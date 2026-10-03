@@ -35,6 +35,8 @@ public final class Queue: @unchecked Sendable {
 }
 
 public final class QueueRegistry: @unchecked Sendable {
+    public let queue = Queue()
+
     public init() {}
 
     public func use(_ storage: some Sendable) throws {}
@@ -72,6 +74,14 @@ public extension Application {
         let created = QueueRegistry()
         storage[QueueRegistryKey.self] = created
         return created
+    }
+}
+
+// Mirrors Vapor Queues' `Request.queue` convenience, which dispatches jobs on
+// the default queue for the application's registry.
+public extension Request {
+    var queue: Queue {
+        application.queues.queue
     }
 }
 

@@ -1,4 +1,5 @@
 import Foundation
+import Vapor
 
 public struct RedisKey: ExpressibleByStringLiteral, CustomStringConvertible {
     public var value: String
@@ -31,7 +32,8 @@ public enum RedisClientResult<T> {
     }
 }
 
-public final class RedisClient {
+// Stateless stand-in, so Sendable is safe; Vapor's Application.storage requires it.
+public final class RedisClient: Sendable {
     public init() {}
 
     public func get<T>(_ key: RedisKey, asJSON type: T.Type) async throws -> RedisClientResult<T?> {
@@ -45,4 +47,27 @@ public final class RedisClient {
     public func delete(_ key: RedisKey) async throws -> RedisClientResult<Void> {
         .value(())
     }
+}
+
+// Mirrors Vapor's RedisKit `Application.redis` / `Request.redis` convenience
+// accessors, backed by a per-application singleton RedisClient stand-in.
+public extension Application {
+    var redis: RedisClient {
+        if let existing = storage[RedisClientKey.self] {
+            return existing
+        }
+        let client = RedisClient()
+        storage[RedisClientKey.self] = client
+        return client
+    }
+}
+
+public extension Request {
+    var redis: RedisClient {
+        application.redis
+    }
+}
+
+private enum RedisClientKey: StorageKey {
+    typealias Value = RedisClient
 }

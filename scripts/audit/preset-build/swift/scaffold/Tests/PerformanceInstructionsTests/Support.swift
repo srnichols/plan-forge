@@ -142,7 +142,8 @@ struct FakeFuture<Value> {
 
 final class FakeThreadPool {
     func runIfActive<Value>(eventLoop: FakeEventLoop, _ work: () throws -> Value) -> FakeFuture<Value> {
-        FakeFuture(value: (try? work()) ?? fatalError("unreachable"))
+        guard let result = try? work() else { fatalError("unreachable") }
+        return FakeFuture(value: result)
     }
 }
 

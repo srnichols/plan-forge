@@ -21,10 +21,10 @@ applyTo: '**/*Repository*,**/*Migration*,**/*Model*,**/Repositories/**,**/Models
 import Fluent
 import Vapor
 
-final class Item: Model, Content {
+final class Item: Model, Content, @unchecked Sendable {
     static let schema = "items"
 
-    @ID(format: .uuid)
+    @ID(key: .id)
     var id: UUID?
 
     @Field(key: "name")

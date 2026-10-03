@@ -31,12 +31,16 @@ public struct CreateUserRequest: Content, Sendable {
     public init(name: String, email: String) { self.name = name; self.email = email }
 }
 
-public struct UpdateOrderRequest: Sendable {
+public struct UpdateOrderRequest: Content, Sendable {
     public var name: String
-    public init(name: String) { self.name = name }
+    public var description: String?
+    public init(name: String, description: String? = nil) {
+        self.name = name
+        self.description = description
+    }
 }
 
-public struct CreateOrderRequest: Sendable {
+public struct CreateOrderRequest: Content, Sendable {
     public var name: String
     public var description: String?
     public var tenantID: UUID

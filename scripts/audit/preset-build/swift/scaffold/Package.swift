@@ -57,7 +57,7 @@ let package = Package(
             dependencies: ["App"],
             path: "Sources/Run"
         ),
-        .target(name: "Redis", path: "Sources/Shims/Redis"),
+        .target(name: "Redis", dependencies: [.product(name: "Vapor", package: "vapor")], path: "Sources/Shims/Redis"),
         .target(name: "Queues", dependencies: [.product(name: "Vapor", package: "vapor"), .product(name: "Logging", package: "swift-log")], path: "Sources/Shims/Queues"),
         .target(name: "QueuesRedisDriver", dependencies: ["Queues"], path: "Sources/Shims/QueuesRedisDriver"),
         .target(name: "GRDB", path: "Sources/Shims/GRDB"),
@@ -152,6 +152,10 @@ let package = Package(
             name: "TestingInstructionsTests",
             dependencies: sampleDependencies,
             path: "Tests/TestingInstructionsTests"
+        ),
+        .testTarget(
+            name: "TestingInstructionsMockTests",
+            path: "Tests/TestingInstructionsMockTests"
         ),
         .testTarget(
             name: "VersionInstructionsTests",

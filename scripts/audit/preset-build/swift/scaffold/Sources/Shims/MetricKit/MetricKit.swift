@@ -27,9 +27,18 @@ public struct ApplicationLaunchMetrics {
     public init() {}
 }
 
+// `NSArray.allObjects` is `internal` (not public) in swift-corelibs-foundation,
+// so a real `NSArray` can't support the `.bucketEnumerator.allObjects` call
+// from the observability.instructions.md sample on Linux. `NSEnumerator`
+// provides a public `allObjects` default implementation built on
+// `nextObject()`, so return a concrete (empty) subclass of that instead.
+public final class EmptyBucketEnumerator: NSEnumerator, @unchecked Sendable {
+    public override func nextObject() -> Any? { nil }
+}
+
 public struct Histogram {
-    public var bucketEnumerator: NSArray {
-        NSArray()
+    public var bucketEnumerator: NSEnumerator {
+        EmptyBucketEnumerator()
     }
 }
 

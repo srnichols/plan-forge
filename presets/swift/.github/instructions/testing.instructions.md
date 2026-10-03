@@ -96,7 +96,7 @@ final class UserAPITests: XCTestCase {
 
     override func tearDown() async throws {
         try await app.autoRevert()
-        await app.asyncShutdown()
+        try await app.asyncShutdown()
     }
 
     func testCreateUser_returnsCreated() async throws {

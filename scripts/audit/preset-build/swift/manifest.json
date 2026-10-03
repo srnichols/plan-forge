@@ -12,27 +12,6 @@
       "mode": "append"
     },
     {
-      "file": ".github/agents/database-reviewer.agent.md",
-      "index": 0,
-      "lang": "swift",
-      "to": "Tests/DatabaseReviewerAgentTests/Samples.swift",
-      "mode": "append"
-    },
-    {
-      "file": ".github/agents/database-reviewer.agent.md",
-      "index": 1,
-      "lang": "swift",
-      "to": "Tests/DatabaseReviewerAgentTests/Samples.swift",
-      "mode": "append"
-    },
-    {
-      "file": ".github/agents/database-reviewer.agent.md",
-      "index": 2,
-      "lang": "swift",
-      "to": "Tests/DatabaseReviewerAgentTests/Samples.swift",
-      "mode": "append"
-    },
-    {
       "file": ".github/agents/performance-analyzer.agent.md",
       "index": 2,
       "lang": "swift",
@@ -77,13 +56,6 @@
     {
       "file": ".github/instructions/api-patterns.instructions.md",
       "index": 5,
-      "lang": "swift",
-      "to": "Tests/ApiPatternsInstructionsTests/Samples.swift",
-      "mode": "append"
-    },
-    {
-      "file": ".github/instructions/api-patterns.instructions.md",
-      "index": 6,
       "lang": "swift",
       "to": "Tests/ApiPatternsInstructionsTests/Samples.swift",
       "mode": "append"
@@ -180,13 +152,6 @@
       "mode": "append"
     },
     {
-      "file": ".github/instructions/caching.instructions.md",
-      "index": 6,
-      "lang": "swift",
-      "to": "Tests/CachingInstructionsTests/Samples.swift",
-      "mode": "append"
-    },
-    {
       "file": ".github/instructions/database.instructions.md",
       "index": 0,
       "lang": "swift",
@@ -203,13 +168,6 @@
     {
       "file": ".github/instructions/database.instructions.md",
       "index": 2,
-      "lang": "swift",
-      "to": "Tests/DatabaseInstructionsTests/Samples.swift",
-      "mode": "append"
-    },
-    {
-      "file": ".github/instructions/database.instructions.md",
-      "index": 3,
       "lang": "swift",
       "to": "Tests/DatabaseInstructionsTests/Samples.swift",
       "mode": "append"
@@ -377,79 +335,9 @@
     },
     {
       "file": ".github/instructions/performance.instructions.md",
-      "index": 5,
-      "lang": "swift",
-      "to": "Tests/PerformanceInstructionsTests/Samples.swift",
-      "mode": "append"
-    },
-    {
-      "file": ".github/instructions/performance.instructions.md",
       "index": 7,
       "lang": "swift",
       "to": "Tests/PerformanceInstructionsTests/Samples.swift",
-      "mode": "append"
-    },
-    {
-      "file": ".github/instructions/security.instructions.md",
-      "index": 0,
-      "lang": "swift",
-      "to": "Tests/SecurityInstructionsTests/Samples.swift",
-      "mode": "append"
-    },
-    {
-      "file": ".github/instructions/security.instructions.md",
-      "index": 1,
-      "lang": "swift",
-      "to": "Tests/SecurityInstructionsTests/Samples.swift",
-      "mode": "append"
-    },
-    {
-      "file": ".github/instructions/security.instructions.md",
-      "index": 2,
-      "lang": "swift",
-      "to": "Tests/SecurityInstructionsTests/Samples.swift",
-      "mode": "append"
-    },
-    {
-      "file": ".github/instructions/security.instructions.md",
-      "index": 3,
-      "lang": "swift",
-      "to": "Tests/SecurityInstructionsTests/Samples.swift",
-      "mode": "append"
-    },
-    {
-      "file": ".github/instructions/security.instructions.md",
-      "index": 4,
-      "lang": "swift",
-      "to": "Tests/SecurityInstructionsTests/Samples.swift",
-      "mode": "append"
-    },
-    {
-      "file": ".github/instructions/security.instructions.md",
-      "index": 5,
-      "lang": "swift",
-      "to": "Tests/SecurityInstructionsTests/Samples.swift",
-      "mode": "append"
-    },
-    {
-      "file": ".github/instructions/security.instructions.md",
-      "index": 6,
-      "lang": "swift",
-      "to": "Tests/SecurityInstructionsTests/Samples.swift",
-      "mode": "append"
-    },
-    {
-      "file": ".github/instructions/security.instructions.md",
-      "index": 7,
-      "lang": "swift",
-      "to": "Tests/SecurityInstructionsTests/Samples.swift",
-      "mode": "append"
-    },
-    {
-      "file": ".github/instructions/security.instructions.md",
-      "index": 8,
-      "lang": "swift",
-      "to": "Tests/SecurityInstructionsTests/Samples.swift",
       "mode": "append"
     },
     {
@@ -460,27 +348,6 @@
       "mode": "append"
     },
     {
-      "file": ".github/instructions/swiftui.instructions.md",
-      "index": 0,
-      "lang": "swift",
-      "to": "Tests/SwiftuiInstructionsTests/Samples.swift",
-      "mode": "append"
-    },
-    {
-      "file": ".github/instructions/swiftui.instructions.md",
-      "index": 1,
-      "lang": "swift",
-      "to": "Tests/SwiftuiInstructionsTests/Samples.swift",
-      "mode": "append"
-    },
-    {
-      "file": ".github/instructions/swiftui.instructions.md",
-      "index": 2,
-      "lang": "swift",
-      "to": "Tests/SwiftuiInstructionsTests/Samples.swift",
-      "mode": "append"
-    },
-    {
       "file": ".github/instructions/testing.instructions.md",
       "index": 0,
       "lang": "swift",
@@ -498,7 +365,7 @@
       "file": ".github/instructions/testing.instructions.md",
       "index": 2,
       "lang": "swift",
-      "to": "Tests/TestingInstructionsTests/Samples.swift",
+      "to": "Tests/TestingInstructionsMockTests/Samples.swift",
       "mode": "append"
     },
     {
@@ -567,19 +434,6 @@
     {
       "file": ".github/prompts/new-controller.prompt.md",
       "index": 0,
-      "lang": "swift",
-      "to": "Tests/NewControllerPromptTests/Samples.swift",
-      "mode": "append",
-      "fill": {
-        "{EntityName}": "Order",
-        "{entityName}": "order",
-        "{entity_name}": "orders",
-        "{ModuleName}": "App"
-      }
-    },
-    {
-      "file": ".github/prompts/new-controller.prompt.md",
-      "index": 1,
       "lang": "swift",
       "to": "Tests/NewControllerPromptTests/Samples.swift",
       "mode": "append",
@@ -952,6 +806,71 @@
       "reason": "Retain-cycle sample intentionally redeclares ViewModel twice in one file, which Swift rejects as an invalid redeclaration."
     },
     {
+      "file": ".github/instructions/performance.instructions.md",
+      "index": 5,
+      "reason": "Main-thread-blocking sample intentionally shows the \u274c anti-pattern calling a @MainActor-isolated function from a synchronous nonisolated context (illegal under Swift 6 strict concurrency), and the \u2705 fix uses URLSession.shared, which requires FoundationNetworking and isn't available in this Linux harness's URLSession shim."
+    },
+    {
+      "file": ".github/instructions/security.instructions.md",
+      "index": 0,
+      "reason": "Top-level UserDefaults.standard.set(...) statement fragment, and imports the Apple-only Security framework (SecItemAdd/SecItemCopyMatching), unavailable on swift:6.4-noble Linux."
+    },
+    {
+      "file": ".github/instructions/security.instructions.md",
+      "index": 1,
+      "reason": "Top-level let/guard-let/fatalError statement fragment; executable statements are only allowed in an executable target's main.swift, not a library/test-target source file."
+    },
+    {
+      "file": ".github/instructions/security.instructions.md",
+      "index": 2,
+      "reason": "Top-level `let session = URLSession(...)` statement, and uses Apple-only Security framework APIs (SecTrustGetCertificateAtIndex, SecCertificateCopyKey, SecKeyCopyExternalRepresentation), unavailable on swift:6.4-noble Linux."
+    },
+    {
+      "file": ".github/instructions/security.instructions.md",
+      "index": 3,
+      "reason": "Top-level statement fragment (force-unwrap examples) that also redeclares `let data` twice in the same scope; executable statements and duplicate bindings are only valid inside a function body."
+    },
+    {
+      "file": ".github/instructions/security.instructions.md",
+      "index": 4,
+      "reason": "Declares `createUser(req:)` twice (the \u274c and \u2705 variants) with the same signature, which Swift rejects as an invalid redeclaration in a single file scope."
+    },
+    {
+      "file": ".github/instructions/security.instructions.md",
+      "index": 5,
+      "reason": "Top-level statement fragment that also redeclares `let results` and `let users` twice in the same scope; executable statements are only allowed in an executable target's main.swift."
+    },
+    {
+      "file": ".github/instructions/security.instructions.md",
+      "index": 6,
+      "reason": "Top-level let/guard statement fragment illustrating JWT payload validation; executable statements are only allowed in an executable target's main.swift, not a library/test-target source file."
+    },
+    {
+      "file": ".github/instructions/security.instructions.md",
+      "index": 7,
+      "reason": "Declares a valid RequireRoleMiddleware struct but also has trailing top-level route-registration statements (`let adminRoutes = ...`, `adminRoutes.delete(...)`), so the block cannot compile standalone."
+    },
+    {
+      "file": ".github/instructions/security.instructions.md",
+      "index": 8,
+      "reason": "Top-level `app.middleware.use(CORSMiddleware(...))` statement fragment; executable statements are only allowed in an executable target's main.swift, not a library/test-target source file."
+    },
+    {
+      "file": ".github/instructions/swiftui.instructions.md",
+      "index": 0,
+      "reason": "SwiftUI (@MainActor-isolated view model init called from sync context, Label generic inference, ViewBuilder control-flow restrictions) is an Apple-only UI framework unavailable on the swift:6.4-noble Linux image."
+    },
+    {
+      "file": ".github/instructions/swiftui.instructions.md",
+      "index": 1,
+      "reason": "SwiftUI (@MainActor-isolated view model init called from sync context, Label generic inference, ViewBuilder control-flow restrictions) is an Apple-only UI framework unavailable on the swift:6.4-noble Linux image."
+    },
+    {
+      "file": ".github/instructions/swiftui.instructions.md",
+      "index": 2,
+      "reason": "SwiftUI (@MainActor-isolated view model init called from sync context, Label generic inference, ViewBuilder control-flow restrictions) is an Apple-only UI framework unavailable on the swift:6.4-noble Linux image."
+    },
+    {
       "file": ".github/instructions/swiftui.instructions.md",
       "index": 3,
       "reason": "Async .task/.onAppear modifier example is a receiver-less fragment, so it cannot compile as a standalone harness block."
@@ -975,6 +894,11 @@
       "file": ".github/instructions/version.instructions.md",
       "index": 2,
       "reason": "Bare dependencies: [...] label fragment intended to be read as a snippet of an enclosing Package() call; not a valid top-level construct on its own."
+    },
+    {
+      "file": ".github/prompts/new-controller.prompt.md",
+      "index": 1,
+      "reason": "try app.register(collection: ...) is a top-level configure.swift registration call; top-level executable statements are only legal in main.swift, not in a library/test target file."
     },
     {
       "file": ".github/prompts/new-entity.prompt.md",
@@ -1113,6 +1037,42 @@
       "index": 4,
       "lang": "swift",
       "reason": "GRDB usage sample has top-level dbQueue.read {...} / dbQueue.write {...} calls (expressions are not allowed at the top level in a non-main.swift file) and also re-declares `Item` as a GRDB record, conflicting with the Fluent `Item` model declared earlier in the same file (index 0)."
+    },
+    {
+      "file": ".github/instructions/database.instructions.md",
+      "index": 3,
+      "lang": "swift",
+      "reason": "Illustrative good/bad raw-SQL comparison snippet; `db` and `searchTerm` are free-standing placeholders with no enclosing scope (not a self-contained top-level statement either — top-level `let` expressions calling async APIs aren't legal outside main.swift)."
+    },
+    {
+      "file": ".github/agents/database-reviewer.agent.md",
+      "index": 0,
+      "lang": "swift",
+      "reason": "Illustrative Fluent query snippet; `db`, `tenantID`, `page`, `perPage` are free-standing placeholders with no enclosing scope, and a top-level `let` calling an async API isn't legal outside main.swift."
+    },
+    {
+      "file": ".github/agents/database-reviewer.agent.md",
+      "index": 1,
+      "lang": "swift",
+      "reason": "@ModelActor/FetchDescriptor<Product> is SwiftData; SwiftData is unavailable on Linux (swift:6.4-noble has no SwiftData module)."
+    },
+    {
+      "file": ".github/agents/database-reviewer.agent.md",
+      "index": 2,
+      "lang": "swift",
+      "reason": "Illustrative GRDB query snippet; `dbQueue`, `Product`, `tenantID` are free-standing placeholders with no enclosing scope, and a top-level `let` calling a throwing closure isn't legal outside main.swift."
+    },
+    {
+      "file": ".github/instructions/caching.instructions.md",
+      "index": 6,
+      "lang": "swift",
+      "reason": "Illustrative tenant-scoped cache-invalidation snippet; `producerID`, `tenantID`, `req` are free-standing placeholders with no enclosing scope, and a top-level `_ = try await ...` expression isn't legal outside main.swift."
+    },
+    {
+      "file": ".github/instructions/api-patterns.instructions.md",
+      "index": 6,
+      "lang": "swift",
+      "reason": "Illustrative repeat of the \"validate before decode\" pattern; its CreateItemRequest redeclaration collides with the fuller CreateItemRequest already defined by index0's CRUD example in the same test target."
     },
     {
       "file": ".github/agents/architecture-reviewer.agent.md",

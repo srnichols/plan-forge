@@ -11,7 +11,7 @@ struct EmailService: Sendable {
 
 // index 0 ("Vapor Queues + Redis") reads `app.emailService` — give it a
 // Vapor Application.storage-backed home so the config function compiles.
-public extension Application {
+extension Application {
     var emailService: EmailService {
         if let existing = storage[EmailServiceKey.self] {
             return existing
@@ -77,6 +77,12 @@ struct PaymentCapturedEvent: Codable, Sendable {
     }
 }
 
+// The doc's `dequeue` body calls `process(payload, context:)` as the
+// illustrative "do the actual work" step but never defines it — it's a
+// placeholder for app-specific business logic. Stand in with a no-op so the
+// call site type-checks.
+func process(_ payload: PaymentCapturedEvent, context: QueueContext) async throws {}
+
 struct PaymentDeadLetterJob: AsyncJob {
     typealias Payload = PaymentDeadLetterPayload
 
@@ -90,7 +96,7 @@ struct ReportService: Sendable {
     func generateDailyReport(logger: Logger) async throws {}
 }
 
-public extension Application {
+extension Application {
     var reportService: ReportService {
         if let existing = storage[ReportServiceKey.self] {
             return existing

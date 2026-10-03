@@ -71,4 +71,12 @@ describe.skipIf(!existsSync(join(ROOT, PLUGIN_DIR)))("committed agent plugin", (
   it("matches its sources (run node scripts/build-agent-plugin.mjs)", () => {
     expect(checkPlugin({ root: ROOT })).toEqual({ stale: [], missing: [], extra: [] });
   });
+
+  // A manifest at the root made "install from source" with the repository URL,
+  // or --plugin-dir on a clone, load an empty "plan-forge v3.19.0" plugin with
+  // no skills or agents instead of the marketplace's plugins/plan-forge.
+  it("is the only plugin manifest in the repository", () => {
+    expect(existsSync(join(ROOT, "plugin.json"))).toBe(false);
+    expect(existsSync(join(ROOT, ".github", "plugin", "plugin.json"))).toBe(false);
+  });
 });

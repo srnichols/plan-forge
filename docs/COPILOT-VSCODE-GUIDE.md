@@ -964,6 +964,15 @@ Plan Forge's skills, pipeline agents (Specifier → Plan Hardener → Executor �
 
 The plugin carries guidance only. The skills call Plan Forge's MCP tools, which come from the MCP server that `setup.ps1` / `setup.sh` installs and configures in your project, together with the hooks. In a project without that install, the skills and agents load but their tool calls are unavailable.
 
+**With a setup install.** Setup already copies the same skills and pipeline agents into `.github/`. The project's skills take precedence over the plugin's, so each skill appears once. Agents do not merge: the picker shows both the project's **Executor** and the plugin's **plan-forge:executor**. Prefer the project's agents, which setup tuned to your stack, or skip the plugin in projects that ran setup.
+
+**Try a local copy.** To test a clone or a local change before installing from the marketplace:
+
+- **VS Code**: map the plugin folder in `chat.pluginLocations`, for example `"chat.pluginLocations": { "C:/src/plan-forge/plugins/plan-forge": true }`. Alternatively, add the clone as a marketplace with a file URI: `"chat.plugins.marketplaces": ["file:///C:/src/plan-forge"]`.
+- **Copilot CLI**: `copilot --plugin-dir <clone>/plugins/plan-forge` loads it for one session. `copilot plugin marketplace add <clone>` followed by `copilot plugin install plan-forge@plan-forge` installs it from the clone and loads your edits live; VS Code also picks up plugins installed this way.
+
+Point these at `plugins/plan-forge` or at the clone as a marketplace. The repository root is not itself a plugin.
+
 ---
 
 ## Quick Reference Card

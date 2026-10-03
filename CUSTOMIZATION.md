@@ -824,15 +824,14 @@ OpenBrain supplements — it doesn't replace — hardened plans, instruction fil
 
 ---
 
-## Installing as a VS Code Plugin (Alternative to setup.ps1)
+## Installing the Agent Plugin
 
-Instead of running `setup.ps1`, you can install Plan Forge as a **VS Code agent plugin**:
+Plan Forge's shared skills, pipeline agents and automation templates are also packaged as an agent plugin. This repository is its marketplace:
 
-1. Open Command Palette → `Chat: Install Plugin From Source`
-2. Enter: `https://github.com/srnichols/plan-forge`
-3. Plan Forge's skills, agents, hooks, and prompts appear in chat
+- **VS Code**: add `"srnichols/plan-forge"` to the `chat.plugins.marketplaces` setting, then install **plan-forge** from the Extensions view (`@agentPlugins`).
+- **Copilot CLI**: `copilot plugin marketplace add srnichols/plan-forge`, then `copilot plugin install plan-forge@plan-forge`.
 
-> **Note**: The plugin system is in Preview. For full control over installed files, use `setup.ps1`.
+The plugin carries guidance only and does not replace `setup.ps1` / `setup.sh`: the MCP server, hooks, prompts, instruction files and stack-specific agents still come from setup. See [Plan Forge as an Agent Plugin](docs/COPILOT-VSCODE-GUIDE.md#plan-forge-as-an-agent-plugin) for how the plugin and a setup install work together.
 
 ---
 

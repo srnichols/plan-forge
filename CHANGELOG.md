@@ -7,6 +7,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+## [3.31.1] — 2026-10-03 — Installed projects' test suite passes again
+
 ### Fixed
 
 - **`npm test` in an installed project's `pforge-mcp` passes again.** Four test files added in 3.31.0 (the Boy Scout rule guard, the release script, the agent plugin and the automation templates) read files from Plan Forge's own repository that `pforge update` does not install, so they failed in every project. They are now skipped when those files are absent, as the other repository-only tests are. Tests also no longer ask the Copilot runtime for its model list.

@@ -7,6 +7,10 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+### Changed
+
+- **Each plan run works on its own branch, so a failed slice never lands on your branch.** Workers commit during a slice, so a slice that then failed its gate used to leave its commit on the branch you ran from. An auto-mode `pforge run-plan` now creates `pforge/run/<plan>-<time>` from your current branch (uncommitted work comes along) and runs every slice there. When every slice passes, your branch is fast-forwarded to the run's commits and the run branch is deleted; if your branch gained commits during the run, it is left alone and the run branch is kept. When a slice fails, you stay on the run branch with your branch untouched; `--resume-from` continues on it. Set `runIntegration: "pull-request"` in `.forge.json` to push the run branch and open a (draft) pull request with a per-slice status, duration and cost table instead, ready for review or Copilot's agent merge. Turn isolation off with `runIsolation: "none"` or `PFORGE_RUN_ISOLATION=none`. Assisted mode and dry runs are unchanged.
+
 ## [3.30.0] — 2026-10-03 — One update plan for both shells
 
 ### Changed

@@ -40,6 +40,7 @@ import { findLatestRun, parseEventLine, parseEventsLog, readSliceArtifacts, norm
 import { autoTuneEscalationChain, inferSliceType, recommendModel } from "./model-scoring.mjs";
 import { loadQuorumConfig, classifyLegError, quorumDispatch, quorumReview, analyzeWithQuorum, calculateSliceCost, buildCostBreakdown } from "./quorum.mjs";
 import { estimatePlan as _estimatePlan } from "../cost-service.mjs";
+import { finishRunIsolation, loadRunIsolationConfig, startRunIsolation } from "./run-isolation.mjs";
 import { isRetiredModel, retirementDate } from "../copilot-models.mjs";
 import { rewritePlanStatusOnSuccess as _rewritePlanStatusOnSuccess } from "./run-plan/plan-status-update.mjs";
 
@@ -387,6 +388,10 @@ const _PROGRESS_LINE_FORMATTERS = {
   "slice-escalated": (ts, d) => `[${ts}] ⬆ Slice ${d.sliceId || "?"}: ${d.title || ""} — escalating to ${d.toModel} (attempt ${d.attempt})\n`,
   "run-completed": (ts, d) => `[${ts}] 🏁 Run complete: ${d.results?.passed || 0} passed, ${d.results?.failed || 0} failed\n`,
   "ci-triggered": (ts, d) => `[${ts}] 🚀 CI triggered: ${d.workflow} @ ${d.ref} — ${d.status}\n`,
+  "run-isolation-started": (ts, d) => (d.enabled
+    ? `[${ts}] 🌿 ${d.reused ? "Resuming on" : "Working on"} ${d.runBranch} (base: ${d.baseBranch ?? "unknown"})\n`
+    : `[${ts}] 🌿 Run isolation off: ${d.reason}\n`),
+  "run-isolation-finished": (ts, d) => (d.message ? `[${ts}] 🌿 ${d.message}\n` : ""),
 };
 
 function _emitRunPlanProgressLine(event) {
@@ -1369,6 +1374,9 @@ export async function runPlan(planPath, options = {}) {
 
   eventBus.emit("run-started", { ...runMeta, quorum: quorumConfig ? { enabled: quorumConfig.enabled, auto: quorumConfig.auto, threshold: quorumConfig.threshold } : null });
 
+  // Recommendation 1: every auto run works on its own branch; see run-isolation.mjs.
+  const runIsolation = _startRunIsolationSafe({ cwd, planPath, mode, dryRunWorker, eventBus });
+
   // Issue #201 — janitor pass: drop any pforge-slice-N-snapshot stashes older
   // than 7 days. Best-effort.
   _emitSnapshotJanitor(cwd, eventBus);
@@ -1406,10 +1414,33 @@ export async function runPlan(planPath, options = {}) {
     },
   });
 
-  return _finalizeRunPlan({
+  const summary = await _finalizeRunPlan({
     results, plan, runMeta, runDir, planPath, cwd,
     abortSignal, bridge, eventBus, estimate, dryRun, memoryEnabled, projectName, trace,
   });
+  summary.runIsolation = _finishRunIsolationSafe({ cwd, runIsolation, summary, runDir, abortSignal, eventBus });
+  return summary;
+}
+
+function _startRunIsolationSafe({ cwd, planPath, mode, dryRunWorker, eventBus }) {
+  // Assisted runs are driven by a human, and dryRunWorker is a test fixture
+  // that may point at a real checkout: neither moves branches.
+  if (mode !== "auto" || dryRunWorker) return { enabled: false, reason: mode !== "auto" ? `mode is ${mode}` : "dry-run worker" };
+  const isolation = startRunIsolation({ cwd, planPath, config: loadRunIsolationConfig(cwd) });
+  eventBus.emit("run-isolation-started", isolation);
+  return isolation;
+}
+
+function _finishRunIsolationSafe({ cwd, runIsolation, summary, runDir, abortSignal, eventBus }) {
+  if (!runIsolation?.enabled) return { ...runIsolation, action: "none" };
+  const allPassed = !abortSignal?.aborted && summary.status === "completed";
+  const outcome = finishRunIsolation({ cwd, isolation: runIsolation, allPassed, config: loadRunIsolationConfig(cwd), summary });
+  const result = { ...runIsolation, ...outcome };
+  eventBus.emit("run-isolation-finished", result);
+  try {
+    writeFileSync(resolve(runDir, "summary.json"), JSON.stringify({ ...summary, runIsolation: result }, null, 2));
+  } catch { /* summary.json already written once; this only adds runIsolation */ }
+  return result;
 }
 
 /**

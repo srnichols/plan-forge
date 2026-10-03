@@ -377,6 +377,9 @@ export const CONFIG_SCHEMA = {
     maxRetries: { type: "number", default: 1, minimum: 0, maximum: 5, description: "Gate failure retry attempts" },
     maxRunHistory: { type: "number", default: 50, minimum: 1, description: "Max run directories to retain" },
     maxRunAgeDays: { type: "number", default: 30, minimum: 1, description: "Max age of a run directory in days; runs are pruned when they fail EITHER this or maxRunHistory" },
+    runIsolation: { type: "string", enum: ["branch", "none"], default: "branch", description: "Auto-mode runs work on their own pforge/run/<plan>-<time> branch, so a failed slice never lands on your branch. \"none\" runs on the current branch. Env override: PFORGE_RUN_ISOLATION." },
+    runIntegration: { type: "string", enum: ["fast-forward", "pull-request", "none"], default: "fast-forward", description: "What happens to the run branch when every slice passes: fast-forward your branch to it, push it and open a pull request (needs gh and an origin remote), or leave it for you to merge." },
+    draftPullRequest: { type: "boolean", default: true, description: "With runIntegration \"pull-request\", open the pull request as a draft." },
     quorum: {
       type: "object",
       description: "Multi-model consensus configuration (v2.5; models refreshed 2026-09-30)",

@@ -143,7 +143,11 @@ node scripts/audit/preset-build/run.mjs --stack swift
 
 ### Slice 4: run.mjs and Docker builds [depends: Slice 2, Slice 3] [scope: scripts/audit/preset-build/run.mjs, scripts/audit/preset-build/docker/**]
 
+**WorkerTimeoutMs**: 90m
+
 > Slice 2 already created `run.mjs` with the `--stack rust` path; extend it rather than replacing it.
+
+> On Docker Desktop for Windows, keep build output inside the container (as `swift --scratch-path /tmp/...` does) rather than on the bind-mounted `/work`; bind-mount writes are slow and can fail with I/O errors.
 
 1. Finish `run.mjs`: start `services` containers on a private Docker network, run `check` in `image`, then for every `dockerfile` block in the stack's preset build it against the extracted project, run it, and poll its documented health path (default `/health`) for up to 60 seconds.
 2. For dotnet, go, java, python, typescript and php, add `scripts/audit/preset-build/docker/<stack>/` with the smallest app that serves the health path the preset's Dockerfile and deploy instructions describe, and the build manifest entries for their Dockerfile blocks.

@@ -296,10 +296,7 @@ export async function runSdkSession({
   const onEvent = (ev) => { collectedEvents.push(ev); };
 
   const { session, client, sessionId, resumed } = await _openSession(createSession, {
-    model, cwd, onPermissionRequest, onEvent, provider,
-    sessionId: sessionRef?.id || null,
-    resume: Boolean(sessionRef?.id && sessionRef.resume),
-    autoTier: model === "auto" ? autoTier : null,
+    model, cwd, onPermissionRequest, onEvent, provider, ..._sessionTarget({ sessionRef, model, autoTier }),
   });
   const result = (exitCode, stderr, timedOut = false) => ({
     ..._sdkResult({ events: collectedEvents, model, sessionStartMs, provider }, { exitCode, stderr, timedOut }),
@@ -318,6 +315,16 @@ export async function runSdkSession({
   } finally {
     await _closeSession({ session, client });
   }
+}
+
+/** Session ID, resume flag and auto tier for the session request. */
+function _sessionTarget({ sessionRef, model, autoTier }) {
+  const sessionId = sessionRef?.id || null;
+  return {
+    sessionId,
+    resume: Boolean(sessionId && sessionRef.resume),
+    autoTier: model === "auto" ? autoTier : null,
+  };
 }
 
 /**

@@ -201,16 +201,21 @@ async function defaultCreateSession({ model, system, tools, availableTools, onPe
     });
     return { client, session };
   } catch (err) {
-    if (typeof client.stop === "function") {
-      try { await client.stop(); } catch {
-        if (typeof client.forceStop === "function") {
-          try { await client.forceStop(); } catch { /* ignore cleanup */ }
-        }
-      }
-    } else if (typeof client.forceStop === "function") {
-      try { await client.forceStop(); } catch { /* ignore cleanup */ }
-    }
+    await stopClientQuietly(client);
     throw err;
+  }
+}
+
+/** Stop the client, force-stopping when a graceful stop is unavailable or fails. */
+async function stopClientQuietly(client) {
+  if (typeof client?.stop === "function") {
+    try {
+      await client.stop();
+      return;
+    } catch { /* fall through to forceStop */ }
+  }
+  if (typeof client?.forceStop === "function") {
+    try { await client.forceStop(); } catch { /* ignore cleanup */ }
   }
 }
 

@@ -32,13 +32,16 @@ const ESLINT_CONFIG = path.join('scripts', 'audit', 'eslint-clean-code.config.mj
 // `npx --yes` fetching a package when node_modules is missing.
 const ESLINT_BIN = path.join(ROOT, 'node_modules', 'eslint', 'bin', 'eslint.js');
 
+// The clean-code rules are registered under the `clean-code/` plugin prefix in
+// eslint-clean-code.config.mjs; ESLint reports them with that prefix, so the
+// unprefixed names never matched and only no-magic-numbers was ever counted.
 const TRACKED_RULES = new Set([
-  'complexity-error',
-  'complexity-warn',
-  'max-lines-per-function-error',
-  'max-lines-per-function-warn',
-  'max-params-error',
-  'max-params-warn',
+  'clean-code/complexity-error',
+  'clean-code/complexity-warn',
+  'clean-code/max-lines-per-function-error',
+  'clean-code/max-lines-per-function-warn',
+  'clean-code/max-params-error',
+  'clean-code/max-params-warn',
   'max-depth',
   'max-nested-callbacks',
   'no-magic-numbers'

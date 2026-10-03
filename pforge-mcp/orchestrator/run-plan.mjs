@@ -599,7 +599,7 @@ function _checkVersionCollision(planPath, cwd) {
   return null;
 }
 
-function _buildEstimateQuorumConfig(quorum, cwd, quorumPreset, quorumThreshold, includeGrokOverride = null) {
+function _buildEstimateQuorumConfig({ quorum, cwd, quorumPreset, quorumThreshold, includeGrokOverride = null }) {
   if (!quorum) return null;
   const estimateQuorumConfig = loadQuorumConfig(cwd, quorumPreset, { includeGrokOverride });
   estimateQuorumConfig.enabled = true;
@@ -1278,7 +1278,7 @@ function _runPlanEstimate({ plan, effectiveModel, worker, cwd, resumeFrom, quoru
      
     console.error(`[preflight] ${estimateAuthGate.error}`);
   }
-  const estimateQuorumConfig = _buildEstimateQuorumConfig(quorum, cwd, quorumPreset, quorumThreshold, includeGrokOverride);
+  const estimateQuorumConfig = _buildEstimateQuorumConfig({ quorum, cwd, quorumPreset, quorumThreshold, includeGrokOverride });
   const estimateResult = buildEstimate({ plan, model: effectiveModel, cwd, quorumConfig: estimateQuorumConfig, resumeFrom, worker });
   if (estimateAuthGate) estimateResult.workerWarning = estimateAuthGate.error;
   return estimateResult;

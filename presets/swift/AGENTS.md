@@ -171,8 +171,6 @@ struct UserController: RouteCollection {
         users.post(use: create)
         users.group(":userID") { user in
             user.get(use: getByID)
-            user.put(use: update)
-            user.delete(use: delete)
         }
     }
 
@@ -194,8 +192,8 @@ struct UserController: RouteCollection {
 
     // POST /api/users
     func create(req: Request) async throws -> Response {
-        let input = try req.content.decode(CreateUserRequest.self)
         try CreateUserRequest.validate(content: req)
+        let input = try req.content.decode(CreateUserRequest.self)
         let user = try await userService.create(input, on: req.db)
         guard let userID = user.id else {
             throw Abort(.internalServerError, reason: "Created user missing ID")

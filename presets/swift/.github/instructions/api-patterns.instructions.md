@@ -29,7 +29,7 @@ struct ItemController: RouteCollection {
 
     // GET /api/v1/items?cursor=<token>&limit=25
     func list(req: Request) async throws -> CursorPage<ItemResponse> {
-        let query = try req.query.decode(CursorQuery.self)
+        let query = try req.query.decode(CursorQuery.self).validated()
         return try await service.fetchPage(cursor: query.cursor, limit: query.limit, on: req.db)
     }
 
@@ -231,8 +231,10 @@ struct ProblemDetailMiddleware: AsyncMiddleware {
     }
 }
 
-// Register in configure.swift — BEFORE other middleware
-app.middleware.use(ProblemDetailMiddleware(), at: .beginning)
+// configure.swift — register BEFORE other middleware
+func configure(_ app: Application) throws {
+    app.middleware.use(ProblemDetailMiddleware(), at: .beginning)
+}
 ```
 
 ---

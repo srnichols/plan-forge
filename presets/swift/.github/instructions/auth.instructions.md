@@ -40,8 +40,8 @@ struct JWTAuthMiddleware: AsyncMiddleware {
             throw Abort(.unauthorized, reason: "Missing Bearer token")
         }
         do {
-            let payload = try request.jwt.verify(token, as: AppJWTPayload.self)
-            request.storage[CurrentUserKey.self] = CurrentUser(from: payload)
+            let payload = try await request.jwt.verify(token, as: AppJWTPayload.self)
+            request.currentUser = CurrentUser(from: payload)
         } catch {
             throw Abort(.unauthorized, reason: "Invalid or expired token")
         }

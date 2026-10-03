@@ -190,6 +190,19 @@ The script changes only version values, so key order, indentation and line endin
 
 Skipping any step has burned us before. Each step has the exact command that worked.
 
+**Automated:** `scripts/release/ship.mjs` runs this whole section, from the `to-master` sync through Step 9 and the `to-planning` sync, with the commands below:
+
+```pwsh
+# Dry run: preflight, then the plan with every command, nothing changed
+node scripts/release/ship.mjs --version X.Y.Z --title "<title>" --worktree ../Plan-Forge-release-<ver>
+# Release
+node scripts/release/ship.mjs --version X.Y.Z --title "<title>" --worktree ../Plan-Forge-release-<ver> --execute
+# Resume after fixing a failed step (preflight is skipped)
+node scripts/release/ship.mjs ... --execute --from-step <step-id>
+```
+
+Preflight requires a clean `planning/main` that is in sync with `origin`, a clean release worktree on `master`, a non-empty `[Unreleased]`, a version newer than every tag, a tag name that is free on `origin`, and a signed-in `gh`. The release and bump-back commits refuse files other than the version files and `CHANGELOG.md`. You still choose the version (§2a) and add the `release-checks.json` entries (Step 3a) before running it.
+
 Before Step 1, sync consumer code from `planning/main` onto `master` using
 `scripts/sync-master.ps1 -Direction to-master` or its Bash twin. Check the
 resulting branch contains no development-only artifacts and preserves the

@@ -18,7 +18,7 @@ Plan Forge has shipped broken releases multiple times because invariants weren't
 - v2.59.x — `PreCommit.mjs` hook only mirrored to consuming projects after a downstream complaint
 - v2.82.0 — `postSlice` hook + `self-repair-reporting.instructions.md` missing from setup/update enumerations
 
-The canonical checklist lives at [docs/RELEASE-CHECKLIST.md](../../docs/RELEASE-CHECKLIST.md). Follow it for every tagged release.
+The canonical checklist lives at [docs/RELEASE-CHECKLIST.md](../../docs/RELEASE-CHECKLIST.md). Follow it for every tagged release. `node scripts/release/ship.mjs --version X.Y.Z --title "…" --worktree <master worktree>` runs §3 end to end (dry run unless `--execute`; resume with `--from-step`).
 
 ---
 

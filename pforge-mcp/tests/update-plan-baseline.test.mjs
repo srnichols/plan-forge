@@ -17,7 +17,8 @@
  *     guidance file as `NEW`; PowerShell's `Invoke-Update` shared/internal
  *     instruction loop only offers a file the project already has
  *     (`Test-Path $dstFile`), so it reports nothing. This is the one
- *     documented parity gap (Phase-UPDATE-CORE-PLAN.md, D1) this test allows.
+ *     parity gap (Phase-UPDATE-CORE-PLAN.md, D1) closed in Slices 3-4: both
+ *     shells now share update-plan.mjs and report `NEW` for it.
  *
  * No other guidance category (prompts, agents, skills, hooks, runbook docs,
  * presets) is populated in the fixtures, so every other scan is a no-op in
@@ -46,15 +47,6 @@ const BASH = isWin ? GIT_BASH : "bash";
 const CASES = ["dotnet", "typescript", "dotnet-azure-iac", "no-forge-json", "custom"];
 
 const EDITED_GUIDANCE_LINE = "KEEP .github/instructions/git-workflow.instructions.md";
-
-// The one difference Slice 1 recorded (Phase-UPDATE-CORE-PLAN.md D1): Bash
-// reported the shared instruction the project lacks as NEW; PowerShell never
-// offered an internal/shared instruction the project did not already have, so
-// it reported nothing for that file. Slice 3 closes this gap the moment
-// `Invoke-Update` moves onto `update-plan.mjs` — the same module Bash's
-// `cmd_update` will adopt in Slice 4 — so both shells already agree here,
-// ahead of Slice 6's full "both shells, whole update" coherence pass.
-const KNOWN_BASH_ONLY_LINES = [];
 
 const tmpDirs = [];
 afterEach(() => {
@@ -118,7 +110,7 @@ function parseReport(stdout) {
 }
 
 describe.each(CASES)("update-plan baseline: %s", (caseName) => {
-  it("records each shell's sorted UPDATE/NEW/KEEP lines and checks the documented gap", () => {
+  it("records each shell's sorted UPDATE/NEW/KEEP lines and requires identical operation lists", () => {
     const { source, project } = materialize(caseName);
     const active = runners();
     expect(active.length, "neither pforge.sh nor pforge.ps1 could be run on this machine").toBeGreaterThan(0);
@@ -145,7 +137,8 @@ describe.each(CASES)("update-plan baseline: %s", (caseName) => {
     const bashOnly = results["pforge.sh"].filter((l) => !results["pforge.ps1"].includes(l));
     const psOnly = results["pforge.ps1"].filter((l) => !results["pforge.sh"].includes(l));
 
-    expect(psOnly, "pforge.ps1 reported a line pforge.sh did not — an undocumented gap").toEqual([]);
-    expect(bashOnly.sort()).toEqual([...KNOWN_BASH_ONLY_LINES].sort());
+    expect(psOnly, "pforge.ps1 reported a line pforge.sh did not").toEqual([]);
+    expect(bashOnly, "pforge.sh reported a line pforge.ps1 did not").toEqual([]);
+    expect(results["pforge.sh"]).toEqual(results["pforge.ps1"]);
   });
 });

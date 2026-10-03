@@ -7,6 +7,10 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+### Changed
+
+- **`pforge update` now adds shared and internal instruction files your project lacks, in both shells (#299).** `pforge.ps1 update` used to offer only instruction files you already had, so an install that predated a file (for example `status-reporting.instructions.md`) never received it, while `pforge.sh update` did add it. Both shells now add the missing file as `NEW`. Copies you have edited are still kept. Both shells now build the same plan from `pforge-mcp/update-plan.mjs` and print the same `UPDATE`, `NEW` and `KEEP` lines, and a test requires identical operation lists for every stack fixture. `setup.ps1` and `setup.sh` likewise read stack labels, default commands and the shared-file list from one `pforge-mcp/preset-catalog.json`.
+
 ### Fixed
 
 - **Preset build checks now build the Rust and Swift Dockerfiles too.** The 3.29.3 notes said every documented Dockerfile was built, but the Rust preset's 2 and the Swift preset's 4 were not: those stacks had no Docker fixture, and the check counted that as zero builds and passed. They now build from a minimal Axum and Vapor app and must answer their health paths, and a test fails if any preset documents a Dockerfile that is neither built nor skipped with a reason. The nightly Rust check also failed on Linux CI after passing: the container wrote root-owned build files into the shared folder and cleanup could not delete them. Build output now stays inside the container, and a cleanup error no longer fails a passing check.

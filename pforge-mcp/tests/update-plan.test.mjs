@@ -438,17 +438,32 @@ describe("update-plan: output shape matches the Shared Contract", () => {
 const CASES = ["dotnet", "typescript", "dotnet-azure-iac", "no-forge-json", "custom"];
 const KNOWN_D1_ADDITIONS = [".github/instructions/status-reporting.instructions.md"];
 
-/** Copy a fixture case into scratch dirs and wire in the real update guard (and, for no-forge-json, nothing extra: detectPreset is imported directly). */
+/**
+ * The real modules `update-plan.mjs` itself ships alongside (plain `mcp`
+ * byte-compare, not guidance) — every shell baseline reports all of these as
+ * `NEW` against an empty `pforge-mcp/` project dir, so the fixture source
+ * needs real copies of all of them, not just `update-guard.mjs`.
+ */
+const SHIPPED_MCP_MODULES = [
+  "update-guard.mjs",
+  "detect-preset.mjs",
+  "migrate-forge-config.mjs",
+  "update-plan.mjs",
+  "preset-catalog.json",
+  "orchestrator/constants.mjs",
+];
+
+/** Copy a fixture case into scratch dirs and wire in the real shipped `pforge-mcp` modules `update-plan.mjs` depends on (or reports as `NEW` itself). */
 function materializeFixture(caseName) {
   const fixtureDir = join(FIXTURES_ROOT, caseName);
   const source = makeTmp(`pf-update-plan-fixture-${caseName}-source-`);
   const project = makeTmp(`pf-update-plan-fixture-${caseName}-project-`);
   cpSync(join(fixtureDir, "source"), source, { recursive: true });
   cpSync(join(fixtureDir, "project"), project, { recursive: true });
-  mkdirSync(join(source, "pforge-mcp"), { recursive: true });
-  copyFileSync(join(REPO_ROOT, "pforge-mcp", "update-guard.mjs"), join(source, "pforge-mcp", "update-guard.mjs"));
-  if (caseName === "no-forge-json") {
-    copyFileSync(join(REPO_ROOT, "pforge-mcp", "detect-preset.mjs"), join(source, "pforge-mcp", "detect-preset.mjs"));
+  for (const rel of SHIPPED_MCP_MODULES) {
+    const dst = join(source, "pforge-mcp", rel);
+    mkdirSync(join(dst, ".."), { recursive: true });
+    copyFileSync(join(REPO_ROOT, "pforge-mcp", rel), dst);
   }
   return { source, project };
 }

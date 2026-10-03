@@ -685,7 +685,8 @@ curl -sL https://raw.githubusercontent.com/srnichols/plan-forge/master/pforge.sh
 **What it updates** (framework files):
 - Pipeline prompts (`step0-step6*.prompt.md`)
 - Pipeline agents (specifier, plan-hardener, executor, reviewer-gate, shipper)
-- Shared instruction files (architecture-principles, clean-code, context-fuel, git-workflow, ai-plan-hardening-runbook, security, self-repair-reporting, status-reporting, testing). When your stack preset has its own copy of one of these (for example `testing` or `security`), the preset's copy is used.
+- Shared instruction files (architecture-principles, clean-code, context-fuel, git-workflow, ai-plan-hardening-runbook, security, self-repair-reporting, status-reporting, testing). When your stack preset has its own copy of one of these (for example `testing` or `security`), the preset's copy is used. A file your project lacks is added as `NEW` in both shells; a copy you edited is kept.
+- `.forge.json` additions (`modelRouting.default`, `hooks`), in both shells
 - Runbook and Instructions docs
 - Lifecycle hooks
 - Preset-specific files (instructions, agents, prompts, skills): new ones are added, and existing ones are updated when you have not edited them

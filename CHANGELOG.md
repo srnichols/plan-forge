@@ -7,6 +7,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+## [3.31.0] — 2026-10-03 — Safer runs, live models, leaner tool list
+
 ### Changed
 
 - **Plan Forge's skills, pipeline agents and automation templates are also available as an agent plugin.** The `plan-forge` plugin uses the Agent Plugins 1.0 format and is published from this repository's marketplace. In VS Code, add `srnichols/plan-forge` to `chat.plugins.marketplaces` and install it from the Extensions view; in the Copilot CLI, run `copilot plugin marketplace add srnichols/plan-forge` and then `copilot plugin install plan-forge@plan-forge`. The plugin carries guidance only. The MCP server and hooks that its skills rely on still come from running setup in your project.

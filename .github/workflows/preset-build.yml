@@ -5,7 +5,8 @@ name: Preset Build Checks
 # scripts/audit/preset-build/<stack>/manifest.json into a scaffold and
 # checked with scripts/audit/preset-build/run.mjs:
 #   - rust, swift: a full compile check (`cargo check`, `swift build`)
-#     plus every documented Dockerfile block, built and health-checked.
+#     plus every documented Dockerfile block, built from a minimal app in
+#     docker/<stack>/ and health-checked.
 #   - dotnet, go, java, python, typescript, php: Dockerfile-only — these
 #     stacks have no compile scaffold yet, so `--docker-only` builds and
 #     health-checks their documented Dockerfile blocks without it.
@@ -35,7 +36,8 @@ jobs:
   build:
     name: Build ${{ matrix.stack }}
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    # Swift compiles the harness, then four release builds of a Vapor app.
+    timeout-minutes: ${{ matrix.timeout || 30 }}
     strategy:
       fail-fast: false
       matrix:
@@ -44,6 +46,7 @@ jobs:
             dockerOnly: false
           - stack: swift
             dockerOnly: false
+            timeout: 75
           - stack: dotnet
             dockerOnly: true
           - stack: go

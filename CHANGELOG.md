@@ -7,6 +7,10 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+### Fixed
+
+- **Preset build checks now build the Rust and Swift Dockerfiles too.** The 3.29.3 notes said every documented Dockerfile was built, but the Rust preset's 2 and the Swift preset's 4 were not: those stacks had no Docker fixture, and the check counted that as zero builds and passed. They now build from a minimal Axum and Vapor app and must answer their health paths, and a test fails if any preset documents a Dockerfile that is neither built nor skipped with a reason. The nightly Rust check also failed on Linux CI after passing: the container wrote root-owned build files into the shared folder and cleanup could not delete them. Build output now stays inside the container, and a cleanup error no longer fails a passing check.
+
 ## [3.29.3] — 2026-10-02 — Current model defaults, and no more hung or repeated slices
 
 ### Added

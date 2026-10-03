@@ -1,0 +1,10 @@
+[package]
+name = "checkout-api"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+# Smallest service the Rust preset's Dockerfiles can build and health-check.
+[dependencies]
+axum = "0.8.9"
+tokio = { version = "1.53.1", features = ["macros", "net", "rt-multi-thread"] }

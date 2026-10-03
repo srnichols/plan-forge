@@ -100,6 +100,18 @@ function stopContainer(containerName) {
 
 /** Run the manifest's `check` command for `stack` inside `image`, with any
  * declared `services` started first. Returns `{ ok }`. */
+/**
+ * Remove a temp work dir. Failing to clean up must not turn a passing check
+ * into a failure, so warn instead of throwing.
+ */
+function removeTempDir(dir) {
+  try {
+    rmSync(dir, { recursive: true, force: true });
+  } catch (err) {
+    console.warn(`warning: could not remove ${dir}: ${err.message}`);
+  }
+}
+
 function runCheck({ stack, buildDir, outDir, manifest }) {
   const network = `preset-build-net-${randomUUID().slice(0, 8)}`;
   const serviceContainers = [];
@@ -144,6 +156,10 @@ function runCheck({ stack, buildDir, outDir, manifest }) {
       "run", "--rm",
       "--network", network,
       ...envArgs,
+      // Build output stays inside the container: written through the bind mount it
+      // is root-owned on Linux CI (the runner then cannot delete it) and slow, or
+      // failing with I/O errors, on Docker Desktop for Windows.
+      ...(stack === "rust" ? ["-e", "CARGO_TARGET_DIR=/tmp/cargo-target"] : []),
       "-v", `${outDir}:/work`,
       "-w", "/work",
       manifest.image,
@@ -171,7 +187,7 @@ function runCheck({ stack, buildDir, outDir, manifest }) {
 // stack's main language.
 
 /** Every `dockerfile` fenced block of presets/<stack>, indexed per file from 0. */
-function indexDockerfileBlocks(stack) {
+export function indexDockerfileBlocks(stack) {
   const files = readPreset(join(PRESETS_ROOT, stack));
   const index = [];
   for (const file of files) {
@@ -192,7 +208,7 @@ function dockerfileEntryKey(file, index) {
 
 /** Read scripts/audit/preset-build/docker/<stack>/manifest.json, or `null`
  * if the stack has no documented Dockerfile coverage yet. */
-function loadDockerManifest(stack) {
+export function loadDockerManifest(stack) {
   const path = join(DOCKER_ROOT, stack, "manifest.json");
   if (!existsSync(path)) return null;
   return JSON.parse(readFileSync(path, "utf8"));
@@ -201,7 +217,7 @@ function loadDockerManifest(stack) {
 /** Validate a docker manifest against presets/<stack>: every `dockerfile`
  * block must appear in `dockerfile` or `skip` (the latter needs a `reason`),
  * and every entry must resolve to a block that still exists. */
-function validateDockerManifest(stack, manifest) {
+export function validateDockerManifest(stack, manifest) {
   const indexed = indexDockerfileBlocks(stack);
   const byKey = new Map(indexed.map((e) => [dockerfileEntryKey(e.file, e.index), e]));
   const mapped = new Set();
@@ -272,7 +288,7 @@ async function pollProcessHealth(containerName) {
  * (or `entry.scaffold`) to a temp dir, write the preset's Dockerfile block
  * over `entry.to` (default `Dockerfile`), build the image, run it, and poll
  * `entry.healthPath` (default `/health`) on `entry.port` (default `8080`)
- * for up to 60s. */
+ * for up to 60s. `entry.args` are passed to `docker run` after the image. */
 async function buildDockerfileEntry(stack, entry, block) {
   const scaffoldDir = join(DOCKER_ROOT, stack, entry.scaffold ?? "scaffold");
   const outDir = mkdtempSync(join(tmpdir(), `preset-build-docker-${stack}-`));
@@ -289,7 +305,9 @@ async function buildDockerfileEntry(stack, entry, block) {
 
     containerName = `preset-build-${stack}-c-${randomUUID().slice(0, 8)}`;
     const port = entry.port ?? 8080;
-    const started = run("docker", ["run", "-d", "--rm", "--name", containerName, "-p", `127.0.0.1::${port}`, tag]);
+    // entry.args: container arguments, for Dockerfiles whose ENTRYPOINT expects
+    // the command (e.g. `./App serve ...`) to be passed at run time.
+    const started = run("docker", ["run", "-d", "--rm", "--name", containerName, "-p", `127.0.0.1::${port}`, tag, ...(entry.args ?? [])]);
     if (!started.ok) return { ok: false, reason: "docker run failed" };
 
     if (entry.protocol === "fastcgi") {
@@ -308,13 +326,13 @@ async function buildDockerfileEntry(stack, entry, block) {
   } finally {
     if (containerName) stopContainer(containerName);
     spawnSync("docker", ["rmi", "-f", tag], { stdio: "ignore" });
-    rmSync(outDir, { recursive: true, force: true });
+    removeTempDir(outDir);
   }
 }
 
 /** Build and health-check every documented `dockerfile` entry of a stack's
- * docker manifest. A stack with no docker/<stack>/manifest.json (rust, swift
- * today) trivially passes with zero builds. */
+ * docker manifest. A stack with no docker/<stack>/manifest.json trivially
+ * passes with zero builds. */
 async function runDockerfileBuilds(stack) {
   const manifest = loadDockerManifest(stack);
   if (!manifest) return { ok: true, builds: 0 };
@@ -396,7 +414,7 @@ async function main() {
       : `PASS ${stack}: no dockerfile blocks configured for docker build yet`);
     return 0;
   } finally {
-    rmSync(outDir, { recursive: true, force: true });
+    removeTempDir(outDir);
   }
 }
 

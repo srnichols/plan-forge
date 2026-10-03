@@ -1,0 +1,21 @@
+{
+  "stack": "rust",
+  "dockerfile": [
+    {
+      "file": ".github/instructions/deploy.instructions.md",
+      "index": 0,
+      "to": "Dockerfile",
+      "port": 8080,
+      "healthPath": "/health/live"
+    },
+    {
+      "file": ".github/prompts/new-dockerfile.prompt.md",
+      "index": 0,
+      "to": "Dockerfile",
+      "port": 8080,
+      "healthPath": "/health/live",
+      "fill": { "{BinaryName}": "checkout-api" }
+    }
+  ],
+  "skip": []
+}

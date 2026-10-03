@@ -1,0 +1,35 @@
+{
+  "stack": "swift",
+  "dockerfile": [
+    {
+      "file": ".github/instructions/deploy.instructions.md",
+      "index": 0,
+      "to": "Dockerfile",
+      "port": 8080,
+      "healthPath": "/health"
+    },
+    {
+      "file": ".github/prompts/new-dockerfile.prompt.md",
+      "index": 0,
+      "to": "Dockerfile",
+      "port": 8080,
+      "healthPath": "/healthz"
+    },
+    {
+      "file": ".github/prompts/new-dockerfile.prompt.md",
+      "index": 1,
+      "to": "Dockerfile",
+      "port": 8080,
+      "healthPath": "/health"
+    },
+    {
+      "file": ".github/prompts/new-dockerfile.prompt.md",
+      "index": 2,
+      "to": "Dockerfile",
+      "port": 8080,
+      "healthPath": "/health",
+      "args": ["serve", "--env", "production", "--hostname", "0.0.0.0"]
+    }
+  ],
+  "skip": []
+}

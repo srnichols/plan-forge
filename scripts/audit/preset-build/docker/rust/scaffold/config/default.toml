@@ -1,0 +1,3 @@
+# The preset's Dockerfiles copy config/ into the runtime image.
+[server]
+port = 8080

@@ -16,6 +16,7 @@ import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { extractStack, loadManifest, validateManifest } from "../../scripts/audit/preset-build/extract.mjs";
+import { indexDockerfileBlocks, loadDockerManifest, validateDockerManifest } from "../../scripts/audit/preset-build/run.mjs";
 
 const REPO = resolve(fileURLToPath(new URL("../..", import.meta.url)));
 const EXTRACT_SCRIPT = join(REPO, "scripts", "audit", "preset-build", "extract.mjs");
@@ -225,17 +226,34 @@ describe("shipped manifests — coverage", () => {
         .map((e) => e.name)
     : [];
 
-  it("lists at least the stacks present under scripts/audit/preset-build", () => {
-    // Slice 1 ships no stack manifests yet (rust/swift land in Slices 2-3);
-    // this assertion documents the fixture-free state and starts failing
-    // the moment a manifest is added without this suite seeing it run.
-    expect(Array.isArray(stacks)).toBe(true);
+  it("includes the rust and swift compile harnesses", () => {
+    expect(stacks).toEqual(expect.arrayContaining(["rust", "swift"]));
   });
 
   for (const stack of stacks) {
     it(`${stack}: every main-language block is mapped or skipped with a reason`, () => {
       const manifest = loadManifest(join(buildRoot, stack));
       const { unmapped, stale } = validateManifest(manifest, join(REPO, "presets"));
+      expect({ unmapped, stale }).toEqual({ unmapped: [], stale: [] });
+    });
+  }
+});
+
+// run.mjs passes a stack with no docker/<stack>/manifest.json as "zero builds",
+// which is how rust's and swift's documented Dockerfiles went unbuilt. Every
+// preset that documents a Dockerfile must build it or skip it with a reason.
+describe("docker manifests — coverage", () => {
+  const presetStacks = readdirSync(join(REPO, "presets"), { withFileTypes: true })
+    .filter((e) => e.isDirectory())
+    .map((e) => e.name);
+
+  for (const stack of presetStacks) {
+    const documented = indexDockerfileBlocks(stack).length;
+    if (documented === 0) continue;
+    it(`${stack}: every documented Dockerfile is built or skipped with a reason`, () => {
+      const manifest = loadDockerManifest(stack);
+      expect(manifest, `presets/${stack} documents ${documented} Dockerfile(s) but has no docker/${stack}/manifest.json`).not.toBeNull();
+      const { unmapped, stale } = validateDockerManifest(stack, manifest);
       expect({ unmapped, stale }).toEqual({ unmapped: [], stale: [] });
     });
   }

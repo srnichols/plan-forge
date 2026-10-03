@@ -17,6 +17,8 @@ describe("release archive - consumer templates survive dev exclusions", () => {
       "AGENTS.md", "presets/typescript/AGENTS.md", "presets/dotnet/AGENTS.md",
       "templates/AGENTS.md.template", "docs/plans/Phase-99-PLAN.md",
       "docs/plans/examples/Phase-TYPESCRIPT-EXAMPLE.md",
+      "scripts/audit/preset-build/rust/scaffold/Cargo.lock", "scripts/audit/preset-quality.mjs",
+      "scripts/timeline.mjs",
     ];
     for (const file of files) {
       const path = join(fixtureDir, file);
@@ -31,7 +33,11 @@ describe("release archive - consumer templates survive dev exclusions", () => {
     const paths = execFileSync("tar", ["-tf", archive], { encoding: "utf8", windowsHide: true }).trim().split(/\r?\n/);
     expect(paths).not.toContain("AGENTS.md");
     expect(paths).not.toContain("docs/plans/Phase-99-PLAN.md");
-    for (const consumerFile of files.filter((file) => file.startsWith("presets/") || file.startsWith("templates/") || file.includes("/examples/"))) {
+    // Preset build-check fixtures are CI-only; the rest of scripts/ still ships.
+    expect(paths.filter((p) => p.startsWith("scripts/audit/preset-build/"))).toEqual([]);
+    const kept = (file) => file.startsWith("presets/") || file.startsWith("templates/") || file.includes("/examples/")
+      || (file.startsWith("scripts/") && !file.startsWith("scripts/audit/preset-build/"));
+    for (const consumerFile of files.filter(kept)) {
       expect(paths, `archive omitted ${consumerFile}`).toContain(consumerFile);
     }
   });

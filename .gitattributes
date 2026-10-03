@@ -45,3 +45,5 @@ docs/plans/cleanup-findings/     export-ignore
 docs/plans/DEPLOYMENT-ROADMAP.md export-ignore
 docs/plans/PROJECT-PRINCIPLES.md export-ignore
 /AGENTS.md                       export-ignore
+# Preset build-check fixtures (scaffolds, lock files): CI-only, never installed.
+scripts/audit/preset-build/      export-ignore

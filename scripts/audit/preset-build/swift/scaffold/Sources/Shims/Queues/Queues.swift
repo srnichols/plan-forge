@@ -60,17 +60,9 @@ public struct QueueScheduler<Job>: Sendable {
     public func at(_ hour: Int, _ minute: Int) {}
 }
 
-public protocol LifecycleHandler {
-    func didBoot(_ application: Application) throws
-    func didBootAsync(_ application: Application) async throws
-    func shutdownAsync(_ application: Application) async
-}
-
-public extension LifecycleHandler {
-    func didBoot(_ application: Application) throws {}
-    func didBootAsync(_ application: Application) async throws {}
-    func shutdownAsync(_ application: Application) async {}
-}
+// NOTE: Vapor itself already declares `LifecycleHandler` — do not redeclare it
+// here. A duplicate declaration in this shim module makes the identifier
+// ambiguous for any test target that imports both Vapor and Queues.
 
 public extension Application {
     var queues: QueueRegistry {

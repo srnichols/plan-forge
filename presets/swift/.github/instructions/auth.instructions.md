@@ -22,7 +22,7 @@ struct AppJWTPayload: JWTPayload {
     var roles: [String]
     var tenantID: String
 
-    func verify(using signer: JWTSigner) throws {
+    func verify(using algorithm: some JWTAlgorithm) throws {
         try expiration.verifyNotExpired()
         guard issuer.value == "https://auth.yourapp.com" else {
             throw JWTError.claimVerificationFailure(failedClaim: issuer, reason: "Invalid issuer")

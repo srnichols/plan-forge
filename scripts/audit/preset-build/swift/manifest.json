@@ -6,20 +6,6 @@
   "blocks": [
     {
       "file": ".github/agents/architecture-reviewer.agent.md",
-      "index": 0,
-      "lang": "swift",
-      "to": "Tests/ArchitectureReviewerAgentTests/Samples.swift",
-      "mode": "append"
-    },
-    {
-      "file": ".github/agents/architecture-reviewer.agent.md",
-      "index": 1,
-      "lang": "swift",
-      "to": "Tests/ArchitectureReviewerAgentTests/Samples.swift",
-      "mode": "append"
-    },
-    {
-      "file": ".github/agents/architecture-reviewer.agent.md",
       "index": 2,
       "lang": "swift",
       "to": "Tests/ArchitectureReviewerAgentTests/Samples.swift",
@@ -51,13 +37,6 @@
       "index": 2,
       "lang": "swift",
       "to": "Tests/PerformanceAnalyzerAgentTests/Samples.swift",
-      "mode": "append"
-    },
-    {
-      "file": ".github/agents/security-reviewer.agent.md",
-      "index": 1,
-      "lang": "swift",
-      "to": "Tests/SecurityReviewerAgentTests/Samples.swift",
       "mode": "append"
     },
     {
@@ -112,13 +91,6 @@
     {
       "file": ".github/instructions/auth.instructions.md",
       "index": 0,
-      "lang": "swift",
-      "to": "Tests/AuthInstructionsTests/Samples.swift",
-      "mode": "append"
-    },
-    {
-      "file": ".github/instructions/auth.instructions.md",
-      "index": 1,
       "lang": "swift",
       "to": "Tests/AuthInstructionsTests/Samples.swift",
       "mode": "append"
@@ -238,13 +210,6 @@
     {
       "file": ".github/instructions/database.instructions.md",
       "index": 3,
-      "lang": "swift",
-      "to": "Tests/DatabaseInstructionsTests/Samples.swift",
-      "mode": "append"
-    },
-    {
-      "file": ".github/instructions/database.instructions.md",
-      "index": 4,
       "lang": "swift",
       "to": "Tests/DatabaseInstructionsTests/Samples.swift",
       "mode": "append"
@@ -285,13 +250,6 @@
       "mode": "append"
     },
     {
-      "file": ".github/instructions/errorhandling.instructions.md",
-      "index": 4,
-      "lang": "swift",
-      "to": "Tests/ErrorHandlingInstructionsTests/Samples.swift",
-      "mode": "append"
-    },
-    {
       "file": ".github/instructions/messaging.instructions.md",
       "index": 0,
       "lang": "swift",
@@ -391,28 +349,7 @@
     },
     {
       "file": ".github/instructions/observability.instructions.md",
-      "index": 0,
-      "lang": "swift",
-      "to": "Tests/ObservabilityInstructionsTests/Samples.swift",
-      "mode": "append"
-    },
-    {
-      "file": ".github/instructions/observability.instructions.md",
-      "index": 1,
-      "lang": "swift",
-      "to": "Tests/ObservabilityInstructionsTests/Samples.swift",
-      "mode": "append"
-    },
-    {
-      "file": ".github/instructions/observability.instructions.md",
       "index": 2,
-      "lang": "swift",
-      "to": "Tests/ObservabilityInstructionsTests/Samples.swift",
-      "mode": "append"
-    },
-    {
-      "file": ".github/instructions/observability.instructions.md",
-      "index": 3,
       "lang": "swift",
       "to": "Tests/ObservabilityInstructionsTests/Samples.swift",
       "mode": "append"
@@ -425,34 +362,6 @@
       "mode": "append"
     },
     {
-      "file": ".github/instructions/observability.instructions.md",
-      "index": 5,
-      "lang": "swift",
-      "to": "Tests/ObservabilityInstructionsTests/Samples.swift",
-      "mode": "append"
-    },
-    {
-      "file": ".github/instructions/observability.instructions.md",
-      "index": 6,
-      "lang": "swift",
-      "to": "Tests/ObservabilityInstructionsTests/Samples.swift",
-      "mode": "append"
-    },
-    {
-      "file": ".github/instructions/observability.instructions.md",
-      "index": 7,
-      "lang": "swift",
-      "to": "Tests/ObservabilityInstructionsTests/Samples.swift",
-      "mode": "append"
-    },
-    {
-      "file": ".github/instructions/observability.instructions.md",
-      "index": 8,
-      "lang": "swift",
-      "to": "Tests/ObservabilityInstructionsTests/Samples.swift",
-      "mode": "append"
-    },
-    {
       "file": ".github/instructions/performance.instructions.md",
       "index": 2,
       "lang": "swift",
@@ -475,21 +384,7 @@
     },
     {
       "file": ".github/instructions/performance.instructions.md",
-      "index": 6,
-      "lang": "swift",
-      "to": "Tests/PerformanceInstructionsTests/Samples.swift",
-      "mode": "append"
-    },
-    {
-      "file": ".github/instructions/performance.instructions.md",
       "index": 7,
-      "lang": "swift",
-      "to": "Tests/PerformanceInstructionsTests/Samples.swift",
-      "mode": "append"
-    },
-    {
-      "file": ".github/instructions/performance.instructions.md",
-      "index": 8,
       "lang": "swift",
       "to": "Tests/PerformanceInstructionsTests/Samples.swift",
       "mode": "append"
@@ -635,13 +530,6 @@
       "mode": "append"
     },
     {
-      "file": ".github/prompts/bug-fix-tdd.prompt.md",
-      "index": 3,
-      "lang": "swift",
-      "to": "Tests/NewTestPromptTests/Samples.swift",
-      "mode": "append"
-    },
-    {
       "file": ".github/prompts/new-config.prompt.md",
       "index": 0,
       "lang": "swift",
@@ -672,13 +560,6 @@
     {
       "file": ".github/prompts/new-config.prompt.md",
       "index": 4,
-      "lang": "swift",
-      "to": "Tests/NewConfigPromptTests/Samples.swift",
-      "mode": "append"
-    },
-    {
-      "file": ".github/prompts/new-config.prompt.md",
-      "index": 5,
       "lang": "swift",
       "to": "Tests/NewConfigPromptTests/Samples.swift",
       "mode": "append"
@@ -796,19 +677,6 @@
     },
     {
       "file": ".github/prompts/new-entity.prompt.md",
-      "index": 2,
-      "lang": "swift",
-      "to": "Tests/NewEntityPromptTests/Samples.swift",
-      "mode": "append",
-      "fill": {
-        "{EntityName}": "Order",
-        "{entityName}": "order",
-        "{entity_name}": "orders",
-        "{ModuleName}": "App"
-      }
-    },
-    {
-      "file": ".github/prompts/new-entity.prompt.md",
       "index": 4,
       "lang": "swift",
       "to": "Tests/NewEntityPromptTests/Samples.swift",
@@ -858,13 +726,6 @@
     {
       "file": ".github/prompts/new-event-handler.prompt.md",
       "index": 1,
-      "lang": "swift",
-      "to": "Tests/NewEventHandlerPromptTests/Samples.swift",
-      "mode": "append"
-    },
-    {
-      "file": ".github/prompts/new-event-handler.prompt.md",
-      "index": 2,
       "lang": "swift",
       "to": "Tests/NewEventHandlerPromptTests/Samples.swift",
       "mode": "append"
@@ -965,19 +826,6 @@
     },
     {
       "file": ".github/prompts/new-service.prompt.md",
-      "index": 1,
-      "lang": "swift",
-      "to": "Tests/NewServicePromptTests/Samples.swift",
-      "mode": "append",
-      "fill": {
-        "{EntityName}": "Order",
-        "{entityName}": "order",
-        "{entity_name}": "orders",
-        "{ModuleName}": "App"
-      }
-    },
-    {
-      "file": ".github/prompts/new-service.prompt.md",
       "index": 2,
       "lang": "swift",
       "to": "Tests/NewServicePromptTests/Samples.swift",
@@ -1017,19 +865,6 @@
     },
     {
       "file": ".github/prompts/new-test.prompt.md",
-      "index": 1,
-      "lang": "swift",
-      "to": "Tests/NewTestPromptTests/Samples.swift",
-      "mode": "append",
-      "fill": {
-        "{EntityName}": "Order",
-        "{entityName}": "order",
-        "{entity_name}": "orders",
-        "{ModuleName}": "App"
-      }
-    },
-    {
-      "file": ".github/prompts/new-test.prompt.md",
       "index": 2,
       "lang": "swift",
       "to": "Tests/NewTestPromptTests/Samples.swift",
@@ -1044,13 +879,6 @@
     {
       "file": ".github/skills/database-migration/SKILL.md",
       "index": 0,
-      "lang": "swift",
-      "to": "Tests/DatabaseMigrationSkillTests/Samples.swift",
-      "mode": "append"
-    },
-    {
-      "file": ".github/skills/database-migration/SKILL.md",
-      "index": 1,
       "lang": "swift",
       "to": "Tests/DatabaseMigrationSkillTests/Samples.swift",
       "mode": "append"
@@ -1177,6 +1005,138 @@
       "file": "AGENTS.md",
       "index": 3,
       "reason": "References SwiftUI view bindings like $viewModel.hasError that require SwiftUI runtime/property-wrapper projection unavailable in the Linux harness."
+    },
+    {
+      "file": ".github/agents/security-reviewer.agent.md",
+      "index": 1,
+      "lang": "swift",
+      "reason": "JWT middleware compliant-example snippet calls app.middleware.use(...) as a top-level statement; top-level executable statements are only legal in main.swift, not in a library/test target file."
+    },
+    {
+      "file": ".github/instructions/performance.instructions.md",
+      "index": 6,
+      "lang": "swift",
+      "reason": "Actor Hopping Cost sample declares two top-level funcs named buildReport() (before/after illustration); Swift rejects the second as an invalid redeclaration in the same scope."
+    },
+    {
+      "file": ".github/instructions/performance.instructions.md",
+      "index": 8,
+      "lang": "swift",
+      "reason": "Vapor EventLoop sample registers routes with top-level app.get(...) calls; top-level executable statements are only legal in main.swift, not in a library/test target file."
+    },
+    {
+      "file": ".github/prompts/bug-fix-tdd.prompt.md",
+      "index": 3,
+      "lang": "swift",
+      "reason": "XCTAssertThrowsErrorAsync helper duplicates the copy already declared in Support.swift to support blocks 0-1 of this same file; appending it again is an invalid redeclaration."
+    },
+    {
+      "file": ".github/prompts/new-service.prompt.md",
+      "index": 1,
+      "lang": "swift",
+      "reason": "Actor Implementation sample imports OSLog, an Apple-only framework unavailable on the Linux swift:6.4-noble toolchain used by this harness."
+    },
+    {
+      "file": ".github/prompts/new-test.prompt.md",
+      "index": 1,
+      "lang": "swift",
+      "reason": "Swift Testing (@Suite) pattern declares {EntityName}ServiceTests with the same name as the XCTest class pattern (block 0) once {EntityName} is filled with Order; placing both in one file is an invalid redeclaration."
+    },
+    {
+      "file": ".github/instructions/errorhandling.instructions.md",
+      "index": 4,
+      "lang": "swift",
+      "reason": "Logging Pattern sample declares a top-level let logger: Logger with no initializer (illustrating constructor injection) and references an undeclared repository; not a self-contained compilable unit."
+    },
+    {
+      "file": ".github/prompts/new-config.prompt.md",
+      "index": 5,
+      "lang": "swift",
+      "reason": "Fail-Fast in Entry Point sample is explicitly commented \"main.swift or @main struct\" and declares a top-level do/catch plus an uninitialized global let; top-level executable statements are only legal in main.swift, not in a library/test target file."
+    },
+    {
+      "file": ".github/skills/database-migration/SKILL.md",
+      "index": 1,
+      "lang": "swift",
+      "reason": "app.migrations.add(CreateOrders()) is a top-level configure.swift registration call; top-level executable statements are only legal in main.swift, not in a library/test target file."
+    },
+    {
+      "file": ".github/instructions/observability.instructions.md",
+      "index": 0,
+      "lang": "swift",
+      "reason": "Illustrative top-level \"Usage\" lines (Logger.orders.info(...), etc.) outside any function; expressions are not allowed at the top level in a non-main.swift file."
+    },
+    {
+      "file": ".github/instructions/observability.instructions.md",
+      "index": 1,
+      "lang": "swift",
+      "reason": "Illustrative top-level Logger calls demonstrating log-level usage; expressions are not allowed at the top level in a non-main.swift file."
+    },
+    {
+      "file": ".github/instructions/observability.instructions.md",
+      "index": 3,
+      "lang": "swift",
+      "reason": "Illustrative top-level os_signpost(...) call demonstrating an \"event\" marker; expressions are not allowed at the top level in a non-main.swift file."
+    },
+    {
+      "file": ".github/instructions/observability.instructions.md",
+      "index": 5,
+      "lang": "swift",
+      "reason": "Illustrative top-level Crashlytics calls; expressions are not allowed at the top level in a non-main.swift file."
+    },
+    {
+      "file": ".github/instructions/observability.instructions.md",
+      "index": 6,
+      "lang": "swift",
+      "reason": "Illustrative top-level SentrySDK calls; expressions are not allowed at the top level in a non-main.swift file."
+    },
+    {
+      "file": ".github/instructions/observability.instructions.md",
+      "index": 7,
+      "lang": "swift",
+      "reason": "Illustrative top-level app.logger.logLevel assignment (configure.swift-style snippet); expressions are not allowed at the top level in a non-main.swift file."
+    },
+    {
+      "file": ".github/instructions/observability.instructions.md",
+      "index": 8,
+      "lang": "swift",
+      "reason": "Illustrative top-level LoggingSystem.bootstrap(...) call (configure.swift-style snippet); expressions are not allowed at the top level in a non-main.swift file."
+    },
+    {
+      "file": ".github/instructions/auth.instructions.md",
+      "index": 1,
+      "lang": "swift",
+      "reason": "Fenced block also contains a top-level app.jwt.signers.use(...) configure.swift-style statement alongside the JWTAuthMiddleware struct; expressions are not allowed at the top level in a non-main.swift file. JWTAuthMiddleware is replicated in Support.swift so the routes.swift registration sample (index 2) still compiles."
+    },
+    {
+      "file": ".github/instructions/database.instructions.md",
+      "index": 4,
+      "lang": "swift",
+      "reason": "GRDB usage sample has top-level dbQueue.read {...} / dbQueue.write {...} calls (expressions are not allowed at the top level in a non-main.swift file) and also re-declares `Item` as a GRDB record, conflicting with the Fluent `Item` model declared earlier in the same file (index 0)."
+    },
+    {
+      "file": ".github/agents/architecture-reviewer.agent.md",
+      "index": 0,
+      "lang": "swift",
+      "reason": "ProductListView is a SwiftUI View; SwiftUI is unavailable on Linux (swift:6.4-noble has no SwiftUI module)."
+    },
+    {
+      "file": ".github/agents/architecture-reviewer.agent.md",
+      "index": 1,
+      "lang": "swift",
+      "reason": "ProductListViewModel conforms to ObservableObject (Combine); Combine is unavailable on Linux (swift:6.4-noble has no Combine module)."
+    },
+    {
+      "file": ".github/prompts/new-entity.prompt.md",
+      "index": 2,
+      "lang": "swift",
+      "reason": "app.migrations.add(Create{EntityName}()) is a top-level configure.swift registration call; top-level executable statements are only legal in main.swift, not in a library/test target file."
+    },
+    {
+      "file": ".github/prompts/new-event-handler.prompt.md",
+      "index": 2,
+      "lang": "swift",
+      "reason": "app.queues.add(OrderPlacedJob(...)) is a top-level configure.swift registration call; top-level executable statements are only legal in main.swift, not in a library/test target file. OrderPlacedJob is replicated in Support.swift so the \"Publishing Events\" block (index 3) still compiles."
     }
   ]
 }

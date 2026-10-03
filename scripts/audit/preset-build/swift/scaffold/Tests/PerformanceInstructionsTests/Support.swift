@@ -2,7 +2,7 @@ import Foundation
 @testable import App
 
 @MainActor
-final class UIViewController {
+class UIViewController {
     func viewDidLoad() {}
 }
 
@@ -79,6 +79,8 @@ struct Report {
     init(_ a: A, _ b: B, _ c: C) {}
 }
 
+actor DataActor {}
+
 let dataActor = DataActor()
 
 extension DataActor {
@@ -128,8 +130,8 @@ enum CPUBoundReportGenerator {
 }
 
 struct FakeParameters {
-    func require<T>(_ key: String, as type: T.Type) throws -> T where T == UUID {
-        UUID() as! T
+    func require(_ key: String, as type: UUID.Type) throws -> UUID {
+        UUID()
     }
 }
 
@@ -157,9 +159,9 @@ struct FakeRequest {
     let parameters = FakeParameters()
 }
 
-final class FakeApp {
-    func get<Response>(_ path: String..., _ handler: @escaping (FakeRequest) -> Response) {}
-    func get<Response>(_ path: String..., _ handler: @escaping (FakeRequest) async throws -> Response) {}
+final class FakeApp: @unchecked Sendable {
+    func get<Response>(_ path: String..., handler: @escaping (FakeRequest) -> Response) {}
+    func get<Response>(_ path: String..., handler: @escaping (FakeRequest) async throws -> Response) {}
 }
 
 let app = FakeApp()

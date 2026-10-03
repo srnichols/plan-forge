@@ -3,6 +3,7 @@
 // mode "append" without ever clobbering the imports a sample needs but
 // doesn't itself declare.
 import Foundation
+import Testing
 import Vapor
 import Fluent
 import FluentSQLiteDriver

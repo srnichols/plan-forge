@@ -79,7 +79,7 @@ struct Update{EntityName}Request: Codable, Content, Validatable, Sendable {
 
 ### Paged Response Wrapper
 ```swift
-struct PagedResponse<T: Codable>: Codable, Content {
+struct PagedResponse<T: Codable & Sendable>: Codable, Content, Sendable {
     let items: [T]
     let page: Int
     let pageSize: Int

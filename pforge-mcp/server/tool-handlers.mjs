@@ -6,6 +6,9 @@ import { PROJECT_DIR } from "./state.mjs";
 import { executeTool } from "./tool-handlers/core.mjs";
 import { _CALL_TOOL_NO_MATCH } from "./tool-handlers/shared.mjs";
 import { _callToolHandler_100_forge_tool_profile } from "./tool-handlers/profiles.mjs";
+
+const HTTP_UNAUTHORIZED = 401;
+const HTTP_FORBIDDEN = 403;
 import {
   _callToolHandler_001_forge_run_plan,
   _callToolHandler_002_forge_abort,
@@ -197,7 +200,7 @@ async function _mcpAuthGate(toolName, request) {
   const fakeRes = {
     headersSent: false,
     writeHead(status) { denied = status; },
-    end() { if (denied == null) denied = 403; },
+    end() { if (denied == null) denied = HTTP_FORBIDDEN; },
   };
 
   const opts = isReadOnly
@@ -207,7 +210,7 @@ async function _mcpAuthGate(toolName, request) {
   await withAuth(() => {}, opts)(fakeReq, fakeRes);
 
   if (denied) {
-    const error = denied === 401 ? "unauthenticated" : "forbidden";
+    const error = denied === HTTP_UNAUTHORIZED ? "unauthenticated" : "forbidden";
     return {
       content: [{ type: "text", text: JSON.stringify({ ok: false, error }) }],
       isError: true,

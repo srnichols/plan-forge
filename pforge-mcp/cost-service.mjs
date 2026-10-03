@@ -559,7 +559,7 @@ function costProviderForWorker(worker) {
   return WORKER_COST_PROVIDERS[worker] || worker || "unknown";
 }
 
-function tokenCostForProvider({ model, provider, tokensIn, tokensOut, cacheRead = 0, cacheWrite = 0 }) {
+export function tokenCostForProvider({ model, provider, tokensIn, tokensOut, cacheRead = 0, cacheWrite = 0 }) {
   const pricing = resolveTokenPricingForProvider(model, provider, tokensIn);
   const uncachedIn = Math.max(0, tokensIn - cacheRead);
   return {
@@ -619,39 +619,41 @@ function _detectProviderFromModelPrefix(m, env) {
   return { provider, source: "model-prefix" };
 }
 
-export function detectCostModel({ env = {}, forgeConfig = {}, model = "" } = {}) {
-  const knownProviders = new Set([
-    "gh-copilot", "claude-cli", "codex-cli", "grok-cli",
-    "anthropic-api", "openai-api", "xai-api", "unknown",
-  ]);
+/** How each CLI worker bills. Direct-API routes ("api:<name>") fall through to the model rules. */
+const WORKER_COST_PROVIDER = Object.freeze({ "gh-copilot": "gh-copilot", claude: "claude-cli", codex: "codex-cli", grok: "grok-cli" });
 
-  function toResult(provider, source) {
-    let perRequestUsd;
-    if (SUBSCRIPTION_PROVIDERS.has(provider)) {
-      perRequestUsd = CLI_PER_REQUEST_USD;
-    } else if (provider === "gh-copilot") {
-      perRequestUsd = null;
-    } else if (provider === "unknown") {
-      perRequestUsd = 0;
-    } else {
-      perRequestUsd = null; // API provider — use token-based pricing
-    }
-    return { provider, perRequestUsd, source };
-  }
+const KNOWN_COST_PROVIDERS = new Set([
+  "gh-copilot", "claude-cli", "codex-cli", "grok-cli",
+  "anthropic-api", "openai-api", "xai-api", "unknown",
+]);
 
-  // 1. Explicit env override
-  const envOverride = env.PFORGE_COST_MODEL;
-  if (envOverride && knownProviders.has(envOverride)) {
-    return toResult(envOverride, "env:PFORGE_COST_MODEL");
-  }
+function _costModelResult(provider, source) {
+  let perRequestUsd = null; // gh-copilot and API providers use token pricing
+  if (SUBSCRIPTION_PROVIDERS.has(provider)) perRequestUsd = CLI_PER_REQUEST_USD;
+  else if (provider === "unknown") perRequestUsd = 0;
+  return { provider, perRequestUsd, source };
+}
 
-  // 2. forge.json cost.model
+/** 1. env PFORGE_COST_MODEL, 2. .forge.json cost.model. */
+function _explicitCostProvider(env, forgeConfig) {
+  if (KNOWN_COST_PROVIDERS.has(env.PFORGE_COST_MODEL)) return _costModelResult(env.PFORGE_COST_MODEL, "env:PFORGE_COST_MODEL");
   const cfgModel = forgeConfig?.cost?.model;
-  if (cfgModel && knownProviders.has(cfgModel)) {
-    return toResult(cfgModel, "forge.json:cost.model");
+  if (KNOWN_COST_PROVIDERS.has(cfgModel)) return _costModelResult(cfgModel, "forge.json:cost.model");
+  return null;
+}
+
+export function detectCostModel({ env = {}, forgeConfig = {}, model = "", worker = null } = {}) {
+  const explicit = _explicitCostProvider(env, forgeConfig);
+  if (explicit) return explicit;
+
+  // 3. The worker execution will use (predictWorkerForModel). A claude-* model
+  // run by the Copilot CLI bills Copilot tokens, not the Claude Code
+  // subscription the model name alone suggests: estimates were 38x low.
+  if (worker && Object.hasOwn(WORKER_COST_PROVIDER, worker)) {
+    return _costModelResult(WORKER_COST_PROVIDER[worker], `worker:${worker}`);
   }
 
-  // 3. Model-name heuristic
+  // 4. Model-name heuristic
   // Issue #120: previously gpt-* always routed to openai-api (token pricing),
   // which produced ~250x overestimates for users running gh-copilot. Align
   // with probeQuorumModelAvailability's host detection: when no API key is
@@ -660,11 +662,11 @@ export function detectCostModel({ env = {}, forgeConfig = {}, model = "" } = {})
   const m = typeof model === "string" ? model : "";
   const prefixResult = _detectProviderFromModelPrefix(m, env);
   if (prefixResult) {
-    return toResult(prefixResult.provider, prefixResult.source);
+    return _costModelResult(prefixResult.provider, prefixResult.source);
   }
 
-  // 4. Default
-  return toResult("unknown", "default");
+  // 5. Default
+  return _costModelResult("unknown", "default");
 }
 
 /**
@@ -1244,7 +1246,7 @@ function _buildCopilotCodingAgentEstimate({ plan, effectiveSlices, effectiveOrde
   const totalInputTokens = sliceCount * tokensPerSlice.input;
   const totalOutputTokens = sliceCount * tokensPerSlice.output;
   const effectiveModel = model || DEFAULT_ESTIMATE_MODEL;
-  const estimatedCost = estimateTokenCost(effectiveModel, "gh-copilot", totalInputTokens, totalOutputTokens);
+  const estimatedCost = estimateTokenCost({ model: effectiveModel, provider: "gh-copilot", inputTokens: totalInputTokens, outputTokens: totalOutputTokens });
   return {
     status: "estimate",
     sliceCount,
@@ -1305,9 +1307,27 @@ function _buildEstimatePlanSlices(effectiveSlices, cwd, quorumConfig) {
   });
 }
 
+/**
+ * Share of input that past runs read from and wrote to the prompt cache, from
+ * cost-history entries that recorded it (3.31.2+). Copilot CLI slices read
+ * ~85% of a 400k-token context from cache, so pricing all of it as fresh input
+ * doubled estimates. Null when no run recorded cache tokens.
+ *
+ * @param {object[]} history
+ * @returns {{ read: number, write: number, runs: number }|null}
+ */
+export function cacheSharesFromHistory(history) {
+  const recorded = history.filter((e) => Number.isFinite(e.total_cache_read_tokens) && e.total_tokens_in > 0);
+  if (recorded.length === 0) return null;
+  const sum = (key) => recorded.reduce((total, e) => total + (Number(e[key]) || 0), 0);
+  const input = sum("total_tokens_in");
+  return { read: sum("total_cache_read_tokens") / input, write: sum("total_cache_write_tokens") / input, runs: recorded.length };
+}
+
 function _estimatePlanHistoryContext(cwd, pricingMode) {
   const history = _loadCostHistory(cwd);
   return {
+    cacheShares: cacheSharesFromHistory(history),
     avgTokensPerSlice: _computeAverageTokensPerSlice(
       history,
       history.length > 0 ? `${history.length} prior run(s)` : null
@@ -1318,32 +1338,32 @@ function _estimatePlanHistoryContext(cwd, pricingMode) {
   };
 }
 
-function estimateTokenCost(model, provider, inputTokens, outputTokens) {
+function estimateTokenCost({ model, provider, inputTokens, outputTokens, cacheShares = null }) {
   // Cost history totals from gh-copilot include cached reads in the aggregate
   // input count, but estimates do not know each future request's exact cache
   // split. Apply a conservative cache-read share so estimates do not price all
   // historical input as uncached. Long-context rates are deliberately not
   // applied here: contextMax is per request, while plan/slice estimates are
   // aggregate totals across many subprocess calls.
-  const estimatedCacheRead = provider === "gh-copilot"
-    ? Math.round(inputTokens * COPILOT_ESTIMATE_CACHE_READ_SHARE)
-    : 0;
+  // Measured shares from this project's runs win over the default.
+  const defaultReadShare = provider === "gh-copilot" ? COPILOT_ESTIMATE_CACHE_READ_SHARE : 0;
   const costs = tokenCostForProvider({
     model,
     provider,
     tokensIn: inputTokens,
     tokensOut: outputTokens,
-    cacheRead: estimatedCacheRead,
+    cacheRead: Math.round(inputTokens * (cacheShares?.read ?? defaultReadShare)),
+    cacheWrite: Math.round(inputTokens * (cacheShares?.write ?? 0)),
   });
-  return costs.inputUncachedCost + costs.inputCacheReadCost + costs.outputCost;
+  return costs.inputUncachedCost + costs.inputCacheReadCost + costs.inputCacheWriteCost + costs.outputCost;
 }
 
-function _estimatePlanBaseCost({ pricingMode, sliceCount, avgPremiumPerSlice, costModel, model, totalInputTokens, totalOutputTokens }) {
+function _estimatePlanBaseCost({ pricingMode, sliceCount, avgPremiumPerSlice, costModel, model, totalInputTokens, totalOutputTokens, cacheShares = null }) {
   if (pricingMode === "subscription") {
     const reqPerSlice = avgPremiumPerSlice !== null ? avgPremiumPerSlice : 1.5;
     return sliceCount * reqPerSlice * costModel.perRequestUsd;
   }
-  return estimateTokenCost(model, costModel.provider, totalInputTokens, totalOutputTokens);
+  return estimateTokenCost({ model, provider: costModel.provider, inputTokens: totalInputTokens, outputTokens: totalOutputTokens, cacheShares });
 }
 
 function _estimatePlanCostCalibration(pricingMode, model, cwd) {
@@ -1431,12 +1451,12 @@ function _buildEstimatePlanResult({
   };
 }
 
-export function estimatePlan({ plan, model, cwd, quorumConfig = null, resumeFrom = null, worker = null }) {
+export function estimatePlan({ plan, model, cwd, quorumConfig = null, resumeFrom = null, worker = null, executionWorker = null }) {
   const { effectiveSlices, effectiveOrder } = _resolveEffectiveSlices(plan, resumeFrom);
   const forgeConfig = _loadForgeConfig(cwd);
-  const costModel = detectCostModel({ env: process.env, forgeConfig, model });
+  const costModel = detectCostModel({ env: process.env, forgeConfig, model, worker: executionWorker ?? worker });
   const pricingMode = SUBSCRIPTION_PROVIDERS.has(costModel.provider) ? "subscription" : "token";
-  const { avgTokensPerSlice, avgPremiumPerSlice } = _estimatePlanHistoryContext(cwd, pricingMode);
+  const { avgTokensPerSlice, avgPremiumPerSlice, cacheShares } = _estimatePlanHistoryContext(cwd, pricingMode);
   const tokensPerSlice = avgTokensPerSlice || { input: 2000, output: 5000, source: "heuristic" };
   const sliceCount = effectiveSlices.length;
   const totalInputTokens = sliceCount * tokensPerSlice.input;
@@ -1454,6 +1474,7 @@ export function estimatePlan({ plan, model, cwd, quorumConfig = null, resumeFrom
     model,
     totalInputTokens,
     totalOutputTokens,
+    cacheShares,
   });
   const calibration = _estimatePlanCostCalibration(pricingMode, model, cwd);
   const costCalibration = calibration?.output || null;
@@ -1467,7 +1488,7 @@ export function estimatePlan({ plan, model, cwd, quorumConfig = null, resumeFrom
       // Flat subscription provider — per-request charge regardless of token volume.
       return legCost.perRequestUsd;
     }
-    return estimateTokenCost(legModel, legCost.provider, inTokens, outTokens);
+    return estimateTokenCost({ model: legModel, provider: legCost.provider, inputTokens: inTokens, outputTokens: outTokens });
   };
 
   return _buildEstimatePlanResult({
@@ -1633,7 +1654,7 @@ export function estimateSlice({ plan, sliceNumber, mode = "auto", model = DEFAUL
     if (SUBSCRIPTION_PROVIDERS.has(legCost.provider)) {
       return legCost.perRequestUsd;
     }
-    return estimateTokenCost(legModel, legCost.provider, inTokens, outTokens);
+    return estimateTokenCost({ model: legModel, provider: legCost.provider, inputTokens: inTokens, outputTokens: outTokens });
   };
 
   const baseCostUSD = costForLeg(model, tokensPerSlice.input, tokensPerSlice.output);

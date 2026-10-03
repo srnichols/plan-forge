@@ -2061,6 +2061,27 @@ function _probeWorkersWithEvents(worker, eventBus) {
   return probeResults;
 }
 
+/**
+ * The worker a slice on `model` would run on, by the same rules as execution:
+ * a direct-API route, a forced CLI (Grok), the Copilot SDK/CLI for
+ * Copilot-servable models, else the first available CLI worker. Used to price
+ * estimates. Returns "api:<provider>" for direct-API routes, null when no
+ * worker is available.
+ *
+ * @param {{ model?: string|null, cwd?: string, workers?: object[]|null }} opts
+ * @returns {string|null}
+ */
+export function predictWorkerForModel({ model = null, cwd = process.cwd(), workers = null } = {}) {
+  try {
+    const { apiProvider, forcedWorker } = _resolveApiProviderForRouting(model, null, { cwd, workers });
+    if (apiProvider) return `api:${apiProvider.name}`;
+    if (forcedWorker) return forcedWorker;
+  } catch { /* the routing error surfaces when the slice runs */ }
+  const available = (workers ?? detectWorkers()).filter((w) => w.available && w.type !== "api");
+  if (model && isCopilotServableModel(model)) return "gh-copilot";
+  return available.length > 0 ? _pickChosenWorker(available, null, model).name : null;
+}
+
 function _pickChosenWorker(workers, worker, model) {
   let chosen = workers[0];
   if (!worker && model && isCopilotServableModel(model)) {

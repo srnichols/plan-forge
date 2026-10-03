@@ -30,7 +30,7 @@ import { API_ALLOWED_ROLES, COST_ANOMALY_MULTIPLIER, CRUCIBLE_STALL_CUTOFF_DAYS,
 import { LogEventHandler, OrchestratorEventBus, appendEvent, writeSilentExitRecord } from "./event-bus.mjs";
 import { buildSlicePrompt } from "./prompt-builders.mjs";
 import { parsePlan, computeLockHash, normalizeSliceId, compareSliceIds, parseOnlySlicesExpr, parseWorkerTimeoutValue, parseSlices, buildDAG, restrictDagToSlices, loadPlanParserConfig } from "./plan-parser.mjs";
-import { resetCliWorkersCache, setGhCopilotProbe, isDirectApiOnlyModel, isCopilotServableModel, isApiOnlyModel, getFoundryAuthScope, detectApiProvider, setSecretsLoader, buildApiMessages, generateImage, loadWorkerCapabilities, compareVersions, detectPackageManager, suggestInstall, classifyProbeFailure, detectWorkers, detectExecutionRuntime, detectClientHost, describeBillingSurface, getRoutingPreference, loadRoutingPreference, resolveRequiredCli, probeQuorumModelAvailability, filterQuorumModels, formatQuorumSummary, assessQuorumViability, detectRuntimes, spawnWorker, detectHelpTextOutput, detectSilentWorkerFailure, detectWorkerLaunchFailure, detectContentFilterBlock, detectKilledBySignal, deriveVendorFromModel, extractTokens, shouldDefaultPremiumRequestsToOne, parseStderrStats, resolveWorkerOutputIdleMs, resolveWorkerTimeoutMs, assertWorkerBackendReady } from "./worker-spawn.mjs";
+import { resetCliWorkersCache, setGhCopilotProbe, isDirectApiOnlyModel, isCopilotServableModel, isApiOnlyModel, getFoundryAuthScope, detectApiProvider, setSecretsLoader, buildApiMessages, generateImage, loadWorkerCapabilities, compareVersions, detectPackageManager, suggestInstall, classifyProbeFailure, detectWorkers, detectExecutionRuntime, detectClientHost, describeBillingSurface, getRoutingPreference, loadRoutingPreference, resolveRequiredCli, probeQuorumModelAvailability, filterQuorumModels, formatQuorumSummary, assessQuorumViability, detectRuntimes, spawnWorker, detectHelpTextOutput, detectSilentWorkerFailure, detectWorkerLaunchFailure, detectContentFilterBlock, detectKilledBySignal, deriveVendorFromModel, extractTokens, shouldDefaultPremiumRequestsToOne, parseStderrStats, resolveWorkerOutputIdleMs, resolveWorkerTimeoutMs, assertWorkerBackendReady, predictWorkerForModel } from "./worker-spawn.mjs";
 import { resolveGateTimeoutMs, __resetBashPathCache, resolveBashPath, detectSelfRepairMissed, buildRetryPrompt, coalesceGateLines, editDistance, isPlaceholderToken, suggestAllowedCommand, looksLikeProse, runGate, SequentialScheduler, ParallelScheduler, CompetitiveScheduler, selectWinner, detectScopeConflicts } from "./schedulers.mjs";
 import { ensureForgeDir, pruneForgeRuns, recordModelPerformance, readForgeJson, appendForgeJsonl, readForgeJsonl, auditOrphanForgeFiles, loadModelPerformance, aggregateModelStats, getCostReport, getHealthTrend, emitToolTelemetry, loadGateCheckConfig, registerGateCheckResponder } from "./forge-io.mjs";
 import { extractPlanReleaseVersion, detectVersionCollision, parseValidationGates, lintGateCommands, validateGatePortability, isGateCommandAllowed, regressionGuard } from "./gate-helpers.mjs";
@@ -1385,7 +1385,8 @@ function _runPlanEstimate({ plan, effectiveModel, worker, cwd, resumeFrom, quoru
     console.error(`[preflight] ${estimateAuthGate.error}`);
   }
   const estimateQuorumConfig = _buildEstimateQuorumConfig({ quorum, cwd, quorumPreset, quorumThreshold, includeGrokOverride });
-  const estimateResult = buildEstimate({ plan, model: effectiveModel, cwd, quorumConfig: estimateQuorumConfig, resumeFrom, worker });
+  const executionWorker = worker || predictWorkerForModel({ model: effectiveModel, cwd });
+  const estimateResult = buildEstimate({ plan, model: effectiveModel, cwd, quorumConfig: estimateQuorumConfig, resumeFrom, worker, executionWorker });
   if (estimateAuthGate) estimateResult.workerWarning = estimateAuthGate.error;
   return estimateResult;
 }
@@ -1766,6 +1767,10 @@ export function resolveModel(cliModel, modelRouting, slice) {
  * Append a run's cost data to .forge/cost-history.json.
  * Each entry captures date, plan, total cost, and per-model breakdown.
  */
+function _sumSliceTokens(summary, key) {
+  return (summary.sliceResults ?? []).reduce((total, r) => total + (Number(r?.tokens?.[key]) || 0), 0);
+}
+
 function appendCostHistory(cwd, summary) {
   const historyPath = resolve(cwd, ".forge", "cost-history.json");
   let history = [];
@@ -1785,6 +1790,9 @@ function appendCostHistory(cwd, summary) {
     status: summary.status,
     total_tokens_in: summary.cost?.total_tokens_in || 0,
     total_tokens_out: summary.cost?.total_tokens_out || 0,
+    // Cache totals let estimates price the cached share of input (cacheSharesFromHistory).
+    total_cache_read_tokens: _sumSliceTokens(summary, "cache_read_tokens"),
+    total_cache_write_tokens: _sumSliceTokens(summary, "cache_creation_input_tokens"),
     total_cost_usd: summary.cost?.total_cost_usd || 0,
     by_model: summary.cost?.by_model || {},
     duration_ms: summary.totalDuration || 0,
@@ -2763,8 +2771,8 @@ async function executeSlice(slice, options) {
 }
 
 
-export function buildEstimate({ plan, model, cwd, quorumConfig = null, resumeFrom = null, worker = null }) {
-  return _estimatePlan({ plan, model, cwd, quorumConfig, resumeFrom, worker });
+export function buildEstimate({ plan, model, cwd, quorumConfig = null, resumeFrom = null, worker = null, executionWorker = null }) {
+  return _estimatePlan({ plan, model, cwd, quorumConfig, resumeFrom, worker, executionWorker });
 }
 
 /**

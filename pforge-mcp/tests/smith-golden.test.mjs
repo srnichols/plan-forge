@@ -91,6 +91,15 @@ function normalize(text) {
       // Present only once the testbed's pforge-mcp ships install-consistency.mjs (3.31.2+).
       .replace(/[^\S\n]*(?:✅|Γ£à)[^\n]*Plan Forge v<version> installed \(packages agree\)\n/g, "")
       .replace(/\b\d+ MCP tools\b/g, "<n> MCP tools")
+      // Run history: every plan run on the testbed changes these numbers, and the
+      // quorum line appears only after a quorum run.
+      .replace(/Cost: \$\d+(?:\.\d+)?/g, "Cost: $<n>")
+      .replace(/\b\d+ run\(s\) in \.forge\/runs\//g, "<n> run(s) in .forge/runs/")
+      .replace(/Model performance: \d+ records/g, "Model performance: <n> records")
+      .replace(/LiveGuard memories: \d+ captured/g, "LiveGuard memories: <n> captured")
+      .replace(/OpenBrain queue: \d+ thought/g, "OpenBrain queue: <n> thought")
+      .replace(/\b\d+ manual-import bypass/g, "<n> manual-import bypass")
+      .replace(/[^\S\n]*(?:✅|Γ£à)[^\n]*Quorum history present[^\n]*\n/g, "")
       // Results summary: pass/fail/warning counts vary with environment state
       .replace(/Results:\s+\d+ passed\s*\|\s*\d+ failed\s*\|\s*\d+ warnings/g, "Results: <summary>")
       // "Fix the N issue(s) above" count varies

@@ -1,0 +1,98 @@
+{
+  "description": "Single source of truth for setup.ps1 / setup.sh preset tables and update-plan.mjs's instruction categories (#299, Phase-UPDATE-CORE Slice 2). Values ported verbatim from setup.ps1 / setup.sh so neither installer keeps its own switch/case table.",
+  "presets": {
+    "dotnet": {
+      "label": ".NET / C# / ASP.NET Core",
+      "shortLabel": ".NET",
+      "build": "dotnet build",
+      "test": "dotnet test",
+      "lint": "dotnet format --verify-no-changes",
+      "dev": ""
+    },
+    "typescript": {
+      "label": "TypeScript / React / Node.js",
+      "shortLabel": "TypeScript",
+      "build": "pnpm build",
+      "test": "pnpm test",
+      "lint": "pnpm lint",
+      "dev": ""
+    },
+    "python": {
+      "label": "Python / FastAPI",
+      "shortLabel": "Python",
+      "build": "python -m build",
+      "test": "pytest",
+      "lint": "ruff check .",
+      "dev": ""
+    },
+    "java": {
+      "label": "Java / Spring Boot",
+      "shortLabel": "Java",
+      "build": "./gradlew build",
+      "test": "./gradlew test",
+      "lint": "./gradlew spotlessCheck",
+      "dev": ""
+    },
+    "go": {
+      "label": "Go / Standard Library",
+      "shortLabel": "Go",
+      "build": "go build ./...",
+      "test": "go test ./...",
+      "lint": "golangci-lint run",
+      "dev": ""
+    },
+    "swift": {
+      "label": "Swift / SwiftUI / iOS / Vapor",
+      "shortLabel": "Swift",
+      "build": "swift build",
+      "test": "swift test",
+      "lint": "swift package plugin --allow-writing-to-package-directory swiftlint",
+      "dev": ""
+    },
+    "rust": {
+      "label": "Rust / Axum / Tokio / SQLx",
+      "shortLabel": "Rust",
+      "build": "cargo build --locked",
+      "test": "cargo test",
+      "lint": "cargo clippy --all-targets --all-features -- -D warnings",
+      "dev": ""
+    },
+    "php": {
+      "label": "PHP / Laravel",
+      "shortLabel": "PHP",
+      "build": "composer install",
+      "test": "php artisan test",
+      "lint": "vendor/bin/pint --test",
+      "dev": ""
+    },
+    "azure-iac": {
+      "label": "Azure Bicep / Terraform / PowerShell / azd",
+      "shortLabel": "Azure IaC",
+      "build": "az bicep build --file infra/main.bicep",
+      "test": "Invoke-Pester -Path ./tests -Output Detailed",
+      "lint": "az bicep lint --file infra/main.bicep",
+      "dev": ""
+    },
+    "custom": {
+      "label": "Custom (configure manually)",
+      "shortLabel": "Custom",
+      "build": "",
+      "test": "",
+      "lint": "",
+      "dev": ""
+    }
+  },
+  "internalInstructions": [
+    "ai-plan-hardening-runbook.instructions.md",
+    "context-fuel.instructions.md",
+    "git-workflow.instructions.md"
+  ],
+  "sharedInstructions": [
+    "architecture-principles.instructions.md",
+    "clean-code.instructions.md",
+    "security.instructions.md",
+    "self-repair-reporting.instructions.md",
+    "status-reporting.instructions.md",
+    "testing.instructions.md"
+  ]
+}

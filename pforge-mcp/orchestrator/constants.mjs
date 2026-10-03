@@ -52,6 +52,8 @@ export const SECURITY_RISK_FOR_TYPE = Object.freeze(new Map([
 
 /** Default gate timeout: 10 minutes (raised from 2 min in v2.62.1). Override with PFORGE_GATE_TIMEOUT_MS. */
 export const DEFAULT_GATE_TIMEOUT_MS = 600_000;
+/** Output a validation gate may produce before execFileSync gives up (16 MiB). */
+export const GATE_MAX_BUFFER = 16_777_216;
 
 /** Default worker output idle timeout: 8 minutes. Override with PFORGE_WORKER_OUTPUT_IDLE_MS. */
 export const DEFAULT_WORKER_OUTPUT_IDLE_MS = 480_000;

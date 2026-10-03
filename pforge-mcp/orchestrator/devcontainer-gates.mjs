@@ -15,6 +15,7 @@
 import { execFileSync } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
 import { extname, isAbsolute, join, relative, resolve, sep } from "node:path";
+import { GATE_MAX_BUFFER } from "./constants.mjs";
 
 const GATE_RUNNER_MODES = Object.freeze(["host", "devcontainer"]);
 const DEFAULT_MODE = "host";
@@ -23,7 +24,6 @@ const INSTALL_HINT = `Install the Dev Containers CLI (npm install -g ${CLI_PACKA
 const UP_TIMEOUT_MS = 900_000;
 const PROBE_TIMEOUT_MS = 60_000;
 const DEFAULT_GATE_TIMEOUT_MS = 600_000;
-const MAX_BUFFER = 16_777_216; // 16 MiB, as runGate
 const UP_ERROR_TAIL_LINES = 5;
 const JS_ENTRY = new Set([".js", ".mjs", ".cjs"]);
 
@@ -110,7 +110,7 @@ export function devcontainerExecArgs({ cli, workspaceFolder, command }) {
 
 function runCli(cli, args, { cwd, timeout }) {
   return execFileSync(cli.command, [...cli.prefix, ...args], {
-    cwd, encoding: "utf8", timeout, maxBuffer: MAX_BUFFER, stdio: ["ignore", "pipe", "pipe"], windowsHide: true,
+    cwd, encoding: "utf8", timeout, maxBuffer: GATE_MAX_BUFFER, stdio: ["ignore", "pipe", "pipe"], windowsHide: true,
     env: { ...process.env, NO_COLOR: "1" },
   });
 }
@@ -148,7 +148,7 @@ export function runDevcontainerGate({ command, cwd, gateTimeout = DEFAULT_GATE_T
   const workspaceFolder = resolve(cwd);
   try {
     const output = execFileSync(cli.command, devcontainerExecArgs({ cli, workspaceFolder, command }), {
-      cwd: workspaceFolder, encoding: "utf8", timeout: gateTimeout, maxBuffer: MAX_BUFFER,
+      cwd: workspaceFolder, encoding: "utf8", timeout: gateTimeout, maxBuffer: GATE_MAX_BUFFER,
       stdio: ["ignore", "pipe", "pipe"], windowsHide: true, env: { ...process.env, NO_COLOR: "1" },
     });
     return { success: true, output: (output || "").trim(), stderr: "", error: "", exitCode: 0 };

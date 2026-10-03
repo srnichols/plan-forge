@@ -4,7 +4,7 @@ import { existsSync } from "node:fs";
 import {
   getCachedBashPath, setCachedBashPath,
 } from "./state.mjs";
-import { GATE_ALLOWED_PREFIXES, UNIX_TOOLS, DEFAULT_GATE_TIMEOUT_MS, resolveGateCommandToken, isGatePrefixAllowed } from "./constants.mjs";
+import { GATE_ALLOWED_PREFIXES, UNIX_TOOLS, DEFAULT_GATE_TIMEOUT_MS, GATE_MAX_BUFFER, resolveGateCommandToken, isGatePrefixAllowed } from "./constants.mjs";
 import { loadGateRunnerMode, runDevcontainerGate } from "./devcontainer-gates.mjs";
 export { GATE_ALLOWED_PREFIXES, UNIX_TOOLS, DEFAULT_GATE_TIMEOUT_MS };
 
@@ -243,7 +243,7 @@ function _runInlineNodeGate(command, cwd, gateTimeout, failOnStderr) {
       cwd,
       encoding: "utf-8",
       timeout: gateTimeout,
-      maxBuffer: 16 * 1024 * 1024,
+      maxBuffer: GATE_MAX_BUFFER,
       env: { ...process.env, NO_COLOR: "1" },
       stdio: ["ignore", "pipe", "pipe"],
       shell: false,
@@ -302,7 +302,7 @@ function _runWindowsBashGate({ command, cwd, cmdBase, gateTimeout, failOnStderr 
       cwd,
       encoding: "utf-8",
       timeout: gateTimeout,
-      maxBuffer: 16 * 1024 * 1024,
+      maxBuffer: GATE_MAX_BUFFER,
       env: {
         ...process.env,
         NO_COLOR: "1",
@@ -329,7 +329,7 @@ function _runDefaultGate(command, cwd, gateTimeout, failOnStderr) {
       cwd,
       encoding: "utf-8",
       timeout: gateTimeout,
-      maxBuffer: 16 * 1024 * 1024,
+      maxBuffer: GATE_MAX_BUFFER,
       env: { ...process.env, NO_COLOR: "1" },
       stdio: ["ignore", "pipe", "pipe"],
     });

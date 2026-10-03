@@ -7,6 +7,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+## [3.31.4] — 2026-10-03 — Updates from older releases finish again
+
 ### Fixed
 
 - **Updating from 3.31.1 or older to 3.31.2 or 3.31.3 could stop halfway.** 3.31.2 started removing package files that a release no longer ships, but wrappers from 3.31.1 and older read the new remove entries as files to copy. In a project with such a file, for example an old `pforge-mcp/.forge.json`, the update failed with `Container cannot be copied onto existing leaf item` after copying only part of the release. Removals are now planned only for wrappers that ask for them, so older wrappers update as before and the new wrapper removes the files on its next run. Package-local `.forge.json` files are now kept. If an update stopped halfway, run `pforge self-update --yes --force` again once 3.31.4 is out. The release rehearsal now updates projects that carry such a file.

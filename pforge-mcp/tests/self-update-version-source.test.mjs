@@ -13,12 +13,14 @@
  *   2. `pforge update` no longer copies a root VERSION file into the consumer
  *      project (it would clobber the consumer's own version file).
  *
- * Mechanical pattern check — does NOT spawn a real update.
+ * (1) is a source pattern check; (2) runs update-plan.mjs's planner.
  */
 
 import { describe, expect, it } from "vitest";
-import { readFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { buildPlan } from "../update-plan.mjs";
 
 const REPO_ROOT = join(import.meta.dirname, "..", "..");
 const PS1 = readFileSync(join(REPO_ROOT, "pforge.ps1"), "utf8");
@@ -43,16 +45,30 @@ describe("self-update sources the installed version from .forge.json templateVer
   });
 });
 
+// Since #299 both shells take their file list from update-plan.mjs, so check
+// the plan itself: a source with a root VERSION file and a project with its own
+// must never produce an operation on VERSION.
 describe("pforge update does not copy a root VERSION file into the consumer project", () => {
-  it("pforge.ps1 core-file copy loop omits VERSION", () => {
-    expect(PS1).toMatch(/foreach \(\$cliFile in @\("pforge\.ps1", "pforge\.sh", "pforge"\)\)/);
-    expect(PS1).not.toMatch(/@\("pforge\.ps1", "pforge\.sh", "pforge", "VERSION"\)/);
-  });
-
-  it("pforge.sh core-file copy loop omits VERSION", () => {
-    expect(SH).toMatch(
-      /for core_file in "pforge\.ps1" "pforge\.sh" "pforge" "validate-setup\.ps1" "validate-setup\.sh"; do/
-    );
-    expect(SH).not.toMatch(/"pforge\.sh" "pforge" "VERSION" "validate-setup/);
+  it("update-plan.mjs never plans an operation on VERSION", () => {
+    const base = mkdtempSync(join(tmpdir(), "pf-version-source-"));
+    try {
+      const source = join(base, "source");
+      const project = join(base, "project");
+      for (const [root, files] of [
+        [source, { VERSION: "9.9.9\n", "pforge.ps1": "# new\n", "pforge.sh": "# new\n" }],
+        [project, { VERSION: "3.32.0\n", ".forge.json": JSON.stringify({ templateVersion: "9.9.8", preset: "custom" }) }],
+      ]) {
+        for (const [rel, text] of Object.entries(files)) {
+          mkdirSync(join(root, rel, ".."), { recursive: true });
+          writeFileSync(join(root, rel), text);
+        }
+      }
+      const plan = buildPlan({ sourceRoot: source, projectRoot: project });
+      expect(plan.operations.map((op) => op.dst)).toContain("pforge.ps1");
+      expect(plan.operations.filter((op) => op.dst === "VERSION" || op.src === "VERSION")).toEqual([]);
+      expect(readFileSync(join(project, "VERSION"), "utf8")).toBe("3.32.0\n");
+    } finally {
+      rmSync(base, { recursive: true, force: true });
+    }
   });
 });

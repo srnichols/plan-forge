@@ -14,6 +14,7 @@ import { execFileSync, spawnSync } from "node:child_process";
 import { copyFileSync, existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
+import { copyUpdateRuntime } from "./helpers/update-runtime.mjs";
 
 const REPO_ROOT = resolve(import.meta.dirname, "..", "..");
 const isWin = process.platform === "win32";
@@ -42,6 +43,8 @@ function seed() {
     "templates/.github/hooks/plan-forge.json": "{\"hooks\":{}}\n",
     "templates/.github/hooks/scripts/check-forbidden.ps1": "'new'\n",
   });
+  // Both shells run the source's update-plan.mjs and refuse a source without it (#299).
+  copyUpdateRuntime(source);
   writeTree(project, {
     ".forge.json": JSON.stringify({ templateVersion: "9.9.8", preset: "custom" }),
     ".github/hooks/plan-forge.json": "{\"hooks\":{}}\n",

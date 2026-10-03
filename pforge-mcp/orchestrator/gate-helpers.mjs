@@ -736,12 +736,17 @@ function _collectGateItemsFromPlans(planPaths, cwd) {
   return gateItems;
 }
 
+/** Regression-guard gates touching the N hottest files run first. */
+const HOTSPOT_PRIORITY_COUNT = 10;
+/** Gate output kept per regression-guard result. */
+const GATE_OUTPUT_MAX_CHARS = 500;
+
 function _prioritizeByHotspots(gateItems, cwd) {
   try {
     const hotspotCache = resolve(cwd, ".forge", "hotspot-cache.json");
     if (!existsSync(hotspotCache)) return;
     const cached = JSON.parse(readFileSync(hotspotCache, "utf-8"));
-    const hotFiles = new Set((cached.hotspots || []).slice(0, 10).map(h => h.file));
+    const hotFiles = new Set((cached.hotspots || []).slice(0, HOTSPOT_PRIORITY_COUNT).map(h => h.file));
     if (hotFiles.size === 0) return;
     gateItems.sort((a, b) => {
       const aHot = a.cmd && [...hotFiles].some(h => a.cmd.includes(h)) ? 1 : 0;
@@ -775,10 +780,10 @@ function _classifyAndSkipGate(gate, cwd, results) {
 function _runGate(gate, cwd, results) {
   try {
     const output = execSync(gate.cmd, { cwd, stdio: "pipe", timeout: resolveGateTimeoutMs(), encoding: "utf-8" });
-    results.push({ ...gate, status: "passed", output: (output || "").trim().slice(0, 500) });
+    results.push({ ...gate, status: "passed", output: (output || "").trim().slice(0, GATE_OUTPUT_MAX_CHARS) });
     return "passed";
   } catch (err) {
-    const errOut = ((err.stderr || "") + (err.stdout || "")).trim().slice(0, 500) || err.message;
+    const errOut = ((err.stderr || "") + (err.stdout || "")).trim().slice(0, GATE_OUTPUT_MAX_CHARS) || err.message;
     results.push({ ...gate, status: "failed", output: errOut });
     return "failed";
   }

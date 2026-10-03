@@ -1738,7 +1738,7 @@ cmd_update() {
 
     # Map operations back into _updates / _new_files, matching the shape the
     # confirm/apply/guard/pending machinery below already expects. Node parses
-    # the JSON (#297 — never python3 or grep -P); paths are already posix/rel.
+    # the JSON (#297 — never Python or PCRE grep); paths are already posix/rel.
     declare -A _offered=() _is_guided=()
     local _op_action _op_src _op_dst _op_guided
     while IFS=$'\t' read -r _op_action _op_src _op_dst _op_guided; do

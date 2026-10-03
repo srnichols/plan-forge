@@ -14,6 +14,7 @@ import { execFileSync, spawnSync } from "node:child_process";
 import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
+import { copyUpdateRuntime } from "./helpers/update-runtime.mjs";
 
 const REPO_ROOT = resolve(import.meta.dirname, "..", "..");
 const isWin = process.platform === "win32";
@@ -42,6 +43,8 @@ function seed() {
   const current = readFileSync(join(REPO_ROOT, "pforge.sh"), "utf8");
   writeFileSync(join(source, "VERSION"), "9.9.9");
   writeFileSync(join(source, "pforge.sh"), longerCopyOf(current));
+  // Both shells run the source's update-plan.mjs and refuse a source without it (#299).
+  copyUpdateRuntime(source);
   writeFileSync(join(project, ".forge.json"), JSON.stringify({ templateVersion: "9.9.8", preset: "custom" }));
   execFileSync("git", ["init", "-q"], { cwd: project, stdio: "ignore" });
   copyFileSync(join(REPO_ROOT, "pforge.sh"), join(project, "pforge.sh"));

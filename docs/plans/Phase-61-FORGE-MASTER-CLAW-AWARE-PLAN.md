@@ -552,7 +552,7 @@ Tasks:
 2. Document the new inputs/outputs and the insight event where the contract is defined (`docs/capabilities.md` narrative, `TOOL_METADATA` examples), with a generic "front-door integration" example (a chat caller, brief format, proposals) that names no specific operator setup. The full manual/doc sweep happens in PFORGE-CLAW Slice 29 once all code is built.
 3. `CHANGELOG.md` `[Unreleased]`: additive `forge_master_ask` fields, `proposedActions`, `forge-master-insight` event, memory provenance (`origin` / `tags` / `visibility`) and recall fencing.
 4. Run both full suites and the surface check.
-5. Retro (last task): append `## What actually shipped` to this plan and rewrite its status header to `> **Status**: ✅ Complete. All 10 slices shipped. See [What actually shipped](#what-actually-shipped).`; do not touch `lockHash`.
+5. Retro (last task): append `## What actually shipped` to this plan and rewrite the status line at the top of the plan so it reads "✅ Complete. All 10 slices shipped. See [What actually shipped](#what-actually-shipped)." (keep the existing bold Status label); do not touch `lockHash`.
 
 **Files**: `docs/capabilities.md`, `CHANGELOG.md`, `docs/plans/Phase-61-FORGE-MASTER-CLAW-AWARE-PLAN.md`
 

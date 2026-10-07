@@ -1611,7 +1611,7 @@ Tasks:
 5. Top-level docs: `README.md` (feature list + link to the guide), `docs/CLI-GUIDE.md` (`pforge claw`), `docs/UNIFIED-SYSTEM-ARCHITECTURE.md` (Forge-Claw as the native front door; OpenClaw remains an alternative integration), `ROADMAP.md`, `CHANGELOG.md` `[Unreleased]` (experimental `pforge-claw` package, `pforge claw` CLI, cross-platform support, link to the guide), `docs/plans/DEPLOYMENT-ROADMAP.md` status for both phases.
 6. Sweep for stale or operator-specific text across all touched docs: no personal hosts, chat ids or paths; every example uses placeholders; every cross-link resolves.
 7. Update `docs/manual/remote-bridge.html` (Forge-Claw as the inbound side of the bridge; OpenClaw section cross-links the guide).
-8. Retro (last task, after everything else): append `## What actually shipped` to this plan and rewrite its status header to `> **Status**: ✅ Complete. All 29 slices shipped. See [What actually shipped](#what-actually-shipped).`; do not touch `lockHash`.
+8. Retro (last task, after everything else): append `## What actually shipped` to this plan and rewrite the status line at the top of the plan so it reads "✅ Complete. All 29 slices shipped. See [What actually shipped](#what-actually-shipped)." (keep the existing bold Status label); do not touch `lockHash`.
 
 **Files**: `docs/PFORGE-CLAW-GUIDE.md`, `pforge-mcp/capabilities/surface.mjs`, `docs/capabilities.md`, `docs/capabilities.html`, `docs/manual/*`, `README.md`, `docs/CLI-GUIDE.md`, `docs/UNIFIED-SYSTEM-ARCHITECTURE.md`, `ROADMAP.md`, `CHANGELOG.md`, `docs/plans/DEPLOYMENT-ROADMAP.md`, `docs/plans/Phase-62-PFORGE-CLAW-PLAN.md`
 

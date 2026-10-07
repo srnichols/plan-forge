@@ -22,6 +22,7 @@ import { FORGE_MASTER_INSIGHT_EVENT as REGISTERED_INSIGHT_EVENT } from "../../pf
 const here = dirname(fileURLToPath(import.meta.url));
 const serverSource = readFileSync(join(here, "../server.mjs"), "utf8");
 const insightSource = readFileSync(join(here, "../src/observer-insights.mjs"), "utf8");
+const controlSource = readFileSync(join(here, "../src/observer-control.mjs"), "utf8");
 
 const insightItem = (overrides = {}) => ({
   severity: "warn",
@@ -325,17 +326,18 @@ describe("observer insight ring and pagination", () => {
 
 describe("observer integration source guards", () => {
   it("advertises paginated observer status without importing the tool dispatcher", () => {
-    expect(serverSource).toContain("paginateInsights");
+    expect(controlSource).toContain("paginateInsights");
     expect(serverSource).toContain("limit:");
     expect(serverSource).toContain("cursor:");
     expect(insightSource).not.toContain("invokeForgeTool");
     expect(insightSource).not.toContain("dispatcher");
+    expect(controlSource).not.toContain("dispatcher");
   });
 
-  it("keeps observer scheduling separate from runObserverTurn", () => {
-    const onBatch = serverSource.match(/onBatch:\s*\(batch\)\s*=>\s*\{([\s\S]*?)\n\s*\},/);
-    expect(onBatch).not.toBeNull();
-    expect(onBatch[1]).not.toMatch(/runObserverTurn\s*\(/);
+  it("routes server observer batches through runObserverTurn via the observer controller", () => {
+    expect(serverSource).toContain("createObserverController");
+    expect(serverSource).not.toMatch(/onBatch:\s*\(batch\)\s*=>/);
+    expect(controlSource).toMatch(/runObserverTurn\(batch,/);
   });
 
   it("includes the structured insight contract in the system prompt", () => {

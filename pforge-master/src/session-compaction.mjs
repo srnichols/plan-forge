@@ -88,7 +88,7 @@ function buildSummaryPrompt(state, evicted) {
   ].join("");
 }
 
-async function callSummaryModel(provider, model, prompt) {
+async function callSummaryModel(provider, model, prompt, apiKey) {
   if (typeof provider?.runLoop === "function") {
     const response = await provider.runLoop({
       system: "Summarize earlier conversation turns accurately and concisely.",
@@ -108,7 +108,7 @@ async function callSummaryModel(provider, model, prompt) {
       ],
       tools: [],
       model,
-      apiKey: "",
+      apiKey: apiKey || "",
     });
   }
   return null;
@@ -141,13 +141,13 @@ function logCompactionFailure(error) {
   console.error(`[session-compaction] ${error?.message ?? error} (non-fatal)`);
 }
 
-async function generateSummaryResult({ state, evicted, provider, config, deps, sessionId }) {
+async function generateSummaryResult({ state, evicted, provider, apiKey, model: servingModel, config, deps, sessionId }) {
   try {
-    const model = resolveModel("low", config);
+    const model = servingModel || resolveModel("low", config);
     const prompt = buildSummaryPrompt(state, evicted);
     const summarize = deps.summarizeSession
       ? deps.summarizeSession({ provider, model, prompt, sessionId })
-      : callSummaryModel(provider, model, prompt);
+      : callSummaryModel(provider, model, prompt, apiKey);
     const response = await callWithTimeout(Promise.resolve(summarize));
     const content = typeof response?.content === "string" ? response.content.trim() : "";
     if (!content) throw new Error("summary model returned empty content");
@@ -161,10 +161,34 @@ async function generateSummaryResult({ state, evicted, provider, config, deps, s
   }
 }
 
+function isUsageField(value) {
+  return value === null || Number.isFinite(value);
+}
+
+/**
+ * Summary-model usage persisted by an earlier background compaction and not yet charged to a turn.
+ * @param {object|null|undefined} state
+ * @returns {{tokensIn:number|null,tokensOut:number|null,costUSD:number|null}|null}
+ */
+export function pendingSummaryUsage(state) {
+  const pending = state?.pendingUsage;
+  if (!pending || typeof pending !== "object") return null;
+  const { tokensIn, tokensOut, costUSD } = pending;
+  return [tokensIn, tokensOut, costUSD].every(isUsageField) ? { tokensIn, tokensOut, costUSD } : null;
+}
+
+function accumulatePendingUsage(state, usage) {
+  const pending = pendingSummaryUsage(state);
+  return pending ? foldUsage(pending, usage) : usage;
+}
+
 /**
  * Persist each completed turn and periodically summarize turns leaving the prompt window.
  *
- * @param {{sessionId:string,turnNumber:number,message:string,reply:string,untrusted:boolean,cwd:string,provider:object,config:object,deps?:object}} input
+ * Summary usage is stored as `pendingUsage` so the next successful turn can fold it into
+ * its `usage`; pass `consumedPendingUsage` once a turn has charged it.
+ *
+ * @param {{sessionId:string,turnNumber:number,message:string,reply:string,untrusted:boolean,cwd:string,provider:object,apiKey?:string|null,model?:string,consumedPendingUsage?:boolean,config:object,deps?:object}} input
  * @returns {Promise<{usage: {tokensIn:number|null,tokensOut:number|null,costUSD:number|null}|null,regenerated:boolean}>}
  */
 export async function maybeCompactSession({
@@ -175,11 +199,15 @@ export async function maybeCompactSession({
   untrusted,
   cwd,
   provider,
+  apiKey = null,
+  model,
+  consumedPendingUsage = false,
   config,
   deps = {},
 }) {
   try {
     let state = await loadSessionSummary(sessionId, cwd);
+    if (consumedPendingUsage) state = { ...state, pendingUsage: null };
     state = recordTurnConclusion(state, { turn: turnNumber, userMessage: message, reply, untrusted });
     let usage = null;
     let regenerated = false;
@@ -188,7 +216,7 @@ export async function maybeCompactSession({
       const evicted = selectEvicted(state, turnNumber);
       if (evicted.length > 0) {
         state = { ...state, lastAttemptTurn: turnNumber };
-        const generated = await generateSummaryResult({ state, evicted, provider, config, deps, sessionId });
+        const generated = await generateSummaryResult({ state, evicted, provider, apiKey, model, config, deps, sessionId });
         if (generated) {
           state = {
             ...state,
@@ -196,6 +224,7 @@ export async function maybeCompactSession({
             coveredThroughTurn: turnNumber - RETAIN_WINDOW,
             generatedAtTurn: turnNumber,
             ledger: state.ledger.filter((entry) => entry.turn > turnNumber - RETAIN_WINDOW),
+            pendingUsage: accumulatePendingUsage(state, generated.usage),
           };
           usage = generated.usage;
           regenerated = true;
@@ -210,4 +239,61 @@ export async function maybeCompactSession({
     logCompactionFailure(err);
     return { usage: null, regenerated: false };
   }
+}
+
+const inflightCompactions = new Map();
+
+/**
+ * Wait for background compaction of one session (or of every session when omitted).
+ * @param {string} [sessionId]
+ * @returns {Promise<void>}
+ */
+export async function settleSessionCompaction(sessionId) {
+  if (sessionId === undefined) {
+    await Promise.all([...inflightCompactions.values()]);
+    return;
+  }
+  await inflightCompactions.get(sessionId);
+}
+
+/**
+ * Load the summary sidecar after any in-process compaction of the same session has finished.
+ * @param {string} sessionId
+ * @param {string} cwd
+ * @returns {Promise<object>}
+ */
+export async function loadSettledSessionSummary(sessionId, cwd) {
+  await settleSessionCompaction(sessionId);
+  return loadSessionSummary(sessionId, cwd);
+}
+
+function nextTurnNumber(priorTurns, sessionSummary) {
+  const lastLedgerTurn = sessionSummary?.ledger?.at(-1)?.turn ?? 0;
+  const lastPriorTurn = priorTurns.at(-1)?.turn ?? priorTurns.length;
+  return Math.max(lastLedgerTurn, lastPriorTurn) + 1;
+}
+
+/**
+ * Start compaction for a completed turn without blocking the reply. Work for one
+ * session is serialized; failures are logged and never reach the caller.
+ *
+ * @param {{isEphemeral:boolean,sessionId:string,priorTurns:object[],sessionSummary:object|null}} input
+ *   plus every `maybeCompactSession` field except `turnNumber`.
+ * @returns {Promise<{usage:object|null,regenerated:boolean}>|null} null for ephemeral sessions
+ */
+export function scheduleSessionCompaction({ isEphemeral, sessionId, priorTurns, sessionSummary, ...rest }) {
+  if (isEphemeral) return null;
+  const turnNumber = nextTurnNumber(priorTurns, sessionSummary);
+  const previous = inflightCompactions.get(sessionId) ?? Promise.resolve();
+  const work = previous
+    .then(() => maybeCompactSession({ sessionId, turnNumber, ...rest }))
+    .catch((err) => {
+      logCompactionFailure(err);
+      return { usage: null, regenerated: false };
+    });
+  inflightCompactions.set(sessionId, work);
+  work.then(() => {
+    if (inflightCompactions.get(sessionId) === work) inflightCompactions.delete(sessionId);
+  });
+  return work;
 }

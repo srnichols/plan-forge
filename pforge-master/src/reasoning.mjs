@@ -44,6 +44,7 @@ import { OBSERVER_NARRATION_EVENT_TYPE } from "./observer-loop.mjs";
 import { buildUsage, invalidInputResult, normalizeTurnInput } from "./turn-input.mjs";
 import { buildShapingSections, enforceMaxChars, hasNewTurnFields, buildTruncated } from "./response-shaping.mjs";
 import { applyUntrustedPolicy } from "./untrusted.mjs";
+import { buildProposalInstruction, finalizeProposals, emptyProposals } from "./proposed-actions.mjs";
 
 // ─── Recall-eligible lanes ────────────────────────────────────────────
 
@@ -742,7 +743,7 @@ function _earlyLoopErrorResult({ loopResult, effectiveSessionId, requestedTier, 
   };
 }
 
-function _successResult({ loopResult, effectiveSessionId, requestedTier, provider, autoEscalation, classification, relatedTurns, quorumResult, truncated }) {
+function _successResult({ loopResult, effectiveSessionId, requestedTier, provider, autoEscalation, classification, relatedTurns, quorumResult, truncated, proposals }) {
   return {
     reply: loopResult.finalReply,
     toolCalls: loopResult.allToolCalls,
@@ -767,6 +768,7 @@ function _successResult({ loopResult, effectiveSessionId, requestedTier, provide
       relatedTurns,
     }),
     quorumResult,
+    ...(proposals && { proposedActions: proposals.proposedActions, proposedActionsMessage: proposals.proposedActionsMessage }),
   };
 }
 
@@ -948,7 +950,8 @@ async function _runPreparedTurn({ input, deps, config, effectiveSessionId, isEph
   const { contextBlock, relatedTurns } = await _buildContextBlock({ effectiveSessionId, isEphemeral, classification, message, cwd, priorTurns, deps });
 
   // ── 3. Load system prompt (with lane overlay) ─────────────────────
-  const systemPrompt = loadSystemPrompt(contextBlock, _loadPrinciplesBlock(cwd), classification?.lane, { caller: input.caller, responseFormat: input.responseFormat });
+  let systemPrompt = loadSystemPrompt(contextBlock, _loadPrinciplesBlock(cwd), classification?.lane, { caller: input.caller, responseFormat: input.responseFormat });
+  if (input.proposeActions === true) systemPrompt += `\n\n${buildProposalInstruction({ role: input.caller?.role })}`;
 
   // ── 4. Resolve allowlist + tool schemas ───────────────────────────
   const turn = applyUntrustedPolicy({ message, untrustedContext: input.untrustedContext, allowlist: deps.resolvedAllowlist ?? resolveAllowlist({ toolMetadata: deps.toolMetadata || {}, discoverExtensionTools: config.discoverExtensionTools }), maxToolCalls: Math.min(input.maxToolCalls ?? config.maxToolCalls, ABSOLUTE_CEILING) });
@@ -997,6 +1000,8 @@ async function _runPreparedTurn({ input, deps, config, effectiveSessionId, isEph
     return _earlyLoopErrorResult({ loopResult, effectiveSessionId, requestedTier, provider: provider.PROVIDER_NAME, autoEscalation, classification, relatedTurns });
   }
 
+  const proposals = input.proposeActions === true ? finalizeProposals({ reply: loopResult.finalReply, role: input.caller?.role, untrusted: turn.untrusted, projectId: input.caller?.projectId }) : null;
+  if (proposals) loopResult.finalReply = proposals.reply;
   const shaped = enforceMaxChars(loopResult.finalReply, input.responseFormat?.maxChars);
   loopResult.finalReply = shaped.reply;
 
@@ -1004,13 +1009,13 @@ async function _runPreparedTurn({ input, deps, config, effectiveSessionId, isEph
   await _persistTurnToStores({ isEphemeral, effectiveSessionId, message, classification, finalReply: loopResult.finalReply, allToolCalls: loopResult.allToolCalls, totalTokensIn: loopResult.totalTokensIn, totalTokensOut: loopResult.totalTokensOut, truncated: loopResult.truncated, cwd, deps });
   _emitTurnComplete(deps.hub, { tokensIn: loopResult.totalTokensIn, tokensOut: loopResult.totalTokensOut, toolCallCount: loopResult.allToolCalls.length, truncated: loopResult.truncated, sessionId: effectiveSessionId, timestamp: new Date().toISOString() });
 
-  return _successResult({ loopResult, effectiveSessionId, requestedTier, provider: provider.PROVIDER_NAME, autoEscalation, classification, relatedTurns, quorumResult: quorumOut.quorumResult, truncated: buildTruncated({ legacy: loopResult.truncated, optIn: hasNewTurnFields(input), inputFlags: inputTruncated, reply: shaped.truncated }) });
+  return _successResult({ loopResult, effectiveSessionId, requestedTier, provider: provider.PROVIDER_NAME, autoEscalation, classification, relatedTurns, quorumResult: quorumOut.quorumResult, truncated: buildTruncated({ legacy: loopResult.truncated, optIn: hasNewTurnFields(input), inputFlags: inputTruncated, reply: shaped.truncated }), proposals });
 }
 
 export async function runTurn(input, deps = {}) {
   const prepared = await _prepareTurn(input, deps);
-  if (prepared.done) return prepared.result;
-  return _runPreparedTurn(prepared);
+  const result = prepared.done ? prepared.result : await _runPreparedTurn(prepared);
+  return input?.proposeActions === true && result.error !== "INVALID_INPUT" && !("proposedActions" in result) ? { ...result, ...emptyProposals() } : result;
 }
 
 // ─── Observer Reasoning Turn ────────────────────────────────────────

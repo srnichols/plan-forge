@@ -741,6 +741,100 @@ Degradation: <2 successful dry-runs → falls back to normal execution. Reviewer
 | Test robustness | Hardcoded dates | **Relative dates** | Better |
 | Edge cases | Standard | **+voided regen, +sequence** | Better |
 
+## Forge-Master Front-Door Contract
+
+`forge_master_ask` accepts these optional, additive inputs. Invalid values return
+`error: "INVALID_INPUT"` and name the offending `field`; if text is capped,
+`truncated` reports the relevant flag.
+
+| Input | Contract |
+|-------|----------|
+| `caller` | Object requiring `role` (`owner`, `approver`, or `viewer`) and `channel` (`dashboard`, `vscode`, `chat`, or `api`). Optional `surface`, `projectId`, and `topic` are informational strings. |
+| `responseFormat` | `style` is `standard` or `brief`; `maxChars` is an integer from 200 to 20,000. A reply exceeding the limit is cut at a readable boundary and ends with `…(truncated — ask for more)`. |
+| `untrustedContext` | Array of `{kind, source?, text}` items; `kind` is `forward`, `link`, `transcript`, `file`, or `other`. Text is capped at 8 KB total. |
+| `contextBlocks` | Array of trusted `{title, text}` items, capped at 4 KB total. |
+| `proposeActions` | Set to `true` to request validated, structured suggestions. |
+
+When text is capped, the opt-in `truncated` object reports `untrusted: true`
+and/or `context: true`; reply shaping is reported separately by `reply`.
+
+When `proposeActions: true`, the response adds `proposedActions` (at most three)
+and `proposedActionsMessage`. Each action contains `type`, `projectId`, schema-
+validated `args`, `rationale` (at most 200 characters), `confidence` (`low`,
+`medium`, or `high`), `origin` (`trusted` or `untrusted`), and `mutating`
+(derived from action type). Viewer callers may receive only `bug`, `idea`, and
+`remember` actions; owner and approver callers may receive all supported types.
+`proposedActionsMessage` explains when no action was proposed. Proposals are
+suggestions only: Forge-Master never executes, approves, or queues them, and
+role filtering does not replace enforcement by the caller's adapter.
+
+The additive `usage` object is
+`{tokensIn, tokensOut, costUSD, model, provider}`. Unknown values are `null`,
+not `0`; existing top-level response fields remain available.
+
+**Trust boundary.** Put third-party material only in `untrustedContext`.
+Forge-Master wraps it in randomized fences, narrows available tools to a
+read-only subset, and caps the turn at three tool calls. Fences identify data as
+untrusted; they do not make an unsafe caller or adapter safe.
+
+**Observer event.** `forge-master-insight` carries `ts`, optional `runId`, and
+an `insight` with a stable `id`, severity (`info`, `warn`, or `critical`), a
+summary limited to 200 characters, up to five evidence references, and a
+nullable `suggestedAction`. Each observer turn emits at most five insights.
+Use paginated `forge_master_observe` with `action: "status"` (`limit` and
+`cursor`) to read retained events. See
+[Forge-Master Observer Events](../pforge-mcp/EVENTS.md#forge-master-observer-events).
+
+Example request:
+
+```json
+{
+  "message": "Summarize this forwarded note and suggest a next step.",
+  "caller": { "role": "approver", "channel": "chat" },
+  "responseFormat": { "style": "brief", "maxChars": 1200 },
+  "proposeActions": true,
+  "untrustedContext": [
+    { "kind": "forward", "source": "forwarded message", "text": "The validation gate failed twice." }
+  ]
+}
+```
+
+Example response with a proposal:
+
+```json
+{
+  "sessionId": "session-example",
+  "reply": "The forwarded note reports two validation failures.",
+  "toolCalls": [],
+  "tokensIn": 120,
+  "tokensOut": 35,
+  "totalCostUSD": 0.0003,
+  "truncated": { "budget": false, "reply": false, "context": false, "untrusted": false },
+  "usage": { "tokensIn": 120, "tokensOut": 35, "costUSD": 0.0003, "model": "resolved-model", "provider": "resolved-provider" },
+  "proposedActions": [
+    {
+      "type": "task",
+      "projectId": "project-example",
+      "args": { "description": "Review the failing validation gate" },
+      "rationale": "The note reports repeated failures.",
+      "confidence": "medium",
+      "origin": "untrusted",
+      "mutating": true
+    }
+  ],
+  "proposedActionsMessage": "1 action(s) proposed. Forge-Master does not execute them; the caller decides."
+}
+```
+
+Example response when no action is proposed:
+
+```json
+{
+  "proposedActions": [],
+  "proposedActionsMessage": "No actions proposed — the answer is informational."
+}
+```
+
 ## Memory Layers
 
 Plan Forge uses three distinct memory systems. Each has a specific role in the 3-session pipeline:
@@ -752,6 +846,12 @@ Plan Forge uses three distinct memory systems. Each has a specific role in the 3
 | **OpenBrain** | Semantic vector memory via MCP `search_thoughts` / `capture_thought` | Global (workspace-agnostic) | OpenBrain MCP server | Auto-injecting relevant prior decisions before each slice begins |
 
 All three are complementary. A typical phase uses all three: Copilot Memory for quick notes, the session bridge files for structured handoffs, and OpenBrain for surfacing past decisions automatically without manual prompting.
+
+`forge_memory_capture` supports `origin` (`trusted` or `untrusted`), `tags` (up to
+10 strings matching `[a-z0-9:-]{1,40}`), and `visibility` (`normal` or
+`restricted`). Defaults are `trusted`, no tags, and `normal`; older memories
+without provenance use `trusted` and `normal`. Provenance is read from OpenBrain
+metadata first, then top-level fields, then the inline header.
 
 See [COPILOT-VSCODE-GUIDE.md#memory-layers](COPILOT-VSCODE-GUIDE.md#memory-layers) for the full usage guide.
 
@@ -766,6 +866,12 @@ When configured (`.vscode/mcp.json` includes `openbrain`), the orchestrator inje
 | After run | Summary field | `_memoryCapture` with run summary + cost anomaly |
 
 Key OpenBrain tools: `search_thoughts`, `capture_thought`, `capture_thoughts`, `thought_stats`
+
+When non-default provenance is written to OpenBrain, a leading
+`[[pforge origin=… visibility=… tags=…]]` header is also stored; an existing
+header is replaced rather than stacked. Every recalled `untrusted` memory takes
+the fenced untrusted-context path, never the trusted prompt path. `restricted`
+memories are excluded from cross-project recall.
 
 ## Presets
 

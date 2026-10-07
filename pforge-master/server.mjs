@@ -31,6 +31,7 @@ import { fileURLToPath } from "node:url";
 import { existsSync } from "node:fs";
 
 import { runTurn } from "./src/reasoning.mjs";
+import { NEW_TURN_FIELDS } from "./src/turn-input.mjs";
 import { getForgeMasterConfig } from "./src/config.mjs";
 import { resolveAllowlist } from "./src/allowlist.mjs";
 import { createMcpClient } from "./src/mcp-client.mjs";
@@ -50,7 +51,9 @@ const FORGE_MASTER_ASK_TOOL = {
     "Ask Forge-Master a question about your Plan Forge project. " +
     "Forge-Master classifies the intent, retrieves relevant context from memory tiers, " +
     "and calls read-only Plan Forge tools to ground its answer. " +
-    "Write tools require an approval card before execution.",
+    "Write tools require an approval card before execution. Optional caller, responseFormat, " +
+    "untrustedContext, contextBlocks, and proposeActions fields are accepted and validated; " +
+    "this version does not shape responses or propose actions. Turn results include usage telemetry.",
   inputSchema: {
     type: "object",
     properties: {
@@ -65,6 +68,55 @@ const FORGE_MASTER_ASK_TOOL = {
       maxToolCalls: {
         type: "number",
         description: "Maximum number of tool calls per turn (default: from config, hard ceiling: 10).",
+      },
+      caller: {
+        type: "object",
+        description: "Optional caller metadata; fields are accepted and validated.",
+        properties: {
+          role: { type: "string", enum: ["owner", "approver", "viewer"] },
+          channel: { type: "string", enum: ["dashboard", "vscode", "chat", "api"] },
+          surface: { type: "string" },
+          projectId: { type: "string" },
+          topic: { type: "string" },
+        },
+        required: ["role", "channel"],
+      },
+      responseFormat: {
+        type: "object",
+        description: "Optional response-format metadata; fields are accepted and validated.",
+        properties: {
+          style: { type: "string", enum: ["standard", "brief"] },
+          maxChars: { type: "integer", minimum: 200, maximum: 20000 },
+        },
+      },
+      untrustedContext: {
+        type: "array",
+        description: "Optional untrusted context; entries are accepted and validated, with text capped at 8 KB total.",
+        items: {
+          type: "object",
+          properties: {
+            kind: { type: "string", enum: ["forward", "link", "transcript", "file", "other"] },
+            source: { type: "string" },
+            text: { type: "string" },
+          },
+          required: ["kind", "text"],
+        },
+      },
+      contextBlocks: {
+        type: "array",
+        description: "Optional context blocks; entries are accepted and validated, with text capped at 4 KB total.",
+        items: {
+          type: "object",
+          properties: {
+            title: { type: "string" },
+            text: { type: "string" },
+          },
+          required: ["title", "text"],
+        },
+      },
+      proposeActions: {
+        type: "boolean",
+        description: "Optional proposal preference; accepted and validated, with no proposal behavior in this release.",
       },
       path: {
         type: "string",
@@ -248,6 +300,9 @@ async function _handleAsk(args) {
         sessionId: args.sessionId || undefined,
         maxToolCalls: args.maxToolCalls || undefined,
         cwd,
+        ...Object.fromEntries(NEW_TURN_FIELDS
+          .filter((field) => args[field] !== undefined)
+          .map((field) => [field, args[field]])),
       },
       {
         mcpClient: downstreamClient,

@@ -41,6 +41,7 @@ import * as githubCopilotProvider from "./providers/github-copilot-tools.mjs";
 import { checkBudget, recordSpend, loadBudgetState, saveBudgetState } from "./observer-budget.mjs";
 import { buildObserverPrompt } from "./observer-prompt.mjs";
 import { OBSERVER_NARRATION_EVENT_TYPE } from "./observer-loop.mjs";
+import { buildUsage, invalidInputResult, normalizeTurnInput } from "./turn-input.mjs";
 
 // ─── Recall-eligible lanes ────────────────────────────────────────────
 
@@ -391,8 +392,9 @@ function _resolveModelForProvider(providerName, config, currentModel) {
 }
 
 async function _runPlannerPhase({ provider, currentModel, apiKey, message, classification, allowlist, cwd, deps, systemPrompt }) {
-  if (deps.skipPlanner || typeof provider?.sendTurn !== "function") return { plannerSynthesis: null, plannerToolCalls: [], tokensIn: 0, tokensOut: 0, costUSD: 0 };
+  if (deps.skipPlanner || typeof provider?.sendTurn !== "function") return { plannerSynthesis: null, plannerToolCalls: [], tokensIn: 0, tokensOut: 0, costUSD: 0, usageKnown: false };
   let tokensIn = 0, tokensOut = 0, costUSD = 0;
+  let usageKnown = false;
   try {
     const callPlannerModel = async ({ systemPrompt: sp, userMessage: um }) => {
       const planResp = await provider.sendTurn({
@@ -402,6 +404,7 @@ async function _runPlannerPhase({ provider, currentModel, apiKey, message, class
         apiKey: apiKey || "",
         signal: undefined,
       });
+      if (Number.isFinite(planResp.tokensIn) || Number.isFinite(planResp.tokensOut)) usageKnown = true;
       tokensIn += planResp.tokensIn || 0;
       tokensOut += planResp.tokensOut || 0;
       costUSD += computeTurnCost(currentModel, planResp.tokensIn || 0, planResp.tokensOut || 0);
@@ -409,7 +412,7 @@ async function _runPlannerPhase({ provider, currentModel, apiKey, message, class
     };
     const planResult = await runPlanner({ userMessage: message, classification, lane: classification.lane, allowedTools: allowlist, deps: { callPlannerModel } });
     try { if (typeof deps.onPlan === "function") deps.onPlan(planResult); } catch { /* observer */ }
-    if (!planResult.steps || planResult.steps.length === 0) return { plannerSynthesis: null, plannerToolCalls: [], tokensIn, tokensOut, costUSD };
+    if (!planResult.steps || planResult.steps.length === 0) return { plannerSynthesis: null, plannerToolCalls: [], tokensIn, tokensOut, costUSD, usageKnown };
 
     const planDispatch = async (step) => invokeAllowlisted(
       { tool: step.tool, args: step.args || {}, cwd },
@@ -429,9 +432,9 @@ async function _runPlannerPhase({ provider, currentModel, apiKey, message, class
       const trunc = output.length > 800 ? output.slice(0, 800) + "…" : output;
       return `[${r.step.id}] ${r.step.tool} → ${status}\n${trunc}`;
     });
-    return { plannerSynthesis: lines.join("\n\n"), plannerToolCalls, tokensIn, tokensOut, costUSD };
+    return { plannerSynthesis: lines.join("\n\n"), plannerToolCalls, tokensIn, tokensOut, costUSD, usageKnown };
   } catch {
-    return { plannerSynthesis: null, plannerToolCalls: [], tokensIn, tokensOut, costUSD };
+    return { plannerSynthesis: null, plannerToolCalls: [], tokensIn, tokensOut, costUSD, usageKnown };
   }
 }
 
@@ -499,7 +502,7 @@ async function _dispatchToolCalls({ response, conversationMessages, allToolCalls
   return { done: false };
 }
 
-async function _executeToolUseLoop({ provider, conversationMessages, toolSchemas, maxIterations, effectiveMaxToolCalls, allowlist, cwd, deps, config, currentTier, currentModel, apiKey, fallbackFromTier, allToolCalls, totalTokensIn, totalTokensOut, totalCostUSD }) {
+async function _executeToolUseLoop({ provider, conversationMessages, toolSchemas, maxIterations, effectiveMaxToolCalls, allowlist, cwd, deps, config, currentTier, currentModel, apiKey, fallbackFromTier, allToolCalls, totalTokensIn, totalTokensOut, totalCostUSD, usageKnown }) {
   let finalReply = "", truncated = false, iterationCount = 0;
   let _currentTier = currentTier, _currentModel = currentModel, _fallbackFromTier = fallbackFromTier;
 
@@ -507,12 +510,13 @@ async function _executeToolUseLoop({ provider, conversationMessages, toolSchemas
     iterationCount++;
     const callResult = await _callWithTierFallback({ provider, messages: conversationMessages, toolSchemas, currentTier: _currentTier, currentModel: _currentModel, config, apiKey, fallbackFromTier: _fallbackFromTier, partialReply: finalReply });
     if (!callResult.ok) {
-      return { earlyError: callResult.earlyError, currentTier: callResult.currentTier, currentModel: callResult.currentModel, fallbackFromTier: callResult.fallbackFromTier, allToolCalls, totalTokensIn, totalTokensOut, totalCostUSD, finalReply: callResult.finalReply };
+      return { earlyError: callResult.earlyError, currentTier: callResult.currentTier, currentModel: callResult.currentModel, fallbackFromTier: callResult.fallbackFromTier, allToolCalls, totalTokensIn, totalTokensOut, totalCostUSD, finalReply: callResult.finalReply, usageKnown };
     }
     _currentTier = callResult.currentTier;
     _currentModel = callResult.currentModel;
     _fallbackFromTier = callResult.fallbackFromTier;
     const { response } = callResult;
+    if (Number.isFinite(response.tokensIn) || Number.isFinite(response.tokensOut)) usageKnown = true;
     totalTokensIn += response.tokensIn || 0;
     totalTokensOut += response.tokensOut || 0;
     totalCostUSD += computeTurnCost(_currentModel, response.tokensIn || 0, response.tokensOut || 0);
@@ -529,10 +533,10 @@ async function _executeToolUseLoop({ provider, conversationMessages, toolSchemas
   }
 
   if (!finalReply && iterationCount >= maxIterations) { truncated = true; finalReply = "(tool budget exceeded — partial response)"; }
-  return { allToolCalls, totalTokensIn, totalTokensOut, totalCostUSD, finalReply, truncated, currentTier: _currentTier, currentModel: _currentModel, fallbackFromTier: _fallbackFromTier };
+  return { allToolCalls, totalTokensIn, totalTokensOut, totalCostUSD, finalReply, truncated, currentTier: _currentTier, currentModel: _currentModel, fallbackFromTier: _fallbackFromTier, usageKnown };
 }
 
-async function _runProviderLoop({ provider, conversationMessages, toolSchemas, effectiveMaxToolCalls, allowlist, cwd, deps, currentModel, allToolCalls, totalTokensIn, totalTokensOut, totalCostUSD, systemPrompt }) {
+async function _runProviderLoop({ provider, conversationMessages, toolSchemas, effectiveMaxToolCalls, allowlist, cwd, deps, currentModel, allToolCalls, totalTokensIn, totalTokensOut, totalCostUSD, usageKnown, systemPrompt }) {
   const dispatchTool = async (name, args) => invokeAllowlisted(
     { tool: name, args: args || {}, cwd },
     { resolvedAllowlist: allowlist, dispatcher: deps.dispatcher || (async () => ({})), hub: deps.hub || null },
@@ -567,6 +571,7 @@ async function _runProviderLoop({ provider, conversationMessages, toolSchemas, e
     truncated: false,
     currentModel: resolvedModel,
     fallbackFromTier: null,
+    usageKnown: usageKnown || Number.isFinite(response.tokensIn) || Number.isFinite(response.tokensOut),
   };
 }
 
@@ -589,7 +594,7 @@ async function _handleOfftopicTurn({ isEphemeral, effectiveSessionId, message, c
   if (!isEphemeral) {
     try { await storeAppendTurn(effectiveSessionId, { userMessage: message, classification, replyHash: hashReply(OFFTOPIC_REDIRECT), toolCalls: [] }, cwd); } catch { /* non-fatal */ }
   }
-  return { reply: OFFTOPIC_REDIRECT, toolCalls: [], tokensIn: 0, tokensOut: 0, totalCostUSD: 0, truncated: false, sessionId: effectiveSessionId, requestedTier, resolvedModel: currentModel, fallbackFromTier: null, escalated: false, autoEscalated: false, fromTier: null, toTier: null, reason: null, classification: classification ?? null, relatedTurns: [] };
+  return { reply: OFFTOPIC_REDIRECT, toolCalls: [], tokensIn: 0, tokensOut: 0, totalCostUSD: 0, usage: buildUsage({ tokensIn: 0, tokensOut: 0, costUSD: 0, model: null, provider: null }), truncated: false, sessionId: effectiveSessionId, requestedTier, resolvedModel: currentModel, fallbackFromTier: null, escalated: false, autoEscalated: false, fromTier: null, toTier: null, reason: null, classification: classification ?? null, relatedTurns: [] };
 }
 
 function _formatCrossRunSnap(snap) {
@@ -638,6 +643,7 @@ function _turnTelemetrySeed(plannerOut, quorumOut) {
     totalTokensIn: plannerOut.tokensIn,
     totalTokensOut: plannerOut.tokensOut,
     totalCostUSD: plannerOut.costUSD + quorumOut.costUSD,
+    usageKnown: plannerOut.usageKnown,
   };
 }
 
@@ -672,6 +678,7 @@ function _noProviderResult({ effectiveSessionId, requestedTier, currentModel, au
     tokensIn: 0,
     tokensOut: 0,
     totalCostUSD: 0,
+    usage: buildUsage({ tokensIn: null, tokensOut: null, costUSD: null, model: currentModel, provider: null }),
     truncated: false,
     error: "no provider available",
     suggestion: NO_PROVIDER_SUGGESTION,
@@ -679,26 +686,40 @@ function _noProviderResult({ effectiveSessionId, requestedTier, currentModel, au
   };
 }
 
-function _providerLoopErrorResult({ err, telemetry, effectiveSessionId, requestedTier, currentModel, autoEscalation, classification, relatedTurns }) {
+function _providerLoopErrorResult({ err, telemetry, effectiveSessionId, requestedTier, currentModel, provider, autoEscalation, classification, relatedTurns }) {
   return {
     reply: "",
     toolCalls: telemetry.allToolCalls,
     tokensIn: telemetry.totalTokensIn,
     tokensOut: telemetry.totalTokensOut,
     totalCostUSD: telemetry.totalCostUSD,
+    usage: buildUsage({
+      tokensIn: telemetry.usageKnown ? telemetry.totalTokensIn : null,
+      tokensOut: telemetry.usageKnown ? telemetry.totalTokensOut : null,
+      costUSD: telemetry.usageKnown ? telemetry.totalCostUSD : null,
+      model: currentModel,
+      provider,
+    }),
     truncated: false,
     error: err?.code || "reasoning_model_unavailable",
     ..._turnMetadata({ effectiveSessionId, requestedTier, resolvedModel: currentModel, autoEscalation, classification, relatedTurns }),
   };
 }
 
-function _earlyLoopErrorResult({ loopResult, effectiveSessionId, requestedTier, autoEscalation, classification, relatedTurns }) {
+function _earlyLoopErrorResult({ loopResult, effectiveSessionId, requestedTier, provider, autoEscalation, classification, relatedTurns }) {
   return {
     reply: loopResult.finalReply || "",
     toolCalls: loopResult.allToolCalls,
     tokensIn: loopResult.totalTokensIn,
     tokensOut: loopResult.totalTokensOut,
     totalCostUSD: loopResult.totalCostUSD,
+    usage: buildUsage({
+      tokensIn: loopResult.usageKnown ? loopResult.totalTokensIn : null,
+      tokensOut: loopResult.usageKnown ? loopResult.totalTokensOut : null,
+      costUSD: loopResult.usageKnown ? loopResult.totalCostUSD : null,
+      model: loopResult.currentModel,
+      provider: loopResult.providerName ?? provider,
+    }),
     truncated: false,
     error: loopResult.earlyError,
     ..._turnMetadata({
@@ -713,13 +734,20 @@ function _earlyLoopErrorResult({ loopResult, effectiveSessionId, requestedTier, 
   };
 }
 
-function _successResult({ loopResult, effectiveSessionId, requestedTier, autoEscalation, classification, relatedTurns, quorumResult }) {
+function _successResult({ loopResult, effectiveSessionId, requestedTier, provider, autoEscalation, classification, relatedTurns, quorumResult }) {
   return {
     reply: loopResult.finalReply,
     toolCalls: loopResult.allToolCalls,
     tokensIn: loopResult.totalTokensIn,
     tokensOut: loopResult.totalTokensOut,
     totalCostUSD: loopResult.totalCostUSD,
+    usage: buildUsage({
+      tokensIn: loopResult.usageKnown ? loopResult.totalTokensIn : null,
+      tokensOut: loopResult.usageKnown ? loopResult.totalTokensOut : null,
+      costUSD: loopResult.usageKnown ? loopResult.totalCostUSD : null,
+      model: loopResult.currentModel,
+      provider: loopResult.providerName ?? provider,
+    }),
     truncated: loopResult.truncated,
     ..._turnMetadata({
       effectiveSessionId,
@@ -737,13 +765,14 @@ function _successResult({ loopResult, effectiveSessionId, requestedTier, autoEsc
 async function _executeFallbackLoopAfterProviderError({ err, provider, conversationMessages, toolSchemas, effectiveMaxToolCalls, allowlist, cwd, deps, config, currentTier, currentModel, telemetry, errorContext }) {
   const fallbackProvider = await _resolveFallbackProvider(config, deps, provider);
   if (!fallbackProvider) {
-    return { earlyReturn: _providerLoopErrorResult({ err, telemetry, currentModel, ...errorContext }) };
+    return { earlyReturn: _providerLoopErrorResult({ err, telemetry, currentModel, provider: provider.PROVIDER_NAME, ...errorContext }) };
   }
 
   const fallbackModel = _resolveModelForProvider(fallbackProvider.PROVIDER_NAME, config, currentModel);
   const fallbackApiKey = _resolveApiKey(config, deps, fallbackProvider.PROVIDER_NAME);
   return {
-    loopResult: await _executeToolUseLoop({
+    loopResult: {
+      ...await _executeToolUseLoop({
       provider: fallbackProvider,
       conversationMessages,
       toolSchemas,
@@ -758,7 +787,9 @@ async function _executeFallbackLoopAfterProviderError({ err, provider, conversat
       apiKey: fallbackApiKey,
       fallbackFromTier: provider.PROVIDER_NAME || "githubCopilot",
       ...telemetry,
-    }),
+      }),
+      providerName: fallbackProvider.PROVIDER_NAME,
+    },
   };
 }
 
@@ -865,6 +896,9 @@ async function _runReactiveLoop({ provider, conversationMessages, toolSchemas, e
  * }>}
  */
 async function _prepareTurn(input, deps) {
+  const norm = normalizeTurnInput(input);
+  if (!norm.ok) return { done: true, result: invalidInputResult(norm) };
+  input = norm.input;
   const { message, cwd } = input;
   const config = deps.config ?? getForgeMasterConfig({ cwd });
   const effectiveSessionId = ensureSessionId(deps.sessionId ?? input.sessionId);
@@ -883,7 +917,7 @@ async function _prepareTurn(input, deps) {
       result: await _handleOfftopicTurn({ isEphemeral, effectiveSessionId, message, classification, requestedTier, currentModel, cwd }),
     };
   }
-  return { done: false, input, deps, config, effectiveSessionId, isEphemeral, priorTurns, tierState, classification };
+  return { done: false, input, inputTruncated: norm.truncated, deps, config, effectiveSessionId, isEphemeral, priorTurns, tierState, classification };
 }
 
 async function _runPreparedTurn({ input, deps, config, effectiveSessionId, isEphemeral, priorTurns, tierState, classification }) {
@@ -932,7 +966,7 @@ async function _runPreparedTurn({ input, deps, config, effectiveSessionId, isEph
   // ── 7. Tool-use loop ──────────────────────────────────────────────
   const conversationMessages = _buildConversationMessages({ systemPrompt, message, plannerSynthesis: plannerOut.plannerSynthesis });
   const telemetry = _turnTelemetrySeed(plannerOut, quorumOut);
-  const errorContext = { effectiveSessionId, requestedTier, autoEscalation, classification, relatedTurns };
+  const errorContext = { effectiveSessionId, requestedTier, autoEscalation, classification, relatedTurns, provider: provider.PROVIDER_NAME };
   const { loopResult, earlyReturn } = await _runReactiveLoop({
     provider,
     conversationMessages,
@@ -952,14 +986,14 @@ async function _runPreparedTurn({ input, deps, config, effectiveSessionId, isEph
   if (earlyReturn) return earlyReturn;
 
   if (loopResult.earlyError) {
-    return _earlyLoopErrorResult({ loopResult, effectiveSessionId, requestedTier, autoEscalation, classification, relatedTurns });
+    return _earlyLoopErrorResult({ loopResult, effectiveSessionId, requestedTier, provider: provider.PROVIDER_NAME, autoEscalation, classification, relatedTurns });
   }
 
   // ── 8. Persist + emit ─────────────────────────────────────────────
   await _persistTurnToStores({ isEphemeral, effectiveSessionId, message, classification, finalReply: loopResult.finalReply, allToolCalls: loopResult.allToolCalls, totalTokensIn: loopResult.totalTokensIn, totalTokensOut: loopResult.totalTokensOut, truncated: loopResult.truncated, cwd, deps });
   _emitTurnComplete(deps.hub, { tokensIn: loopResult.totalTokensIn, tokensOut: loopResult.totalTokensOut, toolCallCount: loopResult.allToolCalls.length, truncated: loopResult.truncated, sessionId: effectiveSessionId, timestamp: new Date().toISOString() });
 
-  return _successResult({ loopResult, effectiveSessionId, requestedTier, autoEscalation, classification, relatedTurns, quorumResult: quorumOut.quorumResult });
+  return _successResult({ loopResult, effectiveSessionId, requestedTier, provider: provider.PROVIDER_NAME, autoEscalation, classification, relatedTurns, quorumResult: quorumOut.quorumResult });
 }
 
 export async function runTurn(input, deps = {}) {

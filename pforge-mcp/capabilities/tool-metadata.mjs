@@ -1591,21 +1591,31 @@ export const TOOL_METADATA = {
     risk: "low",
     agentGuidance: "Use forge_master_ask for multi-step reasoning about Plan Forge workflows — ideating features, troubleshooting failures, querying run status, or funneling ideas into Crucible smelts. Also serves as the advisory / CTO-in-a-box lane for architectural guidance: ask 'should I refactor or ship X?', 'what is the right approach for Y?', 'architecture advice on Z' — the intent router classifies these to the advisory lane and the system prompt injects project principles. Forge-Master classifies intent, fetches memory context, and orchestrates tool calls on your behalf. Prefer this over manually calling individual forge tools when the task is open-ended or involves multiple steps. Do NOT use for direct file edits or code generation — Forge-Master is read-only.",
     errors: {
+      INVALID_INPUT: {
+        message: "A supplied forge_master_ask field is invalid",
+        recovery: "fix the named `field` (enum/type/range) and retry",
+      },
       reasoning_model_unavailable: {
         message: "No reasoning provider configured",
         recovery: "Set ANTHROPIC_API_KEY, OPENAI_API_KEY, or XAI_API_KEY, or configure forgeMaster.reasoningModel in .forge.json",
       },
     },
     example: {
-      input: { message: "I want to add multi-tenant billing to my pipeline", sessionId: "sess-abc123" },
+      input: {
+        message: "How can I check the current status of my plan?",
+        sessionId: "sess-abc123",
+        caller: { role: "owner", channel: "chat" },
+        responseFormat: { style: "brief", maxChars: 1200 },
+      },
       output: {
         sessionId: "sess-abc123",
-        reply: "I've started a Crucible smelt for your multi-tenant billing feature...",
-        toolCalls: [{ name: "forge_crucible_submit", args: {}, resultSummary: "Smelt created", costUSD: 0.002 }],
-        tokensIn: 1200,
-        tokensOut: 450,
-        totalCostUSD: 0.003,
+        reply: "Your current plan status is available through the read-only plan status tool.",
+        toolCalls: [{ name: "forge_plan_status", args: {}, resultSummary: "Plan status retrieved", costUSD: 0 }],
+        tokensIn: 120,
+        tokensOut: 45,
+        totalCostUSD: 0.0003,
         truncated: false,
+        usage: { tokensIn: 120, tokensOut: 45, costUSD: 0.0003, model: "resolved-model", provider: "resolved-provider" },
       },
     },
   },

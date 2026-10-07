@@ -1127,13 +1127,62 @@ export const TOOLS = [
   },
   {
     name: "forge_master_ask",
-    description: "Ask Forge-Master to reason about Plan Forge workflows — ideate features via Crucible, troubleshoot failures, query run status, or get operational guidance. Classifies intent, fetches memory context, and orchestrates read-only tool calls. Returns reply text, tool call history, token counts, and session ID for conversation continuity.",
+    description: "Ask Forge-Master to reason about Plan Forge workflows — ideate features, troubleshoot failures, query run status, or get operational guidance. Classifies intent, fetches memory context, and orchestrates read-only tool calls. Returns reply text, tool call history, token counts, usage, and session ID. Optional caller, responseFormat, untrustedContext, contextBlocks, and proposeActions fields are accepted and validated; no response shaping or action proposals are performed here.",
     inputSchema: {
       type: "object",
       properties: {
         message: { type: "string", description: "Your question or request for Forge-Master" },
         sessionId: { type: "string", description: "Session ID for conversation continuity (omit for new session)" },
         maxToolCalls: { type: "number", description: "Max tool calls per turn (default: 5, max: 10)" },
+        caller: {
+          type: "object",
+          description: "Optional caller metadata; fields are accepted and validated.",
+          properties: {
+            role: { type: "string", enum: ["owner", "approver", "viewer"] },
+            channel: { type: "string", enum: ["dashboard", "vscode", "chat", "api"] },
+            surface: { type: "string" },
+            projectId: { type: "string" },
+            topic: { type: "string" },
+          },
+          required: ["role", "channel"],
+        },
+        responseFormat: {
+          type: "object",
+          description: "Optional response-format metadata; fields are accepted and validated.",
+          properties: {
+            style: { type: "string", enum: ["standard", "brief"] },
+            maxChars: { type: "integer", minimum: 200, maximum: 20000 },
+          },
+        },
+        untrustedContext: {
+          type: "array",
+          description: "Optional untrusted context; entries are accepted and validated, with text capped at 8 KB total.",
+          items: {
+            type: "object",
+            properties: {
+              kind: { type: "string", enum: ["forward", "link", "transcript", "file", "other"] },
+              source: { type: "string" },
+              text: { type: "string" },
+            },
+            required: ["kind", "text"],
+          },
+        },
+        contextBlocks: {
+          type: "array",
+          description: "Optional context blocks; entries are accepted and validated, with text capped at 4 KB total.",
+          items: {
+            type: "object",
+            properties: {
+              title: { type: "string" },
+              text: { type: "string" },
+            },
+            required: ["title", "text"],
+          },
+        },
+        proposeActions: {
+          type: "boolean",
+          description: "Optional proposal preference; accepted and validated, with no proposal behavior in this release.",
+        },
         path: { type: "string", description: "Project directory (default: current)" },
       },
       required: ["message"],

@@ -46,6 +46,7 @@ import { buildShapingSections, enforceMaxChars, hasNewTurnFields, buildTruncated
 import { appendContextBlocks } from "./context-blocks.mjs";
 import { applyUntrustedPolicy } from "./untrusted.mjs";
 import { buildProposalInstruction, finalizeProposals, emptyProposals } from "./proposed-actions.mjs";
+import { emitObserverInsights, finalizeInsights } from "./observer-insights.mjs";
 
 // ─── Recall-eligible lanes ────────────────────────────────────────────
 
@@ -1158,6 +1159,7 @@ function emitObserverNarration({ hub, batch, narration, usd, observerConfig }) {
  *   _recordSpend?: Function,    recordSpend override for testing.
  *   _loadBudgetState?: Function loadBudgetState override for testing.
  *   _saveBudgetState?: Function saveBudgetState override for testing.
+ *   insightRing?: object,     Optional injected structured-insight ring.
  * }} [opts]
  * @returns {Promise<{
  *   ok: boolean,
@@ -1167,6 +1169,7 @@ function emitObserverNarration({ hub, batch, narration, usd, observerConfig }) {
  *   tokensIn?: number,
  *   tokensOut?: number,
  *   usd?: number,
+ *   insights?: object[],
  * }>}
  */
 export async function runObserverTurn(batch, opts = {}) {
@@ -1205,7 +1208,7 @@ export async function runObserverTurn(batch, opts = {}) {
     };
   }
 
-  const narration = response.content || "";
+  const { narration, insights } = finalizeInsights(response.content || "");
   const tokensIn = response.tokensIn || 0;
   const tokensOut = response.tokensOut || 0;
   const usd = computeTurnCost(resolvedModel, tokensIn, tokensOut);
@@ -1214,6 +1217,7 @@ export async function runObserverTurn(batch, opts = {}) {
   saveObserverBudgetState(saveBudgetStateFn, updatedState, cwd);
   captureObserverNarration({ observerConfig: observerConfig, rememberFn: _remember, batch: batch, narration: narration, usd: usd });
   emitObserverNarration({ hub: hub, batch: batch, narration: narration, usd: usd, observerConfig: observerConfig });
+  emitObserverInsights({ hub, batch, insights, ring: opts.insightRing });
 
-  return { ok: true, narration, tokensIn, tokensOut, usd };
+  return { ok: true, narration, tokensIn, tokensOut, usd, insights };
 }

@@ -36,6 +36,7 @@ import { getForgeMasterConfig } from "./src/config.mjs";
 import { resolveAllowlist } from "./src/allowlist.mjs";
 import { createMcpClient } from "./src/mcp-client.mjs";
 import { startObserver } from "./src/observer-loop.mjs";
+import { paginateInsights } from "./src/observer-insights.mjs";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -131,8 +132,8 @@ const FORGE_MASTER_OBSERVE_TOOL = {
   name: "forge_master_observe",
   description:
     "Control the Forge-Master observer — a background hub subscriber that batches " +
-    "live Plan Forge events and (in later slices) narrates notable patterns. " +
-    "Observer is mute-by-default; LLM narration is wired in Slice 7. " +
+    "live Plan Forge events and can narrate notable patterns. " +
+    "status with limit or cursor returns insights with total, limit, cursor, nextCursor, hasMore, truncated, and an optional message. " +
     "Read-only: cannot invoke write tools or modify project files.",
   inputSchema: {
     type: "object",
@@ -149,6 +150,17 @@ const FORGE_MASTER_OBSERVE_TOOL = {
       detach: {
         type: "boolean",
         description: "If true, observer runs as a detached background process (not yet implemented — reserved for Slice 8).",
+      },
+      limit: {
+        type: "integer",
+        minimum: 1,
+        maximum: 25,
+        default: 10,
+        description: "Optional insight page size for status (default 10, maximum 25).",
+      },
+      cursor: {
+        type: "string",
+        description: "Optional opaque numeric sequence cursor for the next insight status page.",
       },
     },
     required: ["action"],
@@ -249,15 +261,21 @@ function _handleObserveStop() {
   return _textResult({ ok: true, message: "Observer stopped.", status: finalStatus });
 }
 
-function _handleObserveStatus() {
+function _handleObserveStatus(args = {}) {
+  const includeInsights = args.limit !== undefined || args.cursor !== undefined;
+  const page = includeInsights ? paginateInsights(args) : null;
+  if (page && !page.ok) return _textResult(page, true);
+
   const status = _activeObserver
     ? _activeObserver.getStatus()
     : { connected: false, stopped: true, message: "Observer has not been started." };
-  return _textResult({
+  const response = {
     ok: true,
     status,
     recentBatches: _observedBatches.slice(-5),
-  });
+  };
+  if (page) response.insights = page;
+  return _textResult(response);
 }
 
 function _handleObserve(args) {
@@ -278,7 +296,7 @@ function _handleObserve(args) {
     return _handleObserveStop();
   }
 
-  return _handleObserveStatus();
+  return _handleObserveStatus(args);
 }
 
 async function _handleAsk(args) {

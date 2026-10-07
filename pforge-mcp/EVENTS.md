@@ -26,8 +26,54 @@ Every event includes:
 | `version` | string | Schema version. Always `"1.0"`. |
 | `type` | string | Event type identifier (see sections below). |
 | `timestamp` | string | ISO-8601 UTC timestamp of emission. |
-| `source` | string | System that emitted the event. One of `orchestrator`, `worker`, `hub`, `bridge`, `liveguard`, `crucible`, `skill`, `watcher`, `audit`. |
+| `source` | string | System that emitted the event. One of `orchestrator`, `worker`, `hub`, `bridge`, `liveguard`, `crucible`, `skill`, `watcher`, `audit`, `forge-master`. |
 | `security_risk` | string | Security risk level assessed at emission time. One of `none`, `low`, `medium`, `high`, `critical`. Defaults to `none`. |
+
+---
+
+## Forge-Master Observer Events
+
+### `forge-master-insight`
+
+Emitted by Forge-Master after a successful observer model turn when the model
+identifies a notable pattern. The hub adds its common `version` and `timestamp`
+fields to this event envelope.
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `type` | string | Always `forge-master-insight`. |
+| `ts` | string | ISO-8601 timestamp for the insight observation. |
+| `source` | string | Always `forge-master`. |
+| `runId` | string | Included only when every event in the observed batch has the same non-empty run ID; limited to 80 characters. |
+| `insight.id` | string | Stable `fmi-` fingerprint for de-duplication. It excludes evidence refs and time. |
+| `insight.severity` | string | One of `info`, `warn`, or `critical`. |
+| `insight.summary` | string | Insight summary, limited to 200 characters. |
+| `insight.evidence` | array | Up to five `{eventType, ref}` references. |
+| `insight.suggestedAction` | object or null | Advisory recommendation only; it is never dispatched. |
+
+Each observer turn may emit at most five insights; each insight contains up to
+five evidence items. The summary limit is 200 characters. Insights are kept in
+a 50-entry in-process ring only and are lost when the process exits. Read them
+with `forge_master_observe` using `action: "status"` and optional `limit` and
+`cursor` pagination fields.
+
+```json
+{
+  "type": "forge-master-insight",
+  "version": "1.0",
+  "timestamp": "2026-10-07T17:10:00.000Z",
+  "ts": "2026-10-07T17:10:00.000Z",
+  "source": "forge-master",
+  "runId": "run-123",
+  "insight": {
+    "id": "fmi-0123456789abcdef",
+    "severity": "warn",
+    "summary": "The same gate failed repeatedly.",
+    "evidence": [{ "eventType": "gate-failed", "ref": "slice-2" }],
+    "suggestedAction": null
+  }
+}
+```
 
 ---
 

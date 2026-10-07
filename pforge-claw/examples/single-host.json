@@ -1,0 +1,30 @@
+{
+  "v": 1,
+  "instanceId": "<generated-by-init>",
+  "timezone": "Etc/UTC",
+  "channels": {
+    "telegram": {
+      "enabled": true,
+      "botTokenSecret": "PFORGE_CLAW_TELEGRAM_TOKEN",
+      "mode": "poll",
+      "generalChat": { "chatId": "<chat-id>", "topicId": "<topic-id>" }
+    }
+  },
+  "allowlist": [{ "channel": "telegram", "userId": "<user-id>", "role": "owner", "alias": "<display alias>" }],
+  "policy": { "ghcpRoles": ["owner"], "nonOwnerRuntime": "byok-only" },
+  "runtimes": { "default": "copilot-sdk", "pforgeCommand": "auto" },
+  "lanes": [{ "id": "local", "kind": "local", "labels": ["<host>"], "enabled": true }],
+  "projects": [{
+    "id": "project",
+    "displayName": "<project name>",
+    "repo": { "path": "/path/to/project", "baseBranch": "main" },
+    "channel": { "adapter": "telegram", "chatId": "<chat-id>", "topicId": "<topic-id>" },
+    "placement": { "prefer": ["local"], "requires": [] },
+    "homeLane": "local",
+    "keepAlive": false,
+    "visibility": "normal"
+  }],
+  "schedules": [{ "id": "digest", "kind": "digest", "at": "daily 07:30" }],
+  "capture": { "voice": { "enabled": false } },
+  "http": { "bind": "127.0.0.1", "port": 3190 }
+}

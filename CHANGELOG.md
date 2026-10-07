@@ -7,6 +7,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+## [3.32.0] — 2026-10-07 — Analyze and diagnose from the CLI, .NET gates on Microsoft.Testing.Platform
+
 ### Added
 
 - **`pforge diagnose <file>` and `pforge analyze --quorum`.** The CLI guide documented both, but the CLI never had them: `pforge analyze` ignored every flag, and `diagnose` was an unknown command. `pforge analyze <plan-or-file> --quorum` now runs the multi-model review, and it works on source files as well as plans. `--quorum=power`, `--quorum=speed` or `--quorum=power-gov` picks a quorum preset, and `--models m1,m2` picks the models (which implies `--quorum`). `pforge diagnose <file>` runs the multi-model bug investigation behind `forge_diagnose`. Both save their report to `.forge/analysis/`, and both shells support them. The review watcher's `pforge analyze --quorum=power <plan>` suggestion now works too. The dashboard's **Analyze (quorum)** and **Diagnose** buttons now run the multi-model review in the server process. Before, they ran the plain plan score, or failed with an unknown command.

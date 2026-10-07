@@ -3470,6 +3470,7 @@
   ],
   "mcpOnlyTools": [
     "forge_alert_triage",
+    "forge_analyze",
     "forge_anvil_clear",
     "forge_anvil_dlq_drain",
     "forge_anvil_dlq_list",
@@ -3495,6 +3496,7 @@
     "forge_delegate_to_agent",
     "forge_dep_watch",
     "forge_deploy_journal",
+    "forge_diagnose",
     "forge_diff_classify",
     "forge_doctor_quorum",
     "forge_drift_report",

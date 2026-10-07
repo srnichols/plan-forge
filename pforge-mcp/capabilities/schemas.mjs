@@ -56,10 +56,27 @@ export const CLI_SCHEMA = {
       examples: ["pforge diff docs/plans/Phase-1-AUTH-PLAN.md"],
     },
     analyze: {
-      description: "Cross-artifact consistency scoring (0-100)",
+      description: "Cross-artifact consistency scoring (0-100); with --quorum or --models, a multi-model review of a plan or source file",
       args: [{ name: "plan", type: "path", required: true }],
-      flags: {},
-      examples: ["pforge analyze docs/plans/Phase-1-AUTH-PLAN.md"],
+      flags: {
+        "--quorum": { type: "boolean|string", description: "Multi-model review instead of the score; --quorum=<preset> picks power, speed or power-gov" },
+        "--models": { type: "string", description: "Comma-separated model list for the multi-model review (implies --quorum)" },
+        "--mode": { type: "string", enum: ["plan", "file"], description: "Default: plan for .md/.markdown, file otherwise. File mode needs --quorum" },
+      },
+      examples: [
+        "pforge analyze docs/plans/Phase-1-AUTH-PLAN.md",
+        "pforge analyze docs/plans/Phase-1-AUTH-PLAN.md --quorum=power",
+        "pforge analyze src/services/billing.ts --quorum",
+      ],
+    },
+    diagnose: {
+      description: "Multi-model bug investigation of a source file — root causes and fix recommendations",
+      args: [{ name: "file", type: "path", required: true }],
+      flags: {
+        "--models": { type: "string", description: "Comma-separated model list override" },
+        "--quorum": { type: "string", description: "--quorum=<preset> picks power, speed or power-gov" },
+      },
+      examples: ["pforge diagnose src/services/billing.ts", "pforge diagnose src/auth/token-validator.ts --models grok-4.7,claude-sonnet-5.5"],
     },
     "run-plan": {
       description: "Execute a hardened plan automatically or interactively",

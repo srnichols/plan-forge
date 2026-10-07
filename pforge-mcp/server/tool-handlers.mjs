@@ -357,6 +357,10 @@ export const MCP_ONLY_TOOLS = new Set([
   "forge_incident_capture", "forge_deploy_journal", "forge_dep_watch",
   "forge_diff_classify", "forge_secret_scan", "forge_env_diff", "forge_fix_proposal",
   "forge_hotspot", "forge_runbook", "forge_run_plan", "forge_cost_report",
+  // Multi-model analysis runs in-process: the dashboard's "Analyze (quorum)" and
+  // "Diagnose" buttons call these. Proxied through runPforge they would hit its
+  // 60 s timeout and orphan the orchestrator child that spends the tokens.
+  "forge_analyze", "forge_diagnose",
   // Phase-27.1 Slice 2b — forge_estimate_quorum was registered in
   // capabilities.mjs/tools.json/switch case/handler in Phase-27 Slice 6 but
   // missed this Set, so /api/tool/forge_estimate_quorum fell through to

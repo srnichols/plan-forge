@@ -29,6 +29,7 @@ export const HOOK_CATEGORY = Object.freeze({
 
 export const MODEL_TIERS = freezeArray(["flagship", "mid", "fast"]);
 export const QUORUM_MODES = freezeArray(["auto", "power", "speed", "false"]);
+export const ANALYZE_MODES = freezeArray(["plan", "file"]);
 export const FORGE_MASTER_MODES = freezeArray(["ask", "observe"]);
 export const WATCHER_MODES = freezeArray(["snapshot", "analyze", "cross-run"]);
 export const COST_SOURCES = freezeArray(["worker", "forge-master", "observer", "auditor"]);

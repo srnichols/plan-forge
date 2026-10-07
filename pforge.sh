@@ -163,6 +163,8 @@ COMMANDS:
                       Flags: --force (heal), --downgrade (with --force), --yes/-y, --dry-run, --verify (run check + smith after),
                              --overwrite-customized
   analyze <plan>    Cross-artifact analysis — requirement traceability, test coverage, scope compliance
+                      Flags: --quorum[=<preset>] or --models m1,m2 (multi-model review, also of source files), --mode plan|file
+  diagnose <file>   Multi-model bug investigation — root causes and fixes. Flags: --models m1,m2, --quorum=<preset>
   run-plan <plan>   Execute a hardened plan — spawn CLI workers, validate at every boundary, track tokens
   org-rules export  Export org custom instructions from .github/instructions/ for GitHub org settings
   drift             Score codebase against architecture guardrail rules — track drift over time
@@ -2101,29 +2103,97 @@ writeFreshCache(process.argv[1], process.argv[2]);
     _pf_gh_cleanup
 }
 
-# ─── Command: analyze ──────────────────────────────────────────────────
-cmd_analyze() {
-    if [ $# -eq 0 ]; then
-        echo "ERROR: Plan file required." >&2
-        echo "  Usage: pforge analyze <plan-file>" >&2
+# Parses `analyze` / `diagnose` arguments into ANALYSIS_* globals. Flags may come
+# before or after the target; the first non-flag token is the target. --models
+# implies a quorum run. Twin of Get-AnalysisArgs in pforge.ps1.
+parse_analysis_args() {
+    ANALYSIS_TARGET="" ANALYSIS_MODE="" ANALYSIS_MODELS="" ANALYSIS_QUORUM="" ANALYSIS_PRESET=""
+    while [ $# -gt 0 ]; do
+        case "$1" in
+            --quorum)   ANALYSIS_QUORUM=1 ;;
+            --quorum=*) ANALYSIS_QUORUM=1; ANALYSIS_PRESET="${1#--quorum=}" ;;
+            --mode|--models)
+                if [ $# -lt 2 ]; then
+                    echo "ERROR: $1 requires a value." >&2
+                    exit 1
+                fi
+                if [ "$1" = "--mode" ]; then ANALYSIS_MODE="$2"; else ANALYSIS_MODELS="$2"; ANALYSIS_QUORUM=1; fi
+                shift ;;
+            --*)
+                echo "ERROR: Unknown option '$1'." >&2
+                exit 1 ;;
+            *)  if [ -z "$ANALYSIS_TARGET" ]; then ANALYSIS_TARGET="$1"; fi ;;
+        esac
+        shift
+    done
+}
+
+# Prints the target relative to the current directory, then the repo root; exits 1 when missing.
+resolve_analysis_target() {
+    local target="$1" label="$2"
+    if [ -f "$target" ]; then echo "$target"; return; fi
+    if [ -f "$REPO_ROOT/$target" ]; then echo "$REPO_ROOT/$target"; return; fi
+    echo "ERROR: $label not found: $target" >&2
+    exit 1
+}
+
+# Multi-model runs live in the orchestrator (pforge-mcp/orchestrator/analysis-cli.mjs),
+# which validates --mode and the preset and writes .forge/analysis/<name>-<ts>.json.
+run_analysis_orchestrator() {
+    local command="$1" target="$2"
+    local node_args=("$REPO_ROOT/pforge-mcp/orchestrator.mjs" "--$command" "$target")
+    if [ -n "$ANALYSIS_MODE" ];   then node_args+=("--mode" "$ANALYSIS_MODE"); fi
+    if [ -n "$ANALYSIS_MODELS" ]; then node_args+=("--models" "$ANALYSIS_MODELS"); fi
+    if [ -n "$ANALYSIS_PRESET" ]; then node_args+=("--preset" "$ANALYSIS_PRESET"); fi
+    node "${node_args[@]}"
+    exit $?
+}
+
+# ─── Command: diagnose ─────────────────────────────────────────────────
+cmd_diagnose() {
+    parse_analysis_args "$@"
+    if [ -z "$ANALYSIS_TARGET" ]; then
+        echo "ERROR: Source file required." >&2
+        echo "  Usage: pforge diagnose <file> [--models m1,m2] [--quorum=<preset>]" >&2
+        echo "  Example: pforge diagnose src/services/billing.ts" >&2
         exit 1
     fi
-
-    local plan_file="$1"
-    [ ! -f "$plan_file" ] && plan_file="$REPO_ROOT/$plan_file"
-    if [ ! -f "$plan_file" ]; then
-        echo "ERROR: Plan file not found: $1" >&2
+    if [ -n "$ANALYSIS_MODE" ]; then
+        echo "ERROR: --mode applies to pforge analyze only." >&2
         exit 1
+    fi
+    local file
+    file="$(resolve_analysis_target "$ANALYSIS_TARGET" "Source file")" || exit 1
+    print_manual_steps "diagnose" \
+        "Send the file to each quorum model for an independent bug investigation" \
+        "Synthesize root causes and fixes with the reviewer model" \
+        "Save the report to .forge/analysis/diagnose-*"
+    run_analysis_orchestrator "diagnose" "$file"
+}
+
+# ─── Command: analyze ──────────────────────────────────────────────────
+cmd_analyze() {
+    parse_analysis_args "$@"
+    if [ -z "$ANALYSIS_TARGET" ]; then
+        echo "ERROR: Plan file required." >&2
+        echo "  Usage: pforge analyze <plan-file> [--quorum[=<preset>]] [--models m1,m2] [--mode plan|file]" >&2
+        exit 1
+    fi
+    local plan_file
+    plan_file="$(resolve_analysis_target "$ANALYSIS_TARGET" "Plan file")" || exit 1
+
+    if [ -n "$ANALYSIS_QUORUM" ]; then
+        print_manual_steps "analyze --quorum" \
+            "Send the plan or source file to each quorum model for an independent review" \
+            "Synthesize the reviews with the reviewer model" \
+            "Save the report to .forge/analysis/"
+        run_analysis_orchestrator "analyze" "$plan_file"
     fi
 
     # The scorer reads its target as a plan; a source file used to be scored as an empty
     # plan after a slow repo-wide scan (meta-bug #319). Twin of the pforge.ps1 check:
     # .md/.markdown are plans unless --mode says otherwise.
-    local analyze_mode="" arg prev=""
-    for arg in "$@"; do
-        [ "$prev" = "--mode" ] && analyze_mode="$arg"
-        prev="$arg"
-    done
+    local analyze_mode="$ANALYSIS_MODE"
     if [ -z "$analyze_mode" ]; then
         case "$(echo "$plan_file" | tr '[:upper:]' '[:lower:]')" in
             *.md|*.markdown) analyze_mode="plan" ;;
@@ -2131,8 +2201,9 @@ cmd_analyze() {
         esac
     fi
     if [ "$analyze_mode" != "plan" ]; then
-        echo "ERROR: pforge analyze scores plan files only; '$1' was read as a source file (mode '$analyze_mode')." >&2
-        echo "  For a code review, call the forge_analyze MCP tool with quorum: true, or forge_diagnose for a bug investigation." >&2
+        echo "ERROR: pforge analyze scores plan files only; '$ANALYSIS_TARGET' was read as a source file (mode '$analyze_mode')." >&2
+        echo "  For a code review, run: pforge analyze $ANALYSIS_TARGET --quorum   (multi-model; spends tokens)" >&2
+        echo "  For a bug investigation, run: pforge diagnose $ANALYSIS_TARGET" >&2
         echo "  To score a Markdown file as a plan, pass --mode plan." >&2
         exit 1
     fi
@@ -7381,6 +7452,7 @@ case "$COMMAND" in
     ext)          cmd_ext "$@" ;;
     update)       cmd_update "$@" ;;
     analyze)      cmd_analyze "$@" ;;
+    diagnose)     cmd_diagnose "$@" ;;
     run-plan)     cmd_run_plan "$@" ;;
     org-rules)    cmd_org_rules "$@" ;;
     drift)        cmd_drift "$@" ;;

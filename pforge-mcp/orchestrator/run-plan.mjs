@@ -42,6 +42,7 @@ import { loadQuorumConfig, classifyLegError, quorumDispatch, quorumReview, analy
 import { estimatePlan as _estimatePlan } from "../cost-service.mjs";
 import { finishRunIsolation, loadRunIsolationConfig, startRunIsolation } from "./run-isolation.mjs";
 import { loadImpactGateConfig, runImpactGate } from "./impact-gate.mjs";
+import { runAnalysisCli } from "./analysis-cli.mjs";
 import { createWorkerSession, loadResumeOnRetry, workerSessionName } from "./worker-session.mjs";
 import { cleanupStaleWorktrees } from "./worktree-janitor.mjs";
 import { classifyUnrunnableGate, loadGatePreflightMode, preflightGates } from "./gate-preflight.mjs";
@@ -3006,73 +3007,6 @@ async function _cliCmdRun(args, getArg) {
   }
 }
 
-async function _cliCmdAnalyze(args, getArg) {
-  const target = getArg("--analyze");
-  if (!target) {
-    console.error("Usage: node orchestrator.mjs --analyze <plan-or-file> [--mode plan|file] [--models model1,model2,...]");
-    process.exit(1);
-  }
-  const mode = getArg("--mode") || (target.match(/plan/i) ? "plan" : "file");
-  const modelsArg = getArg("--models");
-  const models = modelsArg ? modelsArg.split(",").map((m) => m.trim()) : null;
-  try {
-    const result = await analyzeWithQuorum({ target, mode, models, cwd: process.cwd() });
-    if (result.synthesis) {
-      console.log("\n" + "═".repeat(60));
-      console.log("  QUORUM ANALYSIS — SYNTHESIZED REPORT");
-      console.log("═".repeat(60) + "\n");
-      console.log(result.synthesis);
-    }
-    console.log("\n" + "─".repeat(40));
-    console.log(`  Models: ${result.models.join(", ")}`);
-    console.log(`  Duration: ${Math.round(result.totalDuration / 1000)}s`);
-    console.log(`  Cost: $${result.totalCost.toFixed(2)}`);
-    console.log("─".repeat(40));
-    const reportDir = resolve(process.cwd(), ".forge", "analysis");
-    mkdirSync(reportDir, { recursive: true });
-    const reportFile = resolve(reportDir, `${basename(target, ".md")}-${Date.now()}.json`);
-    writeFileSync(reportFile, JSON.stringify(result, null, 2));
-    console.log(`\n  📄 Full report saved: ${reportFile}\n`);
-    process.exitCode = 0;
-  } catch (err) {
-    console.error(`Analysis error: ${err.message}`);
-    process.exit(1);
-  }
-}
-
-async function _cliCmdDiagnose(args, getArg) {
-  const target = getArg("--diagnose");
-  if (!target) {
-    console.error("Usage: node orchestrator.mjs --diagnose <file> [--models model1,model2,...]");
-    process.exit(1);
-  }
-  const modelsArg = getArg("--models");
-  const models = modelsArg ? modelsArg.split(",").map((m) => m.trim()) : null;
-  try {
-    const result = await analyzeWithQuorum({ target, mode: "diagnose", models, cwd: process.cwd() });
-    if (result.synthesis) {
-      console.log("\n" + "═".repeat(60));
-      console.log("  QUORUM DIAGNOSIS — BUG INVESTIGATION REPORT");
-      console.log("═".repeat(60) + "\n");
-      console.log(result.synthesis);
-    }
-    console.log("\n" + "─".repeat(40));
-    console.log(`  Models: ${result.models.join(", ")}`);
-    console.log(`  Duration: ${Math.round(result.totalDuration / 1000)}s`);
-    console.log(`  Cost: $${result.totalCost.toFixed(2)}`);
-    console.log("─".repeat(40));
-    const reportDir = resolve(process.cwd(), ".forge", "analysis");
-    mkdirSync(reportDir, { recursive: true });
-    const reportFile = resolve(reportDir, `diagnose-${basename(target)}-${Date.now()}.json`);
-    writeFileSync(reportFile, JSON.stringify(result, null, 2));
-    console.log(`\n  📄 Full report saved: ${reportFile}\n`);
-    process.exitCode = 0;
-  } catch (err) {
-    console.error(`Diagnosis error: ${err.message}`);
-    process.exit(1);
-  }
-}
-
 function _cliCmdParse(getArg) {
   const planPath = getArg("--parse");
   if (!planPath) {
@@ -3094,9 +3028,9 @@ export async function runOrchestratorCli(args = []) {
   } else if (args.includes("--run")) {
     await _cliCmdRun(args, getArg);
   } else if (args.includes("--analyze")) {
-    await _cliCmdAnalyze(args, getArg);
+    await runAnalysisCli(args, "analyze");
   } else if (args.includes("--diagnose")) {
-    await _cliCmdDiagnose(args, getArg);
+    await runAnalysisCli(args, "diagnose");
   }
 }
 const ORCHESTRATOR_SURFACE_EXPORTS = [

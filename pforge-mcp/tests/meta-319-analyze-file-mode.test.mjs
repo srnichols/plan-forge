@@ -16,7 +16,7 @@ import { execFileSync, spawnSync } from "node:child_process";
 import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
-import { resolveAnalyzeMode } from "../server/helpers.mjs";
+import { resolveAnalyzeMode } from "../analyze-mode.mjs";
 import {
   _callToolHandler_011_forge_analyze,
   _callToolHandler_012_forge_analyze,
@@ -158,7 +158,7 @@ describe.skipIf(!isWin)("pforge.ps1 analyze prunes dependency/build directories 
       const out = `${result.stdout}\n${result.stderr}`;
       expect(result.status, out).toBe(1);
       expect(out).toMatch(/scores plan files only/);
-      expect(out).toMatch(/forge_analyze MCP tool with quorum: true/);
+      expect(out).toMatch(/pforge analyze \S+ --quorum/);
       expect(out).not.toMatch(/Consistency Score/);
     }
   });
@@ -178,7 +178,7 @@ describe.skipIf(!BASH)("pforge.sh analyze prunes dependency/build directories (m
       const result = spawnSync(BASH, ["pforge.sh", "analyze", ...args], spawnOpts(dir));
       expect(result.status, result.stderr).toBe(1);
       expect(result.stderr).toMatch(/scores plan files only/);
-      expect(result.stderr).toMatch(/forge_analyze MCP tool with quorum: true/);
+      expect(result.stderr).toMatch(/pforge analyze \S+ --quorum/);
       expect(result.stdout).not.toMatch(/Consistency Score/);
     }
   });

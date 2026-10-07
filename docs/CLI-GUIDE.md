@@ -352,7 +352,7 @@ place for other failures.
 > | | `pforge analyze` | `pforge diagnose` |
 > |---|---|---|
 > | **Purpose** | Plan quality scoring | Bug investigation |
-> | **Input** | Plan file (`.md`); source files are rejected | Code file with a suspected bug |
+> | **Input** | Plan file (`.md`); a source file only with `--quorum` | Code file with a suspected bug |
 > | **Question it answers** | "Is this plan well-structured and complete?" | "What's wrong with this code and how do I fix it?" |
 > | **Output** | Consistency score (0–100) across 4 dimensions | Root cause analysis with fix recommendations |
 > | **When to use** | After hardening a plan, before execution | When a slice fails or code behaves unexpectedly |
@@ -366,8 +366,11 @@ Cross-artifact consistency analysis — validates that requirements are traced t
 # PowerShell — Single-model analysis
 .\pforge.ps1 analyze docs/plans/Phase-1-AUTH-PLAN.md
 
-# Multi-model quorum analysis
+# Multi-model quorum analysis (--quorum=power or --quorum=speed picks a preset)
 .\pforge.ps1 analyze docs/plans/Phase-1-AUTH-PLAN.md --quorum
+
+# Multi-model code review of a source file
+.\pforge.ps1 analyze src/services/billing.ts --quorum
 
 # Custom model lineup
 .\pforge.ps1 analyze docs/plans/Phase-1-AUTH-PLAN.md --models grok-4.20-0309-non-reasoning,grok-4.7
@@ -377,8 +380,11 @@ Cross-artifact consistency analysis — validates that requirements are traced t
 # Bash — Single-model analysis
 ./pforge.sh analyze docs/plans/Phase-1-AUTH-PLAN.md
 
-# Multi-model quorum analysis
+# Multi-model quorum analysis (--quorum=power or --quorum=speed picks a preset)
 ./pforge.sh analyze docs/plans/Phase-1-AUTH-PLAN.md --quorum
+
+# Multi-model code review of a source file
+./pforge.sh analyze src/services/billing.ts --quorum
 
 # Custom model lineup
 ./pforge.sh analyze docs/plans/Phase-1-AUTH-PLAN.md --models grok-4.7,grok-4.20-0309-non-reasoning
@@ -393,16 +399,16 @@ Cross-artifact consistency analysis — validates that requirements are traced t
 | Test Coverage | MUST criteria matched against test files via keyword fuzzy matching |
 | Gates | Validation gates referenced in slices, no deferred-work markers in changed files |
 
-**Quorum mode** (`--quorum`): Dispatches analysis to multiple AI models in parallel, then synthesizes findings into a consensus report with confidence levels and contradictions resolved.
+**Quorum mode** (`--quorum`): Dispatches analysis to multiple AI models in parallel, then synthesizes findings into a consensus report with confidence levels and contradictions resolved. It replaces the score, works on source files as well as plans, spends tokens, and saves the report to `.forge/analysis/`.
 
 **Flags**:
 | Flag | Description |
 |------|-------------|
-| `--quorum` | Multi-model consensus analysis |
-| `--mode plan\|file` | Explicit analysis mode (auto-detected if omitted) |
-| `--models m1,m2` | Comma-separated model override (default: quorum config models) |
+| `--quorum[=<preset>]` | Multi-model consensus analysis; the preset is `power`, `speed` or `power-gov` (default: quorum config) |
+| `--mode plan\|file` | Default: `plan` for `.md`/`.markdown`, `file` otherwise. Without `--quorum`, file mode exits 1 |
+| `--models m1,m2` | Comma-separated model override (default: quorum config models); implies `--quorum` |
 
-**Exit codes**: 0 = pass (score >= 60), 1 = fail (score < 60)
+**Exit codes**: 0 = pass (score >= 60), 1 = fail (score < 60). With `--quorum`: 0 when the review completes, 1 on an error.
 
 **Also available as**: `forge_analyze` MCP tool, and `analyze: true` input on the GitHub Action.
 
@@ -435,6 +441,8 @@ Multi-model bug investigation — dispatches file analysis to multiple AI models
 - Impact assessment
 - Fix recommendations with confidence levels
 - Regression risk
+
+**Flags**: `--models m1,m2` (model override), `--quorum=<preset>` (`power`, `speed` or `power-gov`).
 
 **Output**: Synthesized consensus report saved to `.forge/analysis/diagnose-*`. Includes per-model findings, agreement/disagreement areas, and prioritized action items.
 

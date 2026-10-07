@@ -110,7 +110,7 @@
     "forge_watch",
     "forge_watch_live"
   ],
-  "cliCommandCount": 38,
+  "cliCommandCount": 39,
   "workflowCount": 5,
   "configSchemaKeys": [
     "$schema",

@@ -7,6 +7,10 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+### Added
+
+- **`pforge diagnose <file>` and `pforge analyze --quorum`.** The CLI guide documented both, but the CLI never had them: `pforge analyze` ignored every flag, and `diagnose` was an unknown command. `pforge analyze <plan-or-file> --quorum` now runs the multi-model review, and it works on source files as well as plans. `--quorum=power`, `--quorum=speed` or `--quorum=power-gov` picks a quorum preset, and `--models m1,m2` picks the models (which implies `--quorum`). `pforge diagnose <file>` runs the multi-model bug investigation behind `forge_diagnose`. Both save their report to `.forge/analysis/`, and both shells support them. The review watcher's `pforge analyze --quorum=power <plan>` suggestion now works too. The dashboard's **Analyze (quorum)** and **Diagnose** buttons now run the multi-model review in the server process. Before, they ran the plain plan score, or failed with an unknown command.
+
 ### Fixed
 
 - **`forge_analyze` no longer scores a source file as a plan, and `pforge analyze` no longer times out on large .NET repositories.** Without `quorum: true`, `forge_analyze` ignored `mode: "file"`. It ran the plan scorer on files such as `Program.cs`, reported "No MUST/SHOULD criteria" and "No execution slices", and then failed with `spawnSync cmd.exe ETIMEDOUT` and no score. It now rejects a source-file target straight away and tells you what to use instead: `quorum: true` for a multi-model code review, or `forge_diagnose`. Mode detection is now the same with and without quorum: `.md` and `.markdown` files are plans, everything else is a source file. The timeout came from the test-file scan, which listed every file under `bin`, `obj` and `node_modules` and only discarded them afterwards. Both `pforge.ps1` and `pforge.sh` now skip `node_modules`, `bin`, `obj`, `dist`, `.git` and `vendor` without listing their contents. The `/code-review` skill now says to pass the plan's `.md` path. (meta-bug #319)

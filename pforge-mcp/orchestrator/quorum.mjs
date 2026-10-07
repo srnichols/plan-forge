@@ -412,17 +412,6 @@ export async function quorumReview(dispatchResult, slice, config, options = {}) 
 
 // ─── Quorum Analysis ─────────────────────────────────────────────────
 
-/**
- * Multi-model analysis of a plan or file.
- * Dispatches independent analysis to N models, then synthesizes findings.
- *
- * Modes:
- *   - plan: Analyze a hardened plan for consistency, coverage gaps, risk
- *   - file: Analyze source file(s) for bugs, patterns, improvements
- *
- * @param {object} options - { target, mode, models, cwd }
- * @returns {Promise<{ results, synthesis, cost }>}
- */
 function readAnalysisTargetContent({ cwd, target }) {
   try {
     return readFileSync(resolve(cwd, target), "utf-8");
@@ -517,15 +506,29 @@ function summarizeAnalysisResults({ results, synthesisCost }) {
   };
 }
 
+/**
+ * Multi-model analysis of a plan or file.
+ * Dispatches independent analysis to N models, then synthesizes findings.
+ *
+ * Modes:
+ *   - plan: Analyze a hardened plan for consistency, coverage gaps, risk
+ *   - file: Analyze source file(s) for bugs, patterns, improvements
+ *   - diagnose: Investigate a source file for bugs and root causes
+ *
+ * @param {{ target: string, mode?: string, models?: string[]|null, preset?: string|null, cwd?: string }} options
+ *   preset: a QUORUM_PRESETS name (power, speed, …); explicit `models` still win.
+ * @returns {Promise<{ target, mode, models, results, synthesis, totalDuration, totalCost, timestamp }>}
+ */
 export async function analyzeWithQuorum(options = {}) {
   const {
     target,
     mode = "plan",
     models = null,
+    preset = null,
     cwd = process.cwd(),
   } = options;
 
-  const config = loadQuorumConfig(cwd);
+  const config = loadQuorumConfig(cwd, preset);
   const analyzeModels = models || config.models;
   const content = readAnalysisTargetContent({ cwd, target });
   const prompt = buildAnalysisPromptForMode({ mode, content, target });

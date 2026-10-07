@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Plan Forge Manual — Complete Offline Edition</title>
-  <meta name="description" content="Plan Forge Manual — complete single-page offline edition. 79 chapters and appendices. Generated 2026-10-03 17:32:11 UTC." />
+  <meta name="description" content="Plan Forge Manual — complete single-page offline edition. 79 chapters and appendices. Generated 2026-10-07 04:58:34 UTC." />
   <meta name="generator" content="Plan Forge export.mjs" />
   <link rel="icon" type="image/svg+xml" href="../assets/plan-forge-logo.svg" />
   <link rel="stylesheet" href="../assets/tailwind.built.css" />
@@ -124,8 +124,8 @@
   <h1>📚 Plan Forge Manual</h1>
   <p class="export-subtitle">Complete offline edition &mdash; 79 chapters &amp; appendices</p>
   <p class="export-meta">
-    Generated 2026-10-03 17:32:11 UTC
-    &middot; content hash <code>b284a2dd8bc9b9e0</code>
+    Generated 2026-10-07 04:58:34 UTC
+    &middot; content hash <code>41ad005f1cac2cbc</code>
     &middot; vv3.6.2
     &middot; <a href="https://planforge.software/" rel="noopener">Main site ↗</a>
     &middot; <a href="index.html">Online version ↗</a>
@@ -4364,9 +4364,9 @@ node pforge-mcp/server.mjs --dashboard-only</code></pre>
         <div class="callout callout-info">
           <strong>analyze vs diagnose: which do I use?</strong><br />
           <code>pforge analyze</code> scores a plan's quality (traceability, coverage, gates, 0 to 100).<br />
-          <code>forge_diagnose</code> (MCP tool) investigates a bug in code (root cause, fix recommendations).<br />
+          <code>pforge diagnose</code> (or the <code>forge_diagnose</code> MCP tool) investigates a bug in code (root cause, fix recommendations).<br />
           One tells you if your blueprint is solid. The other finds out why the bridge collapsed.<br />
-          Use <strong>analyze</strong> after hardening a plan. Use <strong>forge_diagnose</strong> from Copilot Chat when a slice fails.
+          Use <strong>analyze</strong> after hardening a plan. Use <strong>diagnose</strong> when a slice fails.
         </div>
 
         <!-- ─── I'm trying to... use-case index ─── -->
@@ -4396,7 +4396,7 @@ node pforge-mcp/server.mjs --dashboard-only</code></pre>
             <tr><td>Co-pilot mode (you code, gates check)</td><td><code>pforge run-plan &lt;plan&gt; --assisted</code></td><td>You want to write the code yourself</td></tr>
 
             <tr><td colspan="3" class="bg-slate-900/40 text-xs font-bold text-slate-500 uppercase tracking-wider">Troubleshooting</td></tr>
-            <tr><td>Investigate a failing slice</td><td><code>forge_diagnose({ file: "…" })</code> <span class="text-xs text-slate-500">(MCP tool)</span></td><td>Slice failed and you don't know why</td></tr>
+            <tr><td>Investigate a failing slice</td><td><a href="#diagnose"><code>pforge diagnose &lt;file&gt;</code></a></td><td>Slice failed and you don't know why</td></tr>
             <tr><td>Run closed-loop drain</td><td><a href="#audit-loop"><code>pforge audit-loop</code></a></td><td>Mass content audit (opt-in feature)</td></tr>
             <tr><td>See chronological event history</td><td><a href="#timeline"><code>pforge timeline</code></a></td><td>Forensic / "what happened on Tuesday?"</td></tr>
 
@@ -4634,14 +4634,14 @@ DRIFT DETECTED, 1 forbidden file(s) touched.</code></pre>
         <!-- ─── analyze ─── -->
         <div class="cmd-ref" id="analyze">
           <div class="cmd-ref-title">pforge analyze &lt;plan-file&gt;</div>
-          <div class="cmd-ref-desc">Cross-artifact consistency scoring, validates traceability, scope coverage, test coverage, and gate definitions. Scores 0–100.</div>
+          <div class="cmd-ref-desc">Cross-artifact consistency scoring, validates traceability, scope coverage, test coverage, and gate definitions. Scores 0–100. With <code>--quorum</code> or <code>--models</code>, runs a multi-model review instead, of a plan or a source file.</div>
 
           <table class="manual-table">
             <thead><tr><th>Flag</th><th>Type</th><th>Description</th></tr></thead>
             <tbody>
-              <tr><td><code>--quorum</code></td><td>boolean</td><td>Multi-model consensus analysis</td></tr>
-              <tr><td><code>--mode</code></td><td>plan | file</td><td>Analysis mode. Defaults to <code>plan</code> for <code>.md</code>/<code>.markdown</code> files and <code>file</code> otherwise; <code>file</code> is rejected, so use the <code>forge_analyze</code> MCP tool with <code>quorum: true</code> for a code review</td></tr>
-              <tr><td><code>--models</code></td><td>string</td><td>Comma-separated model override</td></tr>
+              <tr><td><code>--quorum[=&lt;preset&gt;]</code></td><td>boolean | preset</td><td>Multi-model consensus review instead of the score; the preset is <code>power</code>, <code>speed</code> or <code>power-gov</code>. Spends tokens; the report is saved to <code>.forge/analysis/</code></td></tr>
+              <tr><td><code>--mode</code></td><td>plan | file</td><td>Analysis mode. Defaults to <code>plan</code> for <code>.md</code>/<code>.markdown</code> files and <code>file</code> otherwise; <code>file</code> needs <code>--quorum</code></td></tr>
+              <tr><td><code>--models</code></td><td>string</td><td>Comma-separated model override; implies <code>--quorum</code></td></tr>
             </tbody>
           </table>
 
@@ -4651,7 +4651,10 @@ DRIFT DETECTED, 1 forbidden file(s) touched.</code></pre>
 .\pforge.ps1 analyze docs/plans/Phase-1-AUTH-PLAN.md
 
 # Multi-model quorum
-.\pforge.ps1 analyze docs/plans/Phase-1-AUTH-PLAN.md --quorum</code></pre>
+.\pforge.ps1 analyze docs/plans/Phase-1-AUTH-PLAN.md --quorum
+
+# Multi-model code review of a source file
+.\pforge.ps1 analyze src/services/billing.ts --quorum=power</code></pre>
           </div>
 
           <h3>Scoring Dimensions</h3>
@@ -4665,17 +4668,18 @@ DRIFT DETECTED, 1 forbidden file(s) touched.</code></pre>
             </tbody>
           </table>
 
-          <p class="text-sm text-slate-500">Exit codes: 0 = pass (≥60), 1 = fail (&lt;60). Also available as: <code>forge_analyze</code> MCP tool.</p>
+          <p class="text-sm text-slate-500">Exit codes: 0 = pass (≥60), 1 = fail (&lt;60); with <code>--quorum</code>, 0 when the review completes. Also available as: <code>forge_analyze</code> MCP tool.</p>
         </div>
 
-        <!-- ─── forge_diagnose (MCP tool, no CLI wrapper) ─── -->
+        <!-- ─── diagnose ─── -->
         <div class="cmd-ref" id="diagnose">
-          <div class="cmd-ref-title">forge_diagnose <span class="text-xs text-amber-400">(MCP tool, no CLI wrapper)</span></div>
-          <div class="cmd-ref-desc">Multi-model bug investigation, dispatches file analysis to multiple AI models independently, then synthesizes root cause analysis with fix recommendations. <strong>Invoke from Copilot Chat or any MCP client</strong>; there is no <code>pforge diagnose</code> CLI command.</div>
+          <div class="cmd-ref-title">pforge diagnose &lt;file&gt;</div>
+          <div class="cmd-ref-desc">Multi-model bug investigation, dispatches file analysis to multiple AI models independently, then synthesizes root cause analysis with fix recommendations. Also available as the <code>forge_diagnose</code> MCP tool for Copilot Chat or any MCP client.</div>
 
           <table class="manual-table">
-            <thead><tr><th>Parameter</th><th>Type</th><th>Description</th></tr></thead>
+            <thead><tr><th>Flag / parameter</th><th>Type</th><th>Description</th></tr></thead>
             <tbody>
+              <tr><td><code>--quorum=&lt;preset&gt;</code> (CLI)</td><td>preset</td><td><code>power</code>, <code>speed</code> or <code>power-gov</code> (default: quorum config)</td></tr>
               <tr><td><code>file</code> <span class="text-xs text-amber-400">(required)</span></td><td>string</td><td>Path to the source file to investigate (e.g., <code>src/services/billing.ts</code>)</td></tr>
               <tr><td><code>models</code></td><td>string</td><td>Comma-separated model override (default: quorum config models)</td></tr>
               <tr><td><code>path</code></td><td>string</td><td>Project directory (default: current)</td></tr>
@@ -4683,13 +4687,17 @@ DRIFT DETECTED, 1 forbidden file(s) touched.</code></pre>
           </table>
 
           <div class="cmd-block">
-            <div class="cmd-block-header"><span>Invoke from Copilot Chat</span><button class="cmd-copy-btn">Copy</button></div>
-            <pre><code>forge_diagnose({ file: "src/services/billing.ts" })
+            <div class="cmd-block-header"><span>Investigate a file</span><button class="cmd-copy-btn">Copy</button></div>
+            <pre><code>.\pforge.ps1 diagnose src/services/billing.ts
+.\pforge.ps1 diagnose src/auth/token-validator.ts --models grok-4.20-0309-non-reasoning,grok-4.7
+
+# From Copilot Chat
+forge_diagnose({ file: "src/services/billing.ts" })
 forge_diagnose({ file: "src/auth/token-validator.ts", models: "grok-4.20-0309-non-reasoning,grok-4.7" })</code></pre>
           </div>
 
-          <p class="text-sm text-slate-400 mt-2">Each model analyzes independently for: root cause, failure modes, reproduction steps, impact assessment, fix recommendations, regression risk. Results are returned inline to the calling agent (no on-disk persistence by default).</p>
-          <p class="text-sm text-slate-500">Reference: <code>pforge-mcp/tools.json</code> &raquo; <code>forge_diagnose</code>. Adjacent CLI command: <code>pforge analyze</code> for plan quality (different surface).</p>
+          <p class="text-sm text-slate-400 mt-2">Each model analyzes independently for: root cause, failure modes, reproduction steps, impact assessment, fix recommendations, regression risk. The CLI saves the report to <code>.forge/analysis/diagnose-*</code>; the MCP tool returns it inline to the calling agent.</p>
+          <p class="text-sm text-slate-500">Reference: <code>pforge-mcp/tools.json</code> &raquo; <code>forge_diagnose</code>. Adjacent CLI command: <code>pforge analyze</code> for plan quality.</p>
         </div>
 
         <!-- ─── run-plan ─── -->
@@ -21208,7 +21216,7 @@ switch ($LASTEXITCODE) {
 
 <!-- Footer -->
 <footer style="max-width:56rem;margin:3rem auto;padding:1.5rem;font-size:0.75rem;color:#475569;border-top:1px solid #1e293b;font-family:'JetBrains Mono',monospace;">
-  <p>Plan Forge Manual &mdash; offline edition &mdash; generated 2026-10-03 17:32:11 UTC &mdash; hash <code>b284a2dd8bc9b9e0</code></p>
+  <p>Plan Forge Manual &mdash; offline edition &mdash; generated 2026-10-07 04:58:34 UTC &mdash; hash <code>41ad005f1cac2cbc</code></p>
   <p>Regenerate with: <code>node docs/manual/export.mjs</code> &mdash; <a href="https://planforge.software/" style="color:#f59e0b;" rel="noopener">Main site</a> &mdash; <a href="index.html" style="color:#f59e0b;">Online version</a> &mdash; <a href="https://github.com/srnichols/plan-forge" style="color:#f59e0b;" rel="noopener">GitHub</a></p>
 </footer>
 

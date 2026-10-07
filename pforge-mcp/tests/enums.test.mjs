@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import {
+  ANALYZE_MODES,
   COST_SOURCES,
   ERROR_CODES,
   FORGE_MASTER_MODES,
@@ -27,6 +28,7 @@ describe("enums.mjs", () => {
     expect(Object.isFrozen(HOOK_CATEGORY.liveGuard)).toBe(true);
     expect(Object.isFrozen(MODEL_TIERS)).toBe(true);
     expect(Object.isFrozen(QUORUM_MODES)).toBe(true);
+    expect(Object.isFrozen(ANALYZE_MODES)).toBe(true);
     expect(Object.isFrozen(FORGE_MASTER_MODES)).toBe(true);
     expect(Object.isFrozen(WATCHER_MODES)).toBe(true);
     expect(Object.isFrozen(COST_SOURCES)).toBe(true);

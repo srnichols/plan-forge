@@ -115,7 +115,8 @@ import {
   _mcpServerRef,
 } from "../state.mjs";
 import { writeAuditArtifact } from "../audit-writer.mjs";
-import { startEventFileWatcher, runPforge, findProjectRoot, resolveAnalyzeMode, analyzeFileModeNeedsQuorumMessage } from "../helpers.mjs";
+import { startEventFileWatcher, runPforge, findProjectRoot } from "../helpers.mjs";
+import { resolveAnalyzeMode, analyzeFileModeNeedsQuorumMessage } from "../../analyze-mode.mjs";
 import { callOrgRules } from "../org-rules.mjs";
 import { _sweepAnvilCompute, _analyzeAnvilCompute, _temperingScanAnvilCompute, _hotspotAnvilCompute } from "../anvil-compute.mjs";
 import { TOOLS } from "../tool-definitions.mjs";

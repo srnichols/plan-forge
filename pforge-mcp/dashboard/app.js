@@ -1752,20 +1752,46 @@ async function runAction(tool, args) {
 window.runAction = runAction;
 
 // ─── Quorum / Diagnose Actions ────────────────────────────────────────
+// Multi-model runs go through the in-process MCP handlers (forge_analyze with
+// quorum, forge_diagnose). The CLI route behind runAction has a 60 s timeout,
+// which a multi-model run outlasts.
+async function runQuorumTool(tool, body, label) {
+  const resultDiv = document.getElementById("action-result");
+  const titleEl = document.getElementById("action-result-title");
+  const outputEl = document.getElementById("action-result-output");
+
+  titleEl.textContent = `Running: ${label}`;
+  outputEl.textContent = "Loading... multi-model runs take several minutes.";
+  resultDiv.classList.remove("hidden");
+
+  try {
+    const res = await fetch(`${API_BASE}/api/tool/${tool}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    const data = await res.json();
+    const failed = !res.ok || Boolean(data.error) || data.isError === true;
+    outputEl.textContent = data.synthesis || data.error || data.content?.[0]?.text || JSON.stringify(data, null, 2);
+    titleEl.textContent = `${label}: ${failed ? "❌" : "✅"}`;
+  } catch (err) {
+    outputEl.textContent = `Error: ${err.message}`;
+    titleEl.textContent = `${label}: ❌`;
+  }
+}
+
 async function runAnalyzeQuorum() {
   const target = prompt("Plan or file path:");
   if (!target) return;
   const models = prompt("Models (comma-separated, or leave blank for defaults):", "");
-  const args = models ? `${target} --quorum --models ${models}` : `${target} --quorum`;
-  runAction("analyze", args);
+  runQuorumTool("forge_analyze", { plan: target, quorum: true, ...(models ? { models } : {}) }, `pforge analyze ${target} --quorum`);
 }
 
 async function runDiagnose() {
   const filePath = prompt("File to diagnose:");
   if (!filePath) return;
   const models = prompt("Models (comma-separated, or leave blank for defaults):", "");
-  const args = models ? `${filePath} --models ${models}` : filePath;
-  runAction("diagnose", args);
+  runQuorumTool("forge_diagnose", { file: filePath, ...(models ? { models } : {}) }, `pforge diagnose ${filePath}`);
 }
 
 window.runAnalyzeQuorum = runAnalyzeQuorum;

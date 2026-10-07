@@ -281,6 +281,8 @@ function Show-Help {
     Write-Host "                      Flags: --force (heal), --downgrade (with --force), --yes/-y, --dry-run, --verify (run check + smith after),"
     Write-Host "                             --overwrite-customized"
     Write-Host "  analyze <plan>    Cross-artifact analysis — requirement traceability, test coverage, scope compliance"
+    Write-Host "                      Flags: --quorum[=<preset>] or --models m1,m2 (multi-model review, also of source files), --mode plan|file"
+    Write-Host "  diagnose <file>   Multi-model bug investigation — root causes and fixes. Flags: --models m1,m2, --quorum=<preset>"
     Write-Host "  run-plan <plan>   Execute a hardened plan — spawn CLI workers, validate at every boundary, track tokens"
     Write-Host "  version-bump <v>  Update version across all files (VERSION, package.json, docs, README)"
     Write-Host "  pending           List, diff, apply or discard guidance updates pforge update saved instead of overwriting your edits"
@@ -2293,34 +2295,106 @@ function Get-AnalyzeFiles {
     }
 }
 
+# Parses `analyze` / `diagnose` arguments. Flags may come before or after the target;
+# the first non-flag token is the target. --models implies a quorum run.
+function Get-AnalysisArgs {
+    $parsed = @{ Target = $null; Mode = $null; Models = $null; Quorum = $false; Preset = $null }
+    for ($i = 0; $i -lt $Arguments.Count; $i++) {
+        $arg = [string]$Arguments[$i]
+        if ($arg -eq '--quorum') { $parsed.Quorum = $true; continue }
+        if ($arg -like '--quorum=*') { $parsed.Quorum = $true; $parsed.Preset = $arg.Substring('--quorum='.Length); continue }
+        if ($arg -eq '--mode' -or $arg -eq '--models') {
+            if (($i + 1) -ge $Arguments.Count) {
+                Write-Host "ERROR: $arg requires a value." -ForegroundColor Red
+                exit 1
+            }
+            $i++
+            # From a PowerShell prompt an unquoted "m1,m2" binds as an array and arrives
+            # space-joined in [string[]]$Arguments; model names never contain spaces.
+            if ($arg -eq '--mode') { $parsed.Mode = [string]$Arguments[$i] } else { $parsed.Models = ([string]$Arguments[$i]).Trim() -replace '\s+', ','; $parsed.Quorum = $true }
+            continue
+        }
+        if ($arg.StartsWith('--')) {
+            Write-Host "ERROR: Unknown option '$arg'." -ForegroundColor Red
+            exit 1
+        }
+        if (-not $parsed.Target) { $parsed.Target = $arg }
+    }
+    return $parsed
+}
+
+# Resolves a target relative to the current directory, then the repo root; exits 1 when missing.
+function Resolve-AnalysisTarget([string]$Target, [string]$Label) {
+    if (Test-Path -LiteralPath $Target) { return $Target }
+    $fromRoot = Join-Path $RepoRoot $Target
+    if (Test-Path -LiteralPath $fromRoot) { return $fromRoot }
+    Write-Host "ERROR: $Label not found: $Target" -ForegroundColor Red
+    exit 1
+}
+
+# Multi-model runs live in the orchestrator (pforge-mcp/orchestrator/analysis-cli.mjs),
+# which validates --mode and the preset and writes .forge/analysis/<name>-<ts>.json.
+function Invoke-AnalysisOrchestrator([string]$Command, [string]$Target, [hashtable]$Parsed) {
+    $nodeArgs = @((Join-Path $RepoRoot 'pforge-mcp/orchestrator.mjs'), "--$Command", $Target)
+    if ($Parsed.Mode)   { $nodeArgs += @('--mode', $Parsed.Mode) }
+    if ($Parsed.Models) { $nodeArgs += @('--models', $Parsed.Models) }
+    if ($Parsed.Preset) { $nodeArgs += @('--preset', $Parsed.Preset) }
+    & node @nodeArgs
+    exit $LASTEXITCODE
+}
+
+# ─── Command: diagnose ─────────────────────────────────────────────────
+function Invoke-Diagnose {
+    $parsed = Get-AnalysisArgs
+    if (-not $parsed.Target) {
+        Write-Host "ERROR: Source file required." -ForegroundColor Red
+        Write-Host "  Usage: pforge diagnose <file> [--models m1,m2] [--quorum=<preset>]" -ForegroundColor Yellow
+        Write-Host "  Example: pforge diagnose src/services/billing.ts" -ForegroundColor Yellow
+        exit 1
+    }
+    if ($parsed.Mode) {
+        Write-Host "ERROR: --mode applies to pforge analyze only." -ForegroundColor Red
+        exit 1
+    }
+    $file = Resolve-AnalysisTarget $parsed.Target 'Source file'
+    Write-ManualSteps "diagnose" @(
+        "Send the file to each quorum model for an independent bug investigation"
+        "Synthesize root causes and fixes with the reviewer model"
+        "Save the report to .forge/analysis/diagnose-*"
+    )
+    Invoke-AnalysisOrchestrator 'diagnose' $file $parsed
+}
+
 function Invoke-Analyze {
-    if (-not $Arguments -or $Arguments.Count -eq 0) {
+    $parsed = Get-AnalysisArgs
+    if (-not $parsed.Target) {
         Write-Host "ERROR: Plan file required." -ForegroundColor Red
-        Write-Host "  Usage: pforge analyze <plan-file>" -ForegroundColor Yellow
+        Write-Host "  Usage: pforge analyze <plan-file> [--quorum[=<preset>]] [--models m1,m2] [--mode plan|file]" -ForegroundColor Yellow
         Write-Host "  Example: pforge analyze docs/plans/Phase-1-AUTH-PLAN.md" -ForegroundColor Yellow
         exit 1
     }
+    $planFile = Resolve-AnalysisTarget $parsed.Target 'Plan file'
 
-    $planFile = $Arguments[0]
-    if (-not (Test-Path $planFile)) {
-        $planFile = Join-Path $RepoRoot $planFile
-    }
-    if (-not (Test-Path $planFile)) {
-        Write-Host "ERROR: Plan file not found: $($Arguments[0])" -ForegroundColor Red
-        exit 1
+    if ($parsed.Quorum) {
+        Write-ManualSteps "analyze --quorum" @(
+            "Send the plan or source file to each quorum model for an independent review"
+            "Synthesize the reviews with the reviewer model"
+            "Save the report to .forge/analysis/"
+        )
+        Invoke-AnalysisOrchestrator 'analyze' $planFile $parsed
     }
 
     # The scorer reads its target as a plan; a source file used to be scored as an empty
     # plan after a slow repo-wide scan (meta-bug #319). Mirrors resolveAnalyzeMode in
-    # pforge-mcp/server/helpers.mjs: .md/.markdown are plans unless --mode says otherwise.
-    $modeIdx = [Array]::IndexOf([string[]]$Arguments, '--mode')
-    $analyzeMode = if ($modeIdx -ge 0 -and ($modeIdx + 1) -lt $Arguments.Count) { $Arguments[$modeIdx + 1] } else { $null }
+    # pforge-mcp/analyze-mode.mjs: .md/.markdown are plans unless --mode says otherwise.
+    $analyzeMode = $parsed.Mode
     if (-not $analyzeMode) {
         $analyzeMode = if ([System.IO.Path]::GetExtension($planFile) -in @('.md', '.markdown')) { 'plan' } else { 'file' }
     }
     if ($analyzeMode -ne 'plan') {
-        Write-Host "ERROR: pforge analyze scores plan files only; '$($Arguments[0])' was read as a source file (mode '$analyzeMode')." -ForegroundColor Red
-        Write-Host "  For a code review, call the forge_analyze MCP tool with quorum: true, or forge_diagnose for a bug investigation." -ForegroundColor Yellow
+        Write-Host "ERROR: pforge analyze scores plan files only; '$($parsed.Target)' was read as a source file (mode '$analyzeMode')." -ForegroundColor Red
+        Write-Host "  For a code review, run: pforge analyze $($parsed.Target) --quorum   (multi-model; spends tokens)" -ForegroundColor Yellow
+        Write-Host "  For a bug investigation, run: pforge diagnose $($parsed.Target)" -ForegroundColor Yellow
         Write-Host "  To score a Markdown file as a plan, pass --mode plan." -ForegroundColor Yellow
         exit 1
     }
@@ -8050,6 +8124,7 @@ switch ($Command) {
     'update'       { Invoke-Update }
     'self-update'  { Invoke-SelfUpdate }
     'analyze'      { Invoke-Analyze }
+    'diagnose'     { Invoke-Diagnose }
     'run-plan'     { Invoke-RunPlan }
     'org-rules'    { Invoke-OrgRules }
     'drift'        { Invoke-Drift }

@@ -172,7 +172,7 @@ export const TOOLS = [
       properties: {
         plan: { type: "string", description: "Path to the plan or source file to analyze (e.g., docs/plans/Phase-1-AUTH-PLAN.md or src/services/billing.ts)" },
         quorum: { type: "boolean", description: "If true, dispatch analysis to multiple models and synthesize findings. Default: false" },
-        mode: { type: "string", enum: ["plan", "file"], description: "Analysis mode: 'plan' (plan consistency) or 'file' (code review). Default: auto-detected from filename" },
+        mode: { type: "string", enum: ["plan", "file"], description: "Analysis mode: 'plan' (plan consistency score) or 'file' (code review; requires quorum=true, otherwise the call is rejected without running). Default: 'plan' for .md/.markdown files, 'file' for anything else" },
         models: { type: "string", description: "Comma-separated model list override (e.g., 'grok-4.7,claude-sonnet-5.5,gpt-6-sol'). Default: quorum config models" },
         path: { type: "string", description: "Project directory (default: current)" },
       },

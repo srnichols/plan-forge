@@ -127,6 +127,7 @@ export const TOOL_METADATA = {
     sideEffects: [],
     errors: {
       PLAN_NOT_FOUND: { message: "Plan file not found", recovery: "Check the plan path" },
+      FILE_MODE_REQUIRES_QUORUM: { message: "Source-file (mode 'file') analysis needs quorum=true; the non-quorum scorer reads plans only", recovery: "Pass quorum: true for a multi-model code review, use forge_diagnose, or pass mode: 'plan' for a Markdown plan" },
       LOW_SCORE: { message: "Score below 60%", recovery: "Review gaps in traceability, coverage, tests, or gates" },
     },
     example: { input: { plan: "docs/plans/Phase-1.md" }, output: { score: 85, status: "passed" } },

@@ -63,7 +63,7 @@
               "plan",
               "file"
             ],
-            "description": "Analysis mode: 'plan' (plan consistency) or 'file' (code review). Default: auto-detected from filename"
+            "description": "Analysis mode: 'plan' (plan consistency score) or 'file' (code review; requires quorum=true, otherwise the call is rejected without running). Default: 'plan' for .md/.markdown files, 'file' for anything else"
           },
           "models": {
             "type": "string",

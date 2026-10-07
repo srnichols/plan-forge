@@ -15,7 +15,7 @@ tools: [read_file, forge_analyze, forge_diagnose, forge_diff]
 ## Steps
 
 ### 0. Forge Analysis
-Use the `forge_analyze` MCP tool with the current plan (if available) to get a structured consistency score. Use the `forge_diff` MCP tool to detect scope drift and forbidden file edits.
+Use the `forge_analyze` MCP tool with the current plan (if available) to get a structured consistency score. Pass the plan's `.md` path, not a source file: without `quorum: true`, `forge_analyze` scores plans only and rejects a source-file target. If the reviewed work has no plan, skip the score. Use the `forge_diff` MCP tool to detect scope drift and forbidden file edits.
 
 **If `--quorum` was specified**: Use `forge_analyze` with `quorum: true` to dispatch multi-model analysis. Each changed file is independently reviewed by multiple AI models, and findings are synthesized with consensus confidence levels.
 

@@ -244,7 +244,6 @@ pforge phase-status <plan> <status>   # Update roadmap status
 pforge diff <plan>                    # Scope drift detection
 pforge analyze <plan>                 # Consistency scoring (0-100)
 pforge analyze <plan> --quorum        # Multi-model consensus analysis
-pforge analyze <file> --mode file     # Code file analysis
 pforge analyze <target> --models m1,m2 # Custom model lineup
 pforge diagnose <file>                # Multi-model bug investigation
 pforge diagnose <file> --models m1,m2 # Bug investigation with custom models

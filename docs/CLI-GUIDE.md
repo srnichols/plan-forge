@@ -352,7 +352,7 @@ place for other failures.
 > | | `pforge analyze` | `pforge diagnose` |
 > |---|---|---|
 > | **Purpose** | Plan quality scoring | Bug investigation |
-> | **Input** | Plan file or code file | Code file with a suspected bug |
+> | **Input** | Plan file (`.md`); source files are rejected | Code file with a suspected bug |
 > | **Question it answers** | "Is this plan well-structured and complete?" | "What's wrong with this code and how do I fix it?" |
 > | **Output** | Consistency score (0–100) across 4 dimensions | Root cause analysis with fix recommendations |
 > | **When to use** | After hardening a plan, before execution | When a slice fails or code behaves unexpectedly |
@@ -369,9 +369,6 @@ Cross-artifact consistency analysis — validates that requirements are traced t
 # Multi-model quorum analysis
 .\pforge.ps1 analyze docs/plans/Phase-1-AUTH-PLAN.md --quorum
 
-# Code file analysis (auto-detects mode from filename)
-.\pforge.ps1 analyze src/services/billing.ts --mode file
-
 # Custom model lineup
 .\pforge.ps1 analyze docs/plans/Phase-1-AUTH-PLAN.md --models grok-4.20-0309-non-reasoning,grok-4.7
 ```
@@ -382,9 +379,6 @@ Cross-artifact consistency analysis — validates that requirements are traced t
 
 # Multi-model quorum analysis
 ./pforge.sh analyze docs/plans/Phase-1-AUTH-PLAN.md --quorum
-
-# Code file analysis
-./pforge.sh analyze src/services/billing.ts --mode file
 
 # Custom model lineup
 ./pforge.sh analyze docs/plans/Phase-1-AUTH-PLAN.md --models grok-4.7,grok-4.20-0309-non-reasoning

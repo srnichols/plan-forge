@@ -115,7 +115,7 @@ import {
   _mcpServerRef,
 } from "../state.mjs";
 import { writeAuditArtifact } from "../audit-writer.mjs";
-import { startEventFileWatcher, runPforge, findProjectRoot } from "../helpers.mjs";
+import { startEventFileWatcher, runPforge, findProjectRoot, resolveAnalyzeMode, analyzeFileModeNeedsQuorumMessage } from "../helpers.mjs";
 import { callOrgRules } from "../org-rules.mjs";
 import { _sweepAnvilCompute, _analyzeAnvilCompute, _temperingScanAnvilCompute, _hotspotAnvilCompute } from "../anvil-compute.mjs";
 import { TOOLS } from "../tool-definitions.mjs";
@@ -485,6 +485,16 @@ async function _callToolHandler_011_forge_analyze(request, args) {
   const { name } = request.params;
   if (!(name === "forge_analyze" && !args.quorum)) return _CALL_TOOL_NO_MATCH;
 
+    const resolved = resolveAnalyzeMode(args);
+    if (resolved.error) {
+      return { content: [{ type: "text", text: `Analyze error: ${resolved.error}` }], isError: true };
+    }
+    // The CLI scorer reads every target as a plan; a source file would be scored as an
+    // empty plan after a slow repo-wide test scan (meta-bug #319).
+    if (resolved.mode === "file") {
+      return { content: [{ type: "text", text: analyzeFileModeNeedsQuorumMessage(args.plan) }], isError: true };
+    }
+
     try {
       const cwd = args.path ? findProjectRoot(resolve(args.path)) : findProjectRoot(PROJECT_DIR);
       const result = await _analyzeAnvilCompute(args, { _cwd: cwd });
@@ -502,9 +512,14 @@ async function _callToolHandler_012_forge_analyze(request, args) {
   const { name } = request.params;
   if (!(name === "forge_analyze" && args.quorum)) return _CALL_TOOL_NO_MATCH;
 
+    const resolved = resolveAnalyzeMode(args);
+    if (resolved.error) {
+      return { content: [{ type: "text", text: `Quorum analysis error: ${resolved.error}` }], isError: true };
+    }
+
     try {
       const cwd = args.path ? findProjectRoot(resolve(args.path)) : findProjectRoot(PROJECT_DIR);
-      const mode = args.mode || (args.plan.match(/plan/i) ? "plan" : "file");
+      const { mode } = resolved;
       const models = args.models ? args.models.split(",").map((m) => m.trim()) : null;
 
       const result = await analyzeWithQuorum({

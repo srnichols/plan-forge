@@ -2264,6 +2264,35 @@ writeFreshCache(process.argv[1], process.argv[2]);
 }
 
 # ─── Command: analyze ──────────────────────────────────────────────────
+# Dependency and build-output directories never hold the project's own tests.
+$script:AnalyzeSkipDirs = @('node_modules', 'bin', 'obj', 'dist', '.git', 'vendor')
+
+# Walks $Root without descending into $script:AnalyzeSkipDirs. Get-ChildItem -Recurse
+# enumerated every bin/obj/node_modules file before filtering, so analyze timed out
+# on a .NET solution (meta-bug #319). Hidden entries and reparse points are skipped,
+# matching Get-ChildItem -Recurse without -Force / -FollowSymlink.
+function Get-AnalyzeFiles {
+    param([string]$Root, [string[]]$NamePatterns = @())
+    $skipAttrs = [System.IO.FileAttributes]::Hidden -bor [System.IO.FileAttributes]::ReparsePoint
+    $pending = [System.Collections.Generic.Stack[System.IO.DirectoryInfo]]::new()
+    $pending.Push([System.IO.DirectoryInfo]::new($Root))
+    while ($pending.Count -gt 0) {
+        $dir = $pending.Pop()
+        try { $entries = @($dir.EnumerateFileSystemInfos()) } catch { continue }
+        foreach ($entry in $entries) {
+            if ($entry.Attributes -band $skipAttrs) { continue }
+            if ($entry -is [System.IO.DirectoryInfo]) {
+                if ($script:AnalyzeSkipDirs -notcontains $entry.Name) { $pending.Push($entry) }
+                continue
+            }
+            if ($NamePatterns.Count -eq 0) { $entry; continue }
+            foreach ($pattern in $NamePatterns) {
+                if ($entry.Name -like $pattern) { $entry; break }
+            }
+        }
+    }
+}
+
 function Invoke-Analyze {
     if (-not $Arguments -or $Arguments.Count -eq 0) {
         Write-Host "ERROR: Plan file required." -ForegroundColor Red
@@ -2278,6 +2307,21 @@ function Invoke-Analyze {
     }
     if (-not (Test-Path $planFile)) {
         Write-Host "ERROR: Plan file not found: $($Arguments[0])" -ForegroundColor Red
+        exit 1
+    }
+
+    # The scorer reads its target as a plan; a source file used to be scored as an empty
+    # plan after a slow repo-wide scan (meta-bug #319). Mirrors resolveAnalyzeMode in
+    # pforge-mcp/server/helpers.mjs: .md/.markdown are plans unless --mode says otherwise.
+    $modeIdx = [Array]::IndexOf([string[]]$Arguments, '--mode')
+    $analyzeMode = if ($modeIdx -ge 0 -and ($modeIdx + 1) -lt $Arguments.Count) { $Arguments[$modeIdx + 1] } else { $null }
+    if (-not $analyzeMode) {
+        $analyzeMode = if ([System.IO.Path]::GetExtension($planFile) -in @('.md', '.markdown')) { 'plan' } else { 'file' }
+    }
+    if ($analyzeMode -ne 'plan') {
+        Write-Host "ERROR: pforge analyze scores plan files only; '$($Arguments[0])' was read as a source file (mode '$analyzeMode')." -ForegroundColor Red
+        Write-Host "  For a code review, call the forge_analyze MCP tool with quorum: true, or forge_diagnose for a bug investigation." -ForegroundColor Yellow
+        Write-Host "  To score a Markdown file as a plan, pass --mode plan." -ForegroundColor Yellow
         exit 1
     }
 
@@ -2429,16 +2473,13 @@ function Invoke-Analyze {
     $testFiles = @()
     foreach ($td in $testDirs) {
         $testDir = Join-Path $RepoRoot $td
-        if (Test-Path -LiteralPath $testDir) {
-            $testFiles += Get-ChildItem -LiteralPath $testDir -Recurse -File -ErrorAction SilentlyContinue
+        if (Test-Path -LiteralPath $testDir -PathType Container) {
+            $testFiles += Get-AnalyzeFiles -Root $testDir
         }
     }
     # Also search project root with test patterns
-    foreach ($pattern in $testExtensions) {
-        $testFiles += Get-ChildItem -LiteralPath $RepoRoot -Filter $pattern -Recurse -File -ErrorAction SilentlyContinue |
-            Where-Object { $_.FullName -notmatch '(node_modules|bin|obj|dist|\.git|vendor)' }
-    }
-    $testFiles = $testFiles | Select-Object -Unique
+    $testFiles += Get-AnalyzeFiles -Root $RepoRoot -NamePatterns $testExtensions
+    $testFiles = @($testFiles | Sort-Object -Property FullName -Unique)
 
     $testedMust = 0; $untestedMust = @()
     if ($mustCriteria -and $mustCriteria.Count -gt 0) {

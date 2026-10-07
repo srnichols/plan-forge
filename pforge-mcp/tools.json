@@ -768,7 +768,7 @@
             "plan",
             "file"
           ],
-          "description": "Analysis mode: 'plan' (plan consistency) or 'file' (code review). Default: auto-detected from filename"
+          "description": "Analysis mode: 'plan' (plan consistency score) or 'file' (code review; requires quorum=true, otherwise the call is rejected without running). Default: 'plan' for .md/.markdown files, 'file' for anything else"
         },
         "models": {
           "type": "string",
@@ -809,6 +809,10 @@
       "PLAN_NOT_FOUND": {
         "message": "Plan file not found",
         "recovery": "Check the plan path"
+      },
+      "FILE_MODE_REQUIRES_QUORUM": {
+        "message": "Source-file (mode 'file') analysis needs quorum=true; the non-quorum scorer reads plans only",
+        "recovery": "Pass quorum: true for a multi-model code review, use forge_diagnose, or pass mode: 'plan' for a Markdown plan"
       },
       "LOW_SCORE": {
         "message": "Score below 60%",

@@ -2116,6 +2116,27 @@ cmd_analyze() {
         exit 1
     fi
 
+    # The scorer reads its target as a plan; a source file used to be scored as an empty
+    # plan after a slow repo-wide scan (meta-bug #319). Twin of the pforge.ps1 check:
+    # .md/.markdown are plans unless --mode says otherwise.
+    local analyze_mode="" arg prev=""
+    for arg in "$@"; do
+        [ "$prev" = "--mode" ] && analyze_mode="$arg"
+        prev="$arg"
+    done
+    if [ -z "$analyze_mode" ]; then
+        case "$(echo "$plan_file" | tr '[:upper:]' '[:lower:]')" in
+            *.md|*.markdown) analyze_mode="plan" ;;
+            *)               analyze_mode="file" ;;
+        esac
+    fi
+    if [ "$analyze_mode" != "plan" ]; then
+        echo "ERROR: pforge analyze scores plan files only; '$1' was read as a source file (mode '$analyze_mode')." >&2
+        echo "  For a code review, call the forge_analyze MCP tool with quorum: true, or forge_diagnose for a bug investigation." >&2
+        echo "  To score a Markdown file as a plan, pass --mode plan." >&2
+        exit 1
+    fi
+
     print_manual_steps "analyze" \
         "Parse plan for requirements, slices, gates, scope" \
         "Cross-reference git changes against scope contract" \
@@ -2218,8 +2239,11 @@ cmd_analyze() {
     # ═══════════════════════════════════════════════════════════════
     echo "Test Coverage:"
 
+    # -prune keeps find out of dependency/build trees; "! -path" still walked every
+    # file under them, which is what timed analyze out on a .NET solution (meta-bug #319).
+    # The directory list mirrors $script:AnalyzeSkipDirs in pforge.ps1.
     local test_file_count=0
-    test_file_count=$(find "$REPO_ROOT" -type f \( -name "*.test.*" -o -name "*.spec.*" -o -name "*Tests.cs" -o -name "*Test.java" -o -name "*_test.go" -o -name "test_*.py" -o -name "*_test.py" \) ! -path '*/node_modules/*' ! -path '*/.git/*' ! -path '*/bin/*' ! -path '*/obj/*' 2>/dev/null | wc -l | tr -d ' ')
+    test_file_count=$(find "$REPO_ROOT" \( -type d \( -name node_modules -o -name .git -o -name bin -o -name obj -o -name dist -o -name vendor \) -prune \) -o -type f \( -name "*.test.*" -o -name "*.spec.*" -o -name "*Tests.cs" -o -name "*Test.java" -o -name "*_test.go" -o -name "test_*.py" -o -name "*_test.py" \) -print 2>/dev/null | wc -l | tr -d ' ')
 
     if [ "$test_file_count" -gt 0 ]; then
         echo "  ✅ $test_file_count test file(s) found in project"

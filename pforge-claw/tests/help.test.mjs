@@ -3,7 +3,7 @@ import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { afterEach, describe, expect, it } from "vitest";
-import { COMMANDS, findCommand, parseText, toMetadata, visibleCommands } from "../src/commands/index.mjs";
+import { COMMANDS, findCommand, parseText, suggest, toMetadata, visibleCommands } from "../src/commands/index.mjs";
 import helpCommand from "../src/commands/help.mjs";
 import { CALLBACK_PREFIXES } from "../src/callbacks/index.mjs";
 import { renderCommandHelp, renderHelp, splitHelp } from "../src/handlers/help.mjs";
@@ -62,14 +62,28 @@ describe("help rendering and menu wiring", () => {
     expect(text).not.toContain("/forget");
   });
 
-  it("keeps unavailable /help run details hidden and renders visible metadata directly", () => {
-    const hiddenRun = toMetadata(findCommand("run"));
-    const hidden = renderCommandHelp(hiddenRun, { role: "owner", scope: "project" });
+  it("keeps unavailable /help <command> details hidden and renders visible metadata directly", () => {
+    // Derive the example from the live registry so later slices flipping `available` never break this test.
+    let registry = COMMANDS;
+    let target = COMMANDS.find((command) => !command.available);
+    if (!target) {
+      const flipped = COMMANDS.find((command) => command.name !== "help");
+      registry = COMMANDS.map((command) => command === flipped ? { ...command, available: false } : command);
+      target = registry.find((command) => command.name === flipped.name);
+    }
+    const role = target.roles[0];
+    const scope = target.scope === "general" ? "general" : "project";
+    const hiddenMetadata = toMetadata(target);
+    const hidden = renderCommandHelp(hiddenMetadata, { role, scope, commands: registry });
     expect(hidden).toContain("Unknown command");
-    expect(hidden).toContain("Did you mean");
-    expect(hidden).not.toContain(hiddenRun.details);
-    const visibleHelp = toMetadata(findCommand("help"));
-    expect(renderCommandHelp(visibleHelp, { role: "owner", scope: "project" })).toContain(visibleHelp.details);
+    expect(hidden).not.toContain(hiddenMetadata.details);
+    const suggestion = suggest(target.name, visibleCommands({ role, scope, commands: registry }));
+    if (suggestion) expect(hidden).toContain(`Did you mean /${suggestion}?`);
+    else expect(hidden).not.toContain("Did you mean");
+    for (const command of visibleCommands({ role: "owner", scope: "project", commands: registry })) {
+      const metadata = toMetadata(command);
+      expect(renderCommandHelp(metadata, { role: "owner", scope: "project", commands: registry })).toContain(metadata.details);
+    }
   });
 
   it("recognizes help aliases and /start", async () => {

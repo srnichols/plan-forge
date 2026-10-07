@@ -174,9 +174,20 @@ describe("identity and topic router", () => {
         }
       }
     }
-    const realRig = makeRig();
-    await realRig.router.route(update({ text: "/run" }));
-    expect(realRig.calls[0].text).toBe("/run isn't available yet.");
+    // Derive the unavailable example from the live registry so later slices flipping `available` never break this test.
+    let unavailableRegistry = COMMANDS;
+    let unavailable = COMMANDS.find((command) => !command.available);
+    if (!unavailable) {
+      unavailable = { ...COMMANDS.find((command) => command.name !== "help"), available: false };
+      unavailableRegistry = COMMANDS.map((command) => command.name === unavailable.name ? unavailable : command);
+    }
+    const realRig = makeRig({ commandRegistry: unavailableRegistry });
+    const target = unavailable.scope === "general"
+      ? { chatId: "general-chat", threadId: "general-topic" }
+      : { chatId: "project-chat", threadId: "project-topic" };
+    await realRig.router.route(update({ ...target, text: `/${unavailable.name}` }));
+    expect(realRig.calls[0].text).toBe(`/${unavailable.name} isn't available yet.`);
+    expect(auditRecords(realRig.store).at(-1)).toMatchObject({ kind: "refused", reason: "unavailable" });
   });
 
   it("refuses non-owner mutating execution when byok-only is disabled", async () => {
@@ -211,9 +222,9 @@ describe("identity and topic router", () => {
     expect(rig.calls[0].text).toBe("Audit unavailable; command not run.");
   });
 
-  it("returns only a generic error code and never exposes a handler stack", async () => {
+  it("returns only a friendly error with a sanitized code and never exposes a handler stack", async () => {
     const handler = async () => {
-      const error = new ClawError("TEST_FAILURE");
+      const error = new ClawError("TEST_FAILURE", { secret: "private-details-marker" });
       error.stack = "private-stack-marker";
       throw error;
     };
@@ -221,7 +232,46 @@ describe("identity and topic router", () => {
       commandRegistry: COMMANDS.map((command) => command.name === "help" ? { ...command, handle: handler } : command),
     });
     await rig.router.route(update());
-    expect(rig.calls[0].text).toBe("TEST_FAILURE: The command could not be completed.");
+    expect(rig.calls[0].text).toBe("/help couldn't be completed (TEST_FAILURE). Try again later or check `pforge claw doctor`.");
     expect(rig.calls[0].text).not.toContain("private-stack-marker");
+    expect(rig.calls[0].text).not.toContain("private-details-marker");
+  });
+
+  it("maps SERVICE_UNAVAILABLE failures to a friendly reply without raw codes or details", async () => {
+    const friendly = "/run can't run right now: a required service isn't running. Try again later or check `pforge claw doctor`.";
+    const thrower = async () => {
+      const error = new ClawError("SERVICE_UNAVAILABLE", { service: "mcp", token: "private-details-marker" });
+      error.stack = "private-stack-marker";
+      throw error;
+    };
+    const handlers = [
+      thrower,
+      async () => ({ text: "SERVICE_UNAVAILABLE: run" }),
+      async () => { throw new Error("raw private-message-marker"); },
+    ];
+    const replies = [];
+    for (const handle of handlers) {
+      const rig = makeRig({
+        commandRegistry: COMMANDS.map((command) => command.name === "run" ? { ...command, available: true, handle } : command),
+      });
+      await rig.router.route(update({ text: "/run plan" }));
+      replies.push(rig.calls.find(({ method }) => method === "send").text);
+    }
+    expect(replies).toEqual([
+      friendly,
+      friendly,
+      "/run couldn't be completed (INTERNAL). Try again later or check `pforge claw doctor`.",
+    ]);
+    for (const reply of replies) {
+      expect(reply).not.toMatch(/SERVICE_UNAVAILABLE|private-|stack/);
+    }
+    // A real handler with no wired services takes the same friendly path.
+    const realRig = makeRig();
+    await realRig.router.route(update({ text: "/run plan" }));
+    if (findAvailable("run")) expect(realRig.calls[0].text).toBe(friendly);
   });
 });
+
+function findAvailable(name) {
+  return COMMANDS.find((command) => command.name === name && command.available);
+}

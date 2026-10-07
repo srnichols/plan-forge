@@ -129,10 +129,26 @@ function unknownCommandReply(token, caller, scope, commands) {
   return `Unknown command \`${escapeToken(token)}\` — try /help${suggestion ? `\nDid you mean /${suggestion}?` : ""}`;
 }
 
-async function sendHandlerResult(channel, update, result) {
+const ERROR_CODE_PATTERN = /^[A-Z][A-Z0-9_]{0,63}$/;
+// Handlers that predate ClawError return bare "SERVICE_UNAVAILABLE: <service>" text.
+const RAW_SERVICE_UNAVAILABLE_TEXT = /^SERVICE_UNAVAILABLE(?::\s*[\w .-]{0,64})?$/;
+
+function friendlyErrorReply(commandName, error) {
+  const code = error instanceof ClawError && ERROR_CODE_PATTERN.test(String(error.code)) ? error.code : "INTERNAL";
+  if (code === "SERVICE_UNAVAILABLE") {
+    return `/${commandName} can't run right now: a required service isn't running. Try again later or check \`pforge claw doctor\`.`;
+  }
+  return `/${commandName} couldn't be completed (${code}). Try again later or check \`pforge claw doctor\`.`;
+}
+
+async function sendHandlerResult(channel, update, result, commandName) {
   const messages = Array.isArray(result) ? result : [result];
   for (const message of messages) {
-    if (message && typeof message.text === "string") await sendText(channel, update, message.text);
+    if (!message || typeof message.text !== "string") continue;
+    const text = RAW_SERVICE_UNAVAILABLE_TEXT.test(message.text.trim())
+      ? friendlyErrorReply(commandName, new ClawError("SERVICE_UNAVAILABLE"))
+      : message.text;
+    await sendText(channel, update, text);
   }
 }
 
@@ -166,10 +182,9 @@ async function dispatchCommand({
         ? commandByName(commandRegistry, argsText.split(/\s+/)[0])
         : null,
     });
-    await sendHandlerResult(channel, update, result);
+    await sendHandlerResult(channel, update, result, command.name);
   } catch (error) {
-    const code = error instanceof ClawError && typeof error.code === "string" ? error.code : "INTERNAL";
-    await sendText(channel, update, `${code}: The command could not be completed.`);
+    await sendText(channel, update, friendlyErrorReply(command.name, error));
   }
 }
 

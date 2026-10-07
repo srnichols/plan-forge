@@ -303,9 +303,11 @@ function _applyAutoEscalation({ inputModel, currentTier, currentModel, config, c
 
 async function _buildContextBlock({ effectiveSessionId, isEphemeral, classification, message, cwd, priorTurns, sessionSummary, deps }) {
   let contextBlock = "";
+  let recalledUntrusted = [];
   try {
     const ctx = await fetchContext({ sessionId: effectiveSessionId, lane: classification.lane, cwd }, deps);
     contextBlock = ctx.contextBlock;
+    recalledUntrusted = ctx.untrustedContext ?? [];
   } catch { /* non-fatal */ }
 
   let relatedTurns = [];
@@ -346,7 +348,7 @@ async function _buildContextBlock({ effectiveSessionId, isEphemeral, classificat
     contextBlock = `${renderSummaryBlock(sessionSummary)}${contextBlock}`;
   }
 
-  return { contextBlock, relatedTurns };
+  return { contextBlock, relatedTurns, recalledUntrusted };
 }
 
 function _loadPrinciplesBlock(cwd) {
@@ -965,7 +967,7 @@ async function _runPreparedTurn({ input, deps, config, effectiveSessionId, isEph
   };
 
   // ── 2. Build context block (memory, recall, patterns, prior turns) ─
-  const { contextBlock, relatedTurns } = await _buildContextBlock({ effectiveSessionId, isEphemeral, classification, message, cwd, priorTurns, sessionSummary, deps });
+  const { contextBlock, relatedTurns, recalledUntrusted } = await _buildContextBlock({ effectiveSessionId, isEphemeral, classification, message, cwd, priorTurns, sessionSummary, deps });
   const ctxWithOperator = appendContextBlocks(contextBlock, input.contextBlocks);
 
   // ── 3. Load system prompt (with lane overlay) ─────────────────────
@@ -973,7 +975,7 @@ async function _runPreparedTurn({ input, deps, config, effectiveSessionId, isEph
   if (input.proposeActions === true) systemPrompt += `\n\n${buildProposalInstruction({ role: input.caller?.role })}`;
 
   // ── 4. Resolve allowlist + tool schemas ───────────────────────────
-  const turn = applyUntrustedPolicy({ message, untrustedContext: input.untrustedContext, allowlist: deps.resolvedAllowlist ?? resolveAllowlist({ toolMetadata: deps.toolMetadata || {}, discoverExtensionTools: config.discoverExtensionTools }), maxToolCalls: Math.min(input.maxToolCalls ?? config.maxToolCalls, ABSOLUTE_CEILING) });
+  const turn = applyUntrustedPolicy({ message, untrustedContext: input.untrustedContext, recalledUntrusted, allowlist: deps.resolvedAllowlist ?? resolveAllowlist({ toolMetadata: deps.toolMetadata || {}, discoverExtensionTools: config.discoverExtensionTools }), maxToolCalls: Math.min(input.maxToolCalls ?? config.maxToolCalls, ABSOLUTE_CEILING) });
   const { allowlist, maxToolCalls: effectiveMaxToolCalls } = turn;
   const toolSchemas = buildToolSchemas(allowlist);
 

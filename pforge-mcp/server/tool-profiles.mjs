@@ -32,7 +32,7 @@ export const TOOL_PROFILES = Object.freeze({
     "forge_liveguard_run", "forge_drift_report", "forge_secret_scan", "forge_env_diff", "forge_dep_watch",
     "forge_health_trend", "forge_hotspot", "forge_deploy_journal", "forge_runbook", "forge_watch",
     "forge_home_snapshot", "forge_timeline", "forge_audit_export", "forge_notify_send", "forge_notify_test",
-    "forge_org_rules",
+    "forge_org_rules", "forge_master_observe",
   ]),
   tempering: Object.freeze([
     "forge_tempering_run", "forge_tempering_scan", "forge_tempering_status", "forge_tempering_drain",
@@ -70,7 +70,7 @@ const ALWAYS_ON = "core";
 export const TOOL_PROFILE_DESCRIPTIONS = Object.freeze({
   core: "plan execution, status, cost, search, diagnostics (always on)",
   bugs: "bug registry, triage, fix proposals, reviews, regression guard",
-  liveguard: "drift, secrets, env diff, dependencies, health, incidents, notifications",
+  liveguard: "drift, secrets, env diff, dependencies, health, incidents, notifications, live observer",
   tempering: "test-quality scans and the testbed",
   crucible: "idea-to-plan smelting, plan export, quorum analysis",
   memory: "memory capture and recall, OpenBrain, Hallmark provenance",

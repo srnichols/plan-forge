@@ -1,12 +1,12 @@
 # Plan Forge — Capabilities Reference
 
-> **Tools**: 105 MCP on `pforge-mcp` (`forge_*`, includes `forge_master_ask` + Phase-43 `forge_master_audit`) plus 2 standalone tools on the companion `pforge-master` MCP server (`forge_master_ask`, `forge_master_observe`). The breakdown by family (35 core + 14 LiveGuard + 2 Watcher + 8 Crucible + 6 Tempering + 4 Bug Registry + 3 Testbed + 3 Review + 2 Notify + 5 Lattice + 2 Memory + 2 Sync + 1 Doctor + 1 Worker Guardrails + 4 Auditor/Observer + Forge-Master + ~newer) is no longer maintained inline — the authoritative source is `pforge-mcp/tools.json` (regenerated on every MCP server start). | **CLI mirrors**: Hallmark (`forge_hallmark_show|verify`, `pforge hallmark show|verify`), Anvil (`forge_anvil_stat|clear|rebuild|dlq_*`, `pforge anvil stat|clear|rebuild|dlq`) | **CLI**: 48+ commands (incl. Phase-43 `pforge audit`) | **Presets**: 9 | **Agents**: ~21 | **Skills**: ~12
+> **Tools**: 107 MCP on `pforge-mcp` (`forge_*`, includes Phase-43 `forge_master_audit` and `forge_master_ask` + `forge_master_observe`, which proxy to the companion) plus 2 tools on the companion `pforge-master` MCP server (`forge_master_ask`, `forge_master_observe`). The breakdown by family (35 core + 14 LiveGuard + 2 Watcher + 8 Crucible + 6 Tempering + 4 Bug Registry + 3 Testbed + 3 Review + 2 Notify + 5 Lattice + 2 Memory + 2 Sync + 1 Doctor + 1 Worker Guardrails + 4 Auditor/Observer + Forge-Master + ~newer) is no longer maintained inline — the authoritative source is `pforge-mcp/tools.json` (regenerated on every MCP server start). | **CLI mirrors**: Hallmark (`forge_hallmark_show|verify`, `pforge hallmark show|verify`), Anvil (`forge_anvil_stat|clear|rebuild|dlq_*`, `pforge anvil stat|clear|rebuild|dlq`) | **CLI**: 48+ commands (incl. Phase-43 `pforge audit`) | **Presets**: 9 | **Agents**: ~21 | **Skills**: ~12
 >
 > Machine-readable version: call `forge_capabilities` MCP tool, `GET https://planforge.software/.well-known/plan-forge.json`, or read `pforge-mcp/tools.json` (auto-generated on every MCP server start).
 
 ---
 
-## MCP Tools (106)
+## MCP Tools (107)
 
 | Tool | Intent | Cost | Description |
 |------|--------|------|-------------|
@@ -74,6 +74,7 @@
 | `forge_local_search` | semantic-search | low | Semantic search over local .forge/ thought stores — searches openbrain-queue.jsonl, openbrain-queue.archive.jsonl, openbrain-dlq.jsonl, and liveguard-memories.jsonl using TF-IDF cosine similarity. Automatically upgrades to neural embeddings (all-MiniLM-L6-v2) when @xenova/transformers is installed. USE FOR: recalling prior decisions and patterns when OpenBrain (L3 Postgres) is not configured; offline semantic memory search; auditing what thoughts have been captured locally. DO NOT USE FOR: querying a live OpenBrain/Postgres instance (use forge_search with memory source); searching code (use forge_search or forge_lattice_query). |
 | `forge_master_ask` | ask | high | Ask Forge-Master to reason about Plan Forge workflows — ideate features via Crucible, troubleshoot failures, query run status, or get operational guidance. Classifies intent, fetches memory context, and orchestrates read-only tool calls. Returns reply text, tool call history, token counts, usage, and session ID. Optional fields: caller (role/channel) and responseFormat shape the reply for the caller (e.g. brief, length-capped for chat); untrustedContext is fenced as third-party data and narrows the tools Forge-Master may use; contextBlocks add caller-supplied context; proposeActions:true returns up to 3 schema-validated proposedActions that Forge-Master never executes. When any optional field is supplied, truncated is an object with budget, reply, context, and untrusted flags. |
 | `forge_master_audit` | audit | high | Run a holistic CTO-style audit of the project. Forge-Master pulls drift, cost, open bugs, watcher alerts, deploy journal, and open Crucible smelts, then returns a structured report with summary, top 3 risks (with evidence), prioritized recommended actions (P0/P1/P2), and a cost note. Read-only. USE FOR: end-of-week health check, end-of-run hook, 'what should I worry about today?'. DO NOT USE FOR: per-slice troubleshooting (use forge_master_ask). |
+| `forge_master_observe` | observe | medium | Control the Forge-Master observer — a background hub subscriber that batches live Plan Forge events and can narrate notable patterns. status with limit or cursor returns insights with total, limit, cursor, nextCursor, hasMore, truncated, and an optional message. Read-only: cannot invoke write tools or modify project files. Proxied to the Forge-Master studio child so start, stop, and status share one observer and insight ring; when the child is unavailable returns { ok: false, error: 'FORGE_MASTER_UNAVAILABLE', message } (no in-process fallback). Kill switch: PFORGE_FORGE_MASTER_OBSERVE_DISABLE=1. |
 | `forge_memory_capture` | capture | low | Capture a thought, decision, or lesson into OpenBrain persistent memory. USE FOR: recording architecture decisions, patterns chosen, gotchas discovered, conventions established, or any cross-session knowledge that future AI sessions should know. Requires OpenBrain to be configured in .vscode/mcp.json or .claude/mcp.json. |
 | `forge_memory_report` | memory-report | low | GX.3 (v2.36): aggregate the health of every memory surface — L2 jsonl files (record counts, schema _v distribution), OpenBrain queue state (pending/delivered/failed/deferred/DLQ), drain stats trend, capture telemetry (per-tool/per-type volume + dedup rate), search cache health, and orphans under .forge/. Read-only — never mutates files. |
 | `forge_meta_bug_file` | self-repair | low | File a self-repair meta-bug against Plan Forge itself. Creates (or deduplicates) a GitHub issue for plan, orchestrator, or prompt defects discovered during execution. Auto-attaches trajectory context when slice reference is provided. |
@@ -784,7 +785,8 @@ an `insight` with a stable `id`, severity (`info`, `warn`, or `critical`), a
 summary limited to 200 characters, up to five evidence references, and a
 nullable `suggestedAction`. Each observer turn emits at most five insights.
 Use paginated `forge_master_observe` with `action: "status"` (`limit` and
-`cursor`) to read retained events. See
+`cursor`) to read retained events; on `pforge-mcp` the tool proxies to the
+Forge-Master studio child that owns the insight ring. See
 [Forge-Master Observer Events](../pforge-mcp/EVENTS.md#forge-master-observer-events).
 
 Example request:

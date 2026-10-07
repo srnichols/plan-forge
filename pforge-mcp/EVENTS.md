@@ -55,7 +55,11 @@ Each observer turn may emit at most five insights; each insight contains up to
 five evidence items. The summary limit is 200 characters. Insights are kept in
 a 50-entry in-process ring only and are lost when the process exits. Read them
 with `forge_master_observe` using `action: "status"` and optional `limit` and
-`cursor` pagination fields.
+`cursor` pagination fields. The ring lives in the Forge-Master studio child;
+`pforge-mcp` registers `forge_master_observe` as a proxy to that same child, so
+any MCP client connected to a project's `pforge-mcp` can start the observer and
+page its insights. There is no in-process fallback: if the child cannot be
+reached, the tool returns `{ ok: false, error: "FORGE_MASTER_UNAVAILABLE" }`.
 
 ```json
 {

@@ -42,6 +42,7 @@ import { checkBudget, recordSpend, loadBudgetState, saveBudgetState } from "./ob
 import { buildObserverPrompt } from "./observer-prompt.mjs";
 import { OBSERVER_NARRATION_EVENT_TYPE } from "./observer-loop.mjs";
 import { buildUsage, invalidInputResult, normalizeTurnInput } from "./turn-input.mjs";
+import { buildShapingSections, enforceMaxChars, hasNewTurnFields, buildTruncated } from "./response-shaping.mjs";
 
 // ─── Recall-eligible lanes ────────────────────────────────────────────
 
@@ -218,6 +219,10 @@ export function buildToolSchemas(allowlist, hints = USAGE_HINTS) {
 
 // ─── System Prompt Loader ───────────────────────────────────────────
 
+function _appendShapingSection(prompt, extra) {
+  return extra ? `${prompt}\n\n${extra}` : prompt;
+}
+
 /**
  * Load and interpolate the system prompt.
  * Composes base prompt + optional lane overlay, then substitutes
@@ -229,17 +234,19 @@ export function buildToolSchemas(allowlist, hints = USAGE_HINTS) {
  * @param {string} [lane]           — classification lane; selects an overlay if matched
  * @returns {string}
  */
-function loadSystemPrompt(contextBlock, principlesBlock, lane = null) {
+function loadSystemPrompt(contextBlock, principlesBlock, lane = null, shaping = null) {
   const overlay = loadLaneOverlay(lane);
+  const extra = shaping ? buildShapingSections(shaping) : "";
   try {
     const raw = readFileSync(SYSTEM_PROMPT_PATH, "utf-8");
     const withOverlay = overlay ? `${raw}\n\n${overlay}` : raw;
-    return withOverlay
+    return _appendShapingSection(withOverlay
       .replace("{principles_block}", principlesBlock || UNIVERSAL_BASELINE)
-      .replace("{context_block}", contextBlock || "(no context available)");
+      .replace("{context_block}", contextBlock || "(no context available)"), extra);
   } catch {
     const overlayBlock = overlay ? `\n\n${overlay}` : "";
-    return `You are Forge-Master, a Plan Forge reasoning assistant.${overlayBlock}\n\n## Philosophy & Guardrails\n\n${principlesBlock || UNIVERSAL_BASELINE}\n\n## Current Context\n\n${contextBlock || "(no context available)"}`;
+    const fallback = `You are Forge-Master, a Plan Forge reasoning assistant.${overlayBlock}\n\n## Philosophy & Guardrails\n\n${principlesBlock || UNIVERSAL_BASELINE}\n\n## Current Context\n\n${contextBlock || "(no context available)"}`;
+    return _appendShapingSection(fallback, extra);
   }
 }
 
@@ -734,7 +741,7 @@ function _earlyLoopErrorResult({ loopResult, effectiveSessionId, requestedTier, 
   };
 }
 
-function _successResult({ loopResult, effectiveSessionId, requestedTier, provider, autoEscalation, classification, relatedTurns, quorumResult }) {
+function _successResult({ loopResult, effectiveSessionId, requestedTier, provider, autoEscalation, classification, relatedTurns, quorumResult, truncated }) {
   return {
     reply: loopResult.finalReply,
     toolCalls: loopResult.allToolCalls,
@@ -748,7 +755,7 @@ function _successResult({ loopResult, effectiveSessionId, requestedTier, provide
       model: loopResult.currentModel,
       provider: loopResult.providerName ?? provider,
     }),
-    truncated: loopResult.truncated,
+    truncated: truncated ?? loopResult.truncated,
     ..._turnMetadata({
       effectiveSessionId,
       requestedTier,
@@ -920,7 +927,7 @@ async function _prepareTurn(input, deps) {
   return { done: false, input, inputTruncated: norm.truncated, deps, config, effectiveSessionId, isEphemeral, priorTurns, tierState, classification };
 }
 
-async function _runPreparedTurn({ input, deps, config, effectiveSessionId, isEphemeral, priorTurns, tierState, classification }) {
+async function _runPreparedTurn({ input, deps, config, effectiveSessionId, isEphemeral, priorTurns, tierState, classification, inputTruncated }) {
   const { message, cwd } = input;
   const { inputModel, requestedTier } = tierState;
   let { currentTier, currentModel } = tierState;
@@ -940,7 +947,7 @@ async function _runPreparedTurn({ input, deps, config, effectiveSessionId, isEph
   const { contextBlock, relatedTurns } = await _buildContextBlock({ effectiveSessionId, isEphemeral, classification, message, cwd, priorTurns, deps });
 
   // ── 3. Load system prompt (with lane overlay) ─────────────────────
-  const systemPrompt = loadSystemPrompt(contextBlock, _loadPrinciplesBlock(cwd), classification?.lane);
+  const systemPrompt = loadSystemPrompt(contextBlock, _loadPrinciplesBlock(cwd), classification?.lane, { caller: input.caller, responseFormat: input.responseFormat });
 
   // ── 4. Resolve allowlist + tool schemas ───────────────────────────
   const allowlist = deps.resolvedAllowlist ?? resolveAllowlist({ toolMetadata: deps.toolMetadata || {}, discoverExtensionTools: config.discoverExtensionTools });
@@ -989,11 +996,14 @@ async function _runPreparedTurn({ input, deps, config, effectiveSessionId, isEph
     return _earlyLoopErrorResult({ loopResult, effectiveSessionId, requestedTier, provider: provider.PROVIDER_NAME, autoEscalation, classification, relatedTurns });
   }
 
+  const shaped = enforceMaxChars(loopResult.finalReply, input.responseFormat?.maxChars);
+  loopResult.finalReply = shaped.reply;
+
   // ── 8. Persist + emit ─────────────────────────────────────────────
   await _persistTurnToStores({ isEphemeral, effectiveSessionId, message, classification, finalReply: loopResult.finalReply, allToolCalls: loopResult.allToolCalls, totalTokensIn: loopResult.totalTokensIn, totalTokensOut: loopResult.totalTokensOut, truncated: loopResult.truncated, cwd, deps });
   _emitTurnComplete(deps.hub, { tokensIn: loopResult.totalTokensIn, tokensOut: loopResult.totalTokensOut, toolCallCount: loopResult.allToolCalls.length, truncated: loopResult.truncated, sessionId: effectiveSessionId, timestamp: new Date().toISOString() });
 
-  return _successResult({ loopResult, effectiveSessionId, requestedTier, provider: provider.PROVIDER_NAME, autoEscalation, classification, relatedTurns, quorumResult: quorumOut.quorumResult });
+  return _successResult({ loopResult, effectiveSessionId, requestedTier, provider: provider.PROVIDER_NAME, autoEscalation, classification, relatedTurns, quorumResult: quorumOut.quorumResult, truncated: buildTruncated({ legacy: loopResult.truncated, optIn: hasNewTurnFields(input), inputFlags: inputTruncated, reply: shaped.truncated }) });
 }
 
 export async function runTurn(input, deps = {}) {

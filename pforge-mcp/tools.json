@@ -3564,6 +3564,31 @@
           "type": "string",
           "description": "Who captured this (e.g. 'openclaw', 'copilot-agent'). Default: 'forge_memory_capture'"
         },
+        "origin": {
+          "type": "string",
+          "enum": [
+            "trusted",
+            "untrusted"
+          ],
+          "description": "Memory trust provenance. Default: trusted."
+        },
+        "visibility": {
+          "type": "string",
+          "enum": [
+            "normal",
+            "restricted"
+          ],
+          "description": "Memory visibility scope. Default: normal."
+        },
+        "tags": {
+          "type": "array",
+          "maxItems": 10,
+          "items": {
+            "type": "string",
+            "pattern": "^[a-z0-9:-]{1,40}$"
+          },
+          "description": "Optional provenance tags (lowercase letters, digits, colon, and hyphen; up to 10 tags)."
+        },
         "path": {
           "type": "string",
           "description": "Project directory (default: current)"
@@ -3591,14 +3616,38 @@
     "sideEffects": [
       "broadcasts memory-captured hub event"
     ],
-    "errors": {},
+    "errors": {
+      "INVALID_ORIGIN": {
+        "message": "origin must be trusted or untrusted",
+        "recovery": "Choose one of the supported provenance values."
+      },
+      "INVALID_VISIBILITY": {
+        "message": "visibility must be normal or restricted",
+        "recovery": "Choose one of the supported visibility values."
+      },
+      "INVALID_TAGS": {
+        "message": "tags must match the provenance tag rules",
+        "recovery": "Pass up to 10 lowercase tags containing only letters, digits, colon, or hyphen; each tag may be up to 40 characters."
+      }
+    },
     "example": {
       "input": {
         "content": "Use JWT for auth",
-        "type": "convention"
+        "type": "convention",
+        "origin": "untrusted",
+        "tags": [
+          "source:web"
+        ]
       },
       "output": {
-        "event": "memory-captured"
+        "thought": {
+          "content": "[[pforge origin=untrusted tags=source:web]]\nUse JWT for auth",
+          "origin": "untrusted",
+          "visibility": "normal",
+          "tags": [
+            "source:web"
+          ]
+        }
       }
     }
   },
@@ -5734,7 +5783,7 @@
   },
   {
     "name": "forge_search",
-    "description": "Search across forge artifacts — runs, bugs, incidents, tempering, hub events, review queue, memories, and plans. Reads existing L2 files and optional L3 OpenBrain index. Returns ranked results with snippets.",
+    "description": "Search across forge artifacts — runs, bugs, incidents, tempering, hub events, review queue, memories, and plans. Reads existing L2 files and optional L3 OpenBrain index. Returns ranked results with snippets; memory hits include origin, visibility, and tags, while restricted hits from other projects (or without a project) are excluded.",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -5823,9 +5872,20 @@
             "recordRef": "BUG-42",
             "snippet": "…critical blocker in auth…",
             "score": 2.1
+          },
+          {
+            "source": "openbrain",
+            "recordRef": "OB-7",
+            "snippet": "Use JWT for auth",
+            "score": 1.8,
+            "origin": "untrusted",
+            "visibility": "normal",
+            "tags": [
+              "source:web"
+            ]
           }
         ],
-        "total": 1,
+        "total": 2,
         "truncated": false,
         "durationMs": 45
       }

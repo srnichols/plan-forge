@@ -2,7 +2,7 @@
 // Pure data: MCP tool schemas (name, description, inputSchema)
 // Only imports: model-default constants and enums, so descriptions and enums cannot drift from runtime values.
 import { DEFAULT_ESTIMATE_MODEL, DEFAULT_WATCHER_MODEL } from "../orchestrator/constants.mjs";
-import { ANALYZE_MODES } from "../enums.mjs";
+import { ANALYZE_MODES, MEMORY_ORIGINS, MEMORY_TAG_RULES, MEMORY_VISIBILITY } from "../enums.mjs";
 
 export const TOOLS = [
   {
@@ -700,6 +700,9 @@ export const TOOLS = [
         type: { type: "string", description: "Memory type: decision | lesson | convention | pattern | gotcha (default: decision)", enum: ["decision", "lesson", "convention", "pattern", "gotcha"] },
         source: { type: "string", description: "Source identifier (e.g. 'openclaw-trigger', 'plan-forge/slice-3'). Default: 'forge_memory_capture'" },
         created_by: { type: "string", description: "Who captured this (e.g. 'openclaw', 'copilot-agent'). Default: 'forge_memory_capture'" },
+        origin: { type: "string", enum: [...MEMORY_ORIGINS], description: "Memory trust provenance. Default: trusted." },
+        visibility: { type: "string", enum: [...MEMORY_VISIBILITY], description: "Memory visibility scope. Default: normal." },
+        tags: { type: "array", maxItems: MEMORY_TAG_RULES.maxItems, items: { type: "string", pattern: MEMORY_TAG_RULES.pattern }, description: "Optional provenance tags (lowercase letters, digits, colon, and hyphen; up to 10 tags)." },
         path: { type: "string", description: "Project directory (default: current)" },
       },
       required: ["content"],
@@ -1067,7 +1070,7 @@ export const TOOLS = [
   // Phase FORGE-SHOP-04 Slice 04.1 — Global search
   {
     name: "forge_search",
-    description: "Search across forge artifacts — runs, bugs, incidents, tempering, hub events, review queue, memories, and plans. Reads existing L2 files and optional L3 OpenBrain index. Returns ranked results with snippets.",
+    description: "Search across forge artifacts — runs, bugs, incidents, tempering, hub events, review queue, memories, and plans. Reads existing L2 files and optional L3 OpenBrain index. Returns ranked results with snippets; memory hits include origin, visibility, and tags, while restricted hits from other projects (or without a project) are excluded.",
     inputSchema: {
       type: "object",
       properties: {

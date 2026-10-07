@@ -9,6 +9,8 @@ import { pipelinesList, pipelinesStats } from "../../pipelines.mjs";
 import {
   drainOpenBrainQueue,
   isOpenBrainConfigured,
+  validateProvenanceInput,
+  buildCaptureThought,
   shapeWatcherAnomalyThought,
   dedupeWatcherAnomalies,
   shapeQueueRecord,
@@ -254,6 +256,22 @@ async function _callToolHandler_040_forge_memory_capture(request, args) {
   const { name } = request.params;
   if (!(name === "forge_memory_capture")) return _CALL_TOOL_NO_MATCH;
 
+    const provenance = validateProvenanceInput(args);
+    if (!provenance.ok) {
+      return {
+        content: [{
+          type: "text",
+          text: JSON.stringify({
+            ok: false,
+            error: provenance.error.code,
+            field: provenance.error.field,
+            message: provenance.error.message,
+          }),
+        }],
+        isError: true,
+      };
+    }
+
     try {
       const cwd = args.path ? findProjectRoot(resolve(args.path)) : findProjectRoot(PROJECT_DIR);
       if (!isOpenBrainConfigured(cwd)) {
@@ -269,14 +287,7 @@ async function _callToolHandler_040_forge_memory_capture(request, args) {
         } catch { project = "plan-forge"; }
       }
 
-      const thought = {
-        content: args.content,
-        project,
-        type: args.type || "decision",
-        source: args.source || "forge_memory_capture",
-        created_by: args.created_by || "forge_memory_capture",
-        captured_at: new Date().toISOString(),
-      };
+      const thought = buildCaptureThought(args, project);
 
       // Return structured capture instructions — the AI worker executes capture_thought
       return {

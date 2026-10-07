@@ -438,8 +438,22 @@ export const TOOL_METADATA = {
     produces: [],
     consumes: [],
     sideEffects: ["broadcasts memory-captured hub event"],
-    errors: {},
-    example: { input: { content: "Use JWT for auth", type: "convention" }, output: { event: "memory-captured" } },
+    errors: {
+      INVALID_ORIGIN: { message: "origin must be trusted or untrusted", recovery: "Choose one of the supported provenance values." },
+      INVALID_VISIBILITY: { message: "visibility must be normal or restricted", recovery: "Choose one of the supported visibility values." },
+      INVALID_TAGS: { message: "tags must match the provenance tag rules", recovery: "Pass up to 10 lowercase tags containing only letters, digits, colon, or hyphen; each tag may be up to 40 characters." },
+    },
+    example: {
+      input: { content: "Use JWT for auth", type: "convention", origin: "untrusted", tags: ["source:web"] },
+      output: {
+        thought: {
+          content: "[[pforge origin=untrusted tags=source:web]]\nUse JWT for auth",
+          origin: "untrusted",
+          visibility: "normal",
+          tags: ["source:web"],
+        },
+      },
+    },
   },
   forge_brain_test: {
     intent: ["test", "ping", "round-trip", "openbrain"],
@@ -1475,7 +1489,15 @@ export const TOOL_METADATA = {
     },
     example: {
       input: { query: "blocker", tags: ["review"], limit: 10 },
-      output: { hits: [{ source: "bug", recordRef: "BUG-42", snippet: "…critical blocker in auth…", score: 2.1 }], total: 1, truncated: false, durationMs: 45 },
+      output: {
+        hits: [
+          { source: "bug", recordRef: "BUG-42", snippet: "…critical blocker in auth…", score: 2.1 },
+          { source: "openbrain", recordRef: "OB-7", snippet: "Use JWT for auth", score: 1.8, origin: "untrusted", visibility: "normal", tags: ["source:web"] },
+        ],
+        total: 2,
+        truncated: false,
+        durationMs: 45,
+      },
     },
   },
   // Phase FORGE-SHOP-05 Slice 05.1 — Unified timeline

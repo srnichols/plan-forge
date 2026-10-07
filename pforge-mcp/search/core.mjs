@@ -17,8 +17,10 @@
  * @module search/core
  */
 
-import { statSync } from "node:fs";
+import { readFileSync, statSync } from "node:fs";
+import { join } from "node:path";
 import { L2_SOURCES, SOURCE_WEIGHTS } from "./sources.mjs";
+import { readProvenance } from "../memory.mjs";
 
 // ─── LRU Cache ────────────────────────────────────────────────────────
 
@@ -215,23 +217,29 @@ function _collectL2Records(activeSources, cwd, sinceDate, tags) {
   return allRecords;
 }
 
-function _mergeL3Records({ allRecords, opts, query, tags, since }) {
+function _mergeL3Records({ allRecords, opts, query, tags, since, currentProject }) {
   if (!opts.openBrainSearchFn || Date.now() - openBrainFailedAt <= OPENBRAIN_COOLDOWN_MS) return;
   try {
     const l3Hits = opts.openBrainSearchFn({ query, tags, since });
     if (!Array.isArray(l3Hits)) return;
     const existingCorrelations = new Set(allRecords.filter((r) => r.correlationId).map((r) => r.correlationId));
     for (const hit of l3Hits) {
-      if (hit.correlationId && existingCorrelations.has(hit.correlationId)) continue;
+      const provenance = readProvenance(hit);
+      if (provenance.visibility === "restricted" && provenance.project !== currentProject) continue;
+      const correlationId = hit.correlationId || "";
+      if (correlationId && existingCorrelations.has(correlationId)) continue;
       allRecords.push({
         source: hit.source || "openbrain",
         recordRef: hit.recordRef || hit.id || "",
-        text: hit.text || hit.content || "",
+        text: provenance.text,
         timestamp: hit.timestamp || new Date().toISOString(),
-        tags: hit.tags || [],
-        correlationId: hit.correlationId || "",
+        tags: provenance.tags,
+        correlationId,
+        origin: provenance.origin,
+        visibility: provenance.visibility,
+        project: provenance.project,
       });
-      if (hit.correlationId) existingCorrelations.add(hit.correlationId);
+      if (correlationId) existingCorrelations.add(correlationId);
     }
   } catch {
     openBrainFailedAt = Date.now();
@@ -254,13 +262,21 @@ export function search(params, opts = {}) {
   const { query, tags = null, since = null, correlationId = null, sources = null } = params;
   const limit = Math.min(Math.max(params.limit || 50, 1), 200);
   const cwd = opts.cwd || process.cwd();
+  let currentProject = typeof opts.project === "string" && opts.project ? opts.project : null;
+  if (!currentProject) {
+    try {
+      const forgeConfig = JSON.parse(readFileSync(join(cwd, ".forge.json"), "utf-8"));
+      if (typeof forgeConfig.projectName === "string" && forgeConfig.projectName) currentProject = forgeConfig.projectName;
+    } catch { /* use the framework default */ }
+  }
+  currentProject ||= "plan-forge";
 
   const { tokens } = parseQuery(query);
   const sinceDate = parseSince(since);
 
   const activeSources = sources ? L2_SOURCES.filter((s) => sources.includes(s.source)) : L2_SOURCES;
   const allRecords = _collectL2Records(activeSources, cwd, sinceDate, tags);
-  _mergeL3Records({ allRecords: allRecords, opts: opts, query: query, tags: tags, since: since });
+  _mergeL3Records({ allRecords: allRecords, opts: opts, query: query, tags: tags, since: since, currentProject: currentProject });
 
   const scored = allRecords
     .map((rec) => ({ ...rec, score: scoreRecord(rec, tokens, tags, correlationId) }))
@@ -270,14 +286,22 @@ export function search(params, opts = {}) {
   const truncated = total > limit;
   const durationMs = Math.round(performance.now() - start);
 
-  const hits = scored.slice(0, limit).map((rec) => ({
-    source: rec.source,
-    recordRef: rec.recordRef,
-    snippet: buildSnippet(rec.text, tokens),
-    score: Math.round(rec.score * 1000) / 1000,
-    correlationId: rec.correlationId || null,
-    timestamp: rec.timestamp,
-  }));
+  const hits = scored.slice(0, limit).map((rec) => {
+    const hit = {
+      source: rec.source,
+      recordRef: rec.recordRef,
+      snippet: buildSnippet(rec.text, tokens),
+      score: Math.round(rec.score * 1000) / 1000,
+      correlationId: rec.correlationId || null,
+      timestamp: rec.timestamp,
+    };
+    if (rec.source === "openbrain" || rec.source === "memory") {
+      hit.origin = rec.origin ?? "trusted";
+      hit.visibility = rec.visibility ?? "normal";
+      hit.tags = rec.tags ?? [];
+    }
+    return hit;
+  });
 
   if (total === 0) {
     return { hits, total, truncated, durationMs, message: _buildEmptyMessage(query, { tags, sinceDate, correlationId, sources, activeSources, since }) };

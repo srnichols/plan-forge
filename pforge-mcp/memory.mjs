@@ -17,6 +17,167 @@ import { readFileSync, writeFileSync, appendFileSync, mkdirSync, existsSync, sta
 import { resolve, join } from "node:path";
 import { createHash } from "node:crypto";
 import { MS_PER_DAY, MS_PER_HOUR } from "./time-units.mjs";
+import { MEMORY_ORIGINS, MEMORY_TAG_RULES, MEMORY_VISIBILITY } from "./enums.mjs";
+
+const PROVENANCE_HEADER = /^\[\[pforge ([^\]\r\n]*)\]\]\r?\n?/;
+const TAG_RE = new RegExp(MEMORY_TAG_RULES.pattern);
+const DEFAULT_MEMORY_ORIGIN = "trusted";
+const DEFAULT_MEMORY_VISIBILITY = "normal";
+
+function _readHeaderFields(rawText) {
+  const match = rawText.match(PROVENANCE_HEADER);
+  const fields = {};
+  if (!match) return { text: rawText, fields };
+  for (const field of match[1].split(/\s+/)) {
+    const separator = field.indexOf("=");
+    if (separator >= 0) fields[field.slice(0, separator)] = field.slice(separator + 1);
+  }
+  return { text: rawText.slice(match[0].length), fields };
+}
+
+function _readProvenanceTags(value) {
+  return Array.isArray(value) && value.every((tag) => typeof tag === "string")
+    ? value.slice(0, MEMORY_TAG_RULES.maxItems)
+    : null;
+}
+
+function _selectProvenanceValue({ topLevel, metadata, header, allowed, fallback }) {
+  return [metadata, topLevel, header].find((value) => allowed.includes(value)) ?? fallback;
+}
+
+function _selectProvenanceTags({ metadataTags, topLevelTags, headerTags }) {
+  const tags = typeof headerTags === "string"
+    ? headerTags.split(",").filter((tag) => TAG_RE.test(tag)).slice(0, MEMORY_TAG_RULES.maxItems)
+    : [];
+  return _readProvenanceTags(metadataTags) ?? _readProvenanceTags(topLevelTags) ?? tags;
+}
+
+/**
+ * Validate optional capture provenance and provide stable defaults.
+ *
+ * @param {{ origin?: unknown, visibility?: unknown, tags?: unknown }} [input]
+ * @returns {{ ok: true, value: { origin: string, visibility: string, tags: string[], supplied: boolean } } | { ok: false, error: { code: string, field: string, message: string } }}
+ */
+export function validateProvenanceInput({ origin, visibility, tags } = {}) {
+  const supplied = [origin, visibility, tags].some((value) => value !== null && value !== undefined);
+  if (origin != null && !MEMORY_ORIGINS.includes(origin)) {
+    return { ok: false, error: { code: "INVALID_ORIGIN", field: "origin", message: `origin must be one of: ${MEMORY_ORIGINS.join(", ")}` } };
+  }
+  if (visibility != null && !MEMORY_VISIBILITY.includes(visibility)) {
+    return { ok: false, error: { code: "INVALID_VISIBILITY", field: "visibility", message: `visibility must be one of: ${MEMORY_VISIBILITY.join(", ")}` } };
+  }
+  if (tags != null && (
+    !Array.isArray(tags)
+    || tags.length > MEMORY_TAG_RULES.maxItems
+    || tags.some((tag) => typeof tag !== "string" || !TAG_RE.test(tag))
+  )) {
+    return {
+      ok: false,
+      error: {
+        code: "INVALID_TAGS",
+        field: "tags",
+        message: `tags must be an array of at most ${MEMORY_TAG_RULES.maxItems} strings matching ${MEMORY_TAG_RULES.pattern}`,
+      },
+    };
+  }
+  return {
+    ok: true,
+    value: {
+      origin: origin ?? DEFAULT_MEMORY_ORIGIN,
+      visibility: visibility ?? DEFAULT_MEMORY_VISIBILITY,
+      tags: tags ?? [],
+      supplied,
+    },
+  };
+}
+
+/**
+ * Prefix content with an inline header only when provenance is non-default.
+ *
+ * @param {string} content
+ * @param {{ origin?: string, visibility?: string, tags?: string[] }} provenance
+ * @returns {string}
+ */
+export function withProvenanceHeader(content, provenance = {}) {
+  const original = String(content ?? "").replace(PROVENANCE_HEADER, "");
+  const origin = provenance.origin ?? DEFAULT_MEMORY_ORIGIN;
+  const visibility = provenance.visibility ?? DEFAULT_MEMORY_VISIBILITY;
+  const tags = Array.isArray(provenance.tags)
+    ? provenance.tags.filter((tag) => typeof tag === "string" && TAG_RE.test(tag)).slice(0, MEMORY_TAG_RULES.maxItems)
+    : [];
+  const fields = [];
+  if (origin !== DEFAULT_MEMORY_ORIGIN) fields.push(`origin=${origin}`);
+  if (visibility !== DEFAULT_MEMORY_VISIBILITY) fields.push(`visibility=${visibility}`);
+  if (tags.length > 0) fields.push(`tags=${tags.join(",")}`);
+  return fields.length > 0 ? `[[pforge ${fields.join(" ")}]]\n${original}` : original;
+}
+
+/**
+ * Normalize provenance and remove a leading inline header from a memory hit.
+ *
+ * @param {object} hit
+ * @returns {{ text: string, origin: string, visibility: string, tags: string[], project: string|null }}
+ */
+export function readProvenance(hit = {}) {
+  const metadata = hit?.metadata && typeof hit.metadata === "object" && !Array.isArray(hit.metadata)
+    ? hit.metadata
+    : {};
+  const rawText = typeof hit?.text === "string" ? hit.text : typeof hit?.content === "string" ? hit.content : "";
+  const { text, fields } = _readHeaderFields(rawText);
+  return {
+    text,
+    origin: _selectProvenanceValue({
+      topLevel: hit?.origin,
+      metadata: metadata.origin,
+      header: fields.origin,
+      allowed: MEMORY_ORIGINS,
+      fallback: DEFAULT_MEMORY_ORIGIN,
+    }),
+    visibility: _selectProvenanceValue({
+      topLevel: hit?.visibility,
+      metadata: metadata.visibility,
+      header: fields.visibility,
+      allowed: MEMORY_VISIBILITY,
+      fallback: DEFAULT_MEMORY_VISIBILITY,
+    }),
+    tags: _selectProvenanceTags({
+      metadataTags: metadata.tags,
+      topLevelTags: hit?.tags,
+      headerTags: fields.tags,
+    }),
+    project: metadata.project ?? hit?.project ?? null,
+  };
+}
+
+/**
+ * Build the current capture payload, preserving its legacy shape unless provenance is supplied.
+ *
+ * @param {object} args
+ * @param {string|null} project
+ * @param {Date} [now]
+ * @returns {object}
+ */
+export function buildCaptureThought(args, project, now = new Date()) {
+  const validation = validateProvenanceInput(args);
+  if (!validation.ok) {
+    throw new TypeError(`${validation.error.code}: ${validation.error.message}`);
+  }
+  const thought = {
+    content: args.content,
+    project,
+    type: args.type || "decision",
+    source: args.source || "forge_memory_capture",
+    created_by: args.created_by || "forge_memory_capture",
+    captured_at: now.toISOString(),
+  };
+  if (validation.value.supplied) {
+    thought.content = withProvenanceHeader(args.content, validation.value);
+    thought.origin = validation.value.origin;
+    thought.visibility = validation.value.visibility;
+    thought.tags = validation.value.tags;
+  }
+  return thought;
+}
 
 /**
  * Default keyword patterns mapped to targeted search queries for `search_thoughts`.
@@ -2223,5 +2384,3 @@ export function getGateSuggestionCounter(suggestionKey, cwd = process.cwd()) {
   }
   return count;
 }
-
-

@@ -2,9 +2,17 @@ import { ClawError } from "../errors.mjs";
 import { ROLES } from "../enums.mjs";
 
 export default Object.freeze({
-  name: "new", aliases: [], args: "<idea>", summary: "Start a new plan",
-  details: "Capture a feature idea and prepare a plan.", examples: ["/new add exports", "/new improve onboarding"],
-  roles: [ROLES[0], ROLES[1]], scope: "project", mutating: false,
-  available: false, sinceSlice: 6, group: "Ask & memory",
-  async handle() { throw new ClawError("NOT_AVAILABLE", { slice: 6 }); },
+  name: "new", aliases: [], args: "", summary: "Start a fresh Forge-Master conversation in this topic.",
+  details: "Start a fresh Forge-Master conversation in this topic.",
+  examples: ["/new", "/new"],
+  roles: [...ROLES], scope: "project", mutating: false,
+  available: true, sinceSlice: 6, group: "Ask & memory",
+  async handle(context, args) {
+    if (!this?.service) throw new ClawError("SERVICE_UNAVAILABLE");
+    return this.service.resetSession({
+      project: context?.project,
+      chatId: args?.chatId,
+      threadId: args?.threadId,
+    });
+  },
 });

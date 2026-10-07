@@ -21,10 +21,17 @@ export const UNTRUSTED_ALLOWLIST = Object.freeze([
   "forge_timeline", "forge_bug_list", "forge_watch",
 ]);
 
-for (const name of UNTRUSTED_ALLOWLIST) {
-  if (!BASE_ALLOWLIST.includes(name) || WRITE_TOOLS_EXCLUDED.includes(name)) {
-    throw new Error(`Invalid untrusted allowlist tool: ${name}`);
+// Validated lazily (first untrusted turn), not at import: a module-level throw breaks every
+// importer whose test partially mocks ./allowlist.mjs (e.g. tests/patterns-lane.test.mjs).
+let untrustedAllowlistChecked = false;
+function assertUntrustedAllowlist() {
+  if (untrustedAllowlistChecked) return;
+  for (const name of UNTRUSTED_ALLOWLIST) {
+    if (!BASE_ALLOWLIST.includes(name) || WRITE_TOOLS_EXCLUDED.includes(name)) {
+      throw new Error(`Invalid untrusted allowlist tool: ${name}`);
+    }
   }
+  untrustedAllowlistChecked = true;
 }
 
 /**
@@ -113,6 +120,7 @@ export function applyUntrustedPolicy({ message, untrustedContext, recalledUntrus
   const merged = combineUntrustedContext(untrustedContext ?? [], recalledUntrusted);
   const untrusted = merged.items.length > 0;
   if (!untrusted) return { untrusted: false, userMessage: message, allowlist, maxToolCalls };
+  assertUntrustedAllowlist();
   const fence = renderUntrusted(merged.items);
   return {
     untrusted: true,

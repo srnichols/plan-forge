@@ -1130,7 +1130,7 @@ export const TOOLS = [
   },
   {
     name: "forge_master_ask",
-    description: "Ask Forge-Master to reason about Plan Forge workflows — ideate features, troubleshoot failures, query run status, or get operational guidance. Classifies intent, fetches memory context, and orchestrates read-only tool calls. Returns reply text, tool call history, token counts, usage, and session ID. Optional caller, responseFormat, untrustedContext, contextBlocks, and proposeActions fields are accepted and validated; no response shaping or action proposals are performed here.",
+    description: "Ask Forge-Master to reason about Plan Forge workflows — ideate features via Crucible, troubleshoot failures, query run status, or get operational guidance. Classifies intent, fetches memory context, and orchestrates read-only tool calls. Returns reply text, tool call history, token counts, usage, and session ID. Optional fields: caller (role/channel) and responseFormat shape the reply for the caller (e.g. brief, length-capped for chat); untrustedContext is fenced as third-party data and narrows the tools Forge-Master may use; contextBlocks add caller-supplied context; proposeActions:true returns up to 3 schema-validated proposedActions that Forge-Master never executes.",
     inputSchema: {
       type: "object",
       properties: {

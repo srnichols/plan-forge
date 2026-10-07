@@ -19,7 +19,8 @@ vi.mock("../src/config.mjs", () => ({
     discoverExtensionTools: false,
   }),
 }));
-vi.mock("../src/allowlist.mjs", () => ({
+vi.mock("../src/allowlist.mjs", async (importOriginal) => ({
+  ...(await importOriginal()),
   resolveAllowlist: () => [],
   USAGE_HINTS: {},
 }));
@@ -33,10 +34,12 @@ vi.mock("../src/planner.mjs", () => ({
 vi.mock("../src/plan-executor.mjs", () => ({
   executePlan: vi.fn(async () => ({ results: [] })),
 }));
-vi.mock("../src/persistence.mjs", () => ({
+vi.mock("../src/persistence.mjs", async (importOriginal) => ({
+  ...(await importOriginal()),
   ensureSessionId: (id) => id || "test-session",
   appendTurn: vi.fn(async () => {}),
   summarizeIfNeeded: vi.fn(async () => {}),
+  loadSessionSummary: vi.fn(async () => null),
 }));
 vi.mock("../src/session-store.mjs", () => ({
   appendTurn: vi.fn(async () => {}),

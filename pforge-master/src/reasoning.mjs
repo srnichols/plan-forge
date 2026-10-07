@@ -30,8 +30,9 @@ import { resolveAllowlist, USAGE_HINTS } from "./allowlist.mjs";
 import { invokeMany, invokeAllowlisted } from "./tool-bridge.mjs";
 import { plan as runPlanner } from "./planner.mjs";
 import { executePlan } from "./plan-executor.mjs";
-import { ensureSessionId, appendTurn, summarizeIfNeeded } from "./persistence.mjs";
+import { ensureSessionId, appendTurn, summarizeIfNeeded, loadSessionSummary } from "./persistence.mjs";
 import { appendTurn as storeAppendTurn, loadSession, hashReply } from "./session-store.mjs";
+import { maybeCompactSession, renderSummaryBlock, foldUsage } from "./session-compaction.mjs";
 import { loadIndex, queryIndex } from "./recall-index.mjs";
 import { loadPrinciples, UNIVERSAL_BASELINE } from "./principles.mjs";
 import { resolveModel, VALID_TIERS } from "./reasoning-tier.mjs";
@@ -300,7 +301,7 @@ function _applyAutoEscalation({ inputModel, currentTier, currentModel, config, c
   };
 }
 
-async function _buildContextBlock({ effectiveSessionId, isEphemeral, classification, message, cwd, priorTurns, deps }) {
+async function _buildContextBlock({ effectiveSessionId, isEphemeral, classification, message, cwd, priorTurns, sessionSummary, deps }) {
   let contextBlock = "";
   try {
     const ctx = await fetchContext({ sessionId: effectiveSessionId, lane: classification.lane, cwd }, deps);
@@ -337,9 +338,12 @@ async function _buildContextBlock({ effectiveSessionId, isEphemeral, classificat
     } catch { /* non-fatal */ }
   }
 
+  // Compaction runs after a completed turn, so a new summary first appears on the next turn.
   if (priorTurns.length > 0) {
     const priorBlock = priorTurns.map((t) => `Turn ${t.turn}: User: "${t.userMessage}"`).join("\n");
-    contextBlock = `## Prior conversation turns (oldest first)\n\n${priorBlock}\n\n${contextBlock}`;
+    contextBlock = `${renderSummaryBlock(sessionSummary)}## Prior conversation turns (oldest first)\n\n${priorBlock}\n\n${contextBlock}`;
+  } else {
+    contextBlock = `${renderSummaryBlock(sessionSummary)}${contextBlock}`;
   }
 
   return { contextBlock, relatedTurns };
@@ -597,6 +601,17 @@ async function _persistTurnToStores({ isEphemeral, effectiveSessionId, message, 
   }
 }
 
+async function _compactSuccessfulTurn({ isEphemeral, effectiveSessionId, priorTurns, sessionSummary, message, reply, untrusted, cwd, provider, config, deps }) {
+  if (isEphemeral) return null;
+  const lastLedgerTurn = sessionSummary?.ledger?.at(-1)?.turn ?? 0;
+  const lastPriorTurn = priorTurns.at(-1)?.turn ?? priorTurns.length;
+  const turnNumber = Math.max(lastLedgerTurn, lastPriorTurn) + 1;
+  const compaction = await maybeCompactSession({
+    sessionId: effectiveSessionId, turnNumber, message, reply, untrusted, cwd, provider, config, deps,
+  });
+  return compaction.usage;
+}
+
 function _notifyClassification(deps, classification) {
   try { if (typeof deps.onClassification === "function") deps.onClassification(classification); } catch { /* observer */ }
 }
@@ -745,20 +760,20 @@ function _earlyLoopErrorResult({ loopResult, effectiveSessionId, requestedTier, 
   };
 }
 
-function _successResult({ loopResult, effectiveSessionId, requestedTier, provider, autoEscalation, classification, relatedTurns, quorumResult, truncated, proposals }) {
+function _successResult({ loopResult, effectiveSessionId, requestedTier, provider, autoEscalation, classification, relatedTurns, quorumResult, truncated, proposals, summaryUsage }) {
   return {
     reply: loopResult.finalReply,
     toolCalls: loopResult.allToolCalls,
     tokensIn: loopResult.totalTokensIn,
     tokensOut: loopResult.totalTokensOut,
     totalCostUSD: loopResult.totalCostUSD,
-    usage: buildUsage({
+    usage: foldUsage(buildUsage({
       tokensIn: loopResult.usageKnown ? loopResult.totalTokensIn : null,
       tokensOut: loopResult.usageKnown ? loopResult.totalTokensOut : null,
       costUSD: loopResult.usageKnown ? loopResult.totalCostUSD : null,
       model: loopResult.currentModel,
       provider: loopResult.providerName ?? provider,
-    }),
+    }), summaryUsage),
     truncated: truncated ?? loopResult.truncated,
     ..._turnMetadata({
       effectiveSessionId,
@@ -916,6 +931,7 @@ async function _prepareTurn(input, deps) {
   const effectiveSessionId = ensureSessionId(deps.sessionId ?? input.sessionId);
   const isEphemeral = !effectiveSessionId || effectiveSessionId === "ephemeral";
   const priorTurns = await _loadPriorTurns(effectiveSessionId, isEphemeral, cwd);
+  const sessionSummary = isEphemeral ? null : await loadSessionSummary(effectiveSessionId, cwd);
   const tierState = _resolveTierState(input, config);
   const { inputModel, requestedTier } = tierState;
   const { currentModel } = tierState;
@@ -929,10 +945,10 @@ async function _prepareTurn(input, deps) {
       result: await _handleOfftopicTurn({ isEphemeral, effectiveSessionId, message, classification, requestedTier, currentModel, cwd }),
     };
   }
-  return { done: false, input, inputTruncated: norm.truncated, deps, config, effectiveSessionId, isEphemeral, priorTurns, tierState, classification };
+  return { done: false, input, inputTruncated: norm.truncated, deps, config, effectiveSessionId, isEphemeral, priorTurns, sessionSummary, tierState, classification };
 }
 
-async function _runPreparedTurn({ input, deps, config, effectiveSessionId, isEphemeral, priorTurns, tierState, classification, inputTruncated }) {
+async function _runPreparedTurn({ input, deps, config, effectiveSessionId, isEphemeral, priorTurns, sessionSummary, tierState, classification, inputTruncated }) {
   const { message, cwd } = input;
   const { inputModel, requestedTier } = tierState;
   let { currentTier, currentModel } = tierState;
@@ -949,7 +965,7 @@ async function _runPreparedTurn({ input, deps, config, effectiveSessionId, isEph
   };
 
   // ── 2. Build context block (memory, recall, patterns, prior turns) ─
-  const { contextBlock, relatedTurns } = await _buildContextBlock({ effectiveSessionId, isEphemeral, classification, message, cwd, priorTurns, deps });
+  const { contextBlock, relatedTurns } = await _buildContextBlock({ effectiveSessionId, isEphemeral, classification, message, cwd, priorTurns, sessionSummary, deps });
   const ctxWithOperator = appendContextBlocks(contextBlock, input.contextBlocks);
 
   // ── 3. Load system prompt (with lane overlay) ─────────────────────
@@ -1010,9 +1026,13 @@ async function _runPreparedTurn({ input, deps, config, effectiveSessionId, isEph
 
   // ── 8. Persist + emit ─────────────────────────────────────────────
   await _persistTurnToStores({ isEphemeral, effectiveSessionId, message, classification, finalReply: loopResult.finalReply, allToolCalls: loopResult.allToolCalls, totalTokensIn: loopResult.totalTokensIn, totalTokensOut: loopResult.totalTokensOut, truncated: loopResult.truncated, cwd, deps });
+  const summaryUsage = await _compactSuccessfulTurn({
+    isEphemeral, effectiveSessionId, priorTurns, sessionSummary, message, reply: loopResult.finalReply,
+    untrusted: turn.untrusted, cwd, provider, config, deps,
+  });
   _emitTurnComplete(deps.hub, { tokensIn: loopResult.totalTokensIn, tokensOut: loopResult.totalTokensOut, toolCallCount: loopResult.allToolCalls.length, truncated: loopResult.truncated, sessionId: effectiveSessionId, timestamp: new Date().toISOString() });
 
-  return _successResult({ loopResult, effectiveSessionId, requestedTier, provider: provider.PROVIDER_NAME, autoEscalation, classification, relatedTurns, quorumResult: quorumOut.quorumResult, truncated: buildTruncated({ legacy: loopResult.truncated, optIn: hasNewTurnFields(input), inputFlags: inputTruncated, reply: shaped.truncated }), proposals });
+  return _successResult({ loopResult, effectiveSessionId, requestedTier, provider: provider.PROVIDER_NAME, autoEscalation, classification, relatedTurns, quorumResult: quorumOut.quorumResult, truncated: buildTruncated({ legacy: loopResult.truncated, optIn: hasNewTurnFields(input), inputFlags: inputTruncated, reply: shaped.truncated }), proposals, summaryUsage });
 }
 
 export async function runTurn(input, deps = {}) {

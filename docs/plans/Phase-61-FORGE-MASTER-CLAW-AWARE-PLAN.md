@@ -1,5 +1,5 @@
 ---
-lockHash: 8b4fbbf1e713758c8c89531322229aa591d530d2d6b746994a117ae1bbc89e38
+lockHash: 370e2f250cb7513895a47ee7cf190494ee384adda6c6df4ce142142f7d999bcb
 lane: full
 source: agent
 phaseId: Phase-61
@@ -59,7 +59,7 @@ Forge-Claw (the chat front door; Telegram is its first channel adapter) routes e
 | `forge_master_audit` returns summary, top-3 risks, prioritized actions (P0/P1/P2) | `tool-definitions.mjs:1144` | true — reused by Forge-Claw digest, no change here |
 | `reasoning.mjs` exceeds 1,000 LOC | file length | true — new logic goes in new modules (clean-code medium tier) |
 | Prior-turn window is bounded by **count**: `_loadPriorTurns` returns the last 10 turns, and the context block renders only the user messages | `pforge-master/src/reasoning.mjs:247–251`, `:329` | true: the draft's "grows indefinitely" premise was false; Slice 7 re-scoped to a rolling summary of turns that leave the window |
-| `forge_memory_capture` schema is `content`, `project`, `type` (`decision`\|`lesson`\|`convention`\|`pattern`\|`gotcha`), `source`, `created_by`, `path` | `pforge-mcp/server/tool-definitions.mjs:693`; handler `_callToolHandler_040_forge_memory_capture` in `server/tool-handlers.mjs` | true: no provenance or visibility field |
+| `forge_memory_capture` schema is `content`, `project`, `type` (`decision`\|`lesson`\|`convention`\|`pattern`\|`gotcha`), `source`, `created_by`, `path` | `pforge-mcp/server/tool-definitions.mjs:693`; handler `_callToolHandler_040_forge_memory_capture` defined in `server/tool-handlers/memory.mjs` (re-exported by `server/tool-handlers.mjs`; corrected during execution after Slice 8 halted on scope) | true: no provenance or visibility field |
 | The OpenBrain delivery queue passes extra record fields through | `pforge-mcp/memory.mjs` `shapeQueueRecord` (`...thought`) | true: new fields survive queueing |
 | Forge-Master retrieval assembles L1/L2/L3 sections and drops L3 first when over budget | `pforge-master/src/retrieval.mjs` (`L3_KEYS`, `truncateSections`) | true: fencing hook point |
 | OpenBrain `capture_thought` accepts a `metadata` object: pforge already sends every non-core queue field as `metadata` | `pforge-mcp/openbrain-replay.mjs` `normalizeQueueRecord` | true: D10 writes provenance as metadata |
@@ -508,13 +508,13 @@ node -e "process.chdir('pforge-master'); require('child_process').execSync('npx 
 Tasks:
 1. **Orient first (no edits yet):** read `docs/plans/Phase-61-FORGE-MASTER-CLAW-AWARE-PLAN.md` sections **Shared Contract** and **Scope Contract → Forbidden**, Required Decisions D9, D10, the **Seed Code** sections SC-D (start from them), then this slice's Context Files (`.github/instructions/aci-design.instructions.md`, `.github/instructions/security.instructions.md`, `.github/instructions/testing.instructions.md`). The worker prompt contains only this slice, so treat those sections as binding. If anything conflicts with them, stop and report a blocker instead of guessing.
 2. Add `MEMORY_ORIGINS` and `MEMORY_VISIBILITY` frozen arrays to `pforge-mcp/enums.mjs`; extend the `forge_memory_capture` schema in `tool-definitions.mjs` with `origin`, `tags`, `visibility` per D9 (optional, documented, `TOOL_METADATA` example updated).
-3. Handler `_callToolHandler_040_forge_memory_capture`: validate the new fields (structured errors), carry them into the queue record (they reach OpenBrain as `metadata` through `normalizeQueueRecord`), and add the D10 header for non-default provenance (Seed SC-D `withProvenanceHeader`).
-4. `forge_search`: normalise `origin` / `visibility` / `tags` on memory hits (from metadata or header, defaulting old records to `trusted` / `normal`), add them to the hit shape, and drop `restricted` hits when the query is not scoped to the same project.
+3. Handler `_callToolHandler_040_forge_memory_capture` (defined in `pforge-mcp/server/tool-handlers/memory.mjs`, re-exported by `server/tool-handlers.mjs`): validate the new fields (structured errors), carry them into the queue record (they reach OpenBrain as `metadata` through `normalizeQueueRecord`), and add the D10 header for non-default provenance (Seed SC-D `withProvenanceHeader`).
+4. `forge_search` (hit shaping and L3 merge live in `pforge-mcp/search/core.mjs`): normalise `origin` / `visibility` / `tags` on memory hits (from metadata or header, defaulting old records to `trusted` / `normal`), add them to the hit shape, and drop `restricted` hits when the query is not scoped to the same project.
 5. Regenerate `tools.json` (`node pforge-mcp/server.mjs --validate`) and `docs/capabilities.md` (`node scripts/generate-capabilities-doc.mjs`); commit both (`cli-schema.json` is gitignored).
 6. Read path: in `searchOpenBrainL3` (`pforge-mcp/server/tool-handlers/core.mjs`) map each hit through Seed SC-D `readProvenance`, so hits carry `origin`, `visibility` and `tags` and the header is stripped from `text`.
 7. Tests: validation table, header encode/decode round-trip incl. hostile content containing a fake header, old records default correctly, restricted hit filtering, queue record carries fields, back-compat for callers sending none of the new fields.
 
-**Files**: `pforge-mcp/enums.mjs`, `pforge-mcp/server/tool-definitions.mjs`, `pforge-mcp/server/tool-handlers.mjs`, `pforge-mcp/memory.mjs`, `pforge-mcp/capabilities/tool-metadata.mjs`, `pforge-mcp/tools.json`, `docs/capabilities.md`, `pforge-mcp/tests/memory-provenance.test.mjs`, `pforge-mcp/server/tool-handlers/core.mjs`
+**Files**: `pforge-mcp/enums.mjs`, `pforge-mcp/server/tool-definitions.mjs`, `pforge-mcp/server/tool-handlers.mjs`, `pforge-mcp/server/tool-handlers/memory.mjs`, `pforge-mcp/search/core.mjs`, `pforge-mcp/memory.mjs`, `pforge-mcp/capabilities/tool-metadata.mjs`, `pforge-mcp/tools.json`, `docs/capabilities.md`, `pforge-mcp/tests/memory-provenance.test.mjs`, `pforge-mcp/server/tool-handlers/core.mjs`
 
 **Validation Gate**:
 ```bash

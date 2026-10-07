@@ -11,6 +11,7 @@ relatedIssues: []
 > **Companion to**: [Phase-PFORGE-CLAW-PLAN.md](./Phase-PFORGE-CLAW-PLAN.md). This phase runs **first** (or in parallel with PFORGE-CLAW Slices 1–5). PFORGE-CLAW Slice 6 onward consumes the contract defined here.
 > **Tracks**: `pforge-master/src/` (new modules + thin wiring in `reasoning.mjs`, `observer-*.mjs`), `pforge-master/server.mjs` (tool schema), `pforge-mcp/server/tool-definitions.mjs`, `pforge-mcp/server/tool-handlers/platform.mjs` (argument forwarding), `pforge-mcp/capabilities/tool-metadata.mjs`, regenerated `pforge-mcp/tools.json` + `cli-schema.json`, `pforge-mcp/EVENTS.md`, `pforge-mcp/enums.mjs`.
 > **Pipeline**: Specify ✅ (this doc) → Harden ⏳ → Execute → Review → Ship
+> **Cost estimate** (`forge_estimate_quorum`, 2026-10-07, historical calibration; re-run after hardening): auto **$4.30** (8/10 slices quorum, recommended) · speed $5.34 · power $71.47 · off $0.15.
 > **Session budget**: 10 slices, run continuously.
 
 ---

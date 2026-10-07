@@ -11,6 +11,8 @@ relatedIssues: []
 > **Tracks**: `pforge-claw/` (new workspace package), `pforge.ps1` / `pforge.sh` (`claw` subcommand), root `package.json` (workspaces), `scripts/audit/dep-boundaries.mjs`, `pforge-mcp/capabilities/schemas.mjs` + `surface.mjs` (metadata only), `.github/workflows/pforge-claw.yml`, `docs/PFORGE-CLAW-GUIDE.md` (new), `docs/PFORGE-CLAW-THREAT-MODEL.md` (new), `docs/manual/forge-claw.html` (new), and the doc sweep set in Slice 29.
 > **Pipeline**: Specify ✅ (this doc) → Harden ⏳ → Execute → Review → Ship
 > **Depends on**: [Phase-FORGE-MASTER-CLAW-AWARE-PLAN.md](./Phase-FORGE-MASTER-CLAW-AWARE-PLAN.md), the Forge-Master contract (`caller`, `responseFormat`, `untrustedContext`, `contextBlocks`, `proposeActions` → `proposedActions`, `usage`, `forge-master-insight` hub events). Run it first, or in parallel with Slices 1–5 here. Slice 6 onward requires it complete.
+> **Manual steps**: a few tasks need a human (creating the Telegram bot, live runs on real hardware, confirming CI after a push). They are labelled **MANUAL (operator)**: the agent prepares everything, writes a handoff note, and stops; no gate depends on them.
+> **Cost estimate** (`forge_estimate_quorum`, 2026-10-07, historical calibration; re-run after hardening): this plan: auto **$12.90** (24/29 slices quorum, recommended) · speed $15.49 · power $207.27 · off $0.44. Companion FORGE-MASTER-CLAW-AWARE: auto **$4.30** · speed $5.34 · power $71.47 · off $0.15. The 25 % budget stop condition is measured against the mode actually chosen.
 > **Session budget**: 29 slices across 4 milestones, executed **continuously M0 → M4 with no hold points** so the result is a complete, testable environment (single host + remote workers + K8s Job lanes) in one pass. Milestones are logical groupings and Re-anchor points, not pauses. Use `pforge run-plan --resume-from <n>` to break across sessions. Slice 27 stands up the full end-to-end test environment (offline harness + a live multi-host topology). The author's macOS host, Windows host and Linux Kubernetes cluster are the **reference validation environment**; nothing in the package is specific to them.
 
 ---
@@ -89,6 +91,7 @@ Explicit non-metrics: this phase does not aim to be a general life assistant (em
 - General life-assistant capabilities (email, calendar, browser automation, shell-on-request outside a job).
 - Replacing the existing outbound bridge — `bridge.mjs` keeps working unchanged; Forge-Claw is additive.
 - Postgres or any new database for claw state (see D5).
+- Publishing `pforge-claw` to npm (D23 follow-up).
 - Helm charts, operators/CRDs, or cloud-managed K8s specifics — plain Kustomize with a base plus an `example` overlay that works on any conformant cluster (homelab or cloud).
 - Changes to orchestrator slice execution semantics.
 
@@ -178,7 +181,10 @@ state/
   sessions.jsonl   # chat/topic ↔ Forge-Master session map
   audit.jsonl      # every inbound command + every mutation
 worktrees/<project>/<jobId>/
+logs/              # rotating structured logs (stdout in containers)
 ```
+
+Additional state files: `state/updates.jsonl` (processed channel update ids, bounded window), `state/lanes.json` (`/lane` on/off), `state/schedules.json` (`lastRunAt`), `state/cursors.json` (alert / watch cursors), `state/memory-queue.jsonl` (direct OpenBrain client queue + dead letters), `state/enrollment.jsonl` (hashed worker enrollment codes). Every state record carries `v` for future migrations.
 
 ### Project registry entry (`config.json#projects[]`)
 
@@ -190,7 +196,9 @@ worktrees/<project>/<jobId>/
   "channel": { "adapter": "telegram", "chatId": "<chat-id>", "topicId": "<topic-id>" },
   "placement": { "prefer": ["k8s-jobs", "mac-1", "local"], "requires": [] },
   "models": { "chat": "<from registry>", "work": "<from registry>" },
-  "budget": { "dailyPremiumRequests": 150 },
+  "homeLane": "mac-1",
+  "keepAlive": false,
+  "budget": { "dailyUSD": 5, "dailyPremiumRequests": 150 },
   "visibility": "normal",
   "image": "<registry>/<namespace>/pforge-claw-worker-node:<tag>"
 }
@@ -229,13 +237,77 @@ Projects reference lanes by id in `placement.prefer` and by label in `placement.
 
 Everything is optional. With no `memory.openbrain`, all memory flows through each project's own Plan Forge configuration; with OpenBrain absent entirely, recall is L2-only (`forge_search`).
 
+### Install & home model (D23, D24)
+
+- **Forge-Claw is a host-level tool, not a per-project file set.** It runs from a Plan Forge framework clone. `pforge claw` in any project resolves `pforge-claw/cli.mjs` from, in order: `PFORGE_CLAW_PATH`; the Plan Forge source that `pforge update` / `self-update` already uses (sibling clone or configured path); the current repo if it is Plan Forge itself. If none is found it prints install instructions and exits 1.
+- **Each project has a home lane** (`homeLane`) that holds its checkout (`repo.path` on that lane) and canonical L2 (`forgeHome` = `<homeLane>:<repo.path>/.forge`). Every project MCP call (asks, captures, recall, status, digest data, alerts) runs on the home lane as a **read job**: no worktree, no approval, low-latency lease. The dispatcher never needs repo checkouts. In single-host mode `homeLane` is `local`.
+
+### Complete config reference (`config.json`)
+
+```json
+{
+  "v": 1,
+  "instanceId": "<generated by init; stable random id>",
+  "timezone": "<IANA tz, e.g. Etc/UTC>",
+  "channels": {
+    "telegram": { "enabled": true, "botTokenSecret": "PFORGE_CLAW_TELEGRAM_TOKEN", "mode": "poll",
+                  "generalChat": { "chatId": "<chat-id>", "topicId": "<topic-id>" },
+                  "webhook": { "url": "<https url>", "secretTokenSecret": "PFORGE_CLAW_TELEGRAM_WEBHOOK_SECRET" } }
+  },
+  "allowlist": [ { "channel": "telegram", "userId": "<user-id>", "role": "owner", "alias": "<display alias>" } ],
+  "policy": { "ghcpRoles": ["owner"], "nonOwnerRuntime": "byok-only" },
+  "runtimes": {
+    "default": "copilot-sdk",
+    "byok": { "anthropic": { "keySecret": "ANTHROPIC_API_KEY" }, "openai": { "keySecret": "OPENAI_API_KEY" }, "azure": { "keySecret": "AZURE_OPENAI_API_KEY", "endpoint": "<url>" } },
+    "pforgeCommand": ["pforge"]
+  },
+  "lanes": [ "… see Lane registry entry …" ],
+  "projects": [ "… see Project registry entry …" ],
+  "budget": { "dailyUSD": 20, "dailyPremiumRequests": 300, "maxUnknownPerDay": 10 },
+  "jobs": { "keepFailedWorktreeHours": 24, "pushOnFailure": false },
+  "bootstrap": { "copy": [".forge.json", ".forge/fm-prefs.json"], "env": ["XAI_API_KEY"], "install": "link" },
+  "mcp": { "serverName": "plan-forge", "idleMinutes": 10 },
+  "schedules": [ { "id": "digest", "kind": "digest", "at": "daily 07:30" },
+                 { "id": "weekly-audit", "kind": "skill", "project": "<project-id>", "skill": "security-audit", "at": "weekly Mon 06:00", "preApproved": false } ],
+  "capture": { "voice": { "enabled": false, "provider": "openai", "keySecret": "OPENAI_API_KEY" } },
+  "memory": { "… see Memory config …": true },
+  "worker": { "dispatcherUrl": "wss://<host>/claw/workers", "laneId": "<lane-id>", "secretName": "PFORGE_CLAW_WORKER_SECRET", "allowInsecureLan": false },
+  "http": { "bind": "127.0.0.1", "port": 3190 },
+  "k8s": { "egress": { "allow": ["github.com", "api.github.com"] } }
+}
+```
+
+`config.schema.json` (Slice 2) is the normative form of this example; any key a later slice needs is added to the schema and the examples in that slice.
+
+### Secret names
+
+| Name | Used by | Notes |
+|---|---|---|
+| `PFORGE_CLAW_TELEGRAM_TOKEN` | Telegram adapter | BotFather token |
+| `PFORGE_CLAW_TELEGRAM_WEBHOOK_SECRET` | webhook mode | random; checked against `X-Telegram-Bot-Api-Secret-Token` |
+| `PFORGE_CLAW_WORKER_SECRET` | each worker | generated by enrollment (D11); never typed by hand |
+| `PFORGE_CLAW_GH_TOKEN` | pods / workers without `gh auth` | clone, push, PR; scoped to the registered repos |
+| `PFORGE_CLAW_COPILOT_TOKEN` | pods (only if D4 allows) | headless Copilot |
+| `OPENBRAIN_URL`, `OPENBRAIN_KEY` | direct OpenBrain client | same names as `.vscode/mcp.json`; sent as the `x-brain-key` header by default (`memory.openbrain.header` overrides) |
+| BYOK keys (`ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `AZURE_OPENAI_API_KEY`) | BYOK runtimes, STT | standard names |
+
+Resolution order: process env → `$PFORGE_CLAW_HOME/secrets.json` → K8s Secret env. Names are configurable; values never appear in config.
+
+### Schedule grammar
+
+`daily HH:MM` · `weekly <Mon|Tue|…> HH:MM` · `monthly <1-28> HH:MM` · `every <N>m` (N ≥ 5). Times are in `timezone`. Anything else fails config validation with a hint. No cron syntax, no cron library.
+
 ### Job model
 
 `JOB_TYPES`: `ask` (read-only Q&A), `capture` (memory/crucible/bug write via MCP — non-repo), `skill` (`forge_run_skill`), `plan` (`pforge run-plan`), `task` (ad-hoc agent work in a worktree → branch/PR), `fanout` (parent of N child jobs).
 
-`JOB_STATES`: `queued → awaiting-approval → approved → leased → running → (succeeded | failed | cancelled | expired | held-budget)`. Transitions are append-only events in `jobs.jsonl`; current state is a fold.
+`JOB_STATES`: `queued`, `awaiting-approval`, `approved`, `rejected`, `expired`, `held-budget`, `leased`, `running`, `needs-input`, `succeeded`, `failed`, `cancelled`. Flow: `queued → awaiting-approval → (approved | rejected | expired)`; `approved → [held-budget ⇄ approved] → leased → running ⇄ needs-input → (succeeded | failed | cancelled)`. **Terminal**: `succeeded`, `failed`, `cancelled`, `rejected`, `expired`. `held-budget` and `needs-input` are not terminal. Read jobs (`ask`, `capture`) skip approval: `queued → leased → running → …`. Transitions are append-only events in `jobs.jsonl`; current state is a fold.
 
-Mutating = `skill` (unless the skill is declared read-only), `plan`, `task`, `fanout`. Mutating jobs **must** pass through `awaiting-approval`.
+Mutating = `skill` (unless its `SKILL.md` frontmatter declares `readOnly: true`; anything else is mutating), `plan`, `task`, `fanout`. Mutating jobs **must** pass through `awaiting-approval`. `capture` jobs write only memory / Crucible / bugs (no repo) and need no approval, but untrusted-origin captures need a confirm card (D21).
+
+**`/run <plan>` resolution**: an exact repo-relative path wins; otherwise a unique case-insensitive match of `docs/plans/*<name>*-PLAN.md`; several matches → reply with buttons to choose; none → explicit message.
+
+**After a job finishes in a worktree**: `plan` and `task` jobs that succeed push `claw/<jobId>` and open a PR against `baseBranch` with `gh` (args array), title `[claw] <plan or task summary>`, body = run summary + job id. Forge-Claw never merges. Failed jobs push only if `jobs.pushOnFailure`; the worktree is kept for `jobs.keepFailedWorktreeHours`.
 
 ### LaneEvent
 
@@ -274,9 +346,9 @@ Plan Forge is open source. Forge-Claw ships as a **generic, configurable** capab
 | D6 | Approval mechanism | Inline keyboard `callback_query` with `callback_data = "a:<jobIdShort>:<nonceShort>"` (≤ 64 bytes). Nonce is 128-bit random, stored as SHA-256 hash, single-use, TTL 15 min, bound to the requesting chat **and** the approving `from.id` (must be on the allowlist with `approve` role). The existing URL-based `/api/bridge/approve` path is untouched. |
 | D7 | Forge-Master integration | Call `forge_master_ask` through the project's MCP client (no extra HTTP process) using the FORGE-MASTER-CLAW-AWARE contract. Always send `caller` (role, `channel:"chat"`, `surface:"<adapter id>"`, project, topic) and `responseFormat:{style:"brief",maxChars:3500}`, plus `proposeActions:true`. Send forwarded or captured content **only** as `untrustedContext`, never inside `message`. Send a compact Forge-Claw state snapshot (queue, held jobs, workers, today's spend; ≤ 4 KB) as a `contextBlocks` entry. `proposedActions` render as inline buttons; tapping one creates a job that still goes through Forge-Claw role checks and approval. `untrusted`-origin proposals are labelled ⚠️ in the card. Map `(chatId, topicId)` → `sessionId` in `sessions.jsonl`; `/new` drops the mapping. Simulate streaming with `sendChatAction: typing` plus a single edit on completion. |
 | D8 | Seat / runtime policy | Configurable, with a safe default: GHCP-backed jobs may be triggered only by `owner` identities (an individual Copilot seat is for its holder; operators are responsible for their own license terms, and the guide says so). Allowlist roles: `owner` (all), `approver`, `viewer` (read-only `ask`). Non-`owner` identities may only trigger jobs whose runtime is a configured **BYOK** provider; otherwise `ask`-only. Enforced in `router.mjs`; policy keys in `config.json#policy`. |
-| D9 | Budget source of truth | Dispatcher-owned `budget.jsonl`. `task`/`ask` jobs record usage from Copilot SDK session events (premium-request / token counts, null-not-zero). `plan` jobs record actuals from `forge_cost_report` after completion. Pre-flight estimates for `plan` jobs come **only** from `forge_estimate_quorum` — never hand-computed. Caps: per-project daily + global daily; exceeding → `held-budget` with an "approve over-budget" button for `owner`. |
+| D9 | Budget source of truth | Dispatcher-owned `budget.jsonl` with two independent units, `costUSD` and `premiumRequests`. Caps `budget.dailyUSD` and `budget.dailyPremiumRequests`, global and per project; each cap is enforced only against **reported** values. Unreported usage is `null` (never 0) and increments an `unknownUsageJobs` counter; past `budget.maxUnknownPerDay` further mutating jobs are held. `task` / `ask` usage comes from runtime and Forge-Master `usage`; `plan` actuals from `forge_cost_report`. Pre-flight `plan` estimates come **only** from `forge_estimate_quorum`, never hand-computed. Exceeding a cap → `held-budget` with an owner-only "approve over budget" button. |
 | D10 | Plan execution path | `plan` jobs run `pforge run-plan <plan> [--quorum=…]` in the job worktree (args array). Progress comes from the worktree's hub (`forge_watch_live` / events JSONL tail), not from parsing stdout. Abort → `forge_abort`. Resume → `--resume-from`. |
-| D11 | Worker protocol | WebSocket (`ws`), worker dials **out** to `wss://<dispatcher>/claw/workers`. Auth: per-worker ID + shared secret → HMAC-SHA256 challenge on connect (secret never sent). Messages JSON with `v` field; job lease with ack + heartbeat (15 s) + lease expiry (60 s) → requeue. Event resume by `seq`. |
+| D11 | Worker protocol | WebSocket (`ws`), worker dials **out** to `wss://<dispatcher>/claw/workers`. Auth: per-worker ID + shared secret → HMAC-SHA256 challenge on connect (secret never sent). Messages JSON with `v` field; job lease with ack + heartbeat (15 s) + lease expiry (60 s) → requeue. Event resume by `seq`. Two lease kinds: `job` (mutating, worktree) and `read` (home-lane MCP calls, D24). **Enrollment**: `pforge claw worker enroll --lane <id>` on the dispatcher prints a single-use code valid 15 min (hash stored); the worker runs `pforge claw worker join --code <code>` once to receive a generated 256-bit secret saved in its own secret store; `pforge claw worker revoke <id>` removes it. **Transport**: `wss://` is required unless the dispatcher URL is loopback. TLS comes from the operator's ingress / reverse proxy or a private overlay network (Tailscale, WireGuard), both documented. Plain `ws://` to a non-loopback address is refused unless `worker.allowInsecureLan: true` (off by default, warned on every connect). |
 | D12 | K8s integration | Dispatcher creates Jobs through the in-cluster REST API using `fetch` + the mounted ServiceAccount token/CA. RBAC: `create/get/list/watch/delete` on `jobs` and `get/list/watch` on `pods`, `pods/log` in the claw namespace **only**. The Job pod runs `pforge claw worker --one-shot --job <id>` and streams LaneEvents back over the worker protocol. |
 | D13 | Network egress for job pods | Default-deny NetworkPolicy; allow DNS, GitHub (`github.com`, `api.github.com`, Copilot API endpoints — exact hostnames confirmed at hardening), the dispatcher Service, and the OpenBrain endpoint. The allowlist of hostnames/CIDRs is **configuration** (`k8s.egress.allow[]`), with GitHub/Copilot defaults. The cluster's CNI must enforce NetworkPolicy (e.g. Calico, Cilium); `doctor` detects and warns otherwise, and the guide documents the risk of running without it. |
 | D14 | STT for voice notes | Off by default (`capture.voice.enabled=false`). When on, BYOK provider (`openai` Whisper or `azure` Speech) with the key from env / secrets. Audio is deleted after transcription; transcript is shown back for confirmation before any write. |
@@ -286,6 +358,10 @@ Plan Forge is open source. Forge-Claw ships as a **generic, configurable** capab
 | D18 | Channel abstraction | `src/channels/channel-adapter.mjs` defines the interface; `src/channels/telegram/` implements it. Core modules import only the interface. Other adapters (Slack, Discord, Teams, Matrix) are community follow-ups and need no core changes. |
 | D19 | Agent runtime abstraction | `src/runtime/agent-runtime.mjs` interface; `copilot-sdk` default; BYOK runtimes via the SDK's provider config (the same mechanism Phase-60 uses), selected per lane or project in config. |
 | D20 | Cross-platform CI | New `.github/workflows/pforge-claw.yml`: unit + offline e2e on `ubuntu-latest`, `windows-latest` and `macos-latest` (Node 22.12 + 24), plus a kind-based K8s e2e job on ubuntu (amd64). Path-filtered to `pforge-claw/**` and the shared CLI files. arm64 coverage comes from the reference environment and community reports. |
+| D23 | Install & home model | Host-level tool run from a Plan Forge framework clone; `pforge claw` resolves it via `PFORGE_CLAW_PATH` → the `update` / `self-update` source → the current repo (Shared Contract → Install & home model). Projects need nothing beyond a normal Plan Forge setup. npm publishing is a follow-up. |
+| D24 | Home lane & read path | Each project's `homeLane` owns its checkout and canonical `.forge`. All project MCP calls run there as `read` leases; the dispatcher holds no repos. Single-host: `homeLane = local`. |
+| D25 | Job bootstrap | Worktrees and clones lack gitignored state (`.forge.json`, `.forge/`, `node_modules`). Before a mutating job: (1) worktree / clone from `baseBranch`; (2) copy the `bootstrap.copy` allow-list from forgeHome (default `.forge.json`, `.forge/fm-prefs.json`; **never** `.forge/secrets.json`); (3) secrets only as environment variables from the executing lane's own store (`bootstrap.env` names), never as files in the worktree; (4) dependencies by `bootstrap.install`: `link` (default for worktrees; reuse the home checkout's `node_modules` via a directory junction on Windows or a symlink elsewhere), `ci` (`npm ci`; default for pods) or `none`; (5) run `pforge smith`, and a non-zero exit fails the job with `reason: bootstrap`. Pods receive the copy set from the home lane over the worker protocol. |
+| D26 | Long-lived project processes | Projects with `keepAlive: true` (needed for observer-based alerts) keep their project MCP server running on the home lane with the hub on and `forge_master_observe start` issued. Other projects start on demand and stop after `mcp.idleMinutes` (default 10). `doctor` verifies keepAlive projects have a live hub and observer. |
 | D21 | Memory integration | Project-scoped writes only through the project's MCP (`forge_memory_capture`), inheriting Plan Forge's queue, dedupe, dead-letter and Hallmark behaviour. Optional direct OpenBrain client only for cross-project reads and the bot namespace. No channel user ids or names in shared memory. `/remember` asks for the type with buttons (`decision` · `lesson` · `convention` · `pattern` · `gotcha`). Content from forwards, links or transcripts is written only after an explicit confirm card, with `origin: "untrusted"`. Per-project `memory.l3` and `visibility` decide what reaches shared L3. |
 | D22 | L2 consolidation | **Verified:** pforge-mcp has no `.forge` directory override, so jobs in worktrees, remote workers and pods produce L2 history outside the operator's checkout. Forge-Claw merges each job's `.forge` delta back into the project's canonical L2 home (`repo.forgeHome`): verbatim copies of orchestrator-produced artifacts, append-only, idempotent. Pods drain the OpenBrain queue and ship leftovers before exit. Upstreaming a `.forge` override or a `pforge import-runs` command is a follow-up. |
 
@@ -342,7 +418,7 @@ Node.js ESM (`.mjs`), no build step, Node `>=22.12.0`, vitest with the repo's ex
 **Context Files**: `.github/instructions/architecture-principles.instructions.md`, `.github/instructions/clean-code.instructions.md`, `.github/instructions/release-checklist.instructions.md`
 
 Tasks:
-1. **Orient first (no edits yet):** read `docs/plans/Phase-PFORGE-CLAW-PLAN.md` sections **Shared Contract**, **Portability & Configurability Contract**, **Scope Contract → Forbidden** and **Security Posture** and Required Decisions D3, then this slice's Context Files (`.github/instructions/architecture-principles.instructions.md`, `.github/instructions/clean-code.instructions.md`, `.github/instructions/release-checklist.instructions.md`). The worker prompt contains only this slice, so treat those sections as binding. If anything here conflicts with them, stop and report a blocker instead of guessing.
+1. **Orient first (no edits yet):** read `docs/plans/Phase-PFORGE-CLAW-PLAN.md` sections **Shared Contract**, **Portability & Configurability Contract**, **Scope Contract → Forbidden** and **Security Posture** and Required Decisions D3, D23, then this slice's Context Files (`.github/instructions/architecture-principles.instructions.md`, `.github/instructions/clean-code.instructions.md`, `.github/instructions/release-checklist.instructions.md`). The worker prompt contains only this slice, so treat those sections as binding. If anything here conflicts with them, stop and report a blocker instead of guessing.
 2. Create `pforge-claw/package.json` (`@pforge/pforge-claw`, `type: module`, `engines.node >=22.12.0`, deps per D3, `vitest` dev dep) and add `pforge-claw` to root `package.json#workspaces`; run `npm install` so the lockfile updates.
 3. Create `pforge-claw/cli.mjs` with `init`, `doctor`, `status`, `start`, `worker`, `service`, `dev`, `commands` subcommands. Every subcommand supports `--help` (exit 0). Until its owning slice lands, invoking a subcommand prints "not yet implemented (Slice N)" and exits 2. Add a `vitest.config.mjs` mirroring `pforge-master`'s, and a `test` script so root `npm test` (workspaces) picks the package up.
 4. Create `pforge-claw/src/enums.mjs` with frozen `JOB_TYPES`, `JOB_STATES`, `LANE_KINDS`, `VISIBILITY`, `ROLES`, `LANE_EVENT_TYPES`.
@@ -350,11 +426,13 @@ Tasks:
 6. Add `pforge-claw` to `dep-boundaries.mjs` `PACKAGE_RULES` (may not import `pforge-mcp`/`pforge-master`/`pforge-sdk` source).
 7. Add `tests/boundaries.test.mjs` — Guard: "pforge-claw imports no Plan Forge package source"; Guard: "no approveAll"; Guard: "no exec( / execSync( with template strings"; Guard: "no operator-specific values" (scans `pforge-claw/` except `tests/fixtures` for real-looking Telegram chat ids, absolute user paths such as drive letters or home directories, personal GitHub owners, private IPs and hostnames that aren't documented placeholders such as `<owner>`, `<registry>`, `example.com`).
 8. Register `claw` (with `init`, `doctor`, `status`, `start`, `worker`, `service`, `dev`, `commands` subcommands) in the CLI schema in `pforge-mcp/capabilities/schemas.mjs`; regenerate locally with `node pforge-mcp/server.mjs --validate`. Note: `pforge-mcp/cli-schema.json` is **gitignored** (generated at startup), so it is not committed; the gate checks the regenerated file. `tools.json` is tracked and must not change.
+9. `pforge.ps1` and `pforge.sh` resolve the claw home per D23 (`PFORGE_CLAW_PATH` → the `update` / `self-update` source → current repo) and pass arguments as an array; with none found they print install instructions and exit 1. Both shells behave identically.
 
 **Files**: `pforge-claw/package.json`, `pforge-claw/cli.mjs`, `pforge-claw/src/enums.mjs`, `pforge-claw/tests/boundaries.test.mjs`, `package.json`, `package-lock.json`, `pforge.ps1`, `pforge.sh`, `scripts/audit/dep-boundaries.mjs`, `pforge-mcp/capabilities/schemas.mjs`, `pforge-mcp/cli-schema.json`
 
 **Validation Gate**:
 ```bash
+node -e 'const fs=require("fs");for(const f of ["pforge.ps1","pforge.sh"])if(!fs.readFileSync(f,"utf8").includes("PFORGE_CLAW_PATH"))throw new Error("D23 claw home resolution missing in "+f)'
 node -e 'const r=require("./package.json");if(!r.workspaces.includes("pforge-claw"))throw new Error("pforge-claw not in workspaces")'
 node -e 'const fs=require("fs");for(const f of ["pforge.ps1","pforge.sh"]){if(!fs.readFileSync(f,"utf8").includes("pforge-claw/cli.mjs"))throw new Error("claw dispatch missing in "+f)}'
 node pforge-claw/cli.mjs doctor --help
@@ -376,7 +454,8 @@ Tasks:
 4. `src/registry.mjs`: project lookup by id / `(chatId, topicId)`; path normalisation via `path.resolve` with case-insensitive compare on Windows; reject projects whose path is not a git repo.
 5. `doctor`: checks Node version, config validity, each project path, presence (not value) of required secrets, `git`/`pforge`/`copilot` availability, and that each project has a resolvable plan-forge MCP launch command (from its `.vscode/mcp.json`).
 6. `pforge claw init`: interactive by default, plus non-interactive `--example single-host|multi-host|k8s --out <dir>`. It writes `config.json` from `pforge-claw/examples/*.json` (placeholders only), lists the secret names to set without ever asking for their values in argv, and runs `doctor`.
-7. Tests: valid/invalid config against the schema, every example validates, env-over-file precedence, redaction with canary secrets, Windows/POSIX path compare, doctor JSON output, `init --example` round-trip, refusal with no owner.
+7. `config.schema.json` covers every key in Shared Contract → Complete config reference, Secret names and Schedule grammar; `init` generates a stable random `instanceId`. Each example config validates.
+8. Tests: valid/invalid config against the schema, every example validates, env-over-file precedence, redaction with canary secrets, Windows/POSIX path compare, doctor JSON output, `init --example` round-trip, refusal with no owner.
 
 **Files**: `pforge-claw/src/config.mjs`, `pforge-claw/src/secrets.mjs`, `pforge-claw/src/registry.mjs`, `pforge-claw/src/init.mjs`, `pforge-claw/config.schema.json`, `pforge-claw/examples/single-host.json`, `pforge-claw/examples/multi-host.json`, `pforge-claw/examples/k8s.json`, `pforge-claw/cli.mjs`, `pforge-claw/tests/config.test.mjs`, `pforge-claw/tests/secrets.test.mjs`, `pforge-claw/tests/registry.test.mjs`, `pforge-claw/tests/init.test.mjs`
 
@@ -420,10 +499,12 @@ Tasks:
 3. `src/channels/telegram/client.mjs`: `getUpdates`, `sendMessage`, `editMessageText`, `answerCallbackQuery`, `sendChatAction`, `getFile`/download; `fetch` injected for tests; token from `getSecret`; 429 handling honouring `retry_after`; never include the token in thrown errors.
 4. `src/channels/telegram/format.mjs`: MarkdownV2 escape, 4096-char chunking on paragraph boundaries, inline keyboard builder enforcing the 64-byte `callback_data` limit. (Behaviour mirrors `bridge.mjs` helpers; duplication is accepted under D1 and recorded for a follow-up extraction to `pforge-sdk`.)
 5. `src/channels/telegram/poller.mjs`: long-poll loop with persisted offset (`state/offsets.json`), exponential backoff, graceful stop on SIGINT/SIGTERM.
-6. Tests: escaping table, chunking, callback_data limit, offset persistence across restart, 429 backoff with fake timers, token-never-in-error guard.
-7. Configurable `telegram.apiBase` (default `https://api.telegram.org`) and `tests/helpers/fake-telegram.mjs`: an in-process HTTP server implementing `getUpdates` (scripted inbound queue, incl. `callback_query` and forum `message_thread_id`), `sendMessage`, `editMessageText`, `answerCallbackQuery`, `sendChatAction`, `getFile`, `setWebhook`/`deleteWebhook`, recording every outbound call. Every later slice and the Slice 27 e2e suite reuse it.
+6. Inbound dedupe: record processed `update_id`s (bounded window) in `state/updates.jsonl`; commit the offset only after handling; a replayed update is dropped without side effects.
+7. Outbound per-chat rate limiter inside the adapter (Telegram defaults: at most 20 messages / minute per group, 1 / second per chat; honour `retry_after`), shared by every sender (replies, progress edits, alerts, digests). Queued edits to the same message coalesce to the latest text.
+8. Tests: escaping table, chunking, callback_data limit, offset persistence across restart, 429 backoff with fake timers, token-never-in-error guard, replayed `update_id` ignored, per-chat limiter ordering and coalescing.
+9. Configurable `telegram.apiBase` (default `https://api.telegram.org`) and `tests/helpers/fake-telegram.mjs`: an in-process HTTP server implementing `getUpdates` (scripted inbound queue, incl. `callback_query` and forum `message_thread_id`), `sendMessage`, `editMessageText`, `answerCallbackQuery`, `sendChatAction`, `getFile`, `setWebhook`/`deleteWebhook`, recording every outbound call. Every later slice and the Slice 27 e2e suite reuse it.
 
-**Files**: `pforge-claw/src/channels/channel-adapter.mjs`, `pforge-claw/tests/channel-adapter-contract.test.mjs`, `pforge-claw/src/channels/telegram/client.mjs`, `pforge-claw/src/channels/telegram/format.mjs`, `pforge-claw/src/channels/telegram/poller.mjs`, `pforge-claw/tests/helpers/fake-telegram.mjs`, `pforge-claw/tests/telegram-*.test.mjs`
+**Files**: `pforge-claw/src/channels/channel-adapter.mjs`, `pforge-claw/tests/channel-adapter-contract.test.mjs`, `pforge-claw/src/channels/telegram/client.mjs`, `pforge-claw/src/channels/telegram/format.mjs`, `pforge-claw/src/channels/telegram/poller.mjs`, `pforge-claw/tests/helpers/fake-telegram.mjs`, `pforge-claw/tests/telegram-*.test.mjs`, `pforge-claw/src/channels/telegram/rate-limiter.mjs`
 
 **Validation Gate**:
 ```bash
@@ -461,16 +542,17 @@ node -e 'const s=require("fs").readFileSync("pforge-claw/tests/help.test.mjs","u
 **Context Files**: `.github/instructions/aci-design.instructions.md`, `.github/instructions/testing.instructions.md`
 
 Tasks:
-1. **Orient first (no edits yet):** read `docs/plans/Phase-PFORGE-CLAW-PLAN.md` sections **Shared Contract**, **Portability & Configurability Contract**, **Scope Contract → Forbidden** and **Security Posture** and Required Decisions D7, then this slice's Context Files (`.github/instructions/aci-design.instructions.md`, `.github/instructions/testing.instructions.md`). The worker prompt contains only this slice, so treat those sections as binding. If anything here conflicts with them, stop and report a blocker instead of guessing.
-2. `src/mcp/project-client.mjs`: start/stop a stdio MCP client for a project using its `.vscode/mcp.json` plan-forge launch entry (args array, `cwd` = project path); idle shutdown after N minutes; one client per project.
-3. `ask` handler per D7: `sendChatAction typing` → `forge_master_ask({ message, sessionId, caller, responseFormat, proposeActions: true, contextBlocks: [clawSnapshot] })` → reply (chunked). `proposedActions` render as inline buttons; tapping one creates a job through the normal role check and approval path (never executed directly). Use `proposedActionsMessage` when there are none. Record `usage` in the budget ledger. Persist `(chatId, topicId) → sessionId` in `sessions.jsonl`; `/new` clears it. Empty or error results produce an explicit, friendly message (no silent failure).
+1. **Orient first (no edits yet):** read `docs/plans/Phase-PFORGE-CLAW-PLAN.md` sections **Shared Contract**, **Portability & Configurability Contract**, **Scope Contract → Forbidden** and **Security Posture** and Required Decisions D7, D24, then this slice's Context Files (`.github/instructions/aci-design.instructions.md`, `.github/instructions/testing.instructions.md`). The worker prompt contains only this slice, so treat those sections as binding. If anything here conflicts with them, stop and report a blocker instead of guessing.
+2. `src/mcp/project-client.mjs`: start/stop a stdio MCP client for a project **on its home lane** (D24; in this slice the home lane is always `local`, and Slice 18 routes the same calls as `read` leases). Read the `.vscode/mcp.json` server named by `mcp.serverName` (default `plan-forge`), expand `${workspaceFolder}` and `${env:NAME}`, and resolve relative args against `repo.path`. Idle shutdown after `mcp.idleMinutes`; one client per project. `doctor` reports when `forge_master_ask` answers with the pforge-master-not-installed stub.
+3. `ask` handler per D7: `sendChatAction typing` → `forge_master_ask({ message, sessionId, caller, responseFormat, proposeActions: true, contextBlocks: [clawSnapshot] })` → reply (chunked). `proposedActions` render as inline buttons; tapping one creates a job through the normal role check and approval path (never executed directly). Use `proposedActionsMessage` when there are none. Append each `usage` record to `state/budget.jsonl` through the state store (the Slice 11 governor consumes it). Build `clawSnapshot` in `src/snapshot.mjs` from whatever state exists so far (sessions, queue, approvals); later slices extend it. Persist `(chatId, topicId) → sessionId` in `sessions.jsonl`; `/new` clears it. Empty or error results produce an explicit, friendly message (no silent failure).
 4. `cli.mjs start` now runs poller + router + ask handler (M1 single-host mode).
 5. Tests with an injected fake MCP client: happy path, session reuse, tool error surfaced, client idle shutdown.
 
-**Files**: `pforge-claw/src/mcp/project-client.mjs`, `pforge-claw/src/handlers/ask.mjs`, `pforge-claw/cli.mjs`, `pforge-claw/tests/ask.test.mjs`, `pforge-claw/tests/project-client.test.mjs`
+**Files**: `pforge-claw/src/mcp/project-client.mjs`, `pforge-claw/src/handlers/ask.mjs`, `pforge-claw/cli.mjs`, `pforge-claw/tests/ask.test.mjs`, `pforge-claw/tests/project-client.test.mjs`, `pforge-claw/src/snapshot.mjs`
 
 **Validation Gate**:
 ```bash
+node -e 'const t=require("./pforge-mcp/tools.json");const a=Array.isArray(t)?t:t.tools;const x=a.find(y=>y.name==="forge_master_ask");if(!x||!x.inputSchema.properties.proposeActions)throw new Error("FORGE-MASTER-CLAW-AWARE not complete: forge_master_ask lacks proposeActions")'
 node -e "process.chdir('pforge-claw'); require('child_process').execSync('npx vitest run tests/ask.test.mjs tests/project-client.test.mjs', {stdio:'inherit',shell:true});"
 ```
 
@@ -489,6 +571,7 @@ Tasks:
 
 **Validation Gate**:
 ```bash
+node -e 'const t=require("./pforge-mcp/tools.json");const a=Array.isArray(t)?t:t.tools;const x=a.find(y=>y.name==="forge_memory_capture");if(!x||!x.inputSchema.properties.origin)throw new Error("FORGE-MASTER-CLAW-AWARE Slice 8 not complete: forge_memory_capture lacks origin")'
 node -e "process.chdir('pforge-claw'); require('child_process').execSync('npx vitest run tests/capture-commands.test.mjs', {stdio:'inherit',shell:true});"
 ```
 
@@ -519,13 +602,15 @@ node -e "process.chdir('pforge-claw'); require('child_process').execSync('npx vi
 **Context Files**: `.github/instructions/security.instructions.md`, `.github/instructions/testing.instructions.md`
 
 Tasks:
-1. **Orient first (no edits yet):** read `docs/plans/Phase-PFORGE-CLAW-PLAN.md` sections **Shared Contract**, **Portability & Configurability Contract**, **Scope Contract → Forbidden** and **Security Posture** and Required Decisions D10, then this slice's Context Files (`.github/instructions/security.instructions.md`, `.github/instructions/testing.instructions.md`). The worker prompt contains only this slice, so treat those sections as binding. If anything here conflicts with them, stop and report a blocker instead of guessing.
+1. **Orient first (no edits yet):** read `docs/plans/Phase-PFORGE-CLAW-PLAN.md` sections **Shared Contract**, **Portability & Configurability Contract**, **Scope Contract → Forbidden** and **Security Posture** and Required Decisions D10, D25, then this slice's Context Files (`.github/instructions/security.instructions.md`, `.github/instructions/testing.instructions.md`). The worker prompt contains only this slice, so treat those sections as binding. If anything here conflicts with them, stop and report a blocker instead of guessing.
 2. `src/jobs/worktree.mjs`: `git worktree add` on a new branch `claw/<jobId>` from `baseBranch` under `PFORGE_CLAW_HOME/worktrees/<project>/<jobId>`; remove on completion (keep on failure for N hours, janitor sweep). Args-array spawn only. Refuse if target path resolves inside the operator's working tree.
 3. `src/jobs/permission-policy.mjs`: per `JOB_TYPE` policy — `ask`: deny all writes/shell; `skill`/`task`: writes allowed only under the job worktree, shell allowed only for an allowlist (`git`, `node`, `npm`, `npx`, `pforge`, project test commands from registry), deny network tools except MCP; `plan`: delegated to `pforge run-plan` (D10).
 4. Job runners: `task` (Copilot session in worktree → commit → push branch → open PR via `gh` args array), `skill` (`forge_run_skill` via MCP in worktree), `plan` (`pforge run-plan` args array in worktree; progress via `forge_watch_live`; abort via `forge_abort`).
-5. Tests: worktree path containment, operator-tree refusal, policy matrix (allowed/denied cases incl. `../` escape and symlink), runner wiring with fakes.
+5. `src/jobs/bootstrap.mjs` per D25: copy the `bootstrap.copy` allow-list from forgeHome, inject `bootstrap.env` secrets as environment variables only, set up dependencies per `bootstrap.install` (directory junction on Windows, symlink elsewhere, or `npm ci`), then run `pforge smith`; failure marks the job `failed` with `reason: bootstrap`. Guard: `.forge/secrets.json` is never copied.
+6. Runners follow Shared Contract → Job model for `/run` plan resolution and post-job push + PR. Every `pforge` invocation uses `runtimes.pforgeCommand` (default `["pforge"]`) so tests can substitute a fake.
+7. Tests: worktree path containment, operator-tree refusal, policy matrix (allowed/denied cases incl. `../` escape and symlink), runner wiring with fakes.
 
-**Files**: `pforge-claw/src/jobs/worktree.mjs`, `pforge-claw/src/jobs/permission-policy.mjs`, `pforge-claw/src/jobs/runners.mjs`, `pforge-claw/tests/worktree.test.mjs`, `pforge-claw/tests/permission-policy.test.mjs`, `pforge-claw/tests/runners.test.mjs`
+**Files**: `pforge-claw/src/jobs/worktree.mjs`, `pforge-claw/src/jobs/permission-policy.mjs`, `pforge-claw/src/jobs/runners.mjs`, `pforge-claw/tests/worktree.test.mjs`, `pforge-claw/tests/permission-policy.test.mjs`, `pforge-claw/tests/runners.test.mjs`, `pforge-claw/src/jobs/bootstrap.mjs`, `pforge-claw/tests/bootstrap.test.mjs`
 
 **Validation Gate**:
 ```bash
@@ -559,7 +644,7 @@ node -e 'const s=require("fs").readFileSync("pforge-claw/tests/approvals.test.mj
 
 Tasks:
 1. **Orient first (no edits yet):** read `docs/plans/Phase-PFORGE-CLAW-PLAN.md` sections **Shared Contract**, **Portability & Configurability Contract**, **Scope Contract → Forbidden** and **Security Posture** and Required Decisions D9, then this slice's Context Files (`.github/instructions/architecture-principles.instructions.md`, `.github/instructions/testing.instructions.md`). The worker prompt contains only this slice, so treat those sections as binding. If anything here conflicts with them, stop and report a blocker instead of guessing.
-2. `src/budget.mjs` per D9: ledger append from session usage, Forge-Master turn `usage` (every `ask`), and post-run `forge_cost_report`; per-project + global daily caps (timezone from config); `check(job)` before lease → `held-budget` with owner-only "approve over budget" button; `/budget` command renders today's spend per project vs caps.
+2. `src/budget.mjs` per D9 (two units, `costUSD` and `premiumRequests`, null-not-zero, `maxUnknownPerDay`): ledger append from session usage, Forge-Master turn `usage` (every `ask`), and post-run `forge_cost_report`; per-project + global daily caps (timezone from config); `check(job)` before lease → `held-budget` with owner-only "approve over budget" button; `/budget` command renders today's spend per project vs caps.
 3. Tests: cap boundaries, timezone rollover with fake timers, held job released by owner override, null usage not counted as zero.
 
 **Files**: `pforge-claw/src/budget.mjs`, `pforge-claw/tests/budget.test.mjs`
@@ -598,7 +683,7 @@ Tasks:
 1. **Orient first (no edits yet):** read `docs/plans/Phase-PFORGE-CLAW-PLAN.md` sections **Shared Contract**, **Portability & Configurability Contract**, **Scope Contract → Forbidden** and **Security Posture** and Required Decisions D16, then this slice's Context Files (`.github/instructions/status-reporting.instructions.md`, `.github/instructions/testing.instructions.md`). The worker prompt contains only this slice, so treat those sections as binding. If anything here conflicts with them, stop and report a blocker instead of guessing.
 2. `src/scheduler.mjs` per D16 (tz-aware, persisted `lastRunAt`, no duplicate on restart, catch-up policy = skip missed runs older than 1 h).
 3. `src/digest.mjs`: per-project `forge_plan_status`, overnight job outcomes from `jobs.jsonl`, spend from `budget.jsonl`, open bugs, drift summary, plus a "Look at first" section from `forge_master_audit` (top risks + P0 actions as buttons) → one `#general` message with per-project lines.
-4. Scheduled skills: config `schedules[] = { project, skill, cron-like spec, requiresApproval }` — scheduled mutating skills still create approval cards unless the owner set `preApproved: true` for that schedule (recorded in audit).
+4. Scheduled skills: config `schedules[] = { id, kind, project, skill, at, preApproved }` using the Shared Contract schedule grammar (no cron syntax) — scheduled mutating skills still create approval cards unless the owner set `preApproved: true` for that schedule (recorded in audit).
 5. Tests: tz rollover, restart no-duplicate, digest rendering with fakes.
 
 **Files**: `pforge-claw/src/scheduler.mjs`, `pforge-claw/src/digest.mjs`, `pforge-claw/tests/scheduler.test.mjs`, `pforge-claw/tests/digest.test.mjs`
@@ -614,11 +699,12 @@ node -e "process.chdir('pforge-claw'); require('child_process').execSync('npx vi
 **Context Files**: `.github/instructions/status-reporting.instructions.md`
 
 Tasks:
-1. **Orient first (no edits yet):** read `docs/plans/Phase-PFORGE-CLAW-PLAN.md` sections **Shared Contract**, **Portability & Configurability Contract**, **Scope Contract → Forbidden** and **Security Posture**, then this slice's Context Files (`.github/instructions/status-reporting.instructions.md`). The worker prompt contains only this slice, so treat those sections as binding. If anything here conflicts with them, stop and report a blocker instead of guessing.
+1. **Orient first (no edits yet):** read `docs/plans/Phase-PFORGE-CLAW-PLAN.md` sections **Shared Contract**, **Portability & Configurability Contract**, **Scope Contract → Forbidden** and **Security Posture** and Required Decisions D24, D26, then this slice's Context Files (`.github/instructions/status-reporting.instructions.md`). The worker prompt contains only this slice, so treat those sections as binding. If anything here conflicts with them, stop and report a blocker instead of guessing.
 2. `src/alerts.mjs`: subscribe to each project's hub (via `forge_watch_live` polling with cursor) for `forge-master-insight` events (preferred: severity, evidence and suggested action already structured, deduplicated by insight `id`) and raw LiveGuard / secret-scan / drift / run-failed events as a fallback when the observer isn't running → topic message with action buttons (📝 File bug · 🛠 Draft fix → approval-gated `task`; or the insight's `suggestedAction`). `doctor` checks the observer is running for each registered project and advises `forge_master_observe start`.
 3. Nudges: phases hardened but not run for > N days, held-budget jobs older than 24 h, failed worktrees awaiting cleanup.
 4. De-duplicate alerts by `(project, eventType, fingerprint)` within a window.
-5. Tests: dedupe window, button → job creation, cursor persistence.
+5. Alerts read from each project's home lane per D24, and require `keepAlive: true` per D26 for observer insights; the lane keeps that project's MCP server and observer running. For projects without keepAlive, alerts fall back to periodic `forge_watch_live` polling while the project MCP is up, and `doctor` says so.
+6. Tests: dedupe window, button → job creation, cursor persistence.
 
 **Files**: `pforge-claw/src/alerts.mjs`, `pforge-claw/tests/alerts.test.mjs`
 
@@ -674,9 +760,9 @@ Tasks:
 2. `service/com.pforge.claw.plist` (launchd), `service/pforge-claw.service` (systemd user unit), `service/install-service.ps1` (Windows Task Scheduler, at-logon, restart-on-failure) **and** `service/install-service.sh` (macOS/Linux) — both support `install | uninstall | status`.
 3. `pforge claw service install|uninstall|status` wired in `cli.mjs` and both `pforge` shells.
 4. Health: `status` reports poller lag, queue depth per project, last digest, lane health.
-5. Single-host smoke: `tests/single-host-smoke.test.mjs` boots `start` against the fake Telegram helper with three fixture repos and drives the success-metric-1 loop (ask → approve → progress → PR link via a scripted Copilot session). Live dogfood moves to Slice 27.
+5. Single-host smoke: `tests/single-host-smoke.test.mjs` boots `start` against the fake Telegram helper with three fixture repos and drives the success-metric-1 loop (ask → approve → progress → PR link). Offline fakes introduced here and reused by Slice 27: `tests/helpers/fake-project-mcp.mjs` (a scripted MCP server answering the `forge_*` tools the bot calls, including `forge_master_ask` with `proposedActions`), `tests/helpers/fake-pforge.mjs` (substituted via `runtimes.pforgeCommand`; writes a scripted `.forge/runs/<id>/events.jsonl` and commits in the worktree), `tests/helpers/scripted-copilot.mjs`, and a fake `gh` that records PR creation. Live dogfood moves to Slice 27.
 
-**Files**: `pforge-claw/service/*`, `pforge-claw/cli.mjs`, `pforge.ps1`, `pforge.sh`, `pforge-claw/tests/service.test.mjs`, `pforge-claw/tests/single-host-smoke.test.mjs`, `pforge-claw/tests/helpers/fixture-repos.mjs`, `pforge-claw/tests/helpers/scripted-copilot.mjs`
+**Files**: `pforge-claw/service/*`, `pforge-claw/cli.mjs`, `pforge.ps1`, `pforge.sh`, `pforge-claw/tests/service.test.mjs`, `pforge-claw/tests/single-host-smoke.test.mjs`, `pforge-claw/tests/helpers/fixture-repos.mjs`, `pforge-claw/tests/helpers/scripted-copilot.mjs`, `pforge-claw/tests/helpers/fake-project-mcp.mjs`, `pforge-claw/tests/helpers/fake-pforge.mjs`
 
 **Validation Gate**:
 ```bash
@@ -693,12 +779,13 @@ node pforge-mcp/server.mjs --check
 **Context Files**: `.github/instructions/security.instructions.md`, `.github/instructions/testing.instructions.md`
 
 Tasks:
-1. **Orient first (no edits yet):** read `docs/plans/Phase-PFORGE-CLAW-PLAN.md` sections **Shared Contract**, **Portability & Configurability Contract**, **Scope Contract → Forbidden** and **Security Posture** and Required Decisions D11, then this slice's Context Files (`.github/instructions/security.instructions.md`, `.github/instructions/testing.instructions.md`). The worker prompt contains only this slice, so treat those sections as binding. If anything here conflicts with them, stop and report a blocker instead of guessing.
+1. **Orient first (no edits yet):** read `docs/plans/Phase-PFORGE-CLAW-PLAN.md` sections **Shared Contract**, **Portability & Configurability Contract**, **Scope Contract → Forbidden** and **Security Posture** and Required Decisions D11, D24, then this slice's Context Files (`.github/instructions/security.instructions.md`, `.github/instructions/testing.instructions.md`). The worker prompt contains only this slice, so treat those sections as binding. If anything here conflicts with them, stop and report a blocker instead of guessing.
 2. `src/protocol/messages.mjs`: versioned schemas (`hello`, `challenge`, `auth`, `ready`, `lease`, `ack`, `event`, `cancel`, `heartbeat`, `bye`) with validation.
 3. `src/protocol/ws-server.mjs` (dispatcher): `/claw/workers` endpoint, HMAC challenge per D11, worker presence registry, lease/ack/expiry/requeue, event resume by `seq`.
 4. `src/protocol/worker-agent.mjs` + `cli.mjs worker`: dials out, authenticates, advertises capabilities (`os`, toolchains, projects it can serve, `macos: true`), runs leased jobs through a local `LocalLane`, reconnects with jittered backoff.
 5. `src/lanes/remote-lane.mjs`: `Lane` implementation over the server registry.
-6. Tests: secret never on the wire, bad HMAC rejected, lease expiry requeues, duplicate events suppressed on resume, version mismatch handled.
+6. Enrollment and transport per D11: `worker enroll` / `worker join` / `worker revoke`; refuse non-loopback `ws://` unless `worker.allowInsecureLan`; `read` leases (low latency, no worktree) for home-lane MCP calls per D24 alongside `job` leases.
+7. Tests: enrollment code single-use and expiring, revoked worker rejected, insecure non-loopback URL refused, `read` lease round-trip latency bounded, secret never on the wire, bad HMAC rejected, lease expiry requeues, duplicate events suppressed on resume, version mismatch handled.
 
 **Files**: `pforge-claw/src/protocol/*`, `pforge-claw/src/lanes/remote-lane.mjs`, `pforge-claw/cli.mjs`, `pforge-claw/tests/protocol.test.mjs`, `pforge-claw/tests/remote-lane.test.mjs`
 
@@ -774,11 +861,12 @@ node -e "process.chdir('pforge-claw'); require('child_process').execSync('npx vi
 **Context Files**: `.github/instructions/security.instructions.md`, `.github/instructions/testing.instructions.md`
 
 Tasks:
-1. **Orient first (no edits yet):** read `docs/plans/Phase-PFORGE-CLAW-PLAN.md` sections **Shared Contract**, **Portability & Configurability Contract**, **Scope Contract → Forbidden** and **Security Posture**, then this slice's Context Files (`.github/instructions/security.instructions.md`, `.github/instructions/testing.instructions.md`). The worker prompt contains only this slice, so treat those sections as binding. If anything here conflicts with them, stop and report a blocker instead of guessing.
+1. **Orient first (no edits yet):** read `docs/plans/Phase-PFORGE-CLAW-PLAN.md` sections **Shared Contract**, **Portability & Configurability Contract**, **Scope Contract → Forbidden** and **Security Posture** and Required Decisions D4, D25, then this slice's Context Files (`.github/instructions/security.instructions.md`, `.github/instructions/testing.instructions.md`). The worker prompt contains only this slice, so treat those sections as binding. If anything here conflicts with them, stop and report a blocker instead of guessing.
 2. `src/lanes/k8s-job-lane.mjs`: build Job spec (project image, `activeDeadlineSeconds`, CPU/memory requests+limits, `ttlSecondsAfterFinished`, `backoffLimit: 0`, non-root, emptyDir workspace or PVC repo cache, per-job Secret projection), create via in-cluster REST (`fetch` + SA token + CA), watch status, cancel = delete with propagation.
 3. Pod runs `pforge claw worker --one-shot --job <id>` which connects back over the worker protocol for events (no log scraping).
 4. Shallow clone of `repo.remote` at `baseBranch` into the workspace; push branch / open PR as in Slice 9.
-5. Tests with fake K8s API: spec invariants, create/watch/cancel, deadline exceeded → `failed` with reason, API 403 → structured error.
+5. Pod bootstrap per D25: before work starts, the pod requests the `bootstrap.copy` set from the project's home lane over the worker protocol, receives secrets only as K8s Secret environment variables (`PFORGE_CLAW_GH_TOKEN`, and `PFORGE_CLAW_COPILOT_TOKEN` only if D4 allows), installs dependencies with `npm ci`, and runs `pforge smith`.
+6. Tests with fake K8s API: spec invariants, create/watch/cancel, deadline exceeded → `failed` with reason, API 403 → structured error.
 
 **Files**: `pforge-claw/src/lanes/k8s-job-lane.mjs`, `pforge-claw/src/k8s/api.mjs`, `pforge-claw/tests/k8s-job-lane.test.mjs`
 
@@ -839,7 +927,7 @@ Tasks:
 2. `src/memory/l2-sync.mjs` per D22: after each job, compute the delta between the job's `.forge/` and its starting snapshot (run folders, append-only JSONL streams, cost-history entries, trajectories, pending auto-skills, bugs, OpenBrain queue). The exact file inventory is fixed at hardening from the current `.forge/` layout and listed in the slice notes.
 3. Apply the delta to the project's canonical L2 home (`repo.forgeHome`, default `<repo.path>/.forge` on the lane that owns it): copy orchestrator-produced run folders **verbatim** (Hallmark records must still verify), append JSONL records idempotently by record id / content hash, merge JSON maps by id, never overwrite or synthesise a record.
 4. Remote lanes: the worker sends the delta back as chunked, checksummed `artifact` LaneEvents. The dispatcher forwards it to whichever lane owns the canonical home, and that lane applies it.
-5. K8s Job pods: before exit, run `pforge drain-memory` to flush the OpenBrain queue, then ship any still-undelivered queue records plus the `.forge` delta back over the worker protocol. The pod exits only after the dispatcher acks, bounded by the Job deadline; on timeout the job is marked `failed` with `reason: l2-sync-incomplete` and `doctor` lists it.
+5. K8s Job pods: keep the project MCP server running (REST on loopback) for the job's duration, because `pforge drain-memory` drains through that local REST endpoint (VERIFY the port and flag at hardening); before exit, run `pforge drain-memory` to flush the OpenBrain queue, then ship any still-undelivered queue records plus the `.forge` delta back over the worker protocol. The pod exits only after the dispatcher acks, bounded by the Job deadline; on timeout the job is marked `failed` with `reason: l2-sync-incomplete` and `doctor` lists it.
 6. Tests: idempotent re-apply (no duplicates), never-overwrite, run-folder copy passes Hallmark verification, checksum mismatch rejected, OpenBrain-down pod path where queued records arrive in the canonical queue, delta forwarding to a non-dispatcher canonical lane.
 
 **Files**: `pforge-claw/src/memory/l2-sync.mjs`, `pforge-claw/src/protocol/worker-agent.mjs`, `pforge-claw/src/lanes/k8s-job-lane.mjs`, `pforge-claw/tests/l2-sync.test.mjs`
@@ -880,7 +968,8 @@ Tasks:
 3. `pforge claw dev up|down|status` in `cli.mjs` (and both `pforge` shells): boots a local multi-process topology — dispatcher + LocalLane + two RemoteLane workers (fixture lane ids `worker-a` labelled `macos` and `worker-b` labelled `windows`, both opt-in) with separate `PFORGE_CLAW_HOME`s on localhost — pointed at either the fake Telegram server (`--fake`) or the real bot (`--live`).
 4. Scenarios (each a named test): (a) away-from-desk loop — ask → `/run` → estimate card → approve → slice progress edits → PR link (success metric 1); (b) three projects concurrent, one held by budget cap then owner-released (metric 3); (c) safety — unknown user silent, approval replay/expiry/wrong-user, forwarded-text injection, canary secrets absent everywhere (metric 4); (d) simulated 7-day digest + alerts with fake clock and two injected dispatcher restarts — no miss/duplicate (metric 2); (e) worker disconnect mid-job → lease expiry → requeue → resume by `seq` with no duplicate Telegram edits; (f) placement — `macos`-labelled job pinned to `worker-a`, `restricted` project never on a shared lane, `/lane worker-b off` respected; (g) help — `/help` in a project topic vs `#general` vs as a `viewer` shows the right command sets, every listed command is runnable by that caller, and the `setMyCommands` menu captured by the fake server matches `/help`; (h) memory — OpenBrain offline (fake) → captures queue then drain on recovery, a forwarded message is never stored without confirm, a restricted project never appears in `/recall --all`, and a K8s-style one-shot worker's `.forge` history and undelivered queue records reach the canonical L2 home after it exits.
 5. K8s dev overlay `deploy/k8s/overlays/dev/` (k3d/kind) plus `scripts/e2e-k8s.ps1` **and** `scripts/e2e-k8s.sh` twins: build dispatcher + worker images, load into the local cluster, apply, run scenario (a) through a `K8sJobLane`, assert Job cleanup and NetworkPolicy denial of a non-allowlisted egress host, then tear down. Skipped (not failed) when no cluster is reachable; `doctor` explains why.
-6. Generic live-environment runbook (`docs/PFORGE-CLAW-GUIDE.md` §Live test environment, drafted here and finalised in Slice 29), written for any topology. Then execute it on the **reference validation environment**: dispatcher on the Linux K8s cluster, macOS worker, Windows worker (opt-in), K8s Job lane, three real projects registered; run scenarios (a) and (b) with real Telegram + GHCP; capture evidence (message screenshots, job ids, PR links, `budget.jsonl` excerpt) in the slice artifact. Record the D4 outcome observed live.
+6. **MANUAL (operator)** for the live part. The agent writes the generic live-environment runbook (`docs/PFORGE-CLAW-GUIDE.md` §Live test environment, drafted here and finalised in Slice 29), written for any topology. Then execute it on the **reference validation environment**: dispatcher on the Linux K8s cluster, macOS worker, Windows worker (opt-in), K8s Job lane, three real projects registered; run scenarios (a) and (b) with real Telegram + GHCP; capture evidence (message screenshots, job ids, PR links, `budget.jsonl` excerpt) in the slice artifact. Record the D4 outcome observed live.
+7. **MANUAL (operator)**: create the Telegram bot with BotFather (token into `PFORGE_CLAW_TELEGRAM_TOKEN`, privacy mode off or bot as admin, forum group with topics), enroll the workers, then run the live scenarios. The agent prepares a checklist and an evidence template in the slice notes and stops here.
 
 **Files**: `pforge-claw/tests/e2e/*`, `pforge-claw/tests/helpers/*`, `pforge-claw/package.json`, `pforge-claw/cli.mjs`, `pforge.ps1`, `pforge.sh`, `pforge-claw/deploy/k8s/overlays/dev/*`, `pforge-claw/scripts/e2e-k8s.ps1`, `pforge-claw/scripts/e2e-k8s.sh`
 
@@ -903,6 +992,7 @@ Tasks:
 3. Both shells exercised: the windows job runs `pforge.ps1 claw doctor`; ubuntu and macos run `pforge.sh claw doctor`.
 4. `docs/PFORGE-CLAW-GUIDE.md` §Tested Platforms: matrix (OS, arch, Node, K8s distro/version, CNI, runtime, channel, result, date, reporter) seeded from CI plus the Slice 27 reference-environment runs (macOS host, Windows host, Linux K8s cluster), with instructions for community submissions (issue template field list).
 5. Fix any platform-specific defect the matrix exposes in the slice that owns the code (path, line-ending, spawn or service bugs); record each in the slice notes for the post-mortem.
+6. **MANUAL (operator)**: push the branch, confirm the `pforge-claw` workflow is green on all three OSes and the kind job, and paste the run URL into the slice notes. The agent does not push without the operator.
 
 **Files**: `.github/workflows/pforge-claw.yml`, `docs/PFORGE-CLAW-GUIDE.md`
 
@@ -973,6 +1063,7 @@ The last gate proves the existing outbound bridge is untouched.
 - A slice needs to modify `pforge-mcp/` or `pforge-master/` runtime code beyond what FORGE-MASTER-CLAW-AWARE delivered → stop; extend that companion phase instead.
 - Validation gate fails and root cause isn't found within 30 minutes.
 - Budget for the phase exceeds estimate by more than 25 % (`forge_cost_report`).
+- A **MANUAL (operator)** task is reached: finish the preparation it describes, write a handoff note (what is ready, exact commands, what evidence to capture), and stop. This is an expected pause, not a failure.
 
 ## Rollback
 

@@ -2,7 +2,7 @@
 // Pure data: MCP tool schemas (name, description, inputSchema)
 // Only imports: model-default constants and enums, so descriptions and enums cannot drift from runtime values.
 import { DEFAULT_ESTIMATE_MODEL, DEFAULT_WATCHER_MODEL } from "../orchestrator/constants.mjs";
-import { ANALYZE_MODES } from "../enums.mjs";
+import { ANALYZE_MODES, MEMORY_ORIGINS, MEMORY_TAG_RULES, MEMORY_VISIBILITY } from "../enums.mjs";
 
 export const TOOLS = [
   {
@@ -700,6 +700,9 @@ export const TOOLS = [
         type: { type: "string", description: "Memory type: decision | lesson | convention | pattern | gotcha (default: decision)", enum: ["decision", "lesson", "convention", "pattern", "gotcha"] },
         source: { type: "string", description: "Source identifier (e.g. 'openclaw-trigger', 'plan-forge/slice-3'). Default: 'forge_memory_capture'" },
         created_by: { type: "string", description: "Who captured this (e.g. 'openclaw', 'copilot-agent'). Default: 'forge_memory_capture'" },
+        origin: { type: "string", enum: [...MEMORY_ORIGINS], description: "Memory trust provenance. Default: trusted." },
+        visibility: { type: "string", enum: [...MEMORY_VISIBILITY], description: "Memory visibility scope. Default: normal." },
+        tags: { type: "array", maxItems: MEMORY_TAG_RULES.maxItems, items: { type: "string", pattern: MEMORY_TAG_RULES.pattern }, description: "Optional provenance tags (lowercase letters, digits, colon, and hyphen; up to 10 tags)." },
         path: { type: "string", description: "Project directory (default: current)" },
       },
       required: ["content"],
@@ -1067,7 +1070,7 @@ export const TOOLS = [
   // Phase FORGE-SHOP-04 Slice 04.1 — Global search
   {
     name: "forge_search",
-    description: "Search across forge artifacts — runs, bugs, incidents, tempering, hub events, review queue, memories, and plans. Reads existing L2 files and optional L3 OpenBrain index. Returns ranked results with snippets.",
+    description: "Search across forge artifacts — runs, bugs, incidents, tempering, hub events, review queue, memories, and plans. Reads existing L2 files and optional L3 OpenBrain index. Returns ranked results with snippets; memory hits include origin, visibility, and tags, while restricted hits from other projects (or without a project) are excluded.",
     inputSchema: {
       type: "object",
       properties: {
@@ -1127,13 +1130,62 @@ export const TOOLS = [
   },
   {
     name: "forge_master_ask",
-    description: "Ask Forge-Master to reason about Plan Forge workflows — ideate features via Crucible, troubleshoot failures, query run status, or get operational guidance. Classifies intent, fetches memory context, and orchestrates read-only tool calls. Returns reply text, tool call history, token counts, and session ID for conversation continuity.",
+    description: "Ask Forge-Master to reason about Plan Forge workflows — ideate features via Crucible, troubleshoot failures, query run status, or get operational guidance. Classifies intent, fetches memory context, and orchestrates read-only tool calls. Returns reply text, tool call history, token counts, usage, and session ID. Optional fields: caller (role/channel) and responseFormat shape the reply for the caller (e.g. brief, length-capped for chat); untrustedContext is fenced as third-party data and narrows the tools Forge-Master may use; contextBlocks add caller-supplied context; proposeActions:true returns up to 3 schema-validated proposedActions that Forge-Master never executes.",
     inputSchema: {
       type: "object",
       properties: {
         message: { type: "string", description: "Your question or request for Forge-Master" },
         sessionId: { type: "string", description: "Session ID for conversation continuity (omit for new session)" },
         maxToolCalls: { type: "number", description: "Max tool calls per turn (default: 5, max: 10)" },
+        caller: {
+          type: "object",
+          description: "Optional caller metadata; fields are accepted and validated.",
+          properties: {
+            role: { type: "string", enum: ["owner", "approver", "viewer"] },
+            channel: { type: "string", enum: ["dashboard", "vscode", "chat", "api"] },
+            surface: { type: "string" },
+            projectId: { type: "string" },
+            topic: { type: "string" },
+          },
+          required: ["role", "channel"],
+        },
+        responseFormat: {
+          type: "object",
+          description: "Optional response-format metadata; fields are accepted and validated.",
+          properties: {
+            style: { type: "string", enum: ["standard", "brief"] },
+            maxChars: { type: "integer", minimum: 200, maximum: 20000 },
+          },
+        },
+        untrustedContext: {
+          type: "array",
+          description: "Optional untrusted context; entries are accepted and validated, with text capped at 8 KB total.",
+          items: {
+            type: "object",
+            properties: {
+              kind: { type: "string", enum: ["forward", "link", "transcript", "file", "other"] },
+              source: { type: "string" },
+              text: { type: "string" },
+            },
+            required: ["kind", "text"],
+          },
+        },
+        contextBlocks: {
+          type: "array",
+          description: "Optional context blocks; entries are accepted and validated, with text capped at 4 KB total.",
+          items: {
+            type: "object",
+            properties: {
+              title: { type: "string" },
+              text: { type: "string" },
+            },
+            required: ["title", "text"],
+          },
+        },
+        proposeActions: {
+          type: "boolean",
+          description: "Optional proposal preference; accepted and validated, with no proposal behavior in this release.",
+        },
         path: { type: "string", description: "Project directory (default: current)" },
       },
       required: ["message"],

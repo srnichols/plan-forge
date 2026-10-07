@@ -20,11 +20,95 @@
  */
 
 import { randomUUID } from "node:crypto";
+import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
+import { join } from "node:path";
 
 // ─── Constants ──────────────────────────────────────────────────────
 
 export const SUMMARIZE_THRESHOLD = 20;
 export const SUMMARIZE_COUNT = 10;
+const VALID_SUMMARY_SESSION_ID_RE = /^[A-Za-z0-9._-]+$/;
+
+/**
+ * Create the initial schema for a per-session rolling summary.
+ *
+ * @returns {{version:number,summary:null,coveredThroughTurn:number,generatedAtTurn:null,lastAttemptTurn:null,ledger:object[]}}
+ */
+export function emptyCompactionState() {
+  return {
+    version: 1,
+    summary: null,
+    coveredThroughTurn: 0,
+    generatedAtTurn: null,
+    lastAttemptTurn: null,
+    ledger: [],
+  };
+}
+
+function isValidSummarySessionId(sessionId) {
+  return typeof sessionId === "string"
+    && VALID_SUMMARY_SESSION_ID_RE.test(sessionId)
+    && !sessionId.includes("..");
+}
+
+function sessionSummaryPath(sessionId, cwd) {
+  return join(cwd || process.cwd(), ".forge", "fm-sessions", `${sessionId}.summary.json`);
+}
+
+function isCompactionState(value) {
+  return value !== null
+    && typeof value === "object"
+    && value.version === 1
+    && (value.summary === null || typeof value.summary === "string")
+    && Number.isFinite(value.coveredThroughTurn)
+    && (value.generatedAtTurn === null || Number.isFinite(value.generatedAtTurn))
+    && (value.lastAttemptTurn === null || Number.isFinite(value.lastAttemptTurn))
+    && Array.isArray(value.ledger)
+    && value.ledger.every((entry) => entry
+      && Number.isFinite(entry.turn)
+      && typeof entry.userMessage === "string"
+      && (entry.conclusion === null || typeof entry.conclusion === "string"));
+}
+
+/**
+ * Load a rolling conversation summary. Missing or malformed sidecars start
+ * with empty state; session history remains independently readable.
+ *
+ * @param {string} sessionId
+ * @param {string} [cwd]
+ * @returns {Promise<object>}
+ */
+export async function loadSessionSummary(sessionId, cwd = process.cwd()) {
+  if (!isValidSummarySessionId(sessionId)) return emptyCompactionState();
+  try {
+    const parsed = JSON.parse(await readFile(sessionSummaryPath(sessionId, cwd), "utf8"));
+    return isCompactionState(parsed) ? parsed : emptyCompactionState();
+  } catch {
+    return emptyCompactionState();
+  }
+}
+
+/**
+ * Atomically persist a rolling conversation summary sidecar.
+ *
+ * @param {string} sessionId
+ * @param {object} state
+ * @param {string} [cwd]
+ * @returns {Promise<{ok: boolean, error?: string}>}
+ */
+export async function saveSessionSummary(sessionId, state, cwd = process.cwd()) {
+  if (!isValidSummarySessionId(sessionId)) return { ok: false, error: "invalid_session_id" };
+  if (!isCompactionState(state)) return { ok: false, error: "invalid_state" };
+  const path = sessionSummaryPath(sessionId, cwd);
+  try {
+    await mkdir(join(cwd || process.cwd(), ".forge", "fm-sessions"), { recursive: true });
+    await writeFile(`${path}.tmp`, `${JSON.stringify(state)}\n`, "utf8");
+    await rename(`${path}.tmp`, path);
+    return { ok: true };
+  } catch (err) {
+    return { ok: false, error: err?.message ?? String(err) };
+  }
+}
 
 // ─── Per-Session Mutex ──────────────────────────────────────────────
 

@@ -13,7 +13,9 @@
  * @module forge-master/observer-prompt
  */
 
-export const OBSERVER_SYSTEM_PROMPT = `\
+import { buildInsightsInstruction } from "./observer-insights.mjs";
+
+const OBSERVER_BASE_SYSTEM_PROMPT = `\
 You are the **Plan Forge Observer**, a lightweight narration agent that monitors live pipeline events.
 
 ## Your job
@@ -34,6 +36,8 @@ Say **"N routine events — nothing notable."** when the batch contains no signa
 but prefer narrating from the batch alone.
 - You are strictly read-only. Never call write tools.
 `;
+
+export const OBSERVER_SYSTEM_PROMPT = `${OBSERVER_BASE_SYSTEM_PROMPT}\n\n${buildInsightsInstruction()}`;
 
 /**
  * Build a compact, LLM-friendly description of a hub event batch.

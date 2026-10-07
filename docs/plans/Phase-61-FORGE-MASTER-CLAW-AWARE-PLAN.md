@@ -8,7 +8,7 @@ relatedIssues: []
 ---
 # Phase-61: FORGE-MASTER-CLAW-AWARE — Make Forge-Master a good brain for a chat front door
 
-> **Status**: 🔬 **HARDENED 2026-10-07** — Step-2 complete; Required Decisions D1–D11 resolved (no TBDs). Ready for `pforge run-plan` once the **Execution Hold** is lifted.
+> **Status**: ✅ Complete. All 10 slices shipped. See [What actually shipped](#what-actually-shipped).
 > **Companion to**: [Phase-62-PFORGE-CLAW-PLAN.md](./Phase-62-PFORGE-CLAW-PLAN.md). This phase runs **first** (or in parallel with PFORGE-CLAW Slices 1–5). PFORGE-CLAW Slice 6 onward consumes the contract defined here.
 > **Tracks**: `pforge-master/src/` (new modules + thin wiring in `reasoning.mjs`, `observer-*.mjs`), `pforge-master/server.mjs` (tool schema), `pforge-mcp/server/tool-definitions.mjs`, `pforge-mcp/server/tool-handlers/platform.mjs` (argument forwarding), `pforge-mcp/capabilities/tool-metadata.mjs`, regenerated `pforge-mcp/tools.json` + `cli-schema.json`, `pforge-mcp/EVENTS.md`, `pforge-mcp/enums.mjs`.
 > **Pipeline**: Specify ✅ (this doc) → Harden ⏳ → Execute → Review → Ship
@@ -603,3 +603,59 @@ All new behaviour is opt-in through new optional fields; callers that don't send
 - Any injection fixture that changed model behaviour despite fencing
 - Compaction cost vs. context savings
 - D10 outcome (OpenBrain metadata vs header encoding) and whether OpenBrain delete is available
+
+## What actually shipped
+
+### Slice commits
+
+| Slice | Commit |
+|-------|--------|
+| 1 — Input/output contract and schemas | `966dc335f1babbdcef1bb87b0ad93ae4a0c9b7be` |
+| 2 — Caller- and channel-aware response shaping | `d81c07c11fcb5da39bbc3727c5afad829fd8851d` |
+| 3 — Untrusted-content fencing and allowlist narrowing | `597fd8f756c6ab4a476b2b6e3848340a93f5eaaf` |
+| 4 — Structured proposed actions | `e70844a7090402cca7af8a2bc574429f7b6a5c69` |
+| 5 — Caller-supplied context blocks and claw-ops intent | `35bb012e0757229570e753e8d97a16cea67e65e6` |
+| 6 — Structured observer insights | `c7fc6510674da7e8fcb971c5ff31690ed53a6697` |
+| 7 — Rolling session summary and usage contract | `e4a7767f392e46c066192549aa8300fb890792a8` |
+| 8 — Memory provenance on capture, queue, and search | `ffdc7fc0fc5ece09a131b8165aa7a56aa0fadd9b` |
+| 9 — Recall fencing and restricted-memory exclusion | `cedf76ba608b53e01fcf0b4f04b6ee0db5a40f74` |
+| 10 — Documentation, CHANGELOG, and this retro | Current worktree; not committed |
+
+### Fixes and scope adjustments
+
+- Post-checkpoint suite fixes: `590160e5f3337f0fbbf3b0f4ce6e4edf38849c79`.
+- Slice 8's scope was clarified to include the actual memory capture handler and search shaper (`6993f251c20188b4cdb241b67e309c8bf4b9aa7d`); Slice 9 was ordered after Slice 7 because both change `reasoning.mjs` (`72ad4990a1c39cdbff1ee9a5045274851e15785e`).
+- The known `update-guard-cli.test.mjs` failure was explicitly excluded from the Slice 10 pforge-mcp suite (`e318c0870fc78b528f99cdd41fb203e97ff2b1e3`); details are below.
+- The plan's `maxChars: 3500` shared-contract value is illustrative, not a fixed runtime cap: both schemas accept an optional integer from 200 to 20,000, and truncation enforces the caller-supplied value. The role/channel enums and 8 KB / 4 KB text caps match the implementation.
+- `pforge-master/server.mjs` still has stale schema-description prose claiming response shaping and proposals are inactive, although its handler forwards these fields to the implemented `runTurn` behavior. It was outside this slice's file scope and was not changed.
+
+### Validation gates
+
+| Gate | Result |
+|------|--------|
+| CHANGELOG `[Unreleased]` assertion | PASS — all three required strings found |
+| `node pforge-mcp/server.mjs --check` | PASS — 106 tools registered; generated artifacts current |
+| `node scripts/generate-capabilities-doc.mjs --check` | PASS — `docs/capabilities.md` is in sync |
+| `node docs/manual/maintain.mjs --audit` | Exit 0; 80 chapters, 1,546 internal links checked. One MEDIUM glossary drift reported: 126 terms differ between `glossary.html` and `assets/glossary-terms.js`; left untouched because both are outside scope. |
+| pforge-master `npx vitest run` | PASS — 59 test files passed, 1 skipped; 922 tests passed, 1 skipped |
+| pforge-mcp `npx vitest run --exclude tests/update-guard-cli.test.mjs` | PASS — 458 test files passed, 1 skipped; 8,719 tests passed, 27 skipped |
+
+The pforge-mcp suite excluded only `tests/update-guard-cli.test.mjs`. Issue
+[#321](https://github.com/srnichols/plan-forge/issues/321) records its known
+baseline failure: it expected no update-plan changes but found
+`docs/plans/DEPLOYMENT-ROADMAP.md`.
+
+**Fixture evidence:** both suites passed with the counts above; this is scripted
+test evidence only. **Live-provider evidence:** none was collected for this
+slice. No proposal-validity rate, injection outcome, or live GHCP behaviour is
+claimed.
+
+### Deferred / gaps
+
+- PFORGE-CLAW Slice 29's manual sweep remains deferred to that phase.
+- The `forge_master_ask` `TOOL_METADATA` example still omits `proposeActions`,
+  `proposedActions`, `proposedActionsMessage`, `untrustedContext`, and
+  `contextBlocks`. Slice 10's allowed files excluded
+  `pforge-mcp/capabilities/tool-metadata.mjs`; the gap is tracked as
+  [#326](https://github.com/srnichols/plan-forge/issues/326). The example is
+  not complete.

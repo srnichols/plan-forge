@@ -21,7 +21,8 @@ const REPO_ROOT = resolve(MCP_ROOT, "..");
 const IS_PLAN_FORGE_REPO = existsSync(join(REPO_ROOT, "presets")) && existsSync(join(MCP_ROOT, "server.mjs"));
 
 const SCANNED_EXTENSIONS = new Set([".mjs", ".js", ".cjs", ".json", ".ps1", ".psm1", ".sh"]);
-const SKIPPED_DIRS = new Set(["node_modules", "tests", "__tests__", ".forge"]);
+// obj/: .NET restore output (project.assets.json records the machine's NuGet paths), never source.
+const SKIPPED_DIRS = new Set(["node_modules", "tests", "__tests__", ".forge", "obj"]);
 const SKIPPED_FILES = new Set([".vitest-results.json", "package-lock.json"]);
 
 // A quoted string that points into a personal checkout: a drive path through

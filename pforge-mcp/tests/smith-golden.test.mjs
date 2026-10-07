@@ -51,6 +51,8 @@ function stripAnsi(s) {
 function normalize(text) {
   return (
     stripAnsi(text)
+      // CRLF first: several rules below end in "\n", and pwsh on Windows emits "\r\n".
+      .replace(/\r\n/g, "\n")
       // Semver-like version strings: v1.2.3, v1.2.3.windows.4, 1.2.3.windows.4
       .replace(/v\d+\.\d+\.\d+(?:\.\S*)?/g, "v<version>")
       .replace(/\b\d+\.\d+\.\d+(?:\.\S+)?\b/g, "<version>")
@@ -91,6 +93,10 @@ function normalize(text) {
       // Present only once the testbed's pforge-mcp ships install-consistency.mjs (3.31.2+).
       .replace(/[^\S\n]*(?:✅|Γ£à)[^\n]*Plan Forge v<version> installed \(packages agree\)\n/g, "")
       .replace(/\b\d+ MCP tools\b/g, "<n> MCP tools")
+      // Generated capability surface: cli-schema.json is gitignored and appears only once
+      // the testbed's MCP server has started, so smith passes or warns depending on that.
+      .replace(/[^\S\n]*(?:✅|Γ£à)[^\n]*tools\.json \+ cli-schema\.json[^\n]*\n/g, "  <capability-surface>\n")
+      .replace(/[^\S\n]*(?:⚠️|⚠|ΓÜá∩╕Å)[^\n]*tools\.json or cli-schema\.json missing\n[^\S\n]+FIX:[^\n]*\n/g, "  <capability-surface>\n")
       // Run history: every plan run on the testbed changes these numbers, and the
       // quorum line appears only after a quorum run.
       .replace(/Cost: \$\d+(?:\.\d+)?/g, "Cost: $<n>")
@@ -102,6 +108,7 @@ function normalize(text) {
       .replace(/[^\S\n]*(?:✅|Γ£à)[^\n]*Quorum history present[^\n]*\n/g, "")
       // Results summary: pass/fail/warning counts vary with environment state
       .replace(/Results:\s+\d+ passed\s*\|\s*\d+ failed\s*\|\s*\d+ warnings/g, "Results: <summary>")
+      .replace(/\b\d+ warning\(s\) — review/g, "<n> warning(s) — review")
       // "Fix the N issue(s) above" count varies
       .replace(/Fix the \d+ issue\(s\) above[^\n]*/g, "Fix <n> issue(s) above")
       // Box-drawing characters (U+2500–U+257F) and CP850 mojibake variants
@@ -111,8 +118,7 @@ function normalize(text) {
       .replace(/[─━╔╗╚╝║═╠╣╦╩╬┌┐└┘├┤┬┴┼│\u2500-\u257F]+/g, "<box>")
       // Windows-1252 / CP850 mojibake of the same box chars (ΓòöΓòÉΓòÉ… etc.)
       .replace(/[\u0393\u00F2\u00F6\u00DC\u00C9\u00C7\u00C6\u00C8\u00C4\u00C3\u00BF]+/g, "<box>")
-      // Trailing whitespace and CRLF → LF
-      .replace(/\r\n/g, "\n")
+      // Trailing whitespace
       .replace(/ +\n/g, "\n")
   );
 }

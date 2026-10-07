@@ -43,6 +43,7 @@ import { buildObserverPrompt } from "./observer-prompt.mjs";
 import { OBSERVER_NARRATION_EVENT_TYPE } from "./observer-loop.mjs";
 import { buildUsage, invalidInputResult, normalizeTurnInput } from "./turn-input.mjs";
 import { buildShapingSections, enforceMaxChars, hasNewTurnFields, buildTruncated } from "./response-shaping.mjs";
+import { appendContextBlocks } from "./context-blocks.mjs";
 import { applyUntrustedPolicy } from "./untrusted.mjs";
 import { buildProposalInstruction, finalizeProposals, emptyProposals } from "./proposed-actions.mjs";
 
@@ -244,7 +245,7 @@ function loadSystemPrompt(contextBlock, principlesBlock, lane = null, shaping = 
     const withOverlay = overlay ? `${raw}\n\n${overlay}` : raw;
     return _appendShapingSection(withOverlay
       .replace("{principles_block}", principlesBlock || UNIVERSAL_BASELINE)
-      .replace("{context_block}", contextBlock || "(no context available)"), extra);
+      .replace("{context_block}", () => contextBlock || "(no context available)"), extra);
   } catch {
     const overlayBlock = overlay ? `\n\n${overlay}` : "";
     const fallback = `You are Forge-Master, a Plan Forge reasoning assistant.${overlayBlock}\n\n## Philosophy & Guardrails\n\n${principlesBlock || UNIVERSAL_BASELINE}\n\n## Current Context\n\n${contextBlock || "(no context available)"}`;
@@ -948,9 +949,10 @@ async function _runPreparedTurn({ input, deps, config, effectiveSessionId, isEph
 
   // ── 2. Build context block (memory, recall, patterns, prior turns) ─
   const { contextBlock, relatedTurns } = await _buildContextBlock({ effectiveSessionId, isEphemeral, classification, message, cwd, priorTurns, deps });
+  const ctxWithOperator = appendContextBlocks(contextBlock, input.contextBlocks);
 
   // ── 3. Load system prompt (with lane overlay) ─────────────────────
-  let systemPrompt = loadSystemPrompt(contextBlock, _loadPrinciplesBlock(cwd), classification?.lane, { caller: input.caller, responseFormat: input.responseFormat });
+  let systemPrompt = loadSystemPrompt(ctxWithOperator, _loadPrinciplesBlock(cwd), classification?.lane, { caller: input.caller, responseFormat: input.responseFormat });
   if (input.proposeActions === true) systemPrompt += `\n\n${buildProposalInstruction({ role: input.caller?.role })}`;
 
   // ── 4. Resolve allowlist + tool schemas ───────────────────────────

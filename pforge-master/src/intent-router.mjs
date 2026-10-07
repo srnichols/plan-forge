@@ -7,7 +7,7 @@
  *
  * Lanes:
  *   - build              — user wants to create/add/change a feature → Crucible
- *   - operational        — status, cost, health, memory, watcher queries
+ *   - operational        — status, cost, health, memory, watcher, queue, held-job, worker, and lane queries
  *   - troubleshoot       — bug, incident, failure investigation
  *   - offtopic           — everything outside Plan Forge's domain
  *   - advisory           — architectural guidance and principled recommendations
@@ -125,6 +125,11 @@ const KEYWORD_RULES = [
   { pattern: /\b(tweak|refactor|rework|redesign|overhaul)\b/i, lane: LANES.BUILD, weight: 1 },
 
   // ── Operational signals ──
+  // Phase-61 Slice 5 — claw-ops
+  { pattern: /\b(queue[sd]?\b(?!\s+(it|as))|backlog|held\s+jobs?|jobs?\s+(held|on\s+hold|waiting|pending|queued)|on\s+hold|(awaiting|pending|waiting\s+for)\s+approval)/i, lane: LANES.OPERATIONAL, weight: 3 },
+  { pattern: /\b(workers?\s+(busy|idle|free|available|online|offline|pool|status|capacity|slots?|count)|how\s+many\s+workers|which\s+workers)\b/i, lane: LANES.OPERATIONAL, weight: 4 },
+  { pattern: /\b(lanes?\s+(busy|free|open|full|status|capacity|usage|active)|which\s+(execution\s+)?lanes?|lane\s+(budget|limits?))\b/i, lane: LANES.OPERATIONAL, weight: 3 },
+  { pattern: /\b(bot'?s?|forge-?claw|claw)\b.{0,40}\b(queue|jobs?|workers?|lanes?|budget|held)\b/i, lane: LANES.OPERATIONAL, weight: 3 },
   { pattern: /\b(status|progress|how.{0,10}(is|are|was|were)|current state)\b/i, lane: LANES.OPERATIONAL, weight: 2 },
   { pattern: /\b(cost|spend|budget|price|token|tokens|expense|billing)\b/i, lane: LANES.OPERATIONAL, weight: 3 },
   { pattern: /\b(how much did|how much does|how much will|total cost|cost per)\b/i, lane: LANES.OPERATIONAL, weight: 3 },
@@ -369,7 +374,7 @@ const ROUTER_PROMPT = `You are a message classifier for Plan Forge, a software p
 
 Classify the user's message into exactly ONE lane:
 - "build" — the user wants to create, add, implement, or design a new feature, phase, or component
-- "operational" — the user asks about status, cost, health, metrics, memory, watchers, extensions, plans, or runs
+- "operational" — the user asks about status, cost, health, metrics, memory, watchers, extensions, plans, runs, queues, held jobs, worker pools, execution lanes, or budget
 - "troubleshoot" — the user asks about bugs, failures, errors, incidents, regressions, or root causes
 - "advisory" — the user asks for architectural guidance, a recommendation, or a principled decision ("should I", "what's the right approach", "recommend a path")
 - "tempering" — the user requests a tempering gate evaluation, enforcement check, or tempering run

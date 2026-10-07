@@ -1,0 +1,237 @@
+import { spawn } from "node:child_process";
+import { existsSync } from "node:fs";
+import {
+  lstat,
+  mkdir,
+  readFile,
+  realpath,
+  readdir,
+  writeFile,
+} from "node:fs/promises";
+import path from "node:path";
+import { ClawError } from "../errors.mjs";
+import { TERMINAL } from "./model.mjs";
+
+const MAX_OUTPUT = 64 * 1024;
+const IDENTIFIER = /^[A-Za-z0-9][A-Za-z0-9._-]{0,80}$/;
+const NPM_ENTRY_CANDIDATES = [
+  path.join(path.dirname(process.execPath), "node_modules", "npm", "bin"),
+  path.join(path.dirname(path.dirname(process.execPath)), "lib", "node_modules", "npm", "bin"),
+];
+
+function appendBounded(current, chunk, limit) {
+  const remaining = limit;
+  if (remaining <= 0) return current;
+  let bytes = Buffer.from(chunk).subarray(0, remaining);
+  while (bytes.length && Buffer.byteLength(bytes.toString("utf8")) > remaining) {
+    bytes = bytes.subarray(0, bytes.length - 1);
+  }
+  return current + bytes.toString("utf8");
+}
+
+export function resolveCommand(cmd) {
+  if (typeof cmd !== "string" || !cmd) throw new ClawError("COMMAND_INVALID");
+  if (/\.(?:cmd|bat)$/i.test(cmd)) throw new ClawError("CMD_SHIM_REFUSED");
+  if (process.platform === "win32" && ["npm", "npx"].includes(cmd.toLowerCase())) {
+    const entry = cmd.toLowerCase() === "npm" ? "npm-cli.js" : "npx-cli.js";
+    const executable = NPM_ENTRY_CANDIDATES
+      .map((directory) => path.join(directory, entry))
+      .find((candidate) => existsSync(candidate));
+    if (!executable) throw new ClawError("NPM_CLI_NOT_FOUND");
+    return [process.execPath, executable];
+  }
+  return [cmd];
+}
+
+export function resolvePforgeCommand({ config = {}, cwd, platform = process.platform } = {}) {
+  const configured = config?.runtimes?.pforgeCommand ?? "auto";
+  if (configured === "auto") {
+    if (typeof cwd !== "string" || !cwd) throw new ClawError("PFORGE_CWD_REQUIRED");
+    return platform === "win32"
+      ? ["pwsh", "-NoProfile", "-File", path.join(cwd, "pforge.ps1")]
+      : ["bash", path.join(cwd, "pforge.sh")];
+  }
+  if (!Array.isArray(configured) || configured.length === 0
+    || configured.some((part) => typeof part !== "string" || !part)) {
+    throw new ClawError("PFORGE_COMMAND_INVALID");
+  }
+  if (/\.(?:cmd|bat)$/i.test(configured[0])) throw new ClawError("CMD_SHIM_REFUSED");
+  return [...configured];
+}
+
+export function run(cmd, args = [], options = {}) {
+  const { cwd, env, signal, timeoutMs, maxOutput = MAX_OUTPUT } = options;
+  return new Promise((resolve) => {
+    let child;
+    let stdout = "";
+    let stderr = "";
+    let settled = false;
+    let timer;
+    const finish = (result) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      signal?.removeEventListener("abort", onAbort);
+      resolve(result);
+    };
+    const onAbort = () => child?.kill();
+    try {
+      const [executable, ...prefix] = resolveCommand(cmd);
+      child = spawn(executable, [...prefix, ...args], {
+        cwd,
+        env,
+        signal,
+        shell: false,
+        windowsHide: true,
+      });
+      child.stdout?.on("data", (chunk) => {
+        stdout = appendBounded(stdout, chunk, maxOutput - Buffer.byteLength(stdout) - Buffer.byteLength(stderr));
+      });
+      child.stderr?.on("data", (chunk) => {
+        stderr = appendBounded(stderr, chunk, maxOutput - Buffer.byteLength(stdout) - Buffer.byteLength(stderr));
+      });
+      child.once("error", (error) => finish({ code: -1, stdout, stderr, error }));
+      child.once("close", (code) => finish({ code: code ?? -1, stdout, stderr }));
+      if (Number.isFinite(timeoutMs) && timeoutMs > 0) {
+        timer = setTimeout(() => {
+          child.kill();
+          finish({ code: -1, stdout, stderr, error: new ClawError("COMMAND_TIMEOUT") });
+        }, timeoutMs);
+        timer.unref?.();
+      }
+      signal?.addEventListener("abort", onAbort, { once: true });
+    } catch (error) {
+      finish({ code: -1, stdout, stderr, error });
+    }
+  });
+}
+
+export async function realpathNearest(inputPath) {
+  let candidate = path.resolve(inputPath);
+  const missing = [];
+  while (true) {
+    try {
+      const resolved = await realpath(candidate);
+      return path.join(resolved, ...missing.reverse());
+    } catch (error) {
+      if (error.code !== "ENOENT" && error.code !== "ENOTDIR") throw error;
+      const parent = path.dirname(candidate);
+      if (parent === candidate) throw error;
+      missing.push(path.basename(candidate));
+      candidate = parent;
+    }
+  }
+}
+
+export async function isInside(root, target) {
+  const pathApi = process.platform === "win32" ? path.win32 : path;
+  const resolvedRoot = await realpathNearest(root);
+  const resolvedTarget = await realpathNearest(target);
+  const relative = pathApi.relative(resolvedRoot, resolvedTarget);
+  const normalized = process.platform === "win32" ? relative.toLowerCase() : relative;
+  return normalized === "" || (!normalized.startsWith(`..${pathApi.sep}`)
+    && normalized !== ".." && !pathApi.isAbsolute(relative));
+}
+
+export async function assertInside(root, target, code = "PATH_OUTSIDE_ROOT") {
+  if (!(await isInside(root, target))) throw new ClawError(code);
+  return target;
+}
+
+async function gitTopLevel(repoPath, runner) {
+  const result = await runner("git", ["-C", repoPath, "rev-parse", "--show-toplevel"]);
+  if (result.code !== 0) throw new ClawError("GIT_REPO_INVALID");
+  return realpath(result.stdout.trim());
+}
+
+export async function addWorktree({ home, project, job, runner = run } = {}) {
+  if (!IDENTIFIER.test(project?.id ?? "") || !IDENTIFIER.test(job?.id ?? "")) {
+    throw new ClawError("WORKTREE_BAD_IDENTIFIER");
+  }
+  const root = path.join(home, "worktrees", project.id);
+  const target = path.join(root, job.id);
+  await assertInside(root, target);
+  const operatorRoot = await gitTopLevel(project.repo.path, runner);
+  const canonicalTarget = await realpathNearest(target);
+  if (await isInside(operatorRoot, canonicalTarget)) throw new ClawError("WORKTREE_IN_OPERATOR_TREE");
+  await mkdir(root, { recursive: true });
+  try {
+    await lstat(target);
+    throw new ClawError("WORKTREE_EXISTS");
+  } catch (error) {
+    if (error instanceof ClawError) throw error;
+    if (error.code !== "ENOENT") throw error;
+  }
+  const branch = `claw/${job.id}`;
+  for (const ref of [`refs/heads/${branch}`, `refs/remotes/origin/${branch}`]) {
+    const branchExists = await runner("git", ["-C", project.repo.path, "show-ref", "--verify", "--quiet", ref]);
+    if (branchExists.code === 0) throw new ClawError("WORKTREE_EXISTS");
+  }
+  const result = await runner("git", [
+    "-C", project.repo.path, "worktree", "add", "-b", branch, target,
+    project.repo.baseBranch ?? "main",
+  ]);
+  if (result.code !== 0) throw new ClawError("WORKTREE_ADD_FAILED");
+  await writeFile(path.join(target, ".claw-job.json"), JSON.stringify({
+    jobId: job.id,
+    projectId: project.id,
+    createdAt: new Date().toISOString(),
+  }));
+  return { path: target, branch };
+}
+
+export async function removeWorktree({ repoPath, path: worktreePath, runner = run } = {}) {
+  try {
+    const result = await runner("git", ["-C", repoPath, "worktree", "remove", "--force", worktreePath]);
+    return result.code === 0
+      ? { ok: true }
+      : { ok: false, code: "WORKTREE_REMOVE_FAILED" };
+  } catch {
+    return { ok: false, code: "WORKTREE_REMOVE_FAILED" };
+  }
+}
+
+export async function sweepWorktrees({ home, store, now = Date.now, keepHours = 24, runner = run } = {}) {
+  const worktreesRoot = path.join(home, "worktrees");
+  let projects;
+  try {
+    projects = await readdir(worktreesRoot, { withFileTypes: true });
+  } catch (error) {
+    if (error.code === "ENOENT") return [];
+    throw error;
+  }
+  const jobs = store.fold("jobs", (all, event) => {
+    if (event.kind === "job.created") all[event.job.id] = { ...event.job, finishedAt: null };
+    if (event.kind === "job.transition" && all[event.jobId]) {
+      all[event.jobId] = {
+        ...all[event.jobId],
+        state: event.to,
+        finishedAt: TERMINAL.includes(event.to) ? event.ts ?? all[event.jobId].finishedAt : null,
+      };
+    }
+    return all;
+  }, {});
+  const removed = [];
+  for (const projectEntry of projects) {
+    if (!projectEntry.isDirectory()) continue;
+    const projectRoot = path.join(worktreesRoot, projectEntry.name);
+    for (const jobEntry of await readdir(projectRoot, { withFileTypes: true })) {
+      if (!jobEntry.isDirectory()) continue;
+      const candidate = path.join(projectRoot, jobEntry.name);
+      let marker;
+      try {
+        marker = JSON.parse(await readFile(path.join(candidate, ".claw-job.json"), "utf8"));
+      } catch (error) {
+        if (error.code === "ENOENT" || error instanceof SyntaxError) continue;
+        throw error;
+      }
+      const job = jobs[marker.jobId];
+      if (!job || !["failed", "cancelled"].includes(job.state) || !TERMINAL.includes(job.state)) continue;
+      const finishedAt = Date.parse(job.finishedAt ?? "");
+      if (!Number.isFinite(finishedAt) || now() - finishedAt < keepHours * 60 * 60 * 1000) continue;
+      const removedResult = await removeWorktree({ repoPath: candidate, path: candidate, runner });
+      if (removedResult.ok) removed.push(candidate);
+    }
+  }
+  return removed;
+}

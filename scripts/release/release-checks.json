@@ -76,6 +76,16 @@
     { "label": "pforge.sh self-update succeeds when already current (3.31.3)", "path": "pforge.sh", "contains": "$dry_run || _PF_UPDATE_APPLIED=1" },
     { "label": "update planner removes files only when asked (3.31.4)", "path": "pforge-mcp/update-plan.mjs", "contains": "includeRemovals = false" },
     { "label": "pforge.ps1 asks the planner for removals (3.31.4)", "path": "pforge.ps1", "contains": "\"--json\", \"--removals\")" },
-    { "label": "pforge.sh asks the planner for removals (3.31.4)", "path": "pforge.sh", "contains": "--json --removals)" }
+    { "label": "pforge.sh asks the planner for removals (3.31.4)", "path": "pforge.sh", "contains": "--json --removals)" },
+    { "label": "forge_analyze rejects a source file without quorum (#319)", "path": "pforge-mcp/server/tool-handlers/orch.mjs", "contains": "analyzeFileModeNeedsQuorumMessage(args.plan)" },
+    { "label": "analyze-mode.mjs delivered (#319)", "path": "pforge-mcp/analyze-mode.mjs" },
+    { "label": "pforge.ps1 analyze skips build and dependency dirs (#319)", "path": "pforge.ps1", "contains": "function Get-AnalyzeFiles" },
+    { "label": "pforge.sh analyze prunes build and dependency dirs (#319)", "path": "pforge.sh", "contains": "The directory list mirrors $script:AnalyzeSkipDirs in pforge.ps1." },
+    { "label": "dotnet-test-command.mjs delivered (#318)", "path": "pforge-mcp/dotnet-test-command.mjs" },
+    { "label": "impact gate builds .NET commands per runner (#318)", "path": "pforge-mcp/orchestrator/impact-gate.mjs", "contains": "buildDotnetTestCommand({ cwd, project, classes })" },
+    { "label": ".NET tempering adapter reads the MTP summary (#318)", "path": "pforge-mcp/tempering/adapters/dotnet.mjs", "contains": "export function parseDotnetSummary" },
+    { "label": "analysis-cli.mjs delivered (3.32.0)", "path": "pforge-mcp/orchestrator/analysis-cli.mjs" },
+    { "label": "pforge.ps1 has analyze --quorum and diagnose (3.32.0)", "path": "pforge.ps1", "contains": "function Invoke-Diagnose" },
+    { "label": "pforge.sh has analyze --quorum and diagnose (3.32.0)", "path": "pforge.sh", "contains": "cmd_diagnose()" }
   ]
 }

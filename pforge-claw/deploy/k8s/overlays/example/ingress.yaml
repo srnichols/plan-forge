@@ -1,0 +1,30 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: pforge-claw-dispatcher
+  namespace: pforge-claw
+spec:
+  ingressClassName: <ingress-class>
+  tls:
+    - hosts:
+        - pforge-claw.example
+      secretName: pforge-claw-tls
+  rules:
+    - host: pforge-claw.example
+      http:
+        paths:
+          - path: /telegram/webhook
+            pathType: Prefix
+            backend:
+              service:
+                name: pforge-claw-dispatcher
+                port:
+                  number: 3190
+          - path: /claw/workers
+            pathType: Prefix
+            backend:
+              service:
+                name: pforge-claw-dispatcher
+                port:
+                  number: 3190
+  # Configure the ingress controller's WebSocket idle timeout for long worker sessions.

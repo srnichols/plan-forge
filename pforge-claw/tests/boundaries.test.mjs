@@ -41,6 +41,11 @@ const ALLOWED_HOSTS = new Set([
   "copilot-telemetry.githubusercontent.com",
   "objects.githubusercontent.com",
 ]);
+const K8S_API_GROUPS = new Set([
+  "rbac.authorization.k8s.io",
+  "networking.k8s.io",
+  "kustomize.config.k8s.io",
+]);
 const COPILOT_HOST_SUFFIX = "githubcopilot.com";
 const IMPORT_SPECIFIER = /\b(?:from\s*|import\s*|import\s*\(\s*|require\s*\(\s*)["']([^"']+)["']/g;
 const GITHUB_OWNER_PATTERN = new RegExp(
@@ -111,6 +116,7 @@ function hasUnapprovedHost(text) {
     const host = match[1].toLowerCase();
     if (!TLD_PATTERN.test(host)) continue;
     if (ALLOWED_HOSTS.has(host)) continue;
+    if (K8S_API_GROUPS.has(host)) continue;
     if (host.endsWith(`.${COPILOT_HOST_SUFFIX}`) || host.endsWith(".example")) continue;
     return true;
   }
@@ -218,6 +224,13 @@ describe("Guard: no operator-specific values", () => {
     }
   });
 
+  it("allows only the exact Kubernetes API group hostnames", () => {
+    for (const host of K8S_API_GROUPS) {
+      expect(hasUnapprovedHost(host), host).toBe(false);
+    }
+    expect(hasUnapprovedHost("extension.rbac.authorization.k8s.io")).toBe(true);
+  });
+
   it("contains no operator-specific values", () => {
     for (const detector of detectorSamples) {
       for (const source of sources) {
@@ -281,14 +294,25 @@ describe("CLI dispatch", () => {
     });
   }
 
-  it.each(SUBCOMMANDS)("%s help succeeds and its unimplemented command returns 2", (subcommand) => {
+  it.each(SUBCOMMANDS)("%s help succeeds and dispatches its current command contract", (subcommand) => {
     const help = runCli(subcommand, "--help");
     expect(help.status, help.stderr).toBe(0);
     expect(help.stdout).toMatch(new RegExp(`Usage: pforge claw ${subcommand}`));
 
-    const stub = runCli(subcommand);
-    expect(stub.status).toBe(2);
-    expect(stub.stderr).toMatch(/not yet implemented \(Slice \d+\)/);
+    const result = runCli(subcommand);
+    if (subcommand === "init") {
+      expect(result.status).toBe(2);
+      expect(result.stderr).toMatch(new RegExp(`Usage: pforge claw ${subcommand}`));
+    } else if (subcommand === "doctor") {
+      expect(result.status).toBe(1);
+      expect(result.stdout).toContain("Setup status: incomplete");
+    } else if (subcommand === "commands") {
+      expect(result.status).toBe(0);
+      expect(result.stdout).toContain("sinceSlice");
+    } else {
+      expect(result.status).toBe(2);
+      expect(result.stderr).toMatch(/not yet implemented \(Slice \d+\)/);
+    }
   });
 
   it("returns 1 for unknown commands", () => {

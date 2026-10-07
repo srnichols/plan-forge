@@ -234,6 +234,25 @@ describe("preset adapters — parseOutput", () => {
     expect(r).toEqual({ pass: 42, fail: 0, skipped: 1, coverage: null });
   });
 
+  it("dotnet mutation parses the Stryker JSON report", async () => {
+    const mod = await import("../tempering/adapters/dotnet.mjs");
+    const report = {
+      files: {
+        "src/A.cs": { mutants: [{ status: "Killed" }, { status: "Killed" }, { status: "Survived" }, { status: "Ignored" }] },
+        "src/B.cs": { mutants: [{ status: "Timeout" }, { status: "NoCoverage" }, { status: "Killed" }] },
+      },
+    };
+    const r = mod.temperingAdapter.mutation.parseOutput(`Stryker done\n${JSON.stringify(report)}`, "", 0);
+    expect(r).toEqual({ mutationScore: 50, killed: 3, survived: 1, timeout: 1, noCoverage: 1, layers: null });
+  });
+
+  it("dotnet mutation without a report scores a clean exit 100 and a failed exit null", async () => {
+    const mod = await import("../tempering/adapters/dotnet.mjs");
+    expect(mod.temperingAdapter.mutation.parseOutput("no report", "", 0).mutationScore).toBe(100);
+    expect(mod.temperingAdapter.mutation.parseOutput("{ not json", "", 1).mutationScore).toBeNull();
+    expect(mod.temperingAdapter.mutation.parseOutput(JSON.stringify({ files: {} }), "", 1).mutationScore).toBe(0);
+  });
+
   it("python parses pytest summary", async () => {
     const mod = await import("../tempering/adapters/python.mjs");
     const r = mod.temperingAdapter.unit.parseOutput("3 passed, 1 failed, 2 skipped in 0.45s", "", 1);

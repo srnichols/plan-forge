@@ -10,6 +10,9 @@
  *     integration: { supported, cmd, parseOutput(stdout, stderr, exitCode) },
  *   };
  *
+ * An entry may also define `resolveCmd(cwd)` returning the command array for
+ * that project; the runner falls back to `cmd` when it is absent or fails.
+ *
  * The runner never speaks a stack's native test tooling directly — all
  * knowledge of `npx vitest` vs `dotnet test` vs `go test -json` lives in
  * the adapter. New stacks land as one adapter file, not core changes.

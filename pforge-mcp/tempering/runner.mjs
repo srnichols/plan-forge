@@ -205,6 +205,21 @@ function _checkScannerSkipReason(scanner, config, adapter) {
   return null;
 }
 
+/**
+ * The command for this run. An adapter entry may add `resolveCmd(cwd)` when the
+ * right syntax depends on the project (e.g. .NET on Microsoft.Testing.Platform);
+ * a throw or a non-array result falls back to the static `cmd`.
+ */
+function _resolveScannerCmd(entry, cwd) {
+  if (typeof entry.resolveCmd !== "function") return entry.cmd;
+  try {
+    const resolved = entry.resolveCmd(cwd);
+    return Array.isArray(resolved) && resolved.length > 0 ? resolved : entry.cmd;
+  } catch {
+    return entry.cmd;
+  }
+}
+
 function _computeScannerVerdict(proc, parsed) {
   if (proc.timedOut) return "budget-exceeded";
   if (proc.error && proc.exitCode === -1) return "error";
@@ -238,7 +253,8 @@ export async function runScanner(ctx) {
   const budgetKey = SCANNER_BUDGET_KEYS[scanner] || `${scanner}MaxMs`;
   const budgetMs = (config.runtimeBudgets && config.runtimeBudgets[budgetKey]) || DEFAULT_UNIT_BUDGET_MS;
 
-  const proc = await runSubprocess(adapter[scanner].cmd, { cwd, budgetMs, spawn: spawnFn });
+  const cmd = _resolveScannerCmd(adapter[scanner], cwd);
+  const proc = await runSubprocess(cmd, { cwd, budgetMs, spawn: spawnFn });
 
   let parsed = { pass: 0, fail: 0, skipped: 0, coverage: null };
   try {
@@ -250,7 +266,7 @@ export async function runScanner(ctx) {
   return {
     ...base,
     completedAt: new Date(now()).toISOString(),
-    cmd: adapter[scanner].cmd,
+    cmd,
     exitCode: proc.exitCode,
     timedOut: proc.timedOut,
     error: proc.error || null,

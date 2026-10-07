@@ -12,7 +12,8 @@
  * runner only accepts --filter-class / --filter-method / --filter-trait / --filter-query,
  * not VSTest --filter expressions. MSTest and NUnit on MTP still accept --filter.
  *
- * A leaf module (fs/path only) shared by the impact gate and forge_fix_proposal.
+ * A leaf module (fs/path only) shared by the impact gate, forge_fix_proposal and
+ * the .NET tempering adapter.
  */
 
 import { readdirSync, readFileSync } from "node:fs";
@@ -94,17 +95,31 @@ function usesXunitV3Filters(cwd, project) {
 }
 
 /**
+ * Which filter syntax `dotnet test` accepts here.
+ *   "vstest"     — VSTest mode: positional project, --filter expressions
+ *   "mtp"        — MTP mode, MSTest/NUnit/mixed: --project, --filter expressions
+ *   "xunit-mtp"  — MTP mode, xUnit v3: --project, --filter-class / --filter-query
+ * @param {{ cwd: string, project?: string|null }} options
+ *   project: test project relative to cwd; null judges every test project under cwd.
+ * @returns {"vstest"|"mtp"|"xunit-mtp"}
+ */
+export function dotnetFilterSyntax({ cwd, project = null }) {
+  if (!usesMtpRunner(cwd)) return "vstest";
+  return usesXunitV3Filters(cwd, project) ? "xunit-mtp" : "mtp";
+}
+
+/**
  * @param {{ cwd: string, project?: string|null, classes: string[] }} options
  *   project: test project relative to cwd; null runs whatever `dotnet test` finds in cwd.
  *   classes: test class names (or name fragments) to run; empty runs everything.
  * @returns {string}
  */
 export function buildDotnetTestCommand({ cwd, project = null, classes }) {
-  const mtp = usesMtpRunner(cwd);
+  const syntax = dotnetFilterSyntax({ cwd, project });
   const parts = ["dotnet test"];
-  if (project) parts.push(mtp ? `--project ${quote(project)}` : quote(project));
+  if (project) parts.push(syntax === "vstest" ? quote(project) : `--project ${quote(project)}`);
   if (classes.length > 0) {
-    if (mtp && usesXunitV3Filters(cwd, project)) {
+    if (syntax === "xunit-mtp") {
       parts.push(...classes.map((c) => `--filter-class ${quote(`*${c}*`)}`));
     } else {
       parts.push(`--filter ${quote(classes.map((c) => `FullyQualifiedName~${c}`).join("|"))}`);

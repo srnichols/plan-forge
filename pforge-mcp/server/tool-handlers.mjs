@@ -6,6 +6,7 @@ import { PROJECT_DIR } from "./state.mjs";
 import { executeTool } from "./tool-handlers/core.mjs";
 import { _CALL_TOOL_NO_MATCH } from "./tool-handlers/shared.mjs";
 import { _callToolHandler_100_forge_tool_profile } from "./tool-handlers/profiles.mjs";
+import { _callToolHandler_101_forge_master_observe } from "./tool-handlers/forge-master-observe.mjs";
 
 const HTTP_UNAUTHORIZED = 401;
 const HTTP_FORBIDDEN = 403;
@@ -319,6 +320,7 @@ const _CALL_TOOL_HANDLERS = [
   _callToolHandler_098_forge_audit_export,
   _callToolHandler_099_forge_master_audit,
   _callToolHandler_100_forge_tool_profile,
+  _callToolHandler_101_forge_master_observe,
 ];
 
 export const callToolRequestHandler = _wrapWithToolSpan(async (request) => {

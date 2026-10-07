@@ -1860,6 +1860,50 @@
       }
     },
     {
+      "name": "forge_master_observe",
+      "description": "Control the Forge-Master observer — a background hub subscriber that batches live Plan Forge events and can narrate notable patterns. status with limit or cursor returns insights with total, limit, cursor, nextCursor, hasMore, truncated, and an optional message. Read-only: cannot invoke write tools or modify project files. Proxied to the Forge-Master studio child so start, stop, and status share one observer and insight ring; when the child is unavailable returns { ok: false, error: 'FORGE_MASTER_UNAVAILABLE', message } (no in-process fallback). Kill switch: PFORGE_FORGE_MASTER_OBSERVE_DISABLE=1.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "action": {
+            "type": "string",
+            "enum": [
+              "start",
+              "stop",
+              "status"
+            ],
+            "description": "start — begin observing hub events; stop — halt the observer; status — return current state."
+          },
+          "sessionId": {
+            "type": "string",
+            "description": "Optional session ID for tracing."
+          },
+          "detach": {
+            "type": "boolean",
+            "description": "If true, observer runs as a detached background process (not yet implemented — reserved for Slice 8)."
+          },
+          "limit": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 25,
+            "default": 10,
+            "description": "Optional insight page size for status (default 10, maximum 25)."
+          },
+          "cursor": {
+            "type": "string",
+            "description": "Optional opaque numeric sequence cursor for the next insight status page."
+          },
+          "path": {
+            "type": "string",
+            "description": "Project directory (default: current)"
+          }
+        },
+        "required": [
+          "action"
+        ]
+      }
+    },
+    {
       "name": "forge_memory_capture",
       "description": "Capture a thought, decision, or lesson into OpenBrain persistent memory. USE FOR: recording architecture decisions, patterns chosen, gotchas discovered, conventions established, or any cross-session knowledge that future AI sessions should know. Requires OpenBrain to be configured in .vscode/mcp.json or .claude/mcp.json.",
       "inputSchema": {

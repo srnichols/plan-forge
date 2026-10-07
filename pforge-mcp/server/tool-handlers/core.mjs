@@ -281,6 +281,7 @@ const _NULL_RETURN_TOOLS = new Set([
   "forge_testbed_happypath",
   "forge_master_ask",
   "forge_master_audit",
+  "forge_master_observe",
   "forge_meta_bug_file",
   "forge_graph_query",
   "forge_patterns_list",

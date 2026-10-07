@@ -164,6 +164,10 @@ const FORGE_MASTER_OBSERVE_TOOL = {
         type: "string",
         description: "Optional opaque numeric sequence cursor for the next insight status page.",
       },
+      path: {
+        type: "string",
+        description: "Project directory (default: current)",
+      },
     },
     required: ["action"],
   },

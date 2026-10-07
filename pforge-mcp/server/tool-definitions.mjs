@@ -1192,6 +1192,46 @@ export const TOOLS = [
     },
   },
   {
+    // Proxied to the long-lived pforge-master studio child, which owns the
+    // observer and its insight ring. Property text matches pforge-master/server.mjs.
+    name: "forge_master_observe",
+    description: "Control the Forge-Master observer — a background hub subscriber that batches live Plan Forge events and can narrate notable patterns. status with limit or cursor returns insights with total, limit, cursor, nextCursor, hasMore, truncated, and an optional message. Read-only: cannot invoke write tools or modify project files. Proxied to the Forge-Master studio child so start, stop, and status share one observer and insight ring; when the child is unavailable returns { ok: false, error: 'FORGE_MASTER_UNAVAILABLE', message } (no in-process fallback). Kill switch: PFORGE_FORGE_MASTER_OBSERVE_DISABLE=1.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        action: {
+          type: "string",
+          enum: ["start", "stop", "status"],
+          description: "start — begin observing hub events; stop — halt the observer; status — return current state.",
+        },
+        sessionId: {
+          type: "string",
+          description: "Optional session ID for tracing.",
+        },
+        detach: {
+          type: "boolean",
+          description: "If true, observer runs as a detached background process (not yet implemented — reserved for Slice 8).",
+        },
+        limit: {
+          type: "integer",
+          minimum: 1,
+          maximum: 25,
+          default: 10,
+          description: "Optional insight page size for status (default 10, maximum 25).",
+        },
+        cursor: {
+          type: "string",
+          description: "Optional opaque numeric sequence cursor for the next insight status page.",
+        },
+        path: {
+          type: "string",
+          description: "Project directory (default: current)",
+        },
+      },
+      required: ["action"],
+    },
+  },
+  {
     // Phase-43 — forge_master_audit (CTO-style holistic audit)
     name: "forge_master_audit",
     description: "Run a holistic CTO-style audit of the project. Forge-Master pulls drift, cost, open bugs, watcher alerts, deploy journal, and open Crucible smelts, then returns a structured report with summary, top 3 risks (with evidence), prioritized recommended actions (P0/P1/P2), and a cost note. Read-only. USE FOR: end-of-week health check, end-of-run hook, 'what should I worry about today?'. DO NOT USE FOR: per-slice troubleshooting (use forge_master_ask).",

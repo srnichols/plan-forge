@@ -1,6 +1,7 @@
 import { execSync } from "node:child_process";
 import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync, appendFileSync, watchFile, unwatchFile, statSync, openSync, readSync, closeSync, renameSync, createWriteStream } from "node:fs";
 import { resolve, join, dirname, basename, isAbsolute, extname } from "node:path";
+import { buildDotnetTestCommand } from "../../dotnet-test-command.mjs";
 import { fileURLToPath } from "node:url";
 import { parsePlan, runPlan, detectWorkers, getCostReport, getHealthTrend, analyzeWithQuorum, generateImage, runAnalyze, readForgeJson, readForgeJsonl, appendForgeJsonl, emitToolTelemetry, regressionGuard, runPostSliceHook, resetPostSliceHookFired, runPreAgentHandoffHook, postOpenClawSnapshot, loadOpenClawConfig, loadQuorumConfig, runWatch, runWatchLive, readCrucibleState, readHomeSnapshot, addReviewItem, resolveReviewItem, listReviewItems, readReviewQueueState, maybeAddFixPlanReview, assessQuorumViability, detectExecutionRuntime, PROPOSED_FIX_DIR, detectCostAnomaly, computeMedian, spawnWorker } from "../../orchestrator.mjs";
 import { recall as brainRecall, getReviewerCalibration, federationReadTrajectories, loadFederationConfig, validateFederationConfig, TRAJECTORY_FEDERATION_LIMIT, readHallmark, listHallmarks, validateHallmarkId, HallmarkError } from "../../brain.mjs";
@@ -1659,22 +1660,17 @@ function _th_054_collectIncidentCodeSnippets(cwd, incident, affectedFiles) {
   return codeSnippets;
 }
 
+/** Class-name fragments for the incident's files: Services/Invoice.cs -> "Invoice". */
+function _054_incidentTestClasses(affectedFiles) {
+  return affectedFiles
+    .map((file) => basename(file, extname(file)).replace(/\.(cs|fs|vb)$/, ""))
+    .filter((name) => name.length > 0);
+}
+
 function _th_054_resolveIncidentGate(cwd, affectedFiles) {
-  let gateCmd = null;
   const hasCsproj = existsSync(resolve(cwd, "*.csproj")) || readdirSync(cwd).some((file) => file.endsWith(".csproj") || file.endsWith(".sln"));
   const hasPkgJson = existsSync(resolve(cwd, "package.json"));
-  if (hasCsproj) {
-    gateCmd = "dotnet test";
-    if (affectedFiles.length > 0) {
-      const testFilters = affectedFiles
-        .map((file) => basename(file, extname(file)).replace(/\.(cs|fs|vb)$/, ""))
-        .filter((name) => name.length > 0);
-      if (testFilters.length > 0) {
-        gateCmd = `dotnet test --filter "${testFilters.map((name) => `FullyQualifiedName~${name}`).join("|")}"`;
-      }
-    }
-    return gateCmd;
-  }
+  if (hasCsproj) return buildDotnetTestCommand({ cwd, classes: _054_incidentTestClasses(affectedFiles) });
   if (hasPkgJson) return "npm test";
   return "pforge regression-guard";
 }
@@ -2145,14 +2141,7 @@ function _054_forge_fix_proposal_collectIncidentSnippets(cwd, incident, affected
 
 function _054_forge_fix_proposal_getIncidentGateCommand(cwd, affectedFiles) {
   const hasCsproj = existsSync(resolve(cwd, "*.csproj")) || readdirSync(cwd).some((file) => file.endsWith(".csproj") || file.endsWith(".sln"));
-  if (hasCsproj) {
-    const testFilters = affectedFiles
-      .map((file) => basename(file, extname(file)).replace(/\.(cs|fs|vb)$/, ""))
-      .filter((name) => name.length > 0);
-    return testFilters.length > 0
-      ? `dotnet test --filter "${testFilters.map((name) => `FullyQualifiedName~${name}`).join("|")}"`
-      : "dotnet test";
-  }
+  if (hasCsproj) return buildDotnetTestCommand({ cwd, classes: _054_incidentTestClasses(affectedFiles) });
   return existsSync(resolve(cwd, "package.json")) ? "npm test" : "pforge regression-guard";
 }
 

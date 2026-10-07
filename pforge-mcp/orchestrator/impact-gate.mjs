@@ -12,7 +12,8 @@
  *      test_foo.py, foo_test.go, FooTests.cs, foo_spec.rb)
  *   3. tests in the Lattice blast radius, when an index exists
  *
- * Runners: vitest or jest (from package.json), pytest, go test, dotnet test,
+ * Runners: vitest or jest (from package.json), pytest, go test, dotnet test
+ * (VSTest or Microsoft.Testing.Platform syntax — see dotnet-test-command.mjs),
  * or `.forge.json` impactGate.command with a {files} placeholder.
  */
 
@@ -22,6 +23,7 @@ import { basename, extname, join, posix, resolve } from "node:path";
 import { computeBlastRadius } from "../forge-tools/regression-guard.mjs";
 import { runGate } from "./gate-runner.mjs";
 import { isRunnableTestFile, isTestFile } from "../test-files.mjs";
+import { buildDotnetTestCommand } from "../dotnet-test-command.mjs";
 
 export { isRunnableTestFile, isTestFile };
 
@@ -171,8 +173,7 @@ function dotnetCommands(cwd, tests) {
     if (!byProject.has(proj)) byProject.set(proj, []);
     byProject.get(proj).push(basename(t, extname(t)));
   }
-  return [...byProject].map(([proj, classes]) =>
-    `dotnet test ${quote(proj)} --filter "${classes.map((c) => `FullyQualifiedName~${c}`).join("|")}"`);
+  return [...byProject].map(([project, classes]) => buildDotnetTestCommand({ cwd, project, classes }));
 }
 
 const EXT_GROUPS = Object.freeze({ ".py": "py", ".go": "go", ".cs": "cs" });

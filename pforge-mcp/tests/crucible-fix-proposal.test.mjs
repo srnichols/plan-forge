@@ -85,19 +85,18 @@ describe("forge_fix_proposal — Crucible handler branches (Slice 04.1)", () => 
   });
 
   it("handler picks stalled-in-progress smelts before orphans", () => {
-    // The Crucible branch (anchored by its `Phase CRUCIBLE-04 — Crucible-aware
-    // fix proposals` comment) calls _th_054_findStalledCrucibleTarget (which
-    // internally checks `staleInProgress`) before falling back to orphan
-    // handoffs (`orphanHandoffs`).  After Phase-43 D2 extraction the
-    // staleInProgress check lives in the extracted helper rather than inline.
-    const blockStart = serverSrc.indexOf("Phase CRUCIBLE-04 — Crucible-aware fix proposals");
+    // _054_forge_fix_proposal_pickCrucibleTarget tries an explicit smeltId, then
+    // the stalled-smelt helper (which checks `staleInProgress`), and only then
+    // falls back to orphan handoffs (`orphanHandoffs`).
+    const blockStart = serverSrc.indexOf("function _054_forge_fix_proposal_pickCrucibleTarget(");
     expect(blockStart).toBeGreaterThan(-1);
-    const block = serverSrc.slice(blockStart, blockStart + 4000);
-    const stalledIdx = block.indexOf("_th_054_findStalledCrucibleTarget");
+    const block = serverSrc.slice(blockStart, serverSrc.indexOf("\n}\n", blockStart));
+    const stalledIdx = block.indexOf("_054_forge_fix_proposal_pickStalledCrucibleTarget");
     const orphanIdx = block.indexOf("orphanHandoffs");
     expect(stalledIdx).toBeGreaterThan(-1);
     expect(orphanIdx).toBeGreaterThan(-1);
     expect(stalledIdx).toBeLessThan(orphanIdx);
+    expect(serverSrc).toMatch(/function _054_forge_fix_proposal_pickStalledCrucibleTarget\([^)]*\) \{\s*if \(!\(crucible\.staleInProgress > 0\)\)/);
   });
 
   it("fixId for Crucible is namespaced to prevent collision with drift/secret IDs", () => {

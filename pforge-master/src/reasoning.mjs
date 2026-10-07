@@ -43,6 +43,7 @@ import { buildObserverPrompt } from "./observer-prompt.mjs";
 import { OBSERVER_NARRATION_EVENT_TYPE } from "./observer-loop.mjs";
 import { buildUsage, invalidInputResult, normalizeTurnInput } from "./turn-input.mjs";
 import { buildShapingSections, enforceMaxChars, hasNewTurnFields, buildTruncated } from "./response-shaping.mjs";
+import { applyUntrustedPolicy } from "./untrusted.mjs";
 
 // ─── Recall-eligible lanes ────────────────────────────────────────────
 
@@ -950,11 +951,12 @@ async function _runPreparedTurn({ input, deps, config, effectiveSessionId, isEph
   const systemPrompt = loadSystemPrompt(contextBlock, _loadPrinciplesBlock(cwd), classification?.lane, { caller: input.caller, responseFormat: input.responseFormat });
 
   // ── 4. Resolve allowlist + tool schemas ───────────────────────────
-  const allowlist = deps.resolvedAllowlist ?? resolveAllowlist({ toolMetadata: deps.toolMetadata || {}, discoverExtensionTools: config.discoverExtensionTools });
+  const turn = applyUntrustedPolicy({ message, untrustedContext: input.untrustedContext, allowlist: deps.resolvedAllowlist ?? resolveAllowlist({ toolMetadata: deps.toolMetadata || {}, discoverExtensionTools: config.discoverExtensionTools }), maxToolCalls: Math.min(input.maxToolCalls ?? config.maxToolCalls, ABSOLUTE_CEILING) });
+  const { allowlist, maxToolCalls: effectiveMaxToolCalls } = turn;
   const toolSchemas = buildToolSchemas(allowlist);
 
   // ── 4a. Cross-run watcher pre-fetch (operational lane parity) ─────
-  await _preFetchCrossRunContext({ classification, message, cwd, allowlist, deps });
+  if (!turn.untrusted) await _preFetchCrossRunContext({ classification, message, cwd, allowlist, deps });
 
   // ── 5. Resolve provider + API key ─────────────────────────────────
   const provider = await _resolveProvider(config, deps);
@@ -964,14 +966,13 @@ async function _runPreparedTurn({ input, deps, config, effectiveSessionId, isEph
   const apiKey = _resolveApiKey(config, deps, provider.PROVIDER_NAME);
 
   // ── 6a. Proactive planner + executor ──────────────────────────────
-  const plannerOut = await _runPlannerPhase({ provider, currentModel, apiKey, message, classification, allowlist, cwd, deps, systemPrompt });
-  const effectiveMaxToolCalls = Math.min(input.maxToolCalls ?? config.maxToolCalls, ABSOLUTE_CEILING);
+  const plannerOut = await _runPlannerPhase({ provider, currentModel, apiKey, message, classification, allowlist, cwd, deps: turn.untrusted ? { ...deps, skipPlanner: true } : deps, systemPrompt });
 
   // ── 6b. Quorum advisory fan-out ───────────────────────────────────
   const quorumOut = await _runQuorumAdvisory({ deps, classification, message, systemPrompt, autoEscalated: autoEscalation.autoEscalated, autoToTier: autoEscalation.autoToTier });
 
   // ── 7. Tool-use loop ──────────────────────────────────────────────
-  const conversationMessages = _buildConversationMessages({ systemPrompt, message, plannerSynthesis: plannerOut.plannerSynthesis });
+  const conversationMessages = _buildConversationMessages({ systemPrompt, message: turn.userMessage, plannerSynthesis: plannerOut.plannerSynthesis });
   const telemetry = _turnTelemetrySeed(plannerOut, quorumOut);
   const errorContext = { effectiveSessionId, requestedTier, autoEscalation, classification, relatedTurns, provider: provider.PROVIDER_NAME };
   const { loopResult, earlyReturn } = await _runReactiveLoop({

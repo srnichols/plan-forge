@@ -5,7 +5,8 @@ export default Object.freeze({
   name: "new", aliases: [], args: "", summary: "Start a fresh Forge-Master conversation in this topic.",
   details: "Start a fresh Forge-Master conversation in this topic.",
   examples: ["/new", "/new"],
-  roles: [...ROLES], scope: "project", mutating: false,
+  // D8: viewers are limited to ask/help/status.
+  roles: ROLES.filter((role) => role !== "viewer"), scope: "project", mutating: false,
   available: true, sinceSlice: 6, group: "Ask & memory",
   async handle(context, args) {
     if (!this?.service) throw new ClawError("SERVICE_UNAVAILABLE");

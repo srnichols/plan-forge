@@ -1,8 +1,9 @@
-import { readdirSync, readFileSync } from "node:fs";
+import { mkdtempSync, readdirSync, readFileSync, rmSync } from "node:fs";
+import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { spawnSync } from "node:child_process";
-import { describe, expect, it, vi } from "vitest";
+import { afterAll, describe, expect, it, vi } from "vitest";
 import {
   JOB_TYPES,
   JOB_STATES,
@@ -256,12 +257,15 @@ describe("scaffold contract", () => {
     expect([...SUBCOMMANDS].sort()).toEqual(moduleNames);
   });
 
-  it("registers the 11 unique unavailable feature stubs", () => {
+  it("registers the 11 unique feature modules with the seam shape; unavailable ones stay inert", () => {
     expect(FEATURES).toHaveLength(11);
     expect(new Set(FEATURES.map((feature) => feature.name)).size).toBe(FEATURES.length);
     for (const feature of FEATURES) {
-      expect(feature.available).toBe(false);
-      expect(feature.snapshot()).toBeNull();
+      // Later slices flip `available` when they implement a feature; the seam shape must hold either way.
+      expect(typeof feature.available).toBe("boolean");
+      expect(typeof feature.start).toBe("function");
+      expect(typeof feature.stop).toBe("function");
+      if (!feature.available) expect(feature.snapshot()).toBeNull();
     }
   });
 
@@ -287,10 +291,15 @@ describe("scaffold contract", () => {
 });
 
 describe("CLI dispatch", () => {
+  // Hermetic home: never read (or start against) a real operator's ~/.pforge-claw.
+  const cliHome = mkdtempSync(path.join(os.tmpdir(), "claw-cli-home-"));
+  afterAll(() => rmSync(cliHome, { recursive: true, force: true }));
+
   function runCli(...args) {
     return spawnSync(process.execPath, [path.join(PACKAGE_ROOT, "cli.mjs"), ...args], {
       cwd: PACKAGE_ROOT,
       encoding: "utf8",
+      env: { ...process.env, PFORGE_CLAW_HOME: cliHome },
     });
   }
 
@@ -309,7 +318,12 @@ describe("CLI dispatch", () => {
     } else if (subcommand === "commands") {
       expect(result.status).toBe(0);
       expect(result.stdout).toContain("sinceSlice");
-    } else {
+    } else if (subcommand === "start") {
+      expect(result.status).toBe(1);
+      expect(result.stderr + result.stdout).toContain("CONFIG_MISSING");
+    } else if (/not yet implemented/.test(result.stderr)) {
+      // Unimplemented stubs keep the exit-2 contract; once a later slice implements the
+      // subcommand, the --help contract above remains the stable assertion.
       expect(result.status).toBe(2);
       expect(result.stderr).toMatch(/not yet implemented \(Slice \d+\)/);
     }

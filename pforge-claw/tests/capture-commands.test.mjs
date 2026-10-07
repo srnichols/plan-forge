@@ -276,7 +276,7 @@ describe("memory and idea capture service", () => {
   it("registers bugs with legal evidence, handles duplicate and infra outcomes", async () => {
     const store = await makeStore();
     const { service, mcp } = makeContext(store, {
-      outcome: { structuredContent: { bugId: "BUG-12", issueUrl: "https://example.invalid/12" } },
+      outcome: { structuredContent: { bugId: "BUG-12", issueUrl: "https://example.com/12" } },
     });
     const result = await service.bug(input("Login fails after retry"));
     expect(mcp.call).toHaveBeenCalledWith("project-1", "forge_bug_register", {
@@ -289,7 +289,7 @@ describe("memory and idea capture service", () => {
       },
     });
     expect(result[0].text).toContain("BUG-12");
-    expect(result[0].text).toContain("https://example.invalid/12");
+    expect(result[0].text).toContain("https://example.com/12");
 
     const duplicateStore = await makeStore();
     const { service: duplicate } = makeContext(duplicateStore, {

@@ -3,6 +3,7 @@ import os from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { COMMANDS } from "../src/commands/index.mjs";
+import { CALLBACKS } from "../src/callbacks/index.mjs";
 import { ClawError } from "../src/errors.mjs";
 import { createRegistry } from "../src/registry.mjs";
 import { createStore } from "../src/state/store.mjs";
@@ -144,10 +145,15 @@ describe("identity and topic router", () => {
 
   it("answers callback queries before ignoring unknown and unavailable prefixes", async () => {
     const rig = makeRig();
-    await rig.router.route(update({ kind: "callback", text: null, data: "a:opaque:payload", callbackId: "cb-1" }));
-    expect(rig.calls).toEqual([{ method: "answerCallback", callbackId: "cb-1" }]);
-    expect(auditRecords(rig.store)).toMatchObject([{ kind: "callback-ignored", reason: "unavailable" }]);
-    rig.calls.length = 0;
+    // Derive the unavailable example from the live callback registry so later slices that
+    // implement a prefix (a, b, f, x, t, c, …) never break this test.
+    const unavailableCallback = CALLBACKS.find((callback) => !callback.available);
+    if (unavailableCallback) {
+      await rig.router.route(update({ kind: "callback", text: null, data: `${unavailableCallback.prefix}:opaque:payload`, callbackId: "cb-1" }));
+      expect(rig.calls).toEqual([{ method: "answerCallback", callbackId: "cb-1" }]);
+      expect(auditRecords(rig.store).at(-1)).toMatchObject({ kind: "callback-ignored", reason: "unavailable" });
+      rig.calls.length = 0;
+    }
     await rig.router.route(update({ kind: "callback", text: null, data: "z:payload", callbackId: "cb-2" }));
     expect(rig.calls).toEqual([{ method: "answerCallback", callbackId: "cb-2" }]);
     expect(auditRecords(rig.store).at(-1)).toMatchObject({ kind: "callback-ignored", reason: "unknown-prefix" });

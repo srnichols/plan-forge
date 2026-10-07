@@ -77,9 +77,8 @@ describe("help rendering and menu wiring", () => {
     const hidden = renderCommandHelp(hiddenMetadata, { role, scope, commands: registry });
     expect(hidden).toContain("Unknown command");
     expect(hidden).not.toContain(hiddenMetadata.details);
-    const suggestion = suggest(target.name, visibleCommands({ role, scope, commands: registry }));
-    if (suggestion) expect(hidden).toContain(`Did you mean /${suggestion}?`);
-    else expect(hidden).not.toContain("Did you mean");
+    const suggestion = suggest(target.name, visibleCommands({ role, scope, commands: registry })) ?? "help";
+    expect(hidden).toContain(`Did you mean /${suggestion}?`);
     for (const command of visibleCommands({ role: "owner", scope: "project", commands: registry })) {
       const metadata = toMetadata(command);
       expect(renderCommandHelp(metadata, { role: "owner", scope: "project", commands: registry })).toContain(metadata.details);

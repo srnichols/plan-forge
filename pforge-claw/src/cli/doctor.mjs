@@ -4,6 +4,8 @@ import { parseArgs } from "node:util";
 import { loadConfig, requiredSecretNames, resolveHome, validateConfig } from "../config.mjs";
 import { createSecrets, checkSecretsFilePermissions } from "../secrets.mjs";
 import { isGitRepo, resolveMcpLaunch, validateProjects } from "../registry.mjs";
+import { runFeatureDoctorChecks } from "../doctor-checks.mjs";
+import { FEATURES } from "../features/index.mjs";
 
 const MIN_NODE = [22, 12, 0];
 const USAGE = "Usage: pforge claw doctor [--json] [--home <dir>]";
@@ -174,6 +176,7 @@ export async function runDoctor({
   isGitRepo: checkGit = isGitRepo,
   runIcacls,
   readFile,
+  features = FEATURES,
 } = {}) {
   const checks = [];
   const version = parseVersion(nodeVersion);
@@ -188,6 +191,7 @@ export async function runDoctor({
   await appendMcpChecks(config, checks, { env, platform, which, readFile });
   const redact = await appendSecretsChecks(config, checks, { home, env, platform, runIcacls });
   await appendToolChecks(config, checks, { env, platform, which, redact });
+  if (config) checks.push(...await runFeatureDoctorChecks({ features, ctx: { config, live: false } }));
   for (const check of checks) {
     for (const key of ["id", "code", "message", "hint"]) check[key] = redact(check[key]);
   }

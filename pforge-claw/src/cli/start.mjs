@@ -89,6 +89,12 @@ async function run(argv = []) {
     };
     app = createApp(ctx);
     await app.start();
+    // Startup self-check: surface feature warnings (observer down, memory unreachable, …) in the dispatcher log.
+    void app.doctor().then((results) => {
+      for (const check of results) {
+        if (check.status === "warn" || check.status === "fail") logger.warn(`doctor ${check.id}: ${check.message}`, { code: check.code });
+      }
+    });
     await new Promise((resolve) => {
       let stopping = false;
       const shutdown = async () => {

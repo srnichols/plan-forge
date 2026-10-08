@@ -1,3 +1,4 @@
+import { runFeatureDoctorChecks } from "./doctor-checks.mjs";
 import { FEATURES } from "./features/index.mjs";
 
 export function createApp(ctx, { features = FEATURES } = {}) {
@@ -59,5 +60,10 @@ export function createApp(ctx, { features = FEATURES } = {}) {
     return stopPromise;
   }
 
-  return { start, stop };
+  /** Live feature self-checks against the started features (never throws). */
+  function doctor() {
+    return runFeatureDoctorChecks({ features: started, ctx: { ...featureContext, live: true } });
+  }
+
+  return { start, stop, doctor };
 }

@@ -241,6 +241,13 @@ function snapshot(ctx = {}) {
 }
 
 async function doctorChecks(ctx = {}) {
+  if (!ctx.live && !client) {
+    return [{
+      name: "memory",
+      status: "skip",
+      detail: "Memory reachability (project MCP and direct OpenBrain) is checked live when the dispatcher starts (pforge claw start).",
+    }];
+  }
   const checks = [];
   const activeClient = client;
   const activeContext = context ?? ctx;

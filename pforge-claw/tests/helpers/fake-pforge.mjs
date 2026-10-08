@@ -87,6 +87,53 @@ async function runPlan(args) {
   return 0;
 }
 
+async function fixtureProject() {
+  const root = process.env.PFORGE_CLAW_FIXTURE_ROOT;
+  const cwd = process.cwd();
+  const relative = root ? path.relative(path.resolve(root), path.resolve(cwd)) : "..";
+  if (!root || relative === ".." || relative.startsWith(`..${path.sep}`) || path.isAbsolute(relative)) {
+    throw new Error("FAKE_PFORGE_OUTSIDE_FIXTURE");
+  }
+  try {
+    await readFile(path.join(cwd, ".vscode", "mcp.json"), "utf8");
+  } catch {
+    throw new Error("FAKE_PFORGE_FIXTURE_INVALID");
+  }
+  return cwd;
+}
+
+async function writeFixtureArtifact(name, record) {
+  const cwd = await fixtureProject();
+  const artifactPath = path.join(cwd, ".forge", "e2e", name);
+  await mkdir(path.dirname(artifactPath), { recursive: true });
+  await writeFile(artifactPath, `${JSON.stringify(record)}\n`);
+}
+
+async function handleCommand(command, args) {
+  if (command === "run-plan" || command === "run") return runPlan(args);
+  if (command === "bootstrap") {
+    await writeFixtureArtifact("bootstrap.json", { ok: true, args });
+    process.stdout.write(`${JSON.stringify({ type: "bootstrapped" })}\n`);
+    return 0;
+  }
+  if (command === "resume") {
+    await writeFixtureArtifact("resume.json", { ok: true, runId: args[0] ?? null });
+    process.stdout.write(`${JSON.stringify({ type: "resumed", runId: args[0] ?? null })}\n`);
+    return 0;
+  }
+  if (command === "abort") {
+    await writeFixtureArtifact("abort.json", { ok: true, runId: args[0] ?? null });
+    process.stdout.write(`${JSON.stringify({ type: "aborted", runId: args[0] ?? null })}\n`);
+    return 0;
+  }
+  if (command === "memory" && args[0] === "drain") {
+    await writeFixtureArtifact("memory-drain.json", { ok: true });
+    process.stdout.write(`${JSON.stringify({ type: "memory-drained" })}\n`);
+    return 0;
+  }
+  return 2;
+}
+
 export async function createFakeGh({ logPath, directory } = {}) {
   const targetDir = directory ?? await mkdtemp(path.join(os.tmpdir(), "claw-fake-gh-"));
   await mkdir(targetDir, { recursive: true });
@@ -109,9 +156,8 @@ if (args[0] === "pr" && args[1] === "create") process.stdout.write(${JSON.string
 
 async function main() {
   const [command, ...args] = process.argv.slice(2);
-  if (command !== "run-plan") return 2;
   try {
-    return await runPlan(args);
+    return await handleCommand(command, args);
   } catch (error) {
     process.stderr.write(`${error.code ?? "FAKE_PFORGE_FAILED"}\n`);
     return 1;

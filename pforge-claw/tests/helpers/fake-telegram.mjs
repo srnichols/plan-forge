@@ -81,7 +81,9 @@ export async function startFakeTelegram() {
       return;
     }
     if (method === "getMe") {
-      sendJson(response, 200, { ok: true, result: { id: 9, is_bot: true, username: "fake_bot" } });
+      sendJson(response, 200, { ok: true, result: {
+        id: 9, is_bot: true, username: "fake_bot", can_read_all_group_messages: true,
+      } });
       return;
     }
     if (method === "sendMessage") {
@@ -89,6 +91,8 @@ export async function startFakeTelegram() {
         message_id: nextMessageId++,
         chat: { id: args.chat_id },
         text: args.text,
+        ...(args.message_thread_id === undefined ? {} : { message_thread_id: args.message_thread_id }),
+        ...(args.reply_markup === undefined ? {} : { reply_markup: args.reply_markup }),
       } });
       return;
     }
@@ -186,9 +190,13 @@ export async function startFakeTelegram() {
     } });
   }
 
-  function failNext(method, options) {
+  function failNext(method, options = 500) {
     if (!failures.has(method)) failures.set(method, []);
-    failures.get(method).push(options);
+    failures.get(method).push(typeof options === "number"
+      ? { status: options }
+      : typeof options === "string"
+      ? { status: Number(options) || 500, body: { ok: false, error_code: options, description: options } }
+      : options);
   }
 
   function addFile(fileId, bytes, filePath = `documents/${fileId}.bin`) {
@@ -196,14 +204,43 @@ export async function startFakeTelegram() {
     files.set(fileId, { bytes: data, filePath });
   }
 
-  async function waitForCall(method, { count = 1, timeoutMs = 3000 } = {}) {
+  async function waitForCall(method, predicate = () => true, timeoutMs = 3000) {
+    if (typeof predicate !== "function") {
+      const options = predicate ?? {};
+      predicate = () => true;
+      timeoutMs = options.timeoutMs ?? timeoutMs;
+    }
     const until = Date.now() + timeoutMs;
     while (Date.now() <= until) {
-      const matches = calls.filter((call) => call.method === method);
-      if (matches.length >= count) return matches[count - 1];
+      const match = calls.find((call) => call.method === method && predicate(call.args, call));
+      if (match) return match;
       await new Promise((resolve) => setTimeout(resolve, 5));
     }
     throw new Error(`Timed out waiting for fake Telegram method ${method}`);
+  }
+
+  function edits(chatId, messageId) {
+    return calls.filter(({ method, args }) => method === "editMessageText"
+      && (chatId === undefined || String(args.chat_id) === String(chatId))
+      && (messageId === undefined || String(args.message_id) === String(messageId)));
+  }
+
+  function menus() {
+    return calls.filter(({ method }) => method === "setMyCommands").map(({ args }) => args);
+  }
+
+  function sentTo(chatId) {
+    return calls.filter(({ method, args }) => method === "sendMessage"
+      && String(args.chat_id) === String(chatId));
+  }
+
+  function reset({ preserveUpdateSequence = false } = {}) {
+    calls.length = 0;
+    updates.length = 0;
+    files.clear();
+    failures.clear();
+    if (!preserveUpdateSequence) nextUpdateId = 1;
+    nextMessageId = 1;
   }
 
   async function close() {
@@ -222,6 +259,10 @@ export async function startFakeTelegram() {
     failNext,
     addFile,
     waitForCall,
+    edits,
+    menus,
+    sentTo,
+    reset,
     close,
   };
 }

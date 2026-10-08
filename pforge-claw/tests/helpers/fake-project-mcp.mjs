@@ -5,10 +5,16 @@ import { parseArgs } from "node:util";
 const TOOLS = Object.freeze([
   "forge_master_ask",
   "forge_estimate_quorum",
+  "forge_cost_report",
   "forge_watch_live",
   "forge_abort",
   "forge_search",
   "forge_capabilities",
+  "forge_progress",
+  "forge_digest_inputs",
+  "forge_alerts",
+  "forge_capture",
+  "forge_recall",
 ]);
 let logPath;
 
@@ -29,11 +35,18 @@ function toolResult(name) {
       proposedActions: [{ priority: "P0", kind: "task", args: { description: "Fixture action" } }],
     },
     forge_estimate_quorum: { auto: { estimatedCostUSD: 0 }, power: { estimatedCostUSD: 0 }, speed: { estimatedCostUSD: 0 }, false: { estimatedCostUSD: 0 } },
+    forge_cost_report: { totalCostUSD: 0, runs: [] },
     forge_watch_live: { state: "idle", active: false },
     forge_abort: { ok: true, aborted: false },
     forge_search: { hits: [], total: 0, message: "No fixture matches." },
     forge_capabilities: { tools: TOOLS },
+    forge_progress: { state: "idle", progress: 0 },
+    forge_digest_inputs: { jobs: [], alerts: [], captured: [] },
+    forge_alerts: { alerts: [], total: 0, message: "No fixture alerts." },
+    forge_capture: { ok: true, id: "fixture-capture-1" },
+    forge_recall: { hits: [], total: 0, message: "No fixture memories." },
   };
+  if (!Object.hasOwn(outputs, name)) throw new Error(`Unexpected fake MCP tool call: ${name}`);
   return outputs[name];
 }
 
@@ -64,10 +77,8 @@ async function respond(message) {
   if (method === "tools/call") {
     const name = params.name;
     if (logPath) await appendFile(logPath, `${JSON.stringify({ name, arguments: params.arguments ?? {} })}\n`);
-    const unknown = !TOOLS.includes(name);
-    const result = unknown
-      ? { isError: true, content: [{ type: "text", text: "UNEXPECTED_TOOL" }] }
-      : { content: [{ type: "text", text: JSON.stringify(toolResult(name)) }] };
+    if (!TOOLS.includes(name)) throw new Error(`Unexpected fake MCP tool call: ${name}`);
+    const result = { content: [{ type: "text", text: JSON.stringify(toolResult(name)) }] };
     process.stdout.write(`${JSON.stringify({ jsonrpc: "2.0", id, result })}\n`);
     return;
   }
@@ -92,6 +103,7 @@ process.stdin.on("data", (chunk) => {
     void respond(JSON.parse(line)).catch((error) => {
       process.stderr.write(`${error.code ?? "FAKE_MCP_FAILED"}\n`);
       process.exitCode = 1;
+      process.stdin.destroy();
     });
   }
 });

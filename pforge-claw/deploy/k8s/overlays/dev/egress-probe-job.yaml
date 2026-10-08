@@ -1,0 +1,20 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: pforge-claw-egress-probe
+spec:
+  ttlSecondsAfterFinished: 30
+  backoffLimit: 0
+  template:
+    metadata:
+      labels:
+        app: pforge-claw-egress-probe
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: probe
+          image: curlimages/curl:8.12.1
+          command:
+            - sh
+            - -ec
+            - "curl -fsS --connect-timeout 5 --max-time 10 https://api.github.com/ >/dev/null; address=$(getent hosts example.com); address=${address%% *}; test -n \"$address\"; if curl -kfsS --resolve \"example.com:443:$address\" --connect-timeout 5 --max-time 10 https://example.com/ >/dev/null; then echo \"non-allowlisted egress unexpectedly succeeded\" >&2; exit 1; fi; echo \"non-allowlisted egress denied after DNS resolution\""

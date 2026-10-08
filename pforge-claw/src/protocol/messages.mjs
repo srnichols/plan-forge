@@ -25,6 +25,7 @@ const exact = (object, required, optional = []) => isObject(object)
   && required.every((key) => Object.hasOwn(object, key))
   && Object.keys(object).every((key) => required.includes(key) || optional.includes(key));
 const stringArray = (value) => Array.isArray(value) && value.every(isString);
+const isIdentifier = (value) => typeof value === "string" && /^[A-Za-z0-9][A-Za-z0-9._-]{0,80}$/.test(value);
 
 function validateCapabilities(value) {
   return exact(value, ["os", "arch", "macos", "toolchains", "projects"])
@@ -42,6 +43,8 @@ function validateEvent(value) {
 const validators = {
   hello: (m) => (exact(m, ["v", "t", "mode", "workerId", "laneId", "capabilities"])
     && m.mode === "auth" && isString(m.workerId) && isString(m.laneId) && validateCapabilities(m.capabilities))
+    || (exact(m, ["v", "t", "mode", "laneId", "jobId"])
+      && m.mode === "job" && isIdentifier(m.laneId) && isIdentifier(m.jobId))
     || (exact(m, ["v", "t", "mode", "laneId", "codeId", "pub"])
       && m.mode === "enroll" && isString(m.laneId) && /^[0-9a-f]{8}$/.test(m.codeId) && isString(m.pub)),
   challenge: (m) => exact(m, ["v", "t", "nonce"]) && isHex64(m.nonce),
@@ -53,13 +56,14 @@ const validators = {
     || (exact(m, ["v", "t", "workerId", "pub", "mac"])
       && isString(m.workerId) && isString(m.pub) && isHex64(m.mac)),
   lease: (m) => {
-    if (!exact(m, ["v", "t", "leaseId", "attempt", "kind", "expiresAt"], ["job", "request"])
+    if (!exact(m, ["v", "t", "leaseId", "attempt", "kind", "expiresAt"], ["job", "request", "grant"])
       || !isString(m.leaseId) || !isPositiveInt(m.attempt) || !LEASE_KINDS.includes(m.kind)
       || !Number.isFinite(m.expiresAt)) return false;
     return m.kind === "job"
       ? Object.hasOwn(m, "job") && !Object.hasOwn(m, "request") && isObject(m.job)
+        && (m.grant === undefined || isObject(m.grant))
       : Object.hasOwn(m, "request") && !Object.hasOwn(m, "job") && isObject(m.request)
-        && isString(m.request.tool) && isObject(m.request.args);
+        && !Object.hasOwn(m, "grant") && isString(m.request.tool) && isObject(m.request.args);
   },
   ack: (m) => exact(m, ["v", "t", "leaseId", "attempt"])
     && isString(m.leaseId) && isPositiveInt(m.attempt),
@@ -91,7 +95,9 @@ export function validateMessage(message) {
 
 export function encode(message) {
   validateMessage(message);
-  return JSON.stringify(message);
+  const encoded = JSON.stringify(message);
+  if (Buffer.byteLength(encoded) > MAX_FRAME_BYTES) throw new ClawError("PROTOCOL_FRAME_TOO_LARGE");
+  return encoded;
 }
 
 export function decode(raw, { isBinary = false } = {}) {

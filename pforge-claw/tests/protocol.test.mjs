@@ -12,6 +12,7 @@ import { decode, encode, MAX_FRAME_BYTES, message } from "../src/protocol/messag
 import { createWorkerRegistry } from "../src/protocol/worker-registry.mjs";
 import { createWorkerServer } from "../src/protocol/ws-server.mjs";
 import { createHttpServer } from "../src/http.mjs";
+import { buildLeaseGrant, signGrant, verifyGrant } from "../src/protocol/lease-grant.mjs";
 
 const temps = [];
 const insecureLanUrl = "ws://" + "10." + "0.0.5";
@@ -300,5 +301,63 @@ describe("worker WebSocket handshake", () => {
     const client = await connectClient(`ws://127.0.0.1:${port}/claw/workers`);
     client.send(JSON.stringify({ v: 2, t: "hello" }));
     expect(await closeCode(client)).toBe(4426);
+  });
+
+  it("refuses job-mode hello authentication on a non-k8s lane", async () => {
+    const url = await serverFor({}, {}, {});
+    const client = await connectClient(url);
+    const incoming = [];
+    client.on("message", (raw) => {
+      const packet = decode(raw);
+      incoming.push(packet);
+      if (packet.t === "challenge") client.send(encode(message("auth", {
+        workerId: "job:j1", mac: mac("fixture", packet.nonce, "job:j1"),
+      })));
+    });
+    const closed = closeCode(client);
+    client.send(encode(message("hello", { mode: "job", laneId: "remote", jobId: "j1" })));
+    expect(await closed).toBe(4401);
+    expect(incoming.at(-1)).toMatchObject({ reason: "WORKER_JOB_MODE_DENIED" });
+  });
+});
+
+describe("job-scope lease boundaries", () => {
+  it("job-scoped workers are never given read leases", () => {
+    const sent = [];
+    const registry = createWorkerRegistry({ now: () => 0 });
+    registry.registerPending("pods", "j1", { deadlineMs: 60_000 });
+    registry.connect("job:j1", { laneId: "pods", jobScope: { laneId: "pods", jobId: "j1" }, send: (packet) => sent.push(packet) });
+    registry.enqueue("pods", { kind: "read", request: { tool: "claw.bootstrap.copySet", args: {} } });
+    registry.enqueue("pods", { kind: "job", job: { id: "j2", projectId: "p1" } });
+    expect(sent).toEqual([]);
+    registry.close();
+  });
+  it("lease grants are signed per subject on each reconnect", () => {
+    const sent = [];
+    const key = "fixture-subject-key";
+    const job = { id: "j1", projectId: "p1", type: "skill", mutating: false };
+    const grant = buildLeaseGrant({ leaseJob: job, laneId: "remote", now: 0, proof: { kind: "read-only", ref: null, decidedAt: null } });
+    const registry = createWorkerRegistry({
+      now: () => 0, signLease: ({ worker, grant: unsigned }) => signGrant({ grant: unsigned, subject: worker.id, key }),
+    });
+    registry.connect("w1", { laneId: "remote", capabilities, send: (packet) => sent.push(packet) });
+    registry.enqueue("remote", { kind: "job", job: { ...job, leaseGrant: grant } });
+    registry.connect("w2", { laneId: "remote", capabilities, send: (packet) => sent.push(packet) });
+    registry.disconnect("w1");
+    const leases = sent.filter((packet) => packet.t === "lease");
+    expect(leases.map((lease) => lease.grant.subject)).toEqual(["w1", "w2"]);
+    for (const lease of leases) {
+      expect(lease.job).not.toHaveProperty("leaseGrant");
+      expect(verifyGrant({ grant: lease.grant, job: lease.job, subject: lease.grant.subject, laneId: "remote", key, now: 1 })).toBe(true);
+    }
+    registry.close();
+  });
+  it("bounds outbound frames and rejects a grant on a read lease", () => {
+    expect(() => encode(message("lease", {
+      leaseId: "l1", attempt: 1, kind: "job", expiresAt: 1, job: { prompt: "x".repeat(MAX_FRAME_BYTES) },
+    }))).toThrowError(expect.objectContaining({ code: "PROTOCOL_FRAME_TOO_LARGE" }));
+    expect(() => message("lease", {
+      leaseId: "l1", attempt: 1, kind: "read", expiresAt: 1, request: { tool: "x", args: {} }, grant: {},
+    })).toThrow();
   });
 });

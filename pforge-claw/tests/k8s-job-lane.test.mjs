@@ -8,9 +8,17 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { ClawError } from "../src/errors.mjs";
 import { createK8sClient } from "../src/k8s/api.mjs";
 import { assertLane } from "../src/lanes/lane.mjs";
-import { buildJobSpec, createK8sJobLane, runPodJob } from "../src/lanes/k8s-job-lane.mjs";
+import { buildJobSpec, createK8sJobLane as createLane, runPodJob } from "../src/lanes/k8s-job-lane.mjs";
+import { deriveJobKey } from "../src/protocol/lease-grant.mjs";
 
 const tempDirs = [];
+const jobKey = "b".repeat(64);
+
+function createK8sJobLane(options) {
+  options.registry.registerPending ??= vi.fn();
+  options.registry.revoke ??= vi.fn();
+  return createLane({ jobKeyFor: () => jobKey, canDeriveJobKeys: () => true, ...options });
+}
 
 async function tempDirectory() {
   const dir = await mkdtemp(path.join(os.tmpdir(), "claw-k8s-lane-"));
@@ -54,7 +62,7 @@ function fixtureSpec(overrides = {}) {
   const job = { id: "job-12345678901234567890", projectId: "project-one" };
   const project = { id: "project-one", repo: { remote: "https://example.com/repo.git", baseBranch: "main" } };
   const lane = { id: "jobs", kind: "k8s", k8s: { defaultImage: "example/worker:latest" } };
-  return { job, project, lane, dispatcherUrl: "https://dispatcher.example", ...overrides };
+  return { job, project, lane, jobKey, dispatcherUrl: "https://dispatcher.example", ...overrides };
 }
 
 function appConfig(laneOverrides = {}, projectOverrides = {}) {
@@ -88,6 +96,40 @@ afterEach(async () => {
 });
 
 describe("Kubernetes Job specification", () => {
+  it("lane secret never appears in the Job spec", () => {
+    const laneSecret = "fixture-lane-secret-canary";
+    const derived = deriveJobKey({ laneSecret, laneId: "jobs", jobId: "job-1" });
+    const spec = buildJobSpec(fixtureSpec({ jobKey: derived }));
+    expect(JSON.stringify(spec)).not.toContain(laneSecret);
+    expect(JSON.stringify(spec)).not.toContain("PFORGE_CLAW_WORKER_SECRET");
+    expect(spec.spec.template.spec.containers[0].env.find((entry) => entry.name === "PFORGE_CLAW_JOB_KEY").value).toBe(derived);
+  });
+  it("renders credential-free specs for policy inspection but cannot submit an absent job key", async () => {
+    const spec = buildJobSpec(fixtureSpec({ jobKey: undefined }));
+    expect(spec.spec.template.spec.containers[0].env.some((entry) => entry.name === "PFORGE_CLAW_JOB_KEY")).toBe(false);
+    const api = { createJob: vi.fn(), getJob: vi.fn(), deleteJob: vi.fn(), watchJob: vi.fn() };
+    const lane = createK8sJobLane({
+      id: "jobs", config: appConfig(), api, registry: { enqueue: vi.fn(), cancel: vi.fn() },
+      jobKeyFor: () => undefined,
+    });
+    const events = [];
+    for await (const event of lane.submit({ id: "j1", projectId: "project-one" })) events.push(event);
+    expect(events.at(-1).data).toMatchObject({ status: "failed", error: "K8S_LANE_SECRET_MISSING" });
+    expect(api.createJob).not.toHaveBeenCalled();
+  });
+  it("gives pods job key, lane id and deadline and refuses environment overrides", () => {
+    const spec = buildJobSpec(fixtureSpec());
+    expect(spec.spec.template.spec.containers[0].env).toEqual(expect.arrayContaining([
+      { name: "PFORGE_CLAW_JOB_KEY", value: jobKey },
+      { name: "PFORGE_CLAW_LANE_ID", value: "jobs" },
+      { name: "PFORGE_CLAW_JOB_DEADLINE_SECONDS", value: "3600" },
+    ]));
+    for (const name of ["PFORGE_CLAW_JOB_ID", "PFORGE_CLAW_JOB_KEY", "PFORGE_CLAW_LANE_ID", "PFORGE_CLAW_JOB_DEADLINE_SECONDS", "PFORGE_CLAW_DISPATCHER_URL"]) {
+      expect(() => buildJobSpec(fixtureSpec({
+        lane: { id: "jobs", k8s: { defaultImage: "worker", secrets: { env: { [name]: { name: "fake", key: "fake" } } } } },
+      }))).toThrowError(expect.objectContaining({ code: "LANE_BAD_CONFIG" }));
+    }
+  });
   it("applies security, resource, workspace, command, and secret invariants", () => {
     const spec = buildJobSpec(fixtureSpec({
       job: { id: "a".repeat(90), projectId: "project-one" },
@@ -140,7 +182,7 @@ describe("Kubernetes Job specification", () => {
     expect(container).not.toHaveProperty("args");
     expect(container.env.find((entry) => entry.name === "PFORGE_CLAW_COPILOT_TOKEN")).toBeUndefined();
     expect(spec.apiVersion).toBe("batch/v1");
-    for (const name of ["PFORGE_CLAW_WORKER_SECRET", "PFORGE_CLAW_GH_TOKEN", "OPENAI_API_KEY"]) {
+    for (const name of ["PFORGE_CLAW_GH_TOKEN", "OPENAI_API_KEY"]) {
       expect(container.env.find((entry) => entry.name === name)).toHaveProperty("valueFrom.secretKeyRef");
     }
     expect(container.env.find((entry) => entry.name === "PFORGE_CLAW_DISPATCHER_URL").value)
@@ -164,8 +206,7 @@ describe("Kubernetes Job specification", () => {
     const env = configured.spec.template.spec.containers[0].env;
     expect(env.find((entry) => entry.name === "PFORGE_CLAW_COPILOT_TOKEN"))
       .toMatchObject({ valueFrom: { secretKeyRef: { name: "copilot-auth", key: "pat" } } });
-    expect(env.find((entry) => entry.name === "PFORGE_CLAW_WORKER_SECRET"))
-      .toMatchObject({ valueFrom: { secretKeyRef: { name: "pforge-claw-worker", key: "secret" } } });
+    expect(env.find((entry) => entry.name === "PFORGE_CLAW_WORKER_SECRET")).toBeUndefined();
     let missingImageError;
     try {
       buildJobSpec(fixtureSpec({
@@ -347,6 +388,49 @@ describe("in-cluster Kubernetes API", () => {
 });
 
 describe("Kubernetes Job lane lifecycle", () => {
+  it("deletes an unknown job by its derived name and treats 404 as success", async () => {
+    const deletion = vi.fn(async () => { throw new ClawError("K8S_API", { status: 404 }); });
+    const lane = createK8sJobLane({
+      id: "jobs", config: appConfig(), registry: { enqueue: vi.fn(), cancel: () => ({ ok: false, error: "JOB_UNKNOWN" }) },
+      api: { createJob: vi.fn(), getJob: vi.fn(), watchJob: vi.fn(), deleteJob: deletion },
+    });
+    expect(await lane.cancel("unknown-job")).toMatchObject({ ok: true });
+    expect(deletion).toHaveBeenCalledWith("claw", "pforge-claw-unknown-job");
+  });
+  it("reports a missing lane secret while a provisioned idle lane is healthy", async () => {
+    const options = {
+      id: "jobs", config: appConfig(),
+      registry: { enqueue: vi.fn(), cancel: vi.fn() },
+      api: { createJob: vi.fn(), getJob: vi.fn(), watchJob: vi.fn(), deleteJob: vi.fn() },
+    };
+    const missing = createK8sJobLane({ ...options, canDeriveJobKeys: () => false });
+    expect(missing.health()).toMatchObject({ ok: false, code: "K8S_LANE_SECRET_MISSING" });
+    const events = [];
+    for await (const event of missing.submit({ id: "j1" })) events.push(event);
+    expect(events).toHaveLength(1);
+    expect(events[0].data.error).toBe("K8S_LANE_SECRET_MISSING");
+    expect(createK8sJobLane(options).health().ok).toBe(true);
+  });
+  it("pre-registers job authentication before create and rolls it back when create fails", async () => {
+    const order = [];
+    const registry = {
+      enqueue: vi.fn(), cancel: vi.fn(),
+      registerPending: () => order.push("registered"),
+      revoke: () => order.push("revoked"),
+    };
+    const lane = createK8sJobLane({
+      id: "jobs", config: appConfig(), registry,
+      api: {
+        createJob: async () => { order.push("create"); throw new ClawError("K8S_API"); },
+        deleteJob: vi.fn(), getJob: vi.fn(), watchJob: vi.fn(),
+      },
+    });
+    const events = [];
+    for await (const event of lane.submit({ id: "j1", projectId: "project-one" })) events.push(event);
+    expect(order).toEqual(["registered", "create", "revoked"]);
+    expect(events.filter((event) => event.type === "finished")).toHaveLength(1);
+    expect(registry.enqueue).not.toHaveBeenCalled();
+  });
   it("forwards worker events in order and emits one terminal event", async () => {
     const job = { id: "job-123", projectId: "project-one", type: "task" };
     const registry = {
@@ -655,7 +739,7 @@ describe("pod-side clone and bootstrap", () => {
       config: { bootstrap: { copy: [".forge.json"] }, runtimes: { pforgeCommand: ["pforge"] } },
       requestCopySet: async (files) => {
         expect(files).toEqual([".forge.json"]);
-        return [{ path: ".forge.json", content: "{\"v\":1}" }];
+        return [{ path: ".forge.json", content: Buffer.from("{\"v\":1}").toString("base64") }];
       },
       runner,
       workdir,
@@ -664,11 +748,12 @@ describe("pod-side clone and bootstrap", () => {
     expect(await readFile(path.join(repoDir, ".forge.json"), "utf8")).toBe("{\"v\":1}");
     expect(calls.map(({ command, args }) => [path.basename(command), args.at(-1)])).toEqual([
       ["git", repoDir],
+      ["git", "claw/pod-job"],
       ["node.exe", "ci"],
       ["pforge", "smith"],
     ]);
-    expect(calls[1].args[0]).toContain("npm-cli.js");
-    expect(calls[0].args).toEqual(["clone", "--depth", "1", "--branch", "main", "https://example.com/repo.git", repoDir]);
+    expect(calls[2].args[0]).toContain("npm-cli.js");
+    expect(calls[0].args).toEqual(["clone", "--depth", "1", "--branch", "main", "--", "https://example.com/repo.git", repoDir]);
   });
 
   it.each(["../x", ".forge/secrets.json", "C:\\.forge\\secrets.json"])(
@@ -705,7 +790,7 @@ describe("pod-side clone and bootstrap", () => {
     await expect(runPodJob({
       job: { id: "pod-job" },
       project: { repo: { remote: "https://example.com/repo.git", baseBranch: "main" } },
-      config: { runtimes: { pforgeCommand: ["pforge"] } },
+      config: { bootstrap: { copy: [] }, runtimes: { pforgeCommand: ["pforge"] } },
       requestCopySet: async () => [],
       runner,
       workdir,

@@ -94,6 +94,7 @@ export function createWorkerAgent({
   allowInsecureLan = false, logger = console, WebSocketImpl = WebSocket,
   rand = Math.random, setTimeoutFn = setTimeout, clearTimeoutFn = clearTimeout,
   heartbeatMs = 15_000, maxReplay = 1000, l2 = null,
+  jobScope, verifyLease, afterJob, onLeaseAcked, onPermanentClose,
 } = {}) {
   const l2Options = l2 ? {
     forgeDirFor: l2.forgeDirFor ?? ((job) => path.join(job.worktree ?? process.cwd(), ".forge")),
@@ -104,6 +105,7 @@ export function createWorkerAgent({
     forgeHome: l2.forgeHome,
   } : null;
   const active = new Map();
+  const running = new Set();
   let socket = null;
   let reconnect = null;
   let heartbeatTimer = null;
@@ -113,7 +115,7 @@ export function createWorkerAgent({
   let stopped = false;
 
   function send(packet) {
-    if (socket?.readyState === socket.OPEN) {
+    if (socket && socket.readyState === socket.OPEN) {
       socket.send(encode(packet));
       return true;
     }
@@ -121,6 +123,7 @@ export function createWorkerAgent({
   }
 
   function remember(lease, event) {
+    if (lease.discarded) return;
     lease.replay.push(event);
     if (lease.replay.length > maxReplay) lease.replay.shift();
     if (event.type === "finished") {
@@ -129,6 +132,9 @@ export function createWorkerAgent({
     }
     send(message("event", {
       leaseId: lease.leaseId, attempt: lease.attempt, event,
+    }));
+    if (event.type === "finished") send(message("heartbeat", {
+      ts: Date.now(), leases: [{ leaseId: lease.leaseId, attempt: lease.attempt, lastSeq: event.seq }],
     }));
   }
 
@@ -141,12 +147,34 @@ export function createWorkerAgent({
     clearTimeoutFn(lease.expiryTimer);
     const remaining = Math.max(0, lease.expiresAt - Date.now());
     lease.expiryTimer = setTimeoutFn(() => {
-      if (!lease.completed) {
-        if (lease.kind === "job") void localLane.cancel(lease.job.id);
-        finishLease(lease);
-      }
+      if (!lease.completed && lease.kind === "job") void localLane.cancel(lease.job.id);
+      finishLease(lease);
     }, remaining);
     lease.expiryTimer?.unref?.();
+  }
+
+  function notifyAfterJob(lease) {
+    lease.afterJobPromise = Promise.resolve().then(() => afterJob?.({
+      job: lease.job, event: lease.replay.at(-1),
+    })).catch((error) => logger.error?.("Worker cleanup failed", { code: getCode(error) }));
+  }
+
+  function rejectLease(packet, job, error) {
+    for (const previous of active.values()) {
+      if (previous.job?.id !== job.id) continue;
+      previous.discarded = true;
+      clearTimeoutFn(previous.expiryTimer);
+      active.delete(previous.leaseId);
+      if (!previous.completed) void localLane.cancel(job.id);
+    }
+    const lease = { ...packet, job, replay: [], completed: false, expiryTimer: null };
+    active.set(lease.leaseId, lease);
+    send(message("ack", { leaseId: lease.leaseId, attempt: lease.attempt }));
+    remember(lease, createLaneEvent({
+      jobId: job.id, seq: 1, type: "finished",
+      data: { status: "failed", error: getCode(error) },
+    }));
+    notifyAfterJob(lease);
   }
 
   async function emitL2Finished(lease, event, snap) {
@@ -188,7 +216,10 @@ export function createWorkerAgent({
         jobId: event.jobId,
         seq: (lease.replay.at(-1)?.seq ?? 0) + 1,
         type: "finished",
-        data: { ...event.data, l2: { ok: false, code: getCode(error) } },
+        data: {
+          ...event.data, status: "failed", reason: L2_SYNC_INCOMPLETE,
+          l2: { ok: false, code: getCode(error) },
+        },
       }));
     }
   }
@@ -215,6 +246,7 @@ export function createWorkerAgent({
       remember(lease, event);
     } finally {
       lease.completed = lease.replay.at(-1)?.type === "finished";
+      if (!lease.discarded) notifyAfterJob(lease);
     }
   }
 
@@ -286,6 +318,19 @@ export function createWorkerAgent({
       return;
     }
     if (packet.t === "lease") {
+      if (jobScope && (packet.kind !== "job" || packet.job.id !== jobScope.jobId)) {
+        throw new ClawError("WORKER_JOB_MODE_DENIED");
+      }
+      const leasedJob = packet.kind === "job" ? { ...packet.job, leaseGrant: packet.grant } : null;
+      if (leasedJob) {
+        try {
+          verifyLease?.(leasedJob);
+        } catch (error) {
+          logger.warn?.("Worker lease rejected", { code: getCode(error) });
+          rejectLease(packet, leasedJob, error);
+          return;
+        }
+      }
       const requestId = packet.request?.requestId;
       const existing = [...active.values()].find((item) => (
         packet.kind === "job"
@@ -298,6 +343,7 @@ export function createWorkerAgent({
         existing.leaseId = packet.leaseId;
         existing.attempt = packet.attempt;
         existing.expiresAt = packet.expiresAt;
+        existing.job = leasedJob ?? existing.job;
         active.set(existing.leaseId, existing);
         send(message("ack", { leaseId: existing.leaseId, attempt: existing.attempt }));
         armExpiry(existing);
@@ -310,14 +356,15 @@ export function createWorkerAgent({
       }
       const lease = {
         leaseId: packet.leaseId, attempt: packet.attempt, kind: packet.kind,
-        job: packet.job, request: packet.request, expiresAt: packet.expiresAt,
+        job: leasedJob, request: packet.request, expiresAt: packet.expiresAt,
         replay: [], expiryTimer: null, completed: false, completedSeq: null,
       };
       active.set(lease.leaseId, lease);
       send(message("ack", { leaseId: lease.leaseId, attempt: lease.attempt }));
       armExpiry(lease);
-      if (lease.kind === "job") void runJob(lease);
-      else void runRead(lease);
+      const task = lease.kind === "job" ? runJob(lease) : runRead(lease);
+      running.add(task);
+      void task.finally(() => running.delete(task));
       return;
     }
     if (packet.t === "heartbeat") {
@@ -327,6 +374,12 @@ export function createWorkerAgent({
         if (!lease || lease.attempt !== item.attempt) continue;
         if (lease.completed && item.lastSeq >= lease.completedSeq) {
           finishLease(lease);
+          if (!lease.ackNotified) {
+            lease.ackNotified = true;
+            void Promise.resolve(lease.afterJobPromise).then(() => onLeaseAcked?.({
+              job: lease.job, leaseId: lease.leaseId, attempt: lease.attempt, event: lease.replay.at(-1),
+            })).catch((error) => logger.error?.("Worker acknowledgement hook failed", { code: getCode(error) }));
+          }
           continue;
         }
         lease.expiresAt = Date.now() + leaseDuration;
@@ -362,9 +415,9 @@ export function createWorkerAgent({
       },
       onOpen: (ws) => {
         socket = ws;
-        ws.send(encode(message("hello", {
-          mode: "auth", workerId, laneId, capabilities,
-        })));
+        ws.send(encode(message("hello", jobScope
+          ? { mode: "job", laneId, jobId: jobScope.jobId }
+          : { mode: "auth", workerId, laneId, capabilities })));
         ws.on("message", (raw, isBinary) => {
           try {
             handlePacket(decode(raw, { isBinary }));
@@ -377,6 +430,7 @@ export function createWorkerAgent({
       onPermanentClose: (code) => {
         logger.warn?.("Worker connection permanently rejected", { code });
         stop();
+        onPermanentClose?.(code);
       },
       onError: (code) => logger.warn?.("Worker connection error", { code }),
     });
@@ -392,7 +446,7 @@ export function createWorkerAgent({
       if (lease.kind === "job") void localLane.cancel(lease.job.id);
     }
     active.clear();
-    if (socket?.readyState === socket.OPEN) {
+    if (socket && socket.readyState === socket.OPEN) {
       try {
         socket.send(encode(message("bye", { reason: "SHUTDOWN" })));
       } finally {
@@ -402,7 +456,10 @@ export function createWorkerAgent({
     reconnect?.stop();
   }
 
-  return { start, stop, get activeLeases() { return active.size; } };
+  return {
+    start, stop, drain: () => Promise.allSettled([...running]),
+    get activeLeases() { return active.size; },
+  };
 }
 
 export async function detectCapabilities({ config, laneId, execFileFn = execFileAsync } = {}) {

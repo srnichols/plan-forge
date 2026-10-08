@@ -13,6 +13,7 @@ import { createWorkerAgent, enrollWorker } from "../src/protocol/worker-agent.mj
 import { createWorkerRegistry } from "../src/protocol/worker-registry.mjs";
 import { createWorkerServer } from "../src/protocol/ws-server.mjs";
 import workersFeature from "../src/features/workers.mjs";
+import { buildLanes, createLaneDirectory } from "../src/lanes/directory.mjs";
 
 const directories = [];
 const cleanups = [];
@@ -433,6 +434,31 @@ describe("lease recovery and fencing", () => {
 });
 
 describe("workers feature lifecycle", () => {
+  it("starts for k8s-only configs, exposes registry and registers production lanes with fresh job keys", async () => {
+    const directory = await tempDirectory();
+    let secret = "fixture-first-lane-key";
+    const config = {
+      lanes: [{ id: "pods", kind: "k8s", k8s: { laneSecret: "FIXTURE_KEY" } }],
+      http: { bind: "127.0.0.1", port: 0 },
+      worker: { dispatcherUrl: "wss://fixture.example/claw/workers" },
+    };
+    const context = {
+      home: directory, config, store: { append: () => {}, fold: (_stream, _reducer, initial) => initial },
+      secrets: { get: () => secret }, logger: { warn: () => {} },
+    };
+    await workersFeature.start(context);
+    cleanups.push(() => workersFeature.stop());
+    expect(workersFeature.registry()).not.toBeNull();
+    const first = workersFeature.jobKeyFor("pods", "j1");
+    secret = "fixture-rotated-key";
+    expect(workersFeature.jobKeyFor("pods", "j1")).not.toBe(first);
+    const lanes = buildLanes({ directory: createLaneDirectory(), config });
+    expect(lanes.get("pods").health()).toMatchObject({ ok: true, active: 0 });
+    expect(typeof lanes.get("pods").prepareLease).toBe("function");
+    expect(() => lanes.get("pods").submit({ id: "j1" })).toThrowError(expect.objectContaining({ code: "LEASE_NOT_PREPARED" }));
+    await workersFeature.stop();
+    expect(workersFeature.registry()).toBeNull();
+  });
   it("starts and stops a remote lane without leaving its listener running", async () => {
     const directory = await tempDirectory();
     const entries = [];

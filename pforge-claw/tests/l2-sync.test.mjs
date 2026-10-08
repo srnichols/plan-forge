@@ -31,6 +31,7 @@ import { createEnrollment } from "../src/protocol/enrollment.mjs";
 import { createWorkerRegistry } from "../src/protocol/worker-registry.mjs";
 import { createWorkerServer } from "../src/protocol/ws-server.mjs";
 import { createRemoteLane } from "../src/lanes/remote-lane.mjs";
+import { encode, message } from "../src/protocol/messages.mjs";
 
 const directories = [];
 const cleanups = [];
@@ -372,6 +373,7 @@ describe("L2 synchronization contracts", () => {
 
   it("classifies a K8s deadline during an L2 artifact transfer as incomplete sync", async () => {
     const registry = {
+      registerPending: () => {}, revoke: () => {},
       enqueue: () => ({
         iterator: {
           [Symbol.asyncIterator]() {
@@ -404,6 +406,7 @@ describe("L2 synchronization contracts", () => {
     };
     const lane = createK8sJobLane({
       id: "jobs",
+      jobKeyFor: () => "b".repeat(64), canDeriveJobKeys: () => true,
       config: {
         lanes: [{ id: "jobs", kind: "k8s", k8s: { namespace: "claw" } }],
         projects: [{
@@ -424,6 +427,7 @@ describe("L2 synchronization contracts", () => {
         },
       },
     });
+
     const events = [];
     for await (const event of lane.submit({ id: "job-transfer", projectId: "project-one" })) events.push(event);
     expect(events.at(-1).data).toEqual({ status: "failed", reason: L2_SYNC_INCOMPLETE });
@@ -433,8 +437,70 @@ describe("L2 synchronization contracts", () => {
     });
   });
 
+    describe("worker L2 terminal hooks", () => {
+      function agentFixture({ collect = async () => ({ files: [], jsonl: {}, maps: {} }) } = {}) {
+        vi.useFakeTimers();
+        vi.setSystemTime(0);
+        let socket;
+        const sent = [];
+        const hooks = [];
+        class FakeSocket extends EventEmitter {
+          OPEN = 1;
+          readyState = 1;
+          constructor() { super(); socket = this; }
+          send(raw) { sent.push(JSON.parse(raw)); }
+          close() { this.readyState = 3; }
+        }
+        const acked = vi.fn(() => hooks.push("acked"));
+        const agent = createWorkerAgent({
+          url: "ws://127.0.0.1/claw/workers", workerId: "w1", secret: "fixture",
+          laneId: "remote", capabilities: { os: "linux", arch: "x64", macos: false, toolchains: [], projects: ["p1"] },
+          WebSocketImpl: FakeSocket,
+          localLane: {
+            async *submit(job) {
+              yield { v: 1, jobId: job.id, seq: 1, ts: new Date(0).toISOString(), type: "finished", data: { status: "succeeded" } };
+            },
+            cancel: async () => ({ ok: true }),
+          },
+          l2: { forgeDirFor: () => "/fixture", snapshot: async () => null, collect },
+          afterJob: () => {
+            expect(sent.at(-2).event.type).toBe("finished");
+            hooks.push("after");
+          },
+          onLeaseAcked: acked,
+        });
+        agent.start();
+        cleanups.push(() => agent.stop());
+        socket.emit("open");
+        const receive = (packet) => socket.emit("message", Buffer.from(encode(packet)), false);
+        receive(message("lease", { leaseId: "l1", attempt: 1, kind: "job", expiresAt: 60_000, job: { id: "j1", projectId: "p1" } }));
+        return { receive, sent, hooks, acked };
+      }
+      it("afterJob runs after the delta and finished are emitted and onLeaseAcked fires exactly once", async () => {
+        const fixture = agentFixture();
+        await vi.advanceTimersByTimeAsync(1);
+        const events = fixture.sent.filter((packet) => packet.t === "event").map((packet) => packet.event);
+        expect(events.map((event) => event.type)).toEqual(["artifact", "finished"]);
+        expect(fixture.hooks).toEqual(["after"]);
+        const ack = message("heartbeat", { ts: 1, leases: [{ leaseId: "l1", attempt: 1, lastSeq: 2 }] });
+        fixture.receive(message("heartbeat", { ts: 1, leases: [{ leaseId: "l1", attempt: 2, lastSeq: 2 }] }));
+        expect(fixture.acked).not.toHaveBeenCalled();
+        fixture.receive(ack);
+        fixture.receive(ack);
+        await vi.advanceTimersByTimeAsync(1);
+        expect(fixture.hooks).toEqual(["after", "acked"]);
+        expect(fixture.acked).toHaveBeenCalledOnce();
+      });
+      it("reports collection failure as l2-sync-incomplete, never a success advisory", async () => {
+        const fixture = agentFixture({ collect: async () => { throw new Error("fixture collection failure"); } });
+        await vi.advanceTimersByTimeAsync(1);
+        const terminal = fixture.sent.find((packet) => packet.event?.type === "finished");
+        expect(terminal.event.data).toMatchObject({ status: "failed", reason: "l2-sync-incomplete" });
+      });
+    });
   it("adds the bridge secret only when configured for a pod", () => {
     const fixture = {
+      jobKey: "b".repeat(64),
       job: { id: "job-bridge", projectId: "project-one" },
       project: { id: "project-one", image: "example/worker:latest" },
       lane: {

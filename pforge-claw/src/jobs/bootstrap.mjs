@@ -1,23 +1,89 @@
-import { copyFile, lstat, mkdir, readdir, realpath, symlink } from "node:fs/promises";
+import { copyFile, lstat, mkdir, readFile, readdir, realpath, stat, symlink, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { ClawError } from "../errors.mjs";
-import { isInside, resolveCommand, resolvePforgeCommand, run } from "./worktree.mjs";
+import { isInside, realpathNearest, resolveCommand, resolvePforgeCommand, run } from "./worktree.mjs";
 
 const OUTPUT_LIMIT = 64 * 1024;
 const SECRET_RELATIVE = path.join(".forge", "secrets.json").toLowerCase();
+export const COPYSET_MAX_BYTES = 1024 * 1024;
+export const DEFAULT_COPY_PATHS = Object.freeze([".forge.json", ".forge/fm-prefs.json"]);
 
 function installMode(config) {
   return config?.bootstrap?.install ?? "none";
 }
 
-function validateCopyEntry(entry) {
+export function validateCopyEntry(entry) {
   if (typeof entry !== "string" || !entry || path.isAbsolute(entry)
-    || path.win32.isAbsolute(entry) || entry.split(/[\\/]/).includes("..")) {
+    || path.win32.isAbsolute(entry) || /^[a-z]:/i.test(entry) || entry.split(/[\\/]/).includes("..")) {
     throw new ClawError("BOOTSTRAP_COPY_INVALID");
   }
   const normalizedEntry = entry.replaceAll("\\", "/").split("/").filter((part) => part && part !== ".").join("/").toLowerCase();
   if (normalizedEntry === ".forge/secrets.json") {
     throw new ClawError("BOOTSTRAP_SECRET_COPY_REFUSED");
+  }
+  if (!normalizedEntry) throw new ClawError("BOOTSTRAP_COPY_INVALID");
+  return entry.replaceAll("\\", "/").split("/").filter((part) => part && part !== ".").join("/");
+}
+
+async function copyTarget(repoPath, entry) {
+  const relative = validateCopyEntry(entry);
+  const target = path.resolve(repoPath, ...relative.split("/"));
+  if (!(await isInside(repoPath, target))) throw new ClawError("BOOTSTRAP_COPY_INVALID");
+  const resolved = await realpath(target);
+  validateCopyEntry(path.relative(await realpath(repoPath), resolved));
+  return { relative, target: resolved };
+}
+
+export async function collectCopySet({ repoPath, paths = DEFAULT_COPY_PATHS, maxBytes = COPYSET_MAX_BYTES }) {
+  if (!Array.isArray(paths) || !Number.isSafeInteger(maxBytes) || maxBytes < 0) throw new ClawError("BOOTSTRAP_COPY_INVALID");
+  const files = [];
+  let bytes = 0;
+  for (const entry of paths) {
+    try {
+      const { relative, target } = await copyTarget(repoPath, entry);
+      const metadata = await stat(target);
+      if (!metadata.isFile()) throw new ClawError("BOOTSTRAP_COPY_INVALID");
+      if (bytes + metadata.size > maxBytes) throw new ClawError("CLAW_COPYSET_TOO_LARGE");
+      const content = await readFile(target);
+      bytes += content.length;
+      if (bytes > maxBytes) throw new ClawError("CLAW_COPYSET_TOO_LARGE");
+      files.push({ path: relative, content: content.toString("base64") });
+    } catch (error) {
+      if (error.code === "ENOENT") throw new ClawError("CLAW_COPYSET_MISSING");
+      throw error;
+    }
+  }
+  return files.sort((left, right) => left.path.localeCompare(right.path));
+}
+
+export async function applyCopySet({ repoPath, files, maxBytes = COPYSET_MAX_BYTES }) {
+  if (!Array.isArray(files) || !Number.isSafeInteger(maxBytes) || maxBytes < 0) throw new ClawError("BOOTSTRAP_COPY_INVALID");
+  let bytes = 0;
+  const seen = new Set();
+  const decoded = [];
+  for (const file of files) {
+    const relative = validateCopyEntry(file?.path);
+    if (seen.has(relative) || typeof file.content !== "string") throw new ClawError("BOOTSTRAP_COPY_INVALID");
+    seen.add(relative);
+    const content = Buffer.from(file.content, "base64");
+    if (content.toString("base64") !== file.content) throw new ClawError("BOOTSTRAP_COPY_INVALID");
+    bytes += content.length;
+    if (bytes > maxBytes) throw new ClawError("CLAW_COPYSET_TOO_LARGE");
+    const target = path.resolve(repoPath, ...relative.split("/"));
+    if (!(await isInside(repoPath, target))) throw new ClawError("BOOTSTRAP_COPY_INVALID");
+    validateCopyEntry(path.relative(await realpath(repoPath), await realpathNearest(target)));
+    const metadata = await lstat(target).catch((error) => {
+      if (error.code === "ENOENT") return null;
+      throw error;
+    });
+    if (metadata && !metadata.isFile()) throw new ClawError("BOOTSTRAP_COPY_INVALID");
+    decoded.push({ target, content });
+  }
+  for (const { target, content } of decoded) {
+    await mkdir(path.dirname(target), { recursive: true });
+    if (!(await isInside(repoPath, target))) throw new ClawError("BOOTSTRAP_COPY_INVALID");
+    validateCopyEntry(path.relative(await realpath(repoPath), await realpathNearest(target)));
+    await writeFile(target, content);
   }
 }
 

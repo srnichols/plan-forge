@@ -5,7 +5,7 @@ import { message } from "./messages.mjs";
 function createJob({ jobId, laneId, kind, payload, attempt = 1, maxReplay }) {
   return {
     jobId, laneId, kind, payload, attempt, lastSeq: 0, listeners: new Set(), pending: [],
-    waiters: [], finished: false, maxReplay, usedWorkers: new Set(),
+    waiters: [], finished: false, finishedEmitted: false, maxReplay, usedWorkers: new Set(),
   };
 }
 
@@ -17,7 +17,10 @@ function enqueueEvent(job, event) {
   }
   for (const listener of job.listeners) {
     if (listener.waiters.length) listener.waiters.shift()({ value: event, done: false });
-    else listener.pending.push(event);
+    else {
+      listener.pending.push(event);
+      if (listener.pending.length > job.maxReplay) listener.pending.shift();
+    }
   }
 }
 
@@ -30,12 +33,14 @@ export function createWorkerRegistry({
   maxAttempts = 2,
   maxReplay = 1000,
   onEvent: emitEvent = () => {},
+  signLease,
 } = {}) {
   const workers = new Map();
   const pending = new Map();
   const leases = new Map();
   const recentLeases = new Map();
   const jobs = new Map();
+  const jobScopes = new Map();
   const counters = { staleDropped: 0, duplicatesDropped: 0 };
   let closed = false;
 
@@ -47,8 +52,18 @@ export function createWorkerRegistry({
   function complete(entry, event) {
     if (entry.finished) return;
     entry.finished = true;
-    enqueueEvent(entry, event);
-    for (const waiter of entry.waiters.splice(0)) waiter({ value: undefined, done: true });
+    if (!entry.finishedEmitted) {
+      entry.finishedEmitted = true;
+      enqueueEvent(entry, event);
+    }
+    for (const listener of entry.listeners) {
+      for (const wake of listener.waiters.splice(0)) wake({ value: undefined, done: true });
+    }
+    for (const lease of [...leases.values()]) if (lease.entry === entry) removeLease(lease);
+    revokeScope(entry.jobId);
+    const queue = queueFor(entry.laneId);
+    const index = queue.indexOf(entry);
+    if (index >= 0) queue.splice(index, 1);
     jobs.delete(entry.jobId);
   }
 
@@ -71,6 +86,8 @@ export function createWorkerRegistry({
 
   function eligible(worker, entry) {
     if (worker.laneId !== entry.laneId) return false;
+    if (worker.jobScope) return entry.kind === "job" && entry.jobId === worker.jobScope.jobId
+      && hasActiveJob(entry.laneId, entry.jobId);
     if (entry.kind === "read") return true;
     return worker.capabilities.projects.includes(entry.payload.projectId);
   }
@@ -97,6 +114,21 @@ export function createWorkerRegistry({
   }
 
   function sendLease(worker, entry) {
+    let payload;
+    try {
+      if (entry.kind === "job") {
+        const { leaseGrant, ...job } = entry.payload;
+        payload = { job, ...(signLease ? { grant: signLease({ worker: { ...worker, id: worker.workerId }, grant: leaseGrant }) } : {}) };
+      } else payload = { request: { ...entry.payload, requestId: entry.jobId } };
+    } catch {
+      const event = {
+        v: 1, jobId: entry.jobId, seq: entry.lastSeq + 1, ts: new Date(now()).toISOString(),
+        type: "finished", data: { status: "failed", error: "LEASE_GRANT_UNAVAILABLE" },
+      };
+      emitEvent(event);
+      complete(entry, event);
+      return;
+    }
     entry.usedWorkers.add(worker.workerId);
     const leaseId = randomUUID();
     const lease = {
@@ -108,9 +140,7 @@ export function createWorkerRegistry({
     const fields = {
       leaseId, attempt: lease.attempt, kind: entry.kind,
       expiresAt: now() + leaseMs,
-      ...(entry.kind === "job"
-        ? { job: entry.payload }
-        : { request: { ...entry.payload, requestId: entry.jobId } }),
+      ...payload,
     };
     if (!send(worker, message("lease", fields))) return;
     lease.timer = setTimeoutFn(() => expire(lease), ackMs);
@@ -129,11 +159,14 @@ export function createWorkerRegistry({
         sendLease(readWorker, readEntry);
         continue;
       }
-      if ([...leases.values()].some((lease) => lease.entry.laneId === laneId && lease.entry.kind === "job")) return;
-      const index = queue.findIndex((entry) => entry.kind === "job");
+      const busy = [...leases.values()].some((lease) => lease.entry.laneId === laneId
+        && lease.entry.kind === "job" && !workers.get(lease.workerId)?.jobScope);
+      const index = queue.findIndex((entry) => entry.kind === "job"
+        && [...workers.values()].some((worker) => eligible(worker, entry) && (!busy || worker.jobScope)));
       if (index < 0) return;
       const entry = queue[index];
-      const availableWorkers = [...workers.values()].filter((candidate) => eligible(candidate, entry));
+      const availableWorkers = [...workers.values()].filter((candidate) => eligible(candidate, entry)
+        && (!busy || candidate.jobScope));
       if (availableWorkers.length === 0) return;
       queue.splice(index, 1);
       const worker = availableWorkers.find((candidate) => !entry.usedWorkers.has(candidate.workerId))
@@ -148,6 +181,8 @@ export function createWorkerRegistry({
     const worker = {
       workerId, send: info.send, laneId: info.laneId,
       capabilities: info.capabilities ?? { projects: [] },
+      jobScope: info.jobScope,
+      connection: info.connection,
       lastSeen: now(), leases: new Set(),
     };
     workers.set(workerId, worker);
@@ -242,7 +277,7 @@ export function createWorkerRegistry({
     }
     entry.lastSeq = Math.max(entry.lastSeq, event.seq);
     emitEvent(event);
-    enqueueEvent(entry, event);
+    if (event.type !== "finished") enqueueEvent(entry, event);
     if (event.type === "finished") {
       recentLeases.set(lease.leaseId, {
         workerId, attempt, lastSeq: entry.lastSeq, recordedAt: now(),
@@ -298,10 +333,49 @@ export function createWorkerRegistry({
       const worker = workers.get(lease.workerId);
       if (worker) send(worker, message("cancel", { jobId }));
     }
+    revokeScope(jobId);
     return { ok: true, state: "cancelling" };
   }
 
+  function revokeScope(jobId) {
+    const scope = jobScopes.get(jobId);
+    if (scope) clearTimeoutFn(scope.timer);
+    jobScopes.delete(jobId);
+  }
+
+  function hasActiveJob(laneId, jobId) {
+    const scope = jobScopes.get(jobId);
+    return Boolean(scope && scope.laneId === laneId && scope.deadlineMs > now() && !jobs.get(jobId)?.finished);
+  }
+
+  function registerPending(laneId, jobId, { deadlineMs }) {
+    if (closed || jobScopes.has(jobId) || !Number.isFinite(deadlineMs) || deadlineMs <= now()) {
+      throw new ClawError("WORKER_JOB_UNKNOWN");
+    }
+    const scope = { laneId, deadlineMs, timer: null };
+    jobScopes.set(jobId, scope);
+    scope.timer = setTimeoutFn(() => {
+      revokeScope(jobId);
+      const entry = jobs.get(jobId);
+      if (entry) complete(entry, {
+        v: 1, jobId, seq: entry.lastSeq + 1, ts: new Date(now()).toISOString(),
+        type: "finished", data: { status: "failed", reason: "deadline" },
+      });
+    }, deadlineMs - now());
+    scope.timer?.unref?.();
+  }
+
   function revoke(workerId) {
+    if (jobScopes.has(workerId) || jobs.has(workerId)) {
+      cancel(workerId);
+      const entry = jobs.get(workerId);
+      if (entry) complete(entry, {
+        v: 1, jobId: workerId, seq: entry.lastSeq + 1, ts: new Date(now()).toISOString(),
+        type: "finished", data: { status: "cancelled" },
+      });
+      revokeScope(workerId);
+      return { ok: true };
+    }
     const worker = workers.get(workerId);
     if (worker) send(worker, { closeCode: 4403, message: message("bye", { reason: "WORKER_REVOKED" }) });
     return disconnect(workerId, "REVOKED");
@@ -335,10 +409,12 @@ export function createWorkerRegistry({
     workers.clear();
     pending.clear();
     recentLeases.clear();
+    for (const jobId of jobScopes.keys()) revokeScope(jobId);
   }
 
   return {
     connect, disconnect, enqueue, dispatch, onAck, onEvent, onHeartbeat, cancel, revoke,
     close, snapshot, stats: counters, leaseMs, ackMs,
+    hasActiveJob, registerPending, current: (id) => workers.get(id)?.connection,
   };
 }

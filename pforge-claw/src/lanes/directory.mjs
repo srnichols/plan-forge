@@ -1,6 +1,10 @@
 import { ClawError } from "../errors.mjs";
 import { createLocalLane } from "./local-lane.mjs";
 import { assertLane } from "./lane.mjs";
+import workersFeature from "../features/workers.mjs";
+import { createK8sClient } from "../k8s/api.mjs";
+import { createK8sJobLane } from "./k8s-job-lane.mjs";
+import { wrapPreparedLane } from "../jobs/lease-payload.mjs";
 
 export function createLaneDirectory() {
   const lanes = new Map();
@@ -48,24 +52,40 @@ export function createLaneDirectory() {
 }
 
 export function buildLanes({
-  directory, config = {}, bus, runtimeFor, logger, workers, k8sApiFactory,
+  directory, config = {}, bus, runtimeFor, logger, workers, k8sApiFactory, ctx,
 } = {}) {
-  void workers;
-  void k8sApiFactory;
+  workers ??= ctx?.features?.workers ?? workersFeature;
+  k8sApiFactory ??= createK8sClient;
   const configured = config.lanes ?? [];
   directory.configure?.(configured);
   for (const laneCfg of configured) {
     if (laneCfg.enabled === false) continue;
     if (laneCfg.kind === "local") {
-      directory.register(createLocalLane({
+      const local = createLocalLane({
         id: laneCfg.id,
         config: { lanes: [{ ...laneCfg, maxHeavy: laneCfg.concurrency ?? laneCfg.maxHeavy }] },
         bus,
         runtimeFor,
-      }));
+      });
+      directory.register({
+        ...local,
+        submit(job) {
+          if (job.runtime !== undefined) throw new ClawError("RUNTIME_POLICY_DENIED");
+          return local.submit(job);
+        },
+      });
       continue;
     }
-    logger?.info?.("LANE_NOT_WIRED", { laneId: laneCfg.id, kind: laneCfg.kind });
+    if (!workers?.registry?.()) {
+      logger?.warn?.("LANE_NO_REGISTRY", { laneId: laneCfg.id });
+      continue;
+    }
+    const lane = laneCfg.kind === "remote" ? workers.getLane(laneCfg.id) : createK8sJobLane({
+      id: laneCfg.id, config, api: k8sApiFactory(laneCfg), registry: workers.registry(),
+      jobKeyFor: (jobId) => workers.jobKeyFor(laneCfg.id, jobId),
+      canDeriveJobKeys: () => workers.hasLaneSecret(laneCfg.id),
+    });
+    if (lane) directory.register(wrapPreparedLane(lane, workers.preparerFor(laneCfg, directory)));
   }
   return directory;
 }

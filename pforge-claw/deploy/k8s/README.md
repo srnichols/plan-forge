@@ -55,3 +55,44 @@ The manifest tests deliberately use a small, strict YAML subset parser. Keep
 manifests to block maps and lists, simple inline scalar lists, and plain,
 quoted, integer, boolean, or null scalars. Anchors, aliases, tags, block
 scalars, and complex inline flow values are not supported.
+
+## One-shot Job credentials and execution
+
+Stop the dispatcher and run `pforge claw worker enroll --lane <k8s-lane>`.
+This creates a 256-bit lane secret in the dispatcher's restricted
+`<home>/secrets.json` under `k8s.laneSecret` (default
+`PFORGE_CLAW_K8S_LANE_SECRET`). Only the name is printed. Use `--rotate` to
+replace an existing secret; rotation invalidates keys for outstanding pods.
+An environment variable of the same name takes precedence over the file:
+enrollment warns about this, so rotate the managed environment secret too.
+Restart the dispatcher after enrollment or rotation.
+
+The lane secret stays on the dispatcher. Each Job receives only a derived
+`PFORGE_CLAW_JOB_KEY`, bound to its lane and job. Anyone with read access to
+the Job or Pod can read this key. It authenticates only that job and loses
+authentication eligibility on completion, cancellation, or deadline expiry.
+Restrict Job/Pod read access accordingly.
+
+Pods run `pforge claw worker --one-shot --job <id>` without needing a local
+claw config. Required environment variables are `PFORGE_CLAW_JOB_ID`,
+`PFORGE_CLAW_JOB_KEY`, `PFORGE_CLAW_LANE_ID`,
+`PFORGE_CLAW_DISPATCHER_URL`, and the positive finite
+`PFORGE_CLAW_JOB_DEADLINE_SECONDS`. A missing or mismatched value exits 2.
+The worker verifies the approval grant before cloning, applies the home
+lane's allow-listed bootstrap files, creates `claw/<id>`, and uses the same
+runners and PR lifecycle as local execution. Project model/runtime settings
+for pods come from the copied `.forge.json`; configure them there.
+
+L2 artifacts precede the terminal event. The pod exits 0 only after successful
+execution and acknowledgement of that terminal sequence; failure or an
+unacknowledged deadline exits 1. A received heartbeat proves transport
+receipt, not canonical L2 application: consolidation and its conflicts are
+separate dispatcher guarantees. Grants expire after five minutes with **no
+clock-skew tolerance**. All dispatcher and worker nodes need synchronized NTP.
+
+| Code | Action |
+|---|---|
+| `K8S_LANE_SECRET_MISSING` | Enroll the lane or set its named secret on the dispatcher. |
+| `WORKER_JOB_UNKNOWN` | Check that the job is pending and has not finished, been cancelled, or expired. |
+| `LEASE_GRANT_INVALID` | Check the job/lane binding, credentials, payload integrity, and node clocks. |
+| `l2-sync-incomplete` | Inspect L2 collection/consolidation and the Job deadline; do not treat execution as successful. |

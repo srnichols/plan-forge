@@ -1,8 +1,8 @@
-import { lstat, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { lstat, mkdir, mkdtemp, readFile, rm, symlink, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
-import { bootstrapWorktree } from "../src/jobs/bootstrap.mjs";
+import { applyCopySet, bootstrapWorktree, collectCopySet } from "../src/jobs/bootstrap.mjs";
 
 const dirs = [];
 async function fixture() {
@@ -29,6 +29,57 @@ afterEach(async () => {
 });
 
 describe("worktree bootstrap", () => {
+  it("collects copy-set defaults with a binary round-trip and preserves explicit []", async () => {
+    const f = await fixture();
+    const bytes = Buffer.from([0, 255, 128, 13, 10]);
+    await writeFile(path.join(f.homeRepo, ".forge.json"), bytes);
+    await writeFile(path.join(f.homeRepo, ".forge", "fm-prefs.json"), "{}");
+    const files = await collectCopySet({ repoPath: f.homeRepo });
+    expect(files.map((entry) => entry.path)).toEqual([".forge.json", ".forge/fm-prefs.json"]);
+    await applyCopySet({ repoPath: f.worktree, files });
+    expect(await readFile(path.join(f.worktree, ".forge.json"))).toEqual(bytes);
+    expect(await collectCopySet({ repoPath: f.homeRepo, paths: [] })).toEqual([]);
+  });
+  it("refuses secrets, traversal, drive-relative paths, missing files and oversize sets", async () => {
+    const f = await fixture();
+    for (const entry of [".forge/secrets.json", ".forge/./SECRETS.JSON", "..\\outside", "C:secret", "\\\\server\\share\\file"]) {
+      await expect(collectCopySet({ repoPath: f.homeRepo, paths: [entry] })).rejects.toBeDefined();
+      await expect(applyCopySet({ repoPath: f.worktree, files: [{ path: entry, content: "" }] })).rejects.toBeDefined();
+    }
+    await expect(collectCopySet({ repoPath: f.homeRepo, paths: ["missing"] })).rejects.toMatchObject({ code: "CLAW_COPYSET_MISSING" });
+    await writeFile(path.join(f.homeRepo, "large"), "1234");
+    await expect(collectCopySet({ repoPath: f.homeRepo, paths: ["large"], maxBytes: 3 })).rejects.toMatchObject({ code: "CLAW_COPYSET_TOO_LARGE" });
+    await expect(applyCopySet({ repoPath: f.worktree, files: [{ path: "large", content: Buffer.from("1234").toString("base64") }], maxBytes: 3 }))
+      .rejects.toMatchObject({ code: "CLAW_COPYSET_TOO_LARGE" });
+  });
+  it("rejects escaping symlinks and preflights all writes before applying a partial set", async () => {
+    const f = await fixture();
+    const outside = path.join(f.root, "outside");
+    await mkdir(outside);
+    await writeFile(path.join(outside, "file"), "outside");
+    await symlink(outside, path.join(f.homeRepo, "escape"), process.platform === "win32" ? "junction" : "dir");
+    await expect(collectCopySet({ repoPath: f.homeRepo, paths: ["escape/file"] })).rejects.toMatchObject({ code: "BOOTSTRAP_COPY_INVALID" });
+    await symlink(outside, path.join(f.worktree, "escape"), process.platform === "win32" ? "junction" : "dir");
+    await expect(applyCopySet({ repoPath: f.worktree, files: [
+      { path: "safe", content: Buffer.from("safe").toString("base64") },
+      { path: "escape/file", content: Buffer.from("overwrite").toString("base64") },
+    ] })).rejects.toMatchObject({ code: "BOOTSTRAP_COPY_INVALID" });
+    await expect(readFile(path.join(f.worktree, "safe"))).rejects.toMatchObject({ code: "ENOENT" });
+    expect(await readFile(path.join(outside, "file"), "utf8")).toBe("outside");
+  });
+  it("refuses secrets through a symlink alias inside the repository", async () => {
+    const f = await fixture();
+    const type = process.platform === "win32" ? "junction" : "dir";
+    await symlink(path.join(f.homeRepo, ".forge"), path.join(f.homeRepo, "alias"), type);
+    await expect(collectCopySet({ repoPath: f.homeRepo, paths: ["alias/secrets.json"] }))
+      .rejects.toMatchObject({ code: "BOOTSTRAP_SECRET_COPY_REFUSED" });
+    await mkdir(path.join(f.worktree, ".forge"));
+    await writeFile(path.join(f.worktree, ".forge", "secrets.json"), "private");
+    await symlink(path.join(f.worktree, ".forge"), path.join(f.worktree, "alias"), type);
+    await expect(applyCopySet({ repoPath: f.worktree, files: [{ path: "alias/secrets.json", content: "" }] }))
+      .rejects.toMatchObject({ code: "BOOTSTRAP_SECRET_COPY_REFUSED" });
+    expect(await readFile(path.join(f.worktree, ".forge", "secrets.json"), "utf8")).toBe("private");
+  });
   it.each([".forge/secrets.json", ".forge/SECRETS.JSON", ".forge"])(
     "never copies secrets via %s",
     async (entry) => {

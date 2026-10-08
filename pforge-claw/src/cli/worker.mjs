@@ -1,8 +1,16 @@
 import path from "node:path";
 import { parseArgs } from "node:util";
+import { randomBytes } from "node:crypto";
+import { EventEmitter } from "node:events";
+import { readFile } from "node:fs/promises";
 import { buildLaunch, createProjectClients } from "../mcp/project-client.mjs";
-import { createAgentRuntime } from "../runtime/agent-runtime.mjs";
-import { toSessionMcpServers } from "../runtime/copilot-session.mjs";
+import { createJobExecutor } from "../jobs/executor.mjs";
+import { clonedWorkspace, createLeaseJobSource, deferredWorktreeWorkspace } from "../jobs/lease-jobs.mjs";
+import { collectCopySet } from "../jobs/bootstrap.mjs";
+import { verifyGrant } from "../protocol/lease-grant.mjs";
+import { finalizePodJob, runPodJob } from "../lanes/k8s-job-lane.mjs";
+import { computeDelta, snapshotForge } from "../memory/l2-sync.mjs";
+import { run as runCommand } from "../jobs/worktree.mjs";
 import { createLocalLane } from "../lanes/local-lane.mjs";
 import { loadConfig, requiredSecretNames, resolveHome } from "../config.mjs";
 import { createSecrets } from "../secrets.mjs";
@@ -14,13 +22,14 @@ import { enrollWorker, createWorkerAgent, detectCapabilities } from "../protocol
 import { ClawError } from "../errors.mjs";
 
 const USAGE = [
-  "Usage: pforge claw worker [enroll --lane <id> | join --code <code> [--url <ws(s)>] | revoke <workerId> | [--home <dir>]]",
+  "Usage: pforge claw worker [enroll --lane <id> [--rotate] | join --code <code> [--url <ws(s)>] | revoke <workerId> | --one-shot --job <id> | [--home <dir>]]",
   "",
   "Worker transport: use wss:// with ingress TLS or a private Tailscale/WireGuard overlay.",
   "allowInsecureLan permits plain LAN WebSockets and emits a warning on every connection attempt.",
   "Worker secrets are stored in <home>/secrets.json with restricted file permissions.",
 ].join("\n");
 const DEFAULT_WORKER_SECRET = "PFORGE_CLAW_WORKER_SECRET";
+const IDENTIFIER = /^[A-Za-z0-9][A-Za-z0-9._-]{0,80}$/;
 
 function parse(argv) {
   try {
@@ -35,6 +44,7 @@ function parse(argv) {
         url: { type: "string" },
         "one-shot": { type: "boolean" },
         job: { type: "string" },
+        rotate: { type: "boolean" },
       },
     });
   } catch {
@@ -77,16 +87,28 @@ async function withDispatcherLock({ home, config, action }) {
   const { store, enrollment } = createEnrollmentContext({ home, secrets });
   const release = lockStore(store);
   try {
-    return await action(enrollment);
+    return await action(enrollment, secrets);
   } finally {
     release();
   }
 }
 
-async function enrollCommand({ home, config, laneId }) {
+export async function enrollCommand({ home, config, laneId, rotate = false }) {
   if (!laneId) throw new ClawError("WORKER_USAGE", { hint: USAGE });
-  const lane = (config.lanes ?? []).find((item) => item.id === laneId && item.kind === "remote");
-  if (!lane) throw new ClawError("LANE_UNKNOWN", { hint: "Choose a configured remote lane." });
+  const lane = (config.lanes ?? []).find((item) => item.id === laneId && ["remote", "k8s"].includes(item.kind));
+  if (!lane) throw new ClawError("LANE_UNKNOWN", { hint: "Choose a configured remote or k8s lane." });
+  if (lane.kind === "k8s") {
+    const name = lane.k8s?.laneSecret ?? "PFORGE_CLAW_K8S_LANE_SECRET";
+    await withDispatcherLock({
+      home, config, action: async (_enrollment, secrets) => {
+        if (secrets.get(name) && !rotate) throw new ClawError("K8S_LANE_SECRET_EXISTS");
+        await writeSecret({ file: path.join(home, "secrets.json"), name, value: randomBytes(32).toString("hex") });
+        if (process.env[name]) process.stderr.write(`K8S_LANE_SECRET_ENV_OVERRIDE: ${name}\n`);
+      },
+    });
+    process.stdout.write(`${name}\n`);
+    return;
+  }
   const code = await withDispatcherLock({
     home, config, action: async (enrollment) => enrollment.issue(laneId),
   });
@@ -129,28 +151,47 @@ async function joinCommand({ home, config, code, url }) {
   process.stdout.write(`${result.workerId}\n`);
 }
 
-async function makeWorkerRuntime({ config, secrets, projectRegistry, job }) {
-  const project = projectRegistry.byId(job.projectId);
-  if (!project) throw new ClawError("PROJECT_NOT_FOUND");
-  const model = job.model ?? project.models?.work ?? project.models?.chat ?? config.runtimes?.default;
-  const prompt = job.prompt ?? job.message;
-  if (typeof model !== "string" || !model) throw new ClawError("MODEL_MISSING");
-  if (typeof prompt !== "string" || !prompt) throw new ClawError("JOB_BAD_FIELD", { field: "prompt" });
-  const runtime = await createAgentRuntime({
-    id: job.runtime ?? config.worker?.runtime ?? config.runtimes?.default,
-    config, secrets,
-  });
-  const launch = await buildLaunch({ ...project, homeLane: "local" }, config, {
-    registry: { ...projectRegistry, resolveMcpLaunch },
+export function leasedJob(job, { subject, laneId, key, expectJobId } = {}) {
+  const { leaseGrant, ...plain } = job;
+  verifyGrant({ grant: leaseGrant, job: plain, subject, laneId, key, expectJobId });
+  return job;
+}
+
+export function createLeaseExecution({ ctx, clients, subject, laneId, key, runtimeFactory } = {}) {
+  const workspaces = new Map();
+  const executor = createJobExecutor({
+    ctx, clients, runtimeFactory, jobsFor: createLeaseJobSource,
+    workspaceFor: (job) => {
+      const project = ctx.config.projects.find((entry) => entry.id === job.projectId);
+      if (!project) throw new ClawError("PROJECT_NOT_FOUND");
+      const workspace = deferredWorktreeWorkspace({
+        repoPath: project.repo.path, jobId: job.id, home: ctx.home, project,
+        config: ctx.config, secrets: ctx.secrets, runner: ctx.runner,
+      });
+      workspaces.set(job.id, workspace);
+      return workspace;
+    },
   });
   return {
-    run: (turn) => runtime.run({
-      ...turn,
-      model,
-      prompt,
-      cwd: job.cwd ?? project.repo.path,
-      mcpServers: toSessionMcpServers({ launch }),
-    }),
+    verifyLease: (job) => leasedJob(job, { subject, laneId, key }),
+    runtimeFor: (job) => {
+      leasedJob(job, { subject, laneId, key });
+      return executor.runtimeFor(job);
+    },
+    l2: {
+      forgeDirFor: (job) => workspaces.get(job.id)?.forgeDirFor(),
+      snapshot: async () => null,
+      collect: async ({ forgeDir }) => {
+        const workspace = [...workspaces.values()].find((entry) => entry.forgeDirFor() === forgeDir);
+        if (!workspace) throw new ClawError("L2_WORKSPACE_MISSING");
+        return workspace.delta();
+      },
+    },
+    async afterJob({ job, event }) {
+      const workspace = workspaces.get(job.id);
+      await workspace?.settle({ ok: event.data.status === "succeeded" });
+      workspaces.delete(job.id);
+    },
   };
 }
 
@@ -162,10 +203,7 @@ function createWorkerLogger() {
   };
 }
 
-async function runWorker({ home, config, oneShot, jobId }) {
-  if (oneShot || jobId) {
-    throw new ClawError("WORKER_MODE_NOT_SUPPORTED", { hint: "--one-shot/--job is not yet supported." });
-  }
+async function runWorker({ home, config }) {
   const workerConfig = config.worker ?? {};
   const secretName = workerConfig.secretName ?? DEFAULT_WORKER_SECRET;
   const secrets = await createSecrets({ env: process.env, file: path.join(home, "secrets.json"), trackNames: [secretName] });
@@ -188,18 +226,24 @@ async function runWorker({ home, config, oneShot, jobId }) {
       { ...project, homeLane: "local" }, currentConfig, options,
     ),
   });
+  const ctx = { home, config, secrets, registry, logger, bus: new EventEmitter(), features: [] };
+  const execution = createLeaseExecution({ ctx, clients, subject: identity.workerId, laneId, key: secret });
   const localLane = createLocalLane({
     id: laneId,
     config,
-    runtimeFor: (job) => makeWorkerRuntime({ config, secrets, projectRegistry, job }),
+    runtimeFor: execution.runtimeFor,
   });
   const capabilities = await detectCapabilities({ config, laneId });
   const agent = createWorkerAgent({
     url, workerId: identity.workerId, secret, laneId, capabilities, localLane,
+    verifyLease: execution.verifyLease, l2: execution.l2, afterJob: execution.afterJob,
     readHandler: async ({ projectId, tool, args = {} }) => {
-      const project = projectRegistry.byId(projectId);
+      const project = projectRegistry.byId(projectId ?? args.projectId);
       if (!project || project.homeLane !== laneId) throw new ClawError("PROJECT_NOT_FOUND");
       if (typeof tool !== "string" || !tool) throw new ClawError("READ_BAD_REQUEST");
+      if (tool === "claw.bootstrap.copySet") {
+        return collectCopySet({ repoPath: project.repo.path, paths: project.bootstrap?.copy });
+      }
       return clients.call(projectId, tool, args);
     },
     allowInsecureLan: workerConfig.allowInsecureLan === true,
@@ -215,6 +259,7 @@ async function runWorker({ home, config, oneShot, jobId }) {
       process.off("SIGTERM", onSignal);
       agent.stop();
       try {
+        await agent.drain();
         await clients.closeAll();
       } finally {
         resolve();
@@ -224,6 +269,114 @@ async function runWorker({ home, config, oneShot, jobId }) {
     process.once("SIGINT", onSignal);
     process.once("SIGTERM", onSignal);
   });
+}
+
+function oneShotEnvironment(env, expectJobId) {
+  const jobId = env.PFORGE_CLAW_JOB_ID;
+  const laneId = env.PFORGE_CLAW_LANE_ID;
+  const key = env.PFORGE_CLAW_JOB_KEY;
+  const url = env.PFORGE_CLAW_DISPATCHER_URL;
+  const seconds = Number(env.PFORGE_CLAW_JOB_DEADLINE_SECONDS);
+  if (!IDENTIFIER.test(jobId ?? "") || !IDENTIFIER.test(laneId ?? "")
+    || !/^[0-9a-f]{64}$/.test(key ?? "") || !url
+    || !Number.isFinite(seconds) || seconds <= 0 || !Number.isFinite(seconds * 1000)
+    || (expectJobId !== undefined && expectJobId !== jobId)) throw new ClawError("ONE_SHOT_ENV_MISSING");
+  return { jobId, laneId, key, url, deadlineMs: Date.now() + seconds * 1000 };
+}
+
+async function podConfig(repoDir, job) {
+  let forge;
+  try {
+    forge = JSON.parse(await readFile(path.join(repoDir, ".forge.json"), "utf8"));
+  } catch (error) {
+    if (error.code !== "ENOENT") throw new ClawError("CONFIG_INVALID");
+    forge = {};
+  }
+  if (!forge || typeof forge !== "object" || Array.isArray(forge)) throw new ClawError("CONFIG_INVALID");
+  return {
+    ...forge,
+    projects: [{
+      id: job.projectId, homeLane: "local", models: forge.models,
+      repo: { ...job.project.repo, path: repoDir, baseBranch: job.project.repo.defaultBranch ?? job.project.repo.baseBranch },
+    }],
+  };
+}
+
+export async function runOneShot(env = process.env, {
+  jobId: expectJobId, workdir = "/work", runner = runCommand, runtimeFactory,
+  clientsFactory = createProjectClients, finalize = finalizePodJob,
+} = {}) {
+  const { jobId, laneId, key, url, deadlineMs } = oneShotEnvironment(env, expectJobId);
+  const subject = `job:${jobId}`;
+  const secrets = await createSecrets({ env, trackNames: Object.keys(env) });
+  const logger = createWorkerLogger();
+  let clients;
+  let forgeDir;
+  let snapshot;
+  let resolveDone;
+  let terminal;
+  const done = new Promise((resolve) => { resolveDone = resolve; });
+  const localLane = createLocalLane({
+    id: laneId,
+    runtimeFor: (job) => ({ run: (input, options) => runPodLease(job, input, options) }),
+  });
+
+  async function runPodLease(job, input, options) {
+    leasedJob(job, { subject, laneId, key, expectJobId: jobId });
+    const signal = input.signal;
+    const podRunner = (command, args, commandOptions = {}) => {
+      signal?.throwIfAborted();
+      return runner(command, args, { ...commandOptions, signal });
+    };
+    const boot = await runPodJob({
+      job, project: job.project, config: {}, requestCopySet: async () => job.bootstrapFiles,
+      workdir, runner: podRunner, secrets,
+    });
+    if (!boot.ok) throw new ClawError(boot.code ?? "BOOTSTRAP_FAILED", { reason: "bootstrap" });
+    const config = await podConfig(boot.repoDir, job);
+    forgeDir = path.join(boot.repoDir, ".forge");
+    snapshot = await snapshotForge({ forgeDir });
+    const registry = { ...createRegistry(config), resolveMcpLaunch };
+    clients = clientsFactory({ config, registry, logger });
+    const executor = createJobExecutor({
+      ctx: { config, secrets, registry, logger, bus: new EventEmitter(), features: [], runner: podRunner },
+      clients, runtimeFactory, jobsFor: createLeaseJobSource,
+      workspaceFor: () => clonedWorkspace({ repoDir: boot.repoDir, env: boot.env, jobId }),
+    });
+    const runtime = await executor.runtimeFor(job);
+    const result = await runtime.run(input, options);
+    const finalized = await finalize({
+      repoDir: boot.repoDir, env, runner: podRunner, deadlineMs,
+      collectDelta: async () => null, awaitAck: async () => true,
+    });
+    return finalized.status === "failed" ? { status: "failed", error: "l2-sync-incomplete" } : result;
+  }
+
+  const agent = createWorkerAgent({
+    url, workerId: subject, secret: key, laneId, jobScope: { jobId },
+    localLane, logger,
+    verifyLease: (job) => leasedJob(job, { subject, laneId, key, expectJobId: jobId }),
+    l2: {
+      forgeDirFor: () => forgeDir, snapshot: async () => null,
+      collect: async () => snapshot ? computeDelta({ forgeDir, snapshot }) : null,
+    },
+    afterJob: ({ event }) => { terminal = event; },
+    onLeaseAcked: () => resolveDone(terminal?.data.status === "succeeded" ? 0 : 1),
+    onPermanentClose: () => resolveDone(1),
+  });
+  const timer = setTimeout(() => {
+    logger.error("l2-sync-incomplete");
+    resolveDone(1);
+  }, Math.max(0, deadlineMs - Date.now()));
+  try {
+    agent.start();
+    return await done;
+  } finally {
+    clearTimeout(timer);
+    agent.stop();
+    await agent.drain();
+    await clients?.closeAll();
+  }
 }
 
 async function run(argv = []) {
@@ -240,14 +393,15 @@ async function run(argv = []) {
   const home = parsed.values.home ?? resolveHome();
   try {
     if (parsed.values["one-shot"] || parsed.values.job) {
-      throw new ClawError("WORKER_MODE_NOT_SUPPORTED", { hint: "--one-shot/--job is not yet supported." });
+      if (command !== "run" || positionals.length) throw new ClawError("WORKER_USAGE", { hint: USAGE });
+      return await runOneShot(process.env, { jobId: parsed.values.job });
     }
     if (command === "join" && positionals.length > 0) throw new ClawError("WORKER_USAGE", { hint: USAGE });
     if ((command === "run" || command === "enroll") && positionals.length > 0) {
       throw new ClawError("WORKER_USAGE", { hint: USAGE });
     }
     const config = await loadRuntimeConfig(home);
-    if (command === "enroll") await enrollCommand({ home, config, laneId: parsed.values.lane });
+    if (command === "enroll") await enrollCommand({ home, config, laneId: parsed.values.lane, rotate: parsed.values.rotate });
     else if (command === "join") {
       await joinCommand({ home, config, code: parsed.values.code, url: parsed.values.url });
     }     else if (command === "revoke") {

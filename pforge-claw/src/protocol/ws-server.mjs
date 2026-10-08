@@ -41,9 +41,12 @@ export function createWorkerServer({
   handshakeMs = 10_000,
   heartbeatMs = 15_000,
   allowedLanes = [],
+  jobLanes = [],
+  jobKeyFor,
 } = {}) {
   if (!registry || !enrollment || !secrets) throw new ClawError("WORKER_SERVER_BAD_CONFIG");
   const allowed = new Set(allowedLanes);
+  const allowedJobs = new Set(jobLanes);
   let wss = null;
   let attached = false;
   let detachUpgrade = null;
@@ -98,7 +101,7 @@ export function createWorkerServer({
     };
 
     function failHandshake(code = "WORKER_AUTH_FAILED", closeCode = CLOSE_CODES.UNAUTHORIZED) {
-      audit(logger, code);
+      logger?.warn?.("Worker protocol event", { code, laneId: context.laneId, jobId: context.hello?.jobId });
       closeWith(socket, closeCode, code);
     }
 
@@ -133,20 +136,31 @@ export function createWorkerServer({
 
     async function authenticate(authMessage) {
       const workerId = authMessage.workerId;
-      const registered = enrollment.worker?.(workerId);
-      if (enrollment.status(workerId) !== "active" || registered?.status !== "active") {
-        failHandshake(enrollment.status(workerId) === "revoked" ? "WORKER_REVOKED" : "WORKER_UNKNOWN",
-          enrollment.status(workerId) === "revoked" ? CLOSE_CODES.REVOKED : CLOSE_CODES.UNAUTHORIZED);
-        return;
-      }
-      const secret = secrets.get(`${SECRET_PREFIX}${workerId}`);
-      if (!secret || !verifyMac(secret, context.nonce, workerId, authMessage.mac)) {
-        failHandshake("WORKER_AUTH_FAILED");
-        return;
-      }
-      if (!allowed.has(context.laneId) || registered.laneId !== context.laneId) {
-        failHandshake("WORKER_LANE_DENIED");
-        return;
+      if (context.mode === "job") {
+        const jobId = context.hello.jobId;
+        if (!allowedJobs.has(context.laneId)) return failHandshake("WORKER_JOB_MODE_DENIED");
+        if (!registry.hasActiveJob(context.laneId, jobId)) return failHandshake("WORKER_JOB_UNKNOWN");
+        const key = jobKeyFor?.(context.laneId, jobId);
+        if (workerId !== `job:${jobId}` || !key || !verifyMac(key, context.nonce, workerId, authMessage.mac)) {
+          return failHandshake("WORKER_AUTH_FAILED");
+        }
+        context.jobScope = { laneId: context.laneId, jobId };
+      } else {
+        const registered = enrollment.worker?.(workerId);
+        if (enrollment.status(workerId) !== "active" || registered?.status !== "active") {
+          failHandshake(enrollment.status(workerId) === "revoked" ? "WORKER_REVOKED" : "WORKER_UNKNOWN",
+            enrollment.status(workerId) === "revoked" ? CLOSE_CODES.REVOKED : CLOSE_CODES.UNAUTHORIZED);
+          return;
+        }
+        const secret = secrets.get(`${SECRET_PREFIX}${workerId}`);
+        if (!secret || !verifyMac(secret, context.nonce, workerId, authMessage.mac)) {
+          failHandshake("WORKER_AUTH_FAILED");
+          return;
+        }
+        if (!allowed.has(context.laneId) || registered.laneId !== context.laneId) {
+          failHandshake("WORKER_LANE_DENIED");
+          return;
+        }
       }
       context.workerId = workerId;
       context.nonce = null;
@@ -157,6 +171,8 @@ export function createWorkerServer({
         laneId: context.laneId,
         capabilities: context.capabilities,
         send,
+        jobScope: context.jobScope,
+        connection: context,
       });
       audit(logger, "WORKER_AUTHENTICATED");
     }
@@ -181,7 +197,7 @@ export function createWorkerServer({
         return;
       }
       if (context.state === HANDSHAKE_STATES.AUTH) {
-        if (context.mode === "auth" && packet.t === "auth") {
+        if (["auth", "job"].includes(context.mode) && packet.t === "auth") {
           void authenticate(packet).catch(() => failHandshake("WORKER_AUTH_FAILED"));
           return;
         }
@@ -193,6 +209,7 @@ export function createWorkerServer({
         return;
       }
       if (context.state !== HANDSHAKE_STATES.READY) return failHandshake("WORKER_BAD_STATE");
+      if (registry.current(context.workerId) !== context) return;
       if (packet.t === "ack") {
         registry.onAck({ ...packet, workerId: context.workerId });
       } else if (packet.t === "event") {
@@ -208,7 +225,8 @@ export function createWorkerServer({
     socket.on("close", () => {
       clearTimeout(context.timer);
       contexts.delete(context);
-      if (context.workerId && context.state === HANDSHAKE_STATES.READY) {
+      if (context.workerId && context.state === HANDSHAKE_STATES.READY
+        && registry.current(context.workerId) === context) {
         registry.disconnect(context.workerId, "SOCKET_CLOSED");
       }
     });

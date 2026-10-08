@@ -12,6 +12,7 @@ function callerRole(config, job) {
 }
 
 function selectedRuntime(config, job) {
+  if (typeof job?.runtime === "string") return normalizeRuntimeId(job.runtime);
   return normalizeRuntimeId(projectFor(config, job)?.runtime
     ?? config?.runtimes?.default
     ?? "copilot-sdk");
@@ -20,7 +21,7 @@ function selectedRuntime(config, job) {
 export async function resolveJobRuntime({ job, config, runtimeFactory } = {}) {
   const id = selectedRuntime(config, job);
   const ghcpRoles = config?.policy?.ghcpRoles ?? ["owner"];
-  if (id === "copilot-sdk" && !ghcpRoles.includes(callerRole(config, job))) {
+  if (typeof job?.runtime !== "string" && id === "copilot-sdk" && !ghcpRoles.includes(callerRole(config, job))) {
     throw new ClawError("RUNTIME_POLICY_DENIED");
   }
   if (typeof runtimeFactory !== "function") throw new ClawError("RUNTIME_BAD_CONTRACT");
@@ -37,6 +38,11 @@ export function createJobExecutor({
   const runtimes = new Map();
 
   async function runtimeFor(job) {
+    if (job.runtime !== undefined && !job.leaseGrant) throw new ClawError("RUNTIME_POLICY_DENIED");
+    if (job.runtime === undefined && selectedRuntime(ctx.config, job) === "copilot-sdk"
+      && !(ctx.config?.policy?.ghcpRoles ?? ["owner"]).includes(callerRole(ctx.config, job))) {
+      throw new ClawError("RUNTIME_POLICY_DENIED");
+    }
     const id = selectedRuntime(ctx.config, job);
     if (!runtimes.has(id)) {
       const factory = runtimeFactory ?? ((options) => createAgentRuntime({

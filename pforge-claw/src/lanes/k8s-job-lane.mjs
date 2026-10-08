@@ -1,16 +1,16 @@
 import { spawn } from "node:child_process";
 import { createHash } from "node:crypto";
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { ClawError } from "../errors.mjs";
-import { bootstrapWorktree } from "../jobs/bootstrap.mjs";
-import { assertInside, resolvePforgeCommand, run } from "../jobs/worktree.mjs";
+import { applyCopySet, bootstrapWorktree, COPYSET_MAX_BYTES, DEFAULT_COPY_PATHS, validateCopyEntry } from "../jobs/bootstrap.mjs";
+import { resolvePforgeCommand, run } from "../jobs/worktree.mjs";
 import { assertLane } from "./lane.mjs";
 import { L2_SYNC_INCOMPLETE } from "../memory/l2-sync.mjs";
 
 const DNS_LABEL_VALUE = /[^a-z0-9-]+/g;
 const DNS_LABEL_EDGES = /^-+|-+$/g;
-const MAX_COPY_BYTES = 1024 * 1024;
+const JOB_KEY_PATTERN = /^[0-9a-f]{64}$/;
 const CONNECT_TIMEOUT_REASON = "worker-connect-timeout";
 const FINAL_EVENT_TIMEOUT_MS = 10_000;
 const MCP_READY_TIMEOUT_MS = 15_000;
@@ -73,7 +73,7 @@ function resourceRequirements(resources) {
   };
 }
 
-export function buildJobSpec({ job, project, lane, dispatcherUrl } = {}) {
+export function buildJobSpec({ job, project, lane, dispatcherUrl, jobKey } = {}) {
   if (!job || typeof job.id !== "string" || !job.id
     || !project || typeof project.id !== "string" || !project.id
     || !lane || typeof lane !== "object") {
@@ -101,15 +101,16 @@ export function buildJobSpec({ job, project, lane, dispatcherUrl } = {}) {
   const env = [
     { name: "PFORGE_CLAW_DISPATCHER_URL", value: dispatcherUrl },
     { name: "PFORGE_CLAW_JOB_ID", value: job.id },
+    ...(jobKey === undefined ? [] : [{ name: "PFORGE_CLAW_JOB_KEY", value: jobKey }]),
+    { name: "PFORGE_CLAW_LANE_ID", value: lane.id },
+    { name: "PFORGE_CLAW_JOB_DEADLINE_SECONDS", value: String(deadlineSeconds) },
     { name: "HOME", value: "/work/home" },
   ];
   const secrets = k8s.secrets ?? {};
-  const workerSecret = configuredSecret(secrets, "worker", "pforge-claw-worker", "secret");
   const githubSecret = configuredSecret(secrets, "github", "pforge-claw-github", "token");
   const copilotSecret = configuredSecret(secrets, "copilot", null, "token");
   const bridgeSecretRef = configuredSecret(secrets, "bridge", null, "secret");
-  if (!workerSecret || !githubSecret) throw new ClawError("LANE_BAD_CONFIG");
-  env.push({ name: "PFORGE_CLAW_WORKER_SECRET", ...secretKeyRef(workerSecret.name, workerSecret.key) });
+  if (!githubSecret || (jobKey !== undefined && !JOB_KEY_PATTERN.test(jobKey))) throw new ClawError("LANE_BAD_CONFIG");
   env.push({ name: "PFORGE_CLAW_GH_TOKEN", ...secretKeyRef(githubSecret.name, githubSecret.key) });
   if (copilotSecret) {
     env.push({ name: "PFORGE_CLAW_COPILOT_TOKEN", ...secretKeyRef(copilotSecret.name, copilotSecret.key) });
@@ -118,7 +119,7 @@ export function buildJobSpec({ job, project, lane, dispatcherUrl } = {}) {
     env.push({ name: "PFORGE_BRIDGE_SECRET", ...secretKeyRef(bridgeSecretRef.name, bridgeSecretRef.key) });
   }
   for (const [envName, reference] of Object.entries(secrets.env ?? {})) {
-    if (!/^[A-Z][A-Z0-9_]*$/.test(envName)
+    if (envName === "PFORGE_CLAW_JOB_KEY" || env.some((entry) => entry.name === envName) || !/^[A-Z][A-Z0-9_]*$/.test(envName)
       || typeof reference?.name !== "string" || !reference.name
       || typeof reference.key !== "string" || !reference.key) {
       throw new ClawError("LANE_BAD_CONFIG");
@@ -351,22 +352,6 @@ export async function finalizePodJob({
   }
 }
 
-function copyRelativePath(input) {
-  if (typeof input !== "string" || !input || path.isAbsolute(input) || path.win32.isAbsolute(input)) {
-    throw new ClawError("BOOTSTRAP_COPY_INVALID");
-  }
-  const normalized = input.replaceAll("\\", "/");
-  if (/^[a-z]:/i.test(normalized)) throw new ClawError("BOOTSTRAP_COPY_INVALID");
-  const segments = normalized.split("/").filter((segment) => segment && segment !== ".");
-  if (segments.includes("..")) throw new ClawError("BOOTSTRAP_COPY_INVALID");
-  const relative = segments.join(path.sep);
-  if (!relative) throw new ClawError("BOOTSTRAP_COPY_INVALID");
-  if (relative.toLowerCase() === path.join(".forge", "secrets.json").toLowerCase()) {
-    throw new ClawError("BOOTSTRAP_SECRET_COPY_REFUSED");
-  }
-  return relative;
-}
-
 export async function runPodJob({
   job,
   project,
@@ -374,14 +359,16 @@ export async function runPodJob({
   requestCopySet,
   runner = run,
   workdir = "/work",
+  secrets = { get: (name) => process.env[name] },
 } = {}) {
-  if (!job || !project?.repo?.remote || !project.repo.baseBranch
+  const remote = project?.repo?.url ?? project?.repo?.remote;
+  const baseBranch = project?.repo?.defaultBranch ?? project?.repo?.baseBranch;
+  if (!job || typeof remote !== "string" || !remote || typeof baseBranch !== "string" || !baseBranch
     || typeof requestCopySet !== "function" || typeof runner !== "function") {
     return { ok: false, reason: "bootstrap", step: "clone" };
   }
   const repoDir = path.join(workdir, "repo");
   const cloneArgs = ["clone"];
-  const remote = project.repo.remote;
   if (remote.startsWith("ssh://") || remote.startsWith("git@")) {
     return { ok: false, reason: "bootstrap", step: "clone", code: "REMOTE_AUTH_UNSUPPORTED" };
   }
@@ -390,7 +377,7 @@ export async function runPodJob({
     ?? config.lanes?.find?.((entry) => entry.kind === "k8s")?.k8s
     ?? {};
   if (laneK8s.repoCache?.claimName) cloneArgs.push("--reference", "/cache");
-  cloneArgs.push("--depth", "1", "--branch", project.repo.baseBranch, remote, repoDir);
+  cloneArgs.push("--depth", "1", "--branch", baseBranch, "--", remote, repoDir);
   let clone;
   try {
     clone = await runner("git", cloneArgs, { cwd: workdir });
@@ -402,31 +389,23 @@ export async function runPodJob({
   }
 
   try {
-    const requested = config.bootstrap?.copy ?? [];
-    const allowedPaths = requested.map(copyRelativePath);
+    const branch = await runner("git", ["-C", repoDir, "checkout", "-b", `claw/${job.id}`]);
+    if (branch.code !== 0) throw new ClawError("WORKTREE_ADD_FAILED");
+    const requested = project.bootstrap?.copy ?? config.bootstrap?.copy ?? DEFAULT_COPY_PATHS;
+    const allowedPaths = requested.map(validateCopyEntry);
     const response = await requestCopySet(requested);
     const files = Array.isArray(response) ? response : response?.files;
     if (!Array.isArray(files)) throw new ClawError("BOOTSTRAP_COPY_INVALID");
-    let totalBytes = 0;
-    const copiedPaths = new Set();
     for (const file of files) {
-      const relative = copyRelativePath(file?.path);
-      if (!allowedPaths.some((allowed) => relative === allowed || relative.startsWith(`${allowed}${path.sep}`))
-        || copiedPaths.has(relative)) {
+      const relative = validateCopyEntry(file?.path);
+      if (!allowedPaths.includes(relative)) {
         throw new ClawError("BOOTSTRAP_COPY_INVALID");
       }
-      copiedPaths.add(relative);
-      const target = path.resolve(repoDir, relative);
-      await assertInside(repoDir, target, "BOOTSTRAP_COPY_INVALID");
-      const contents = Buffer.isBuffer(file.content) ? file.content : Buffer.from(String(file.content ?? ""));
-      totalBytes += contents.byteLength;
-      if (totalBytes > MAX_COPY_BYTES) throw new ClawError("BOOTSTRAP_COPY_TOO_LARGE");
-      await mkdir(path.dirname(target), { recursive: true });
-      await assertInside(repoDir, target, "BOOTSTRAP_COPY_INVALID");
-      await writeFile(target, contents);
     }
-  } catch {
-    return { ok: false, reason: "bootstrap", step: "copy" };
+    if (files.length !== new Set(allowedPaths).size) throw new ClawError("CLAW_COPYSET_MISSING");
+    await applyCopySet({ repoPath: repoDir, files, maxBytes: COPYSET_MAX_BYTES });
+  } catch (error) {
+    return { ok: false, reason: "bootstrap", step: "copy", code: error.code ?? "BOOTSTRAP_COPY_INVALID" };
   }
 
   const bootstrapConfig = {
@@ -439,11 +418,11 @@ export async function runPodJob({
     forgeHome: repoDir,
     homeRepo: repoDir,
     config: bootstrapConfig,
-    secrets: { get: (name) => process.env[name] },
+    secrets,
     runner,
   });
   if (!result.ok) return result;
-  return { ok: true, repoDir };
+  return { ok: true, repoDir, env: result.env };
 }
 
 export function createK8sJobLane({
@@ -453,6 +432,8 @@ export function createK8sJobLane({
   registry,
   now = Date.now,
   connectTimeoutMs = 120_000,
+  jobKeyFor,
+  canDeriveJobKeys = () => false,
 } = {}) {
   const lane = configuredLane(config, id);
   if (typeof id !== "string" || !id || lane?.kind !== "k8s"
@@ -490,13 +471,19 @@ export function createK8sJobLane({
   }
 
   async function* submit(job) {
+    if (!canDeriveJobKeys()) {
+      yield finished(job.id, { status: "failed", error: "K8S_LANE_SECRET_MISSING" });
+      return;
+    }
     let spec;
     let name;
     let byokOnly;
     try {
       const project = config.projects?.find((entry) => entry.id === job.projectId);
       if (!project) throw new ClawError("LANE_BAD_CONFIG");
-      spec = buildJobSpec({ job, project, lane, dispatcherUrl });
+      const jobKey = jobKeyFor(job.id);
+      if (typeof jobKey !== "string" || !JOB_KEY_PATTERN.test(jobKey)) throw new ClawError("K8S_LANE_SECRET_MISSING");
+      spec = buildJobSpec({ job, project, lane, dispatcherUrl, jobKey });
       name = spec.metadata.name;
       byokOnly = !spec.spec.template.spec.containers[0].env
         .some((entry) => entry.name === "PFORGE_CLAW_COPILOT_TOKEN");
@@ -534,6 +521,7 @@ export function createK8sJobLane({
     };
 
     try {
+      registry.registerPending(id, job.id, { deadlineMs: now() + spec.spec.activeDeadlineSeconds * 1000 });
       try {
         await api.createJob(namespace, spec);
       } catch (error) {
@@ -655,6 +643,7 @@ export function createK8sJobLane({
         if (terminal) yield terminal.event;
       }
     } finally {
+      registry.revoke(job.id);
       clearTimeout(connectTimer);
       clearTimeout(finalTimer);
       watchController?.abort();
@@ -677,10 +666,10 @@ export function createK8sJobLane({
     } catch (error) {
       registryError = error?.code ?? "WORKER_CANCEL";
     }
-    if (active) {
-      const deletion = await deleteIgnoringNotFound(active.name);
-      if (!deletion.ok) return deletion;
-    }
+    registry.revoke(jobId);
+    const name = active?.name ?? `pforge-claw-${uniqueLabel(jobId, 51)}`.slice(0, 63).replace(/-+$/g, "");
+    const deletion = await deleteIgnoringNotFound(name);
+    if (!deletion.ok) return deletion;
     if (registryError) return { ok: false, error: registryError };
     if (registryResult?.error && registryResult.error !== "JOB_UNKNOWN") {
       return { ok: false, error: registryResult.error };
@@ -689,15 +678,15 @@ export function createK8sJobLane({
   }
 
   function health() {
-    const snapshot = registry.snapshot?.().byLane?.[id] ?? {};
     return {
-      ok: Boolean(snapshot.connected ?? true),
+      ok: canDeriveJobKeys(),
       kind: "k8s",
       id,
       namespace,
       active: activeJobs.size,
       byokOnly,
       incompleteSyncs,
+      ...(!canDeriveJobKeys() ? { code: "K8S_LANE_SECRET_MISSING" } : {}),
       ...(lastError ? { lastError } : {}),
     };
   }

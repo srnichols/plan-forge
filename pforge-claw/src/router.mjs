@@ -2,10 +2,36 @@ import { COMMANDS, parseText, suggest, visibleCommands } from "./commands/index.
 import { callbackFor, parseCallback } from "./callbacks/index.mjs";
 import { ClawError } from "./errors.mjs";
 import { createRegistry } from "./registry.mjs";
+import { classifyMessage, getTriageService } from "./capture.mjs";
 
 const NEUTRAL_TOPIC_REPLY = "This topic isn't configured.";
 const AUDIT_UNAVAILABLE_REPLY = "Audit unavailable; command not run.";
 const GROUP_CHANNEL = "telegram";
+const DEFAULT_MESSAGES_PER_MINUTE = 20;
+const DEFAULT_RATE_WINDOW_MS = 60_000;
+
+function createInboundLimiter({ perMinute, windowMs, now }) {
+  const hits = new Map();
+  const notified = new Set();
+  return {
+    admit(key) {
+      const cutoff = now() - windowMs;
+      const active = (hits.get(key) ?? []).filter((timestamp) => timestamp > cutoff);
+      if (active.length === 0) {
+        hits.delete(key);
+        notified.delete(key);
+      }
+      if (active.length >= perMinute) {
+        const firstDrop = !notified.has(key);
+        notified.add(key);
+        return { ok: false, firstDrop };
+      }
+      active.push(cutoff + windowMs);
+      hits.set(key, active);
+      return { ok: true };
+    },
+  };
+}
 
 function createIndexes(config) {
   const identities = new Map();
@@ -188,6 +214,35 @@ async function dispatchCommand({
   }
 }
 
+async function throttleGate({ update, userId, limiter, store, logger }) {
+  const result = limiter.admit(`${update.adapter}:${userId}`);
+  if (result.ok) return null;
+  if (result.firstDrop) {
+    await safeAudit(store, logger, {
+      kind: "throttled",
+      reason: "rate-limit",
+      ...metadataFor(update),
+    });
+  }
+  return { dropped: true, throttled: true };
+}
+
+async function routeForward({ update, caller, config, registry, chatId, store, logger }) {
+  if (classifyMessage(update)?.kind !== "forward") return null;
+  const context = resolveContext(config, registry, chatId, update.threadId);
+  const service = getTriageService();
+  if (context?.scope !== "project" || !service) {
+    await safeAudit(store, logger, {
+      kind: "refused",
+      reason: "capture-unavailable",
+      ...metadataFor(update),
+    });
+    return { dropped: true };
+  }
+  await service.handleInbound({ update, project: context.project, caller });
+  return { handled: true, captured: true };
+}
+
 function buildMenuCommands({ role, topics }) {
   const available = new Map();
   for (const scope of topics) {
@@ -238,10 +293,13 @@ function commandByName(commands, name) {
 
 export function createRouter({
   config, channel, store, registry = createRegistry(config), logger, commandRegistry = COMMANDS,
+  rateLimit = { perMinute: DEFAULT_MESSAGES_PER_MINUTE, windowMs: DEFAULT_RATE_WINDOW_MS },
+  now = Date.now,
 } = {}) {
   let currentConfig = config;
   let currentRegistry = registry;
   let indexes = createIndexes(config);
+  const limiter = createInboundLimiter({ ...rateLimit, now });
 
   async function route(update) {
     const identity = await checkIdentity(update, indexes, store, logger);
@@ -254,6 +312,14 @@ export function createRouter({
       });
       return { handled: true };
     }
+    const throttled = await throttleGate({
+      update, userId: identity.userId, limiter, store, logger,
+    });
+    if (throttled) return throttled;
+    const forwarded = await routeForward({
+      update, caller, config: currentConfig, registry: currentRegistry, chatId, store, logger,
+    });
+    if (forwarded) return forwarded;
     const parsed = parseText(update.text, { botUsername: currentConfig.channels?.telegram?.botUsername });
     if (parsed.kind === "other-bot" || parsed.kind === "empty") return { handled: false };
     const context = resolveContext(currentConfig, currentRegistry, chatId, update.threadId);

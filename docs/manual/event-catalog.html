@@ -288,6 +288,10 @@ ws.on("message", (raw) =&gt; {
         </div>
 
         <!-- ============================================================ -->
+        <h2 id="forge-master-insight">Forge-Master observer insight</h2>
+        <p><code>forge-master-insight</code> is an observer event with <code>ts</code>, optional <code>runId</code>, and an insight containing a stable <code>id</code>, <code>severity</code> (<code>info</code>, <code>warn</code>, or <code>critical</code>), a summary capped at 200 characters, up to five evidence references, and nullable <code>suggestedAction</code>. The observer emits at most five insights per turn. Retrieve retained insights using <code>forge_master_observe</code> with <code>action: "status"</code>, a small <code>limit</code>, and the continuation <code>cursor</code>; responses include pagination metadata. On the MCP surface the call is proxied to the Forge-Master studio child that owns the insight ring.</p>
+        <p>This hub event is separate from Forge-Claw's internal bus events (<code>job.transition</code>, <code>job.finished</code>, and <code>lane.event</code>). Forge-Claw consumes observer insights through the paginated pull; it does not make those internal events part of the Plan Forge hub.</p>
+
         <h2 id="see-also">See also</h2>
         <ul class="space-y-2 mb-8">
           <li><a href="https://github.com/srnichols/plan-forge/blob/master/pforge-mcp/EVENTS.md" rel="noopener"><strong>pforge-mcp/EVENTS.md</strong></a>, the canonical JSON-schema source for every event. This appendix is the orientation and classification companion; full payloads live there.</li>

@@ -235,6 +235,20 @@
         </tbody>
       </table>
 
+      <h2 id="forge-claw">Forge-Claw</h2>
+      <table class="manual-table">
+        <thead><tr><th>Term</th><th>Definition</th></tr></thead>
+        <tbody>
+          <tr><td><strong>Forge-Claw</strong></td><td>Experimental, opt-in, host-level Telegram front door that asks Forge-Master for reasoning and dispatches governed jobs to configured execution lanes.</td></tr>
+          <tr><td><strong>Dispatcher</strong></td><td>Forge-Claw component that applies caller and runtime policy, selects an execution lane, and controls job leasing.</td></tr>
+          <tr><td><strong>Lane</strong></td><td>A configured local, remote, or Kubernetes execution target. Labels and project placement rules constrain where jobs run.</td></tr>
+          <tr><td><strong>Worker</strong></td><td>A remote execution process that connects outbound to the dispatcher and performs work assigned to its lane.</td></tr>
+          <tr><td><strong>Channel Adapter</strong></td><td>Interface for receiving messages and sending replies, progress, and callbacks; Telegram is the first Forge-Claw adapter.</td></tr>
+          <tr><td><strong>Agent Runtime</strong></td><td>Provider abstraction used by a lane to run agent work; GHCP is the default and configured BYOK providers are alternatives.</td></tr>
+          <tr><td><strong>Proposed Action</strong></td><td>Validated suggestion returned by Forge-Master. It is not executed or approved; an authorized caller must create and govern any resulting job.</td></tr>
+        </tbody>
+      </table>
+
       <h2 id="data">Data Structures</h2>
       <table class="manual-table">
         <thead><tr><th>Term</th><th>Definition</th></tr></thead>

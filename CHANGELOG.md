@@ -9,6 +9,9 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ### Added
 
+- **Experimental Forge-Claw package** (`pforge-claw`) — opt-in, host-level Telegram front door for governed execution lanes and Forge-Master reasoning. It is not installed or started by `setup`; it has not been published to npm. See the [Forge-Claw operator guide](docs/PFORGE-CLAW-GUIDE.md).
+- **`pforge claw` CLI** — adds `init`, `doctor`, `status`, `start`, `worker`, `service`, `dev`, and `commands` subcommands.
+- **Forge-Claw platform support** — dispatcher and workers target macOS, Windows, and Linux; live/platform matrix results remain pending.
 - `forge_master_ask` accepts optional `caller`, `responseFormat`, `untrustedContext`, `contextBlocks`, and `proposeActions` inputs, and returns a `usage` block. These changes are additive; existing response fields are unchanged.
 - `proposedActions` and `proposedActionsMessage` provide up to three role-filtered, proposal-only suggestions; Forge-Master does not execute them.
 - A structured `forge-master-insight` event and paginated observer status.
@@ -7484,4 +7487,3 @@ Every SKILL.md now follows the full Skill Blueprint format: Frontmatter → Trig
 - Setup wizard with auto-detection (`setup.ps1` / `setup.sh`)
 - Validation scripts (`validate-setup.ps1` / `validate-setup.sh`)
 - Worked examples for TypeScript, .NET, and Python
-

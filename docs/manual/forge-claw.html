@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="en" class="scroll-smooth">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Forge-Claw — Plan Forge Manual</title>
+  <meta name="description" content="Forge-Claw is Plan Forge's experimental, opt-in chat front door for governed jobs, execution lanes, and Forge-Master reasoning." />
+  <link rel="icon" type="image/svg+xml" href="../assets/plan-forge-logo.svg" />
+  <link rel="stylesheet" href="../assets/tailwind.built.css" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="../assets/shared.css" />
+  <link rel="stylesheet" href="assets/manual.css" />
+</head>
+<body class="bg-slate-950 text-slate-300 min-h-screen">
+  <button id="mobile-sidebar-btn" class="mobile-sidebar-btn fixed top-4 left-4 z-[101] lg:hidden p-2 bg-slate-900 border border-slate-700 rounded-lg text-slate-400 hover:text-slate-100 transition-colors" aria-label="Open navigation">
+    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/></svg>
+  </button>
+  <div id="sidebar-overlay" class="sidebar-overlay"></div>
+  <div class="manual-layout">
+    <aside id="manual-sidebar" class="manual-sidebar"><nav id="sidebar-nav"></nav></aside>
+    <main>
+      <div class="chapter-content">
+        <div class="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Deep Dive · Cross-cutting</div>
+        <h1>Forge-Claw</h1>
+        <p class="text-lg text-slate-400 mb-8">An experimental, opt-in chat front door that routes approved work into governed execution lanes and asks Forge-Master to reason over project context.</p>
+
+        <h2 id="what-it-is">What it is</h2>
+        <p>Forge-Claw is a host-level package, not a project setup feature. It is not installed or started by <code>setup</code>. Telegram is the first channel adapter. OpenClaw remains an alternative integration and the existing outbound notification bridge continues to work.</p>
+        <p>Read the full <a href="https://github.com/srnichols/plan-forge/blob/planning/main/docs/PFORGE-CLAW-GUIDE.md" rel="noopener">Forge-Claw guide on GitHub</a> and the <a href="https://github.com/srnichols/plan-forge/blob/planning/main/docs/PFORGE-CLAW-THREAT-MODEL.md" rel="noopener">threat model on GitHub</a>.</p>
+
+        <h2 id="architecture">Architecture</h2>
+        <p>The channel adapter receives and formats messages. The dispatcher checks identity and policy, then places jobs on local, remote, or Kubernetes lanes. Each lane uses the configured <code>AgentRuntime</code>; GHCP is the default, with BYOK alternatives. A project's home lane owns its checkout and canonical memory. Remote workers dial outbound to the dispatcher. Forge-Master supplies reasoning and may return proposals, but does not execute them.</p>
+
+        <h2 id="quick-start">Safe quick start</h2>
+        <p>Install Node.js 22.12 or newer and use an existing Plan Forge framework checkout. Keep the host home outside project repositories, store credentials outside committed config, and review the generated example before starting.</p>
+        <pre><code>pforge claw init --example single-host --out &lt;dir&gt;
+pforge claw doctor --home &lt;dir&gt;
+pforge claw start --home &lt;dir&gt;</code></pre>
+        <p>Initialization is explicit. A successful offline doctor check does not validate live provider authentication, Telegram access, or Kubernetes policy enforcement.</p>
+
+        <h2 id="commands">Command discovery</h2>
+        <p>Run <code>pforge claw commands --markdown</code> for the registered chat command catalog or <code>pforge claw commands --json</code> for structured metadata. Chat <code>/help</code> is filtered by caller role and topic. The registered <code>/forget</code> command is currently unavailable.</p>
+        <p>The CLI has eight subcommands: <code>init</code>, <code>doctor</code>, <code>status</code>, <code>start</code>, <code>worker</code>, <code>service</code>, <code>dev</code>, and <code>commands</code>.</p>
+
+        <h2 id="approvals-budgets">Approvals and budgets</h2>
+        <p>Mutating jobs require a single-use, expiring approval bound to the requesting chat and an allowlisted approving identity. Forge-Master's <code>proposedActions</code> are proposals only; an adapter must authorize and create a separate job, and Forge-Claw's approval policy still applies.</p>
+        <p>Reported USD and premium-request usage are tracked independently. Unknown usage stays <code>null</code>, not zero; configured unknown-usage limits can hold further mutating jobs until an owner releases them.</p>
+
+        <h2 id="lanes-workers">Lanes and workers</h2>
+        <p>Lanes are configurable local, remote, or Kubernetes execution targets. Labels drive placement constraints; an opt-in lane must be enabled before it accepts new jobs. Each project specifies a home lane for its checkout and Plan Forge MCP calls.</p>
+        <p>Remote workers enroll with a short-lived, single-use code and connect outbound. Use <code>wss://</code> except on loopback. Workers do not listen for inbound connections and do not receive a reusable dispatcher credential for job execution.</p>
+
+        <h2 id="deployment">Deployment choices</h2>
+        <p>Run a single-host dispatcher, add remote workers on supported macOS, Windows, or Linux hosts, or deploy Kubernetes Jobs using the example Kustomize overlay. The service command integrates with launchd, systemd, or Windows Task Scheduler. Kubernetes RBAC is namespace-scoped; hostname egress restrictions require CNI-specific support beyond plain NetworkPolicy IP rules.</p>
+        <p>For current operating steps, platform caveats, and pending validation results, see the <a href="https://github.com/srnichols/plan-forge/blob/planning/main/docs/PFORGE-CLAW-GUIDE.md" rel="noopener">complete guide on GitHub</a>.</p>
+
+        <h2 id="limitations">Limitations</h2>
+        <ul>
+          <li>Telegram is the only shipped inbound channel adapter.</li>
+          <li><code>/forget</code> is registered but unavailable; platform matrix entries remain pending.</li>
+          <li>There is no <code>forge_claw_*</code> MCP tool family and no npm publish.</li>
+          <li>Git worktrees are not OS sandboxes; use stronger host or container isolation where required.</li>
+          <li>Do not treat offline tests as evidence of live GHCP/BYOK, Telegram, TLS, or CNI behavior.</li>
+        </ul>
+
+        <div id="chapter-prev-next" class="chapter-nav"></div>
+      </div>
+    </main>
+  </div>
+  <script src="assets/manual.js"></script>
+</body>
+</html>

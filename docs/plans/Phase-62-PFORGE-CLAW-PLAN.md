@@ -8,7 +8,7 @@ relatedIssues: []
 ---
 # Phase-62: PFORGE-CLAW — A chat-native, always-on front door for Plan Forge, powered by GHCP models
 
-> **Status**: 🔬 **HARDENED 2026-10-07** — Step-2 complete. Required Decisions D1–D26 are resolved (no TBDs); verification evidence is in **Assumptions**. Ready for `pforge run-plan` once the **Execution Hold** is lifted.
+> **Status**: ✅ Complete. All 31 slices shipped. See [What actually shipped](#what-actually-shipped).
 > **Tracks**: `pforge-claw/` (new workspace package), `pforge.ps1` / `pforge.sh` (`claw` subcommand), root `package.json` (workspaces), `scripts/audit/dep-boundaries.mjs`, `pforge-mcp/capabilities/schemas.mjs` + `surface.mjs` (metadata only), `.github/workflows/pforge-claw.yml`, `docs/PFORGE-CLAW-GUIDE.md` (new), `docs/PFORGE-CLAW-THREAT-MODEL.md` (new), `docs/manual/forge-claw.html` (new), and the doc sweep set in Slice 29.
 > **Pipeline**: Specify ✅ (this doc) → Harden ⏳ → Execute → Review → Ship
 > **Depends on**: [Phase-61-FORGE-MASTER-CLAW-AWARE-PLAN.md](./Phase-61-FORGE-MASTER-CLAW-AWARE-PLAN.md), the Forge-Master contract (`caller`, `responseFormat`, `untrustedContext`, `contextBlocks`, `proposeActions` → `proposedActions`, `usage`, observer insights pulled via `forge_master_observe status` per D27). Run it first, or in parallel with Slices 1–5 here. Slice 6 onward requires it complete.
@@ -2408,6 +2408,46 @@ node -e 'const c=require("fs").readFileSync("docs/plans/Phase-62-PFORGE-CLAW-PLA
 - **After Slice 31**: re-read D11, D12, D28 and Security Posture §5. Confirm no worker runs an agent in the operator's checkout, every remote/one-shot lease is refused without a valid grant, no Job spec contains the lane secret, and a job-scoped connection cannot see or claim another job.
 - **After Slice 28**: the CI matrix is green on all three OSes plus kind; the Tested Platforms matrix is seeded.
 - **Before Slice 29**: all code is frozen; the doc sweep documents what actually shipped, not what was planned.
+
+## What actually shipped
+
+Slices 1–31 delivered the experimental Forge-Claw package, its governed execution system, offline validation, and the documentation and capability surface:
+
+1. **Package and CLI foundation** — `pforge-claw/package.json`, `pforge-claw/cli.mjs`, shell dispatchers, package boundaries, and CLI tests.
+2. **Configuration and setup** — `pforge-claw/config.schema.json`, `src/config.mjs`, `src/secrets.mjs`, `src/registry.mjs`, initialization, and doctor.
+3. **Durable state** — `src/state/store.mjs`, `src/jobs/model.mjs`, and persistence tests.
+4. **Telegram channel** — the channel-adapter contract, Telegram client, formatter, poller, and rate limiter.
+5. **Identity and commands** — `src/router.mjs`, command and callback handlers, role checks, and caller-filtered help.
+6. **Project Q&A** — the project MCP client, Forge-Master ask handler, and chat integration.
+7. **Capture and memory commands** — remember/recall, idea and bug capture, and associated handlers.
+8. **Local execution** — lane and runtime contracts, local lane, GHCP/BYOK adapters, and job queues.
+9. **Governed jobs** — worktrees, permission policy, runners, bootstrap, and run/skill/task commands.
+10. **Approvals** — identity-bound approval callbacks, feature wiring, and approval tests.
+11. **Budget controls** — usage tracking, budget commands, holds, and budget tests.
+12. **Progress and recovery** — job progress, abort/retry commands, and recovery callbacks.
+13. **Scheduling** — scheduler, digest generation, and scheduling feature integration.
+14. **Alerts** — alert relay, stale-work nudges, and alert callbacks.
+15. **Message capture** — forwarded content, links, photos, voice, and speech-to-text handling.
+16. **Cross-project operations** — general-topic status, fan-out, and scoped cross-project behavior.
+17. **Host services** — launchd, systemd, and Task Scheduler packaging, status commands, and single-host smoke coverage.
+18. **Remote workers** — worker protocol, remote lane, enrollment/join/revoke CLI, and worker features.
+19. **Dispatcher deployment** — container packaging and Telegram webhook mode.
+20. **Kubernetes manifests** — dispatcher and worker resources under `pforge-claw/deploy/k8s/`.
+21. **Worker images** — base and platform variants with PowerShell/Bash image-build scripts.
+22. **Kubernetes jobs** — `src/lanes/k8s-job-lane.mjs`, Kubernetes API access, and lane tests.
+23. **Network and placement policy** — job egress policy, label placement, lane controls, and policy tests.
+24. **Memory integration** — OpenBrain client, memory feature wiring, capture, provenance, recall, and `/forget` registration.
+25. **Canonical history sync** — `src/memory/l2-sync.mjs`, worker-agent integration, and remote/Kubernetes history tests.
+26. **Security hardening** — `docs/PFORGE-CLAW-THREAT-MODEL.md`, router safeguards, and security end-to-end tests.
+27. **End-to-end validation** — offline scenario tests, test helpers, development topology, Kubernetes test overlay, and the operator live-test runbook.
+28. **Cross-platform validation** — the three-OS CI workflow and a Tested Platforms matrix that remains pending operator evidence.
+29. **Documentation and capabilities** — the operator guide, Forge-Master companion metadata, capabilities docs, manual chapters, CLI guide, architecture, roadmap, and changelog.
+30. **Composition root and local dispatch** — dispatcher boot, feature/lane wiring, and real local execution through the shared job path.
+31. **Remote and one-shot execution** — runner-based remote and Kubernetes job execution with grants, lease boundaries, and canonical result/history handling.
+
+**Deviations:** The command registry is `pforge-claw/src/commands/index.mjs`, not the plan's `src/commands.mjs` path. Forge-Claw capability metadata is nested at `forgeMaster.companions.forgeClaw` to preserve the exact top-level capabilities snapshot; promoting it to a top-level key is a follow-up once that snapshot can be updated.
+
+**Known limitations:** `/forget` is registered but unavailable; Tested Platforms entries are still pending; there are no `forge_claw_*` MCP tools and no npm publish.
 
 ## Validation Gates (phase-level)
 

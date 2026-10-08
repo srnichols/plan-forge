@@ -29,6 +29,7 @@
     { id: "dashboard-forge-master", file: "dashboard-forge-master.html", num: "", title: "Dashboard — Forge-Master", act: "II" },
     { id: "dashboard-liveguard", file: "dashboard-liveguard.html", num: "",   title: "Dashboard — LiveGuard",    act: "II" },
     { id: "forge-master",        file: "forge-master.html",        num: "",   title: "Forge-Master",  act: "II" },
+    { id: "forge-claw",          file: "forge-claw.html",          num: "",   title: "Forge-Claw",    act: "II" },
     { id: "cli-reference",       file: "cli-reference.html",       num: "8",  title: "CLI Reference",            act: "II" },
     { id: "customization",       file: "customization.html",       num: "9",  title: "Customization",            act: "II" },
     { id: "instructions-agents", file: "instructions-agents.html", num: "10", title: "Instruction Files & Agents", act: "II" },
@@ -153,7 +154,7 @@
   //
   const MANUAL_COUNTS = {
     // Pipeline / surface ────────────────────────────────────────────────
-    tools:        106, // MCP TOOLS array length (capabilities snapshot toolCount) — tools.json is a curated subset (92) and lags; use: node -e "import('./pforge-mcp/server/tool-definitions.mjs').then(m=>console.log(m.TOOLS.length))"
+    tools:        107, // MCP TOOLS array length (capabilities table) — tools.json is a curated subset and lags
     instructions: 18,  // presets/dotnet|typescript/.github/instructions/
     agents:       12,  // 6 stack-specific + 6 pipeline (post Pass 5 reconciliation; cross-stack reviewers folded into stack agents)
     skills:       11,  // dotnet preset (typescript = 10) — varies by preset
@@ -802,6 +803,14 @@
     { t: "Studio Classification Badge", u: "dashboard-forge-master.html#studio-classification" },
     { t: "Studio Quorum Advisory", u: "dashboard-forge-master.html#studio-quorum" },
     { t: "Studio Session Persistence", u: "dashboard-forge-master.html#studio-sessions" },
+    // Forge-Claw
+    { t: "Forge-Claw Overview", u: "forge-claw.html#what-it-is" },
+    { t: "Forge-Claw Safe Quick Start", u: "forge-claw.html#quick-start" },
+    { t: "Forge-Claw Command Discovery", u: "forge-claw.html#commands" },
+    { t: "Forge-Claw Approvals and Budgets", u: "forge-claw.html#approvals-budgets" },
+    { t: "Forge-Claw Lanes and Workers", u: "forge-claw.html#lanes-workers" },
+    { t: "Forge-Claw Deployment Choices", u: "forge-claw.html#deployment" },
+    { t: "Forge-Claw Limitations", u: "forge-claw.html#limitations" },
     // Dashboard — LiveGuard Tabs
     { t: "LiveGuard Health Tab", u: "dashboard-liveguard.html#lg-health" },
     { t: "LiveGuard Incidents Tab", u: "dashboard-liveguard.html#lg-incidents" },

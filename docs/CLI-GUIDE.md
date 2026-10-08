@@ -30,6 +30,41 @@ chmod +x pforge.sh
 
 Each command shows **PowerShell** and **Bash** syntax. Both are functionally identical.
 
+### `pforge claw` — experimental chat front door
+
+Forge-Claw is host-level and opt-in; regular `setup` does not install or start it. Its `pforge claw` dispatcher is reached from the framework checkout. Initialize an example, inspect it with `doctor`, then explicitly start the dispatcher:
+
+```powershell
+# PowerShell
+.\pforge.ps1 claw init --example single-host --out .\claw
+.\pforge.ps1 claw doctor --home .\claw
+.\pforge.ps1 claw start --home .\claw
+.\pforge.ps1 claw commands --markdown
+```
+
+```bash
+# Bash
+./pforge.sh claw init --example single-host --out ./claw
+./pforge.sh claw doctor --home ./claw
+./pforge.sh claw start --home ./claw
+./pforge.sh claw commands --markdown
+```
+
+The eight subcommands and their CLI usage strings are:
+
+| Subcommand | Usage |
+|---|---|
+| `init` | `pforge claw init [--example <single-host\|multi-host\|k8s>] --out <dir> [--force] [--no-doctor]` |
+| `doctor` | `pforge claw doctor [--json] [--home <dir>]` |
+| `status` | `pforge claw status [--home <dir>] [--project <id>] [--json]` |
+| `start` | `pforge claw start [--home <dir>]` |
+| `worker` | `pforge claw worker [enroll --lane <id> [--rotate] \| join --code <code> [--url <ws(s)>] \| revoke <workerId> \| --one-shot --job <id> \| [--home <dir>]]` |
+| `service` | `pforge claw service <install\|uninstall\|status> [--home <dir>] [--dry-run] [--json]` |
+| `dev` | `pforge claw dev <up\|down\|status> [--fake\|--live]` |
+| `commands` | `pforge claw commands [--markdown \| --json]` |
+
+Workers connect outbound; use `wss://` with TLS except on loopback. `doctor` validates local configuration but does not prove live provider credentials or Kubernetes/CNI enforcement. Store token values outside committed config. See the [Forge-Claw guide](PFORGE-CLAW-GUIDE.md).
+
 ### `pforge init`
 
 Bootstrap a project with the Plan Forge Pipeline. Delegates to `setup.ps1` / `setup.sh`.
@@ -2546,4 +2581,3 @@ Set `PFORGE_FORGE_MASTER_OBSERVE_DISABLE=1` to override `enabled` to `false` at 
 - Observer tokens are attributed to `forge-master` in `forge_cost_report`, not to the active run.
 - The daemon reconnects on WebSocket disconnect with exponential backoff (3 retries, 1 s base).
 - MCP equivalent: `forge_master_observe` with `action: "start" | "stop" | "status"`.
-

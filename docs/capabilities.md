@@ -258,6 +258,7 @@ pforge run-plan <plan> --quorum=power # Flagship models, threshold 5, 5min timeo
 pforge run-plan <plan> --quorum=speed # Fast models, threshold 7, 2min timeout
 forge_tempering_run --objective "node scripts/measure-coverage.mjs" --accept-if greater # Accept only if the numeric metric improves
 pforge ext search|add|info|list       # Extension management
+pforge claw init|doctor|status|start|worker|service|dev|commands # Experimental, opt-in chat front door
 
 # LiveGuard CLI (v2.27.0+)
 pforge drift [--threshold N]          # Architecture drift score
@@ -754,7 +755,7 @@ Degradation: <2 successful dry-runs → falls back to normal execution. Reviewer
 | `responseFormat` | `style` is `standard` or `brief`; `maxChars` is an integer from 200 to 20,000. A reply exceeding the limit is cut at a readable boundary and ends with `…(truncated — ask for more)`. |
 | `untrustedContext` | Array of `{kind, source?, text}` items; `kind` is `forward`, `link`, `transcript`, `file`, or `other`. Text is capped at 8 KB total. |
 | `contextBlocks` | Array of trusted `{title, text}` items, capped at 4 KB total. |
-| `proposeActions` | Set to `true` to request validated, structured suggestions. |
+| `proposeActions` | Set to `true` to request validated, structured suggestions; the response uses `proposedActions` and `proposedActionsMessage`. |
 
 When text is capped, the opt-in `truncated` object reports `untrusted: true`
 and/or `context: true`; reply shaping is reported separately by `reply`.
@@ -838,6 +839,14 @@ Example response when no action is proposed:
   "proposedActionsMessage": "No actions proposed — the answer is informational."
 }
 ```
+
+## Forge-Claw (experimental)
+
+Forge-Claw is the opt-in, host-level Telegram front door for governed Plan Forge jobs; `setup` does not install or start it. Its dispatcher asks Forge-Master for reasoning, then applies Forge-Claw's own identity, runtime, approval, budget, and lane policies before any work runs. The package is `@pforge/pforge-claw`; the CLI group is `pforge claw` with `init`, `doctor`, `status`, `start`, `worker`, `service`, `dev`, and `commands`. Chat command metadata is drawn from the registered command catalog and filtered at runtime by caller role and topic.
+
+The capability surface nests Forge-Claw at `forgeMaster.companions.forgeClaw` to preserve the existing top-level capability snapshot contract. It describes the config at `PFORGE_CLAW_HOME/config.json`, its schema at `pforge-claw/config.schema.json`, and the guide at `docs/PFORGE-CLAW-GUIDE.md`. Forge-Claw pulls bounded, paginated `forge-master-insight` records through `forge_master_observe`; its `job.transition`, `job.finished`, and `lane.event` events remain internal to its package. There is no `forge_claw_*` MCP tool family.
+
+See the [Forge-Claw operator guide](PFORGE-CLAW-GUIDE.md) for prerequisites, setup, security boundaries, deployment, and current platform validation status.
 
 ## Memory Layers
 

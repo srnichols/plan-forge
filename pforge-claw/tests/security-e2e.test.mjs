@@ -338,18 +338,18 @@ describe.each(DELIVERY_MODES)("Guard: injection corpus delivered as %s", (mode) 
   });
 });
 
-describe("Guard: KNOWN GAP normalize drops forward provenance (meta-bug #333)", () => {
-  it("routes today's normalized forward as directly typed text", async () => {
+describe("Guard: forward provenance survives normalize (meta-bug #333 fixed in Slice 30)", () => {
+  it("keeps the forwarded flag without sender identity and never routes it as directly typed text", async () => {
     const ask = vi.fn(async (_ctx, args) => ({ text: args.argsText }));
     const commandRegistry = COMMANDS.map((command) => command.name === "ask"
       ? { ...command, available: true, handle: ask }
       : command);
     const rig = makeRig({ commandRegistry });
-    const normalized = normalize(rawMessage("ordinary forwarded text", { forward_origin: { type: "user" } }));
+    const normalized = normalize(rawMessage("ordinary forwarded text", { forward_origin: { type: "user", sender_user: { id: 4242, first_name: "Someone" } } }));
+    expect(normalized).toHaveProperty("forwarded", true);
+    expect(JSON.stringify(normalized)).not.toMatch(/4242|Someone/);
     await rig.router.route(normalized);
-    expect(normalized).not.toHaveProperty("forwarded");
-    expect(ask).toHaveBeenCalledOnce();
-    expect(ask.mock.calls[0][1].argsText).toBe("ordinary forwarded text");
+    expect(ask).not.toHaveBeenCalled();
   });
 });
 
@@ -701,7 +701,7 @@ describe("Guard: memory poisoning boundaries", () => {
     const taskCreated = createJob({ id: "poisoned-task", type: "task", projectId: project.id });
     store.append(JOBS_STREAM, { kind: "job.created", job: { ...taskCreated.job, description: "Implement the approved task" } });
     let taskJob = { ...taskCreated.job, description: "Implement the approved task" };
-    for (const state of ["awaiting-approval", "approved"]) {
+    for (const state of ["awaiting-approval", "approved", "leased"]) {
       const next = transition(taskJob, state);
       store.append(JOBS_STREAM, next.event);
       taskJob = next.job;

@@ -18,7 +18,8 @@
       "anthropic": { "keySecret": "ANTHROPIC_API_KEY" },
       "openai": { "keySecret": "OPENAI_API_KEY" }
     },
-    "pforgeCommand": "auto"
+    "pforgeCommand": "auto",
+    "ghCommand": "auto"
   },
   "lanes": [
     { "id": "local", "kind": "local", "enabled": true },

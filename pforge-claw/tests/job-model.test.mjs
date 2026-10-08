@@ -119,6 +119,27 @@ describe("job model", () => {
       reason: "approved by operator",
     });
     expect(result.event).not.toHaveProperty("sensitive");
+    const approvedForLease = walk(makeJob("lease-meta"), ["awaiting-approval", "approved"]);
+    expect(transition(approvedForLease, "leased", { lane: "local-1" }))
+      .toMatchObject({ job: { lane: "local-1" }, event: { lane: "local-1" } });
+    expect(transition(makeJob("result-meta"), "awaiting-approval")).toBeDefined();
+    const running = walk(makeJob("result-meta"), ["awaiting-approval", "approved", "leased", "running"]);
+    expect(transition(running, "succeeded", {
+      result: { branch: "claw/result-meta", prUrl: "https://example.test/pr/1" },
+    })).toMatchObject({
+      job: { branch: "claw/result-meta", prUrl: "https://example.test/pr/1" },
+      event: { result: { branch: "claw/result-meta", prUrl: "https://example.test/pr/1" } },
+    });
+    for (const [to, meta] of [
+      ["running", { lane: "local" }],
+      ["leased", { lane: "../bad" }],
+      ["running", { result: { branch: "claw/x" } }],
+      ["succeeded", { result: { branch: "x".repeat(201) } }],
+      ["succeeded", { result: { prUrl: "http://example.test/pr/1" } }],
+    ]) {
+      expect(() => transition(makeJob("bad-meta"), to, meta))
+        .toThrowError(expect.objectContaining({ code: "JOB_BAD_META" }));
+    }
   });
 
   it("folds current jobs consistently before and after reopening and snapshotting", () => {
@@ -170,6 +191,35 @@ describe("job model", () => {
       to: "succeeded",
     })).toThrowError(expect.objectContaining({ code: "JOB_TRANSITION_ILLEGAL" }));
     expect(() => reduceJobs({}, { kind: "unknown" })).toThrowError(ClawError);
+  });
+
+  it("replays lane and result metadata to the same state as immediate transitions", () => {
+    const created = createJob({ id: "metadata-replay", type: "task", projectId: "project-1" });
+    let immediate = created.job;
+    let replayed = reduceJobs({}, created.event);
+    for (const [to, meta] of [
+      ["awaiting-approval", {}],
+      ["approved", {}],
+      ["leased", { lane: "local" }],
+      ["running", {}],
+      ["succeeded", { result: { branch: "claw/metadata-replay", prUrl: "https://example.test/pr/2" } }],
+    ]) {
+      const next = transition(immediate, to, meta);
+      immediate = next.job;
+      replayed = reduceJobs(replayed, next.event);
+    }
+    expect(replayed[created.job.id]).toEqual(immediate);
+    expect(replayed[created.job.id]).toMatchObject({
+      lane: "local", branch: "claw/metadata-replay", prUrl: "https://example.test/pr/2",
+    });
+  });
+
+  it("allows failures and cancellation from leased and needs-input", () => {
+    for (const from of ["leased", "needs-input"]) {
+      for (const to of ["failed", "cancelled"]) {
+        expect(transition({ ...makeJob(`${from}-${to}`), state: from }, to).job.state).toBe(to);
+      }
+    }
   });
 
   it("keeps transition keys and destinations aligned with job states", () => {

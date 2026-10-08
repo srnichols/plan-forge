@@ -3,6 +3,7 @@ import { callbackFor, parseCallback } from "./callbacks/index.mjs";
 import { ClawError } from "./errors.mjs";
 import { createRegistry } from "./registry.mjs";
 import { classifyMessage, getTriageService } from "./capture.mjs";
+import { getBudgetService } from "./budget.mjs";
 
 const NEUTRAL_TOPIC_REPLY = "This topic isn't configured.";
 const AUDIT_UNAVAILABLE_REPLY = "Audit unavailable; command not run.";
@@ -83,13 +84,20 @@ async function checkIdentity(update, indexes, store, logger) {
   return null;
 }
 
-function resolveContext(config, registry, chatId, threadId) {
+function resolveContext(config, registry, chatId, threadId, { services, clients } = {}) {
   const project = registry.byChat(chatId, threadId);
-  if (project?.channel?.adapter === GROUP_CHANNEL) return { scope: "project", project };
+  if (project?.channel?.adapter === GROUP_CHANNEL) {
+    return {
+      scope: "project",
+      project,
+      services,
+      ...(clients ? { mcp: { call: (tool, args) => clients.call(project.id, tool, args) } } : {}),
+    };
+  }
   const general = config.channels?.telegram?.generalChat;
   if (general && String(general.chatId) === chatId
     && String(general.topicId ?? "") === String(threadId ?? "")) {
-    return { scope: "general" };
+    return { scope: "general", services };
   }
   return null;
 }
@@ -227,9 +235,11 @@ async function throttleGate({ update, userId, limiter, store, logger }) {
   return { dropped: true, throttled: true };
 }
 
-async function routeForward({ update, caller, config, registry, chatId, store, logger }) {
+async function routeForward({
+  update, caller, config, registry, chatId, store, logger, contextOptions,
+}) {
   if (classifyMessage(update)?.kind !== "forward") return null;
-  const context = resolveContext(config, registry, chatId, update.threadId);
+  const context = resolveContext(config, registry, chatId, update.threadId, contextOptions);
   const service = getTriageService();
   if (context?.scope !== "project" || !service) {
     await safeAudit(store, logger, {
@@ -293,6 +303,7 @@ function commandByName(commands, name) {
 
 export function createRouter({
   config, channel, store, registry = createRegistry(config), logger, commandRegistry = COMMANDS,
+  services = {}, clients,
   rateLimit = { perMinute: DEFAULT_MESSAGES_PER_MINUTE, windowMs: DEFAULT_RATE_WINDOW_MS },
   now = Date.now,
 } = {}) {
@@ -300,6 +311,17 @@ export function createRouter({
   let currentRegistry = registry;
   let indexes = createIndexes(config);
   const limiter = createInboundLimiter({ ...rateLimit, now });
+  const pending = services.pending instanceof Map ? services.pending : new Map();
+  const contextServices = {
+    ...services,
+    store,
+    config,
+    registry,
+    pending,
+    now,
+    get budget() { return getBudgetService(); },
+  };
+  const contextOptions = { services: contextServices, clients };
 
   async function route(update) {
     const identity = await checkIdentity(update, indexes, store, logger);
@@ -307,7 +329,7 @@ export function createRouter({
     const { caller, chatId } = identity;
     if (update.kind === "callback") {
       await dispatchCallback({
-        update, caller, context: resolveContext(currentConfig, currentRegistry, chatId, update.threadId),
+        update, caller, context: resolveContext(currentConfig, currentRegistry, chatId, update.threadId, contextOptions),
         channel, store, logger,
       });
       return { handled: true };
@@ -318,11 +340,12 @@ export function createRouter({
     if (throttled) return throttled;
     const forwarded = await routeForward({
       update, caller, config: currentConfig, registry: currentRegistry, chatId, store, logger,
+      contextOptions,
     });
     if (forwarded) return forwarded;
     const parsed = parseText(update.text, { botUsername: currentConfig.channels?.telegram?.botUsername });
     if (parsed.kind === "other-bot" || parsed.kind === "empty") return { handled: false };
-    const context = resolveContext(currentConfig, currentRegistry, chatId, update.threadId);
+    const context = resolveContext(currentConfig, currentRegistry, chatId, update.threadId, contextOptions);
     if (!context) {
       if (parsed.kind === "command" || parsed.kind === "unknown" || parsed.kind === "help-text") {
         await sendText(channel, update, NEUTRAL_TOPIC_REPLY);

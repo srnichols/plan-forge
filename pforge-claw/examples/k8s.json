@@ -16,7 +16,7 @@
   },
   "allowlist": [{ "channel": "telegram", "userId": "<user-id>", "role": "owner" }],
   "policy": { "ghcpRoles": ["owner"], "nonOwnerRuntime": "byok-only" },
-  "runtimes": { "default": "copilot-sdk", "pforgeCommand": "auto" },
+  "runtimes": { "default": "copilot-sdk", "pforgeCommand": "auto", "ghCommand": "auto" },
   "lanes": [{
     "id": "k8s-jobs",
     "kind": "k8s",
@@ -24,7 +24,8 @@
     "enabled": true,
     "k8s": {
       "namespace": "pforge-claw",
-      "defaultImage": "<registry>/<namespace>/pforge-claw-worker-node:<tag>"
+      "defaultImage": "<registry>/<namespace>/pforge-claw-worker-node:<tag>",
+      "laneSecret": "PFORGE_CLAW_K8S_LANE_SECRET"
     }
   }],
   "projects": [{

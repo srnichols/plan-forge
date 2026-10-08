@@ -24,9 +24,11 @@ export default {
         secrets: ctx.secrets,
         stateDir: path.join(ctx.home ?? resolveHome(), "state"),
         store: ctx.store,
-        onUpdate: (update) => router.route(update),
+        onUpdate: (update) => ctx.onTelegramUpdate(update),
         onError: (error) => ctx.logger?.error?.("Telegram poller error", { code: error?.code ?? "TELEGRAM_ERROR" }),
       });
+      ctx.channel = channel;
+      ctx.onTelegramUpdate = (update) => router.route(update);
       const askContext = {
         ...ctx,
         channel,
@@ -50,16 +52,22 @@ export default {
         registry,
         logger: ctx.logger,
         commandRegistry,
+        services: ctx.services,
+        clients: ctx.mcp,
       });
       unbind = bindProposalService(service);
       await router.syncMenus();
-      await channel.start();
+      if ((ctx.config?.channels?.telegram?.mode ?? "poll") === "poll") {
+        void Promise.resolve(channel.start()).catch((error) => {
+          ctx.logger?.error?.("Telegram poller error", { code: error?.code ?? "TELEGRAM_ERROR" });
+        });
+      }
     } catch (error) {
       unbind?.();
       unbind = null;
       await channel?.stop();
-      await ctx.mcp.closeAll();
       channel = null;
+      ctx.channel = null;
       service = null;
       throw error;
     }
@@ -68,8 +76,8 @@ export default {
     await channel?.stop();
     unbind?.();
     unbind = null;
-    await ctx.mcp.closeAll();
     channel = null;
+    if (ctx) ctx.channel = null;
     service = null;
   },
   snapshot(ctx, { project } = {}) {

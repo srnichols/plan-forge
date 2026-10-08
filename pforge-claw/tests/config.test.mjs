@@ -61,7 +61,12 @@ describe("config validation", () => {
     ["monthly day 29", (cfg) => { cfg.schedules = [{ id: "x", kind: "digest", at: "monthly 29 07:00" }]; }, "SCHEMA_PATTERN"],
     ["invalid hour", (cfg) => { cfg.schedules = [{ id: "x", kind: "digest", at: "daily 24:00" }]; }, "SCHEMA_PATTERN"],
     ["invalid timezone", (cfg) => { cfg.timezone = "Not/AZone"; }, "TIMEZONE_INVALID"],
+    ["invalid ghCommand", (cfg) => { cfg.runtimes = { ghCommand: [] }; }, "SCHEMA_ONE_OF"],
     ["value-shaped secret", (cfg) => { cfg.channels.telegram.botTokenSecret = "ghp_abcdefghijklmnopqrstuvwxyz0123456789"; }, "SCHEMA_PATTERN"],
+    ["invalid k8s lane secret name", (cfg) => {
+      cfg.lanes[0].kind = "k8s";
+      cfg.lanes[0].k8s = { laneSecret: "not-a-secret-name" };
+    }, "SCHEMA_PATTERN"],
     ["dangling lane", (cfg) => { cfg.projects[0].homeLane = "missing"; }, "UNKNOWN_HOME_LANE"],
     ["duplicate ids", (cfg) => { cfg.projects.push({ ...cfg.projects[0] }); }, "DUPLICATE_PROJECT_ID"],
     ["channel collision", (cfg) => { cfg.projects.push({ ...cfg.projects[0], id: "other" }); }, "CHANNEL_ROUTE_COLLISION"],
@@ -102,6 +107,25 @@ describe("config validation", () => {
     expect(schema.$defs.role.enum).toEqual(ROLES);
     expect(schema.$defs.lane.properties.kind.enum).toEqual(LANE_KINDS);
     expect(schema.$defs.visibility.enum).toEqual(VISIBILITY);
+  });
+
+  it("validates ghCommand, k8s laneSecret, and every deployment example", async () => {
+    const config = minimalConfig();
+    config.runtimes = { ghCommand: "auto" };
+    config.lanes[0].kind = "k8s";
+    config.lanes[0].k8s = { laneSecret: "PFORGE_CLAW_K8S_LANE_SECRET" };
+    expect((await validateConfig(config)).ok).toBe(true);
+    config.runtimes.ghCommand = [process.execPath, "gh-entry.mjs"];
+    expect((await validateConfig(config)).ok).toBe(true);
+    for (const example of ["single-host", "multi-host", "k8s"]) {
+      const { default: exampleConfig } = await import(`../examples/${example}.json`, { with: { type: "json" } });
+      expect(exampleConfig.runtimes.ghCommand, example).toBe("auto");
+      const result = await validateConfig(exampleConfig);
+      expect(result.ok, example).toBe(true);
+      expect(result.warnings, example).toEqual([]);
+    }
+    const k8s = await import("../examples/k8s.json", { with: { type: "json" } });
+    expect(k8s.default.lanes[0].k8s.laneSecret).toBe("PFORGE_CLAW_K8S_LANE_SECRET");
   });
 
   it("rejects unsupported schema keywords", () => {

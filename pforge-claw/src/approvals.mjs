@@ -2,6 +2,7 @@ import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
 import { button, keyboard } from "./channels/telegram/format.mjs";
 import { ClawError } from "./errors.mjs";
 import { JOBS_STREAM, currentJobs, transition } from "./jobs/model.mjs";
+import { getPlacementService } from "./placement.mjs";
 
 export const DEFAULT_TTL_MS = 15 * 60_000;
 export const APPROVER_ROLES = Object.freeze(["owner", "approver"]);
@@ -147,8 +148,17 @@ function formatPlanEstimate({ job, estimate, approval }) {
   return { summary, quorumButtons: buttons };
 }
 
+function projectMcp(mcp, projectId) {
+  if (mcp && typeof mcp.get === "function" && typeof mcp.call === "function") {
+    if (!projectId) return null;
+    return { call: (tool, args) => mcp.call(projectId, tool, args) };
+  }
+  return mcp;
+}
+
 export async function buildApprovalCard({ job, project, mcp, approval, now = Date.now, ttlMs } = {}) {
   if (!job) return { ok: false, error: "ESTIMATE_UNAVAILABLE" };
+  mcp = projectMcp(mcp, job.projectId ?? project?.id);
   let summary;
   let quorumButtons = [];
   if (job.type === "plan") {
@@ -185,9 +195,21 @@ export async function buildApprovalCard({ job, project, mcp, approval, now = Dat
       `Description: ${job.description ?? job.skill ?? "No description"}`,
       `Branch: ${job.targetBranch ?? `claw/${job.id}`}`,
       `Base branch: ${project?.repo?.baseBranch ?? "main"}`,
-      ...(job.placement?.explanation
-        ? [`Will run on: ${job.placement.explanation}`]
-        : [`Lane: ${job.lane ?? project?.homeLane ?? "not assigned"}`]),
+      ...placementLines({ job, project }),
+    ];
+  }
+
+  function placementLines({ job, project }) {
+    const placement = job.placement ?? getPlacementService()?.preview({ project });
+    if (!placement) return [`Lane: ${job.lane ?? project?.homeLane ?? "not assigned"}`];
+    const skipped = (placement.skipped ?? []).slice(0, 3)
+      .map(({ id, reason }) => `${id} ${reason}`);
+    if ((placement.skipped?.length ?? 0) > skipped.length) {
+      skipped.push(`+${placement.skipped.length - skipped.length} more`);
+    }
+    return [
+      `Expected to run on: ${placement.explanation}`,
+      ...(skipped.length ? [`Skipped lanes: ${skipped.join(", ")}`] : []),
     ];
   }
 

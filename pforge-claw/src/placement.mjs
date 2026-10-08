@@ -220,6 +220,20 @@ export function createPlacementService({ store, config = {}, health } = {}) {
     findLane(laneId) {
       return (config.lanes ?? []).find((lane) => lane.id === laneId) ?? null;
     },
+    preview({ project } = {}) {
+      if (!Array.isArray(config.lanes) || config.lanes.length === 0) return null;
+      try {
+        return placeJob({
+          project,
+          projects: config.projects ?? [],
+          lanes: config.lanes,
+          laneState: readLaneState(store),
+          health: typeof health === "function" ? health() : health,
+        });
+      } catch {
+        return null;
+      }
+    },
     setOptIn(options) {
       return setLaneOptIn({ store, ...options });
     },

@@ -29,6 +29,9 @@ export function normalize(update) {
   const updateId = Number.isInteger(update?.update_id) ? String(update.update_id) : null;
   if (update?.message) {
     const message = update.message;
+    const forwarded = Object.hasOwn(message, "forward_origin")
+      || Object.hasOwn(message, "is_automatic_forward")
+      || Object.keys(message).some((key) => key.startsWith("forward_"));
     const files = [];
     if (message.document?.file_id) files.push(String(message.document.file_id));
     const photo = Array.isArray(message.photo) ? message.photo.at(-1) : null;
@@ -40,6 +43,10 @@ export function normalize(update) {
       userId: message.from?.id === undefined ? null : String(message.from.id),
       messageId: message.message_id === undefined ? null : String(message.message_id),
       text: message.text ?? message.caption ?? null, callbackId: null, data: null, files,
+      ...(forwarded ? {
+        forwarded: true,
+        forwardOrigin: { type: message.forward_origin?.type ?? "legacy" },
+      } : {}),
     };
   }
   const callback = update?.callback_query;

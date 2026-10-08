@@ -22,6 +22,13 @@ async function command(cmd, args, options = {}) {
   return result;
 }
 
+async function addOrigin(fixture) {
+  const bare = path.join(fixture.root, "origin.git");
+  await command("git", ["init", "--bare", bare]);
+  await command("git", ["-C", fixture.repo, "remote", "add", "origin", bare]);
+  await command("git", ["-C", fixture.repo, "push", "-u", "origin", "main"]);
+}
+
 async function makeFixture({
   type = "task",
   description = "do work",
@@ -64,6 +71,11 @@ async function makeFixture({
     store.append(JOBS_STREAM, updated.event);
     current = updated.job;
   }
+  if (state === "approved" || readOnly) {
+    const leased = transition(current, "leased", { lane: "local" });
+    store.append(JOBS_STREAM, leased.event);
+    current = leased.job;
+  }
   const events = new EventEmitter();
   const busEvents = [];
   events.on("job.transition", (event) => busEvents.push(`transition:${event.to}`));
@@ -72,7 +84,7 @@ async function makeFixture({
   const runner = async (cmd, args, options = {}) => {
     const record = { cmd, args: [...args], options };
     calls.push(record);
-    if (cmd === "gh") return { code: 0, stdout: "http://localhost/pr/1", stderr: "" };
+    if (cmd === "gh") return { code: 0, stdout: "created https://example.test/pr/1\n", stderr: "" };
     if (cmd === process.execPath && args.some((arg) => arg.endsWith("fake-pforge.mjs"))
       && args.at(-1) === "smith") return { code: 0, stdout: "smith ok", stderr: "" };
     if (cmd === "git" && args.includes("show-ref")) return run(cmd, args, options);
@@ -114,7 +126,7 @@ describe("job runners", () => {
   it("refuses to run before stored approval", async () => {
     const f = await makeFixture({ state: "queued" });
     const runners = createRunners(f.context);
-    await expect(runners.runJob(f.job, {})).rejects.toMatchObject({ code: "JOB_NOT_APPROVED" });
+    await expect(runners.runJob(f.job, {})).rejects.toMatchObject({ code: "JOB_NOT_LEASED" });
   });
 
   it("persists transitions in order, includes task context, and avoids duplicate lane events", async () => {
@@ -128,7 +140,7 @@ describe("job runners", () => {
     expect(capturedTurn.prompt).toContain("Useful context");
     expect(capturedTurn.context).toBeUndefined();
     expect(capturedTurn.onPermissionRequest).toBeTypeOf("function");
-    expect(f.busEvents).toEqual(["transition:leased", "transition:running", "transition:succeeded", "finished:succeeded"]);
+    expect(f.busEvents).toEqual(["transition:running", "transition:succeeded", "finished:succeeded"]);
     expect(currentJobs(f.store).j1.state).toBe("succeeded");
   });
 
@@ -186,6 +198,85 @@ describe("job runners", () => {
     expect(prCall.args).toContain("pr");
     expect(prCall.args.at(-1)).toContain("## Summary");
     expect(prCall.args.at(-1)).toContain("Job: j1");
+    expect(result.result.publish.prUrl).toBe("https://example.test/pr/1");
+  });
+
+  it("preserves the pull request URL from the final https URL in gh stdout", async () => {
+    const f = await makeFixture({
+      runtime: { run: async ({ cwd }) => {
+        await writeFile(path.join(cwd, "result.txt"), "done\n");
+        return { ok: true, status: "succeeded" };
+      } },
+    });
+    await addOrigin(f);
+    const result = await createRunners(f.context).runJob(f.job, {});
+    expect(result.result.publish).toMatchObject({
+      pr: true, branch: "claw/j1", prUrl: "https://example.test/pr/1",
+    });
+    expect(currentJobs(f.store).j1).toMatchObject({
+      branch: "claw/j1", prUrl: "https://example.test/pr/1",
+    });
+  });
+
+  it("uses the configured ghCommand prefix to create a pull request", async () => {
+    const f = await makeFixture({
+      runtime: { run: async ({ cwd }) => {
+        await writeFile(path.join(cwd, "result.txt"), "done\n");
+        return { ok: true, status: "succeeded" };
+      } },
+    });
+    await addOrigin(f);
+    f.context.config.runtimes.ghCommand = ["gh-wrapper", "--profile", "safe"];
+    await createRunners(f.context).runJob(f.job, {});
+    expect(f.calls.find(({ cmd }) => cmd === "gh-wrapper").args.slice(0, 4))
+      .toEqual(["--profile", "safe", "pr", "create"]);
+  });
+
+  it("uses the injected job source for all state reads and writes", async () => {
+    const f = await makeFixture();
+    const reads = [];
+    const writes = [];
+    const jobs = {
+      get(id) {
+        reads.push(id);
+        return currentJobs(f.store)[id] ?? null;
+      },
+      append(job, state, meta) {
+        writes.push(state);
+        const updated = transition(job, state, meta);
+        f.store.append(JOBS_STREAM, updated.event);
+        return updated;
+      },
+    };
+    const result = await createRunners(f.context, { jobs }).runJob(f.job, {});
+    expect(result.status).toBe("succeeded");
+    expect(reads.length).toBeGreaterThan(1);
+    expect(writes).toEqual(["running", "succeeded"]);
+  });
+
+  it("treats an empty diff as a successful publish without creating a pull request", async () => {
+    const f = await makeFixture();
+    const result = await createRunners(f.context).runJob(f.job, {});
+    expect(result).toMatchObject({ status: "succeeded", result: { publish: { pr: false } } });
+    expect(f.calls.some(({ cmd }) => cmd === "gh")).toBe(false);
+  });
+
+  it("reports a failed publish and keeps the stored job failed", async () => {
+    const f = await makeFixture({
+      runtime: { run: async ({ cwd }) => {
+        await writeFile(path.join(cwd, "result.txt"), "done\n");
+        return { ok: true, status: "succeeded" };
+      } },
+    });
+    await addOrigin(f);
+    const original = f.context.runner;
+    f.context.runner = async (cmd, args, options) => {
+      if (cmd === "gh") return { code: 1, stdout: "", stderr: "failed" };
+      return original(cmd, args, options);
+    };
+    const result = await createRunners(f.context).runJob(f.job, {});
+    expect(result).toMatchObject({ status: "failed", error: "PUBLISH_FAILED" });
+    expect(currentJobs(f.store).j1.state).toBe("failed");
   });
 
   it("reports bootstrap failures and keeps the worktree", async () => {
@@ -210,7 +301,7 @@ describe("job runners", () => {
     const result = await running;
     expect(result.status).toBe("cancelled");
     expect(f.mcpCalls.find(({ name }) => name === "forge_abort")).toMatchObject({
-      input: {},
+      input: { path: path.join(f.home, "worktrees", "p1", "j1") },
     });
     expect(f.mcpCalls.find(({ name }) => name === "forge_watch_live")).toMatchObject({
       input: {

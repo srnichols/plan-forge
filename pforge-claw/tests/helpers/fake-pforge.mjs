@@ -5,7 +5,7 @@ import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-const FAKE_PR_URL = ["https://example", ".invalid/pr/1"].join("");
+const FAKE_PR_URL = ["https://example", ".test/pr/1"].join("");
 
 function run(command, args, { cwd, env } = {}) {
   return new Promise((resolve, reject) => {
@@ -110,6 +110,7 @@ async function writeFixtureArtifact(name, record) {
 }
 
 async function handleCommand(command, args) {
+  if (command === "smith") return 0;
   if (command === "run-plan" || command === "run") return runPlan(args);
   if (command === "bootstrap") {
     await writeFixtureArtifact("bootstrap.json", { ok: true, args });

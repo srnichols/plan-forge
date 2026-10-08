@@ -12,7 +12,15 @@
   },
   "allowlist": [{ "channel": "telegram", "userId": "<user-id>", "role": "owner", "alias": "<display alias>" }],
   "policy": { "ghcpRoles": ["owner"], "nonOwnerRuntime": "byok-only" },
-  "runtimes": { "default": "copilot-sdk", "pforgeCommand": "auto" },
+  "runtimes": {
+    "default": "copilot-sdk",
+    "pforgeCommand": "auto",
+    "ghCommand": "auto",
+    "byok": {
+      "anthropic": { "keySecret": "ANTHROPIC_API_KEY" },
+      "openai": { "keySecret": "OPENAI_API_KEY" }
+    }
+  },
   "lanes": [{ "id": "local", "kind": "local", "labels": ["<host>"], "enabled": true }],
   "projects": [{
     "id": "project",

@@ -538,7 +538,7 @@ export function createProgressService({
 
   async function abortJob(job, caller) {
     if (!job) return { ok: false, error: "JOB_NOT_FOUND", text: "JOB_NOT_FOUND: job not found." };
-    if (job.state === "running") {
+    if (["leased", "running", "needs-input"].includes(job.state)) {
       const lane = typeof lanes === "function"
         ? lanes(job.lane)
         : typeof lanes?.get === "function"
@@ -564,7 +564,7 @@ export function createProgressService({
       }
     }
     if (job.state !== "failed") {
-      return { ok: false, error: "NOT_ABORTABLE", text: "NOT_ABORTABLE: only running or failed jobs can be aborted." };
+      return { ok: false, error: "NOT_ABORTABLE", text: "NOT_ABORTABLE: only leased, running, needs-input, or failed jobs can be aborted." };
     }
     audit({ kind: "progress.discarded", jobId: job.id, userId: caller?.userId });
     const state = ensureState(job);

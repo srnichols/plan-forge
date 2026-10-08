@@ -23,18 +23,27 @@ function parseOptions() {
     args: process.argv.slice(2),
     strict: true,
     allowPositionals: false,
-    options: { log: { type: "string" } },
+    options: { log: { type: "string" }, port: { type: "string" } },
   });
   logPath = parsed.values.log;
 }
 
 function toolResult(name) {
+  const estimate = (mode) => ({
+    mode, estimatedCostUSD: 0, totalSliceCount: 1, quorumSliceCount: 0,
+  });
   const outputs = {
     forge_master_ask: {
       answer: "A deterministic fixture response.",
       proposedActions: [{ priority: "P0", kind: "task", args: { description: "Fixture action" } }],
     },
-    forge_estimate_quorum: { auto: { estimatedCostUSD: 0 }, power: { estimatedCostUSD: 0 }, speed: { estimatedCostUSD: 0 }, false: { estimatedCostUSD: 0 } },
+    forge_estimate_quorum: {
+      recommended: "auto",
+      auto: estimate("auto"),
+      power: estimate("power"),
+      speed: estimate("speed"),
+      false: estimate("false"),
+    },
     forge_cost_report: { totalCostUSD: 0, runs: [] },
     forge_watch_live: { state: "idle", active: false },
     forge_abort: { ok: true, aborted: false },

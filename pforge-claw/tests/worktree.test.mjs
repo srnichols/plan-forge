@@ -1,9 +1,10 @@
+import { existsSync } from "node:fs";
 import { mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { ClawError } from "../src/errors.mjs";
-import { addWorktree, assertInside, isInside, removeWorktree, resolveCommand, resolvePforgeCommand, run, sweepWorktrees } from "../src/jobs/worktree.mjs";
+import { addWorktree, assertInside, isInside, removeWorktree, resolveCommand, resolveGhCommand, resolvePforgeCommand, run, sweepWorktrees } from "../src/jobs/worktree.mjs";
 import { createStore } from "../src/state/store.mjs";
 import { JOBS_STREAM, createJob, transition } from "../src/jobs/model.mjs";
 
@@ -15,7 +16,7 @@ async function tempDir() {
 }
 
 async function git(cwd, args) {
-  const result = await run("git", args, { cwd });
+  const result = await run("git", args, { cwd, env: process.env, exists: existsSync });
   if (result.code !== 0) throw new Error(result.stderr);
   return result;
 }
@@ -38,7 +39,7 @@ describe("worktree helpers", () => {
     const calls = [];
     const runner = (cmd, args, options) => {
       calls.push({ cmd, args, options });
-      return run(cmd, args, options);
+      return run(cmd, args, { ...options, env: process.env, exists: existsSync });
     };
 
     const created = await addWorktree({
@@ -83,6 +84,41 @@ describe("worktree helpers", () => {
       .toEqual(["pwsh", "-NoProfile", "-File", path.join("C:\\repo", "pforge.ps1")]);
     expect(resolvePforgeCommand({ config: {}, cwd: "/repo", platform: "linux" }))
       .toEqual(["bash", path.join("/repo", "pforge.sh")]);
+  });
+
+  it("prefers executable Windows commands and refuses cmd shims with injected lookup", () => {
+    const files = new Set([
+      path.win32.join("C:\\tools", "git.cmd"),
+      path.win32.join("C:\\tools", "git.exe"),
+    ]);
+    expect(resolveCommand("git", {
+      platform: "win32",
+      env: { PATH: "C:\\tools", PATHEXT: ".cmd;.exe;.com;.bat" },
+      exists: (candidate) => files.has(candidate),
+    })).toEqual([path.win32.join("C:\\tools", "git.exe")]);
+    expect(() => resolveCommand("gh", {
+      platform: "win32",
+      env: { PATH: "C:\\tools", PATHEXT: ".exe;.cmd;.bat" },
+      exists: (candidate) => candidate.endsWith(".cmd"),
+    })).toThrowError(expect.objectContaining({
+      code: "CMD_SHIM_REFUSED",
+      details: { hint: expect.stringContaining("runtimes.ghCommand") },
+    }));
+    expect(() => resolveCommand("missing", {
+      platform: "win32",
+      env: { PATH: "C:\\empty", PATHEXT: ".exe;.com" },
+      exists: () => false,
+    })).toThrowError(expect.objectContaining({ code: "COMMAND_NOT_FOUND" }));
+  });
+
+  it("validates ghCommand configuration without allowing command shims", () => {
+    expect(resolveGhCommand({ config: {} })).toEqual(["gh"]);
+    expect(resolveGhCommand({ config: { runtimes: { ghCommand: [process.execPath, "gh.mjs"] } } }))
+      .toEqual([process.execPath, "gh.mjs"]);
+    expect(() => resolveGhCommand({ config: { runtimes: { ghCommand: ["gh.cmd"] } } }))
+      .toThrowError(expect.objectContaining({ code: "CMD_SHIM_REFUSED" }));
+    expect(() => resolveGhCommand({ config: { runtimes: { ghCommand: [] } } }))
+      .toThrowError(expect.objectContaining({ code: "CONFIG_INVALID" }));
   });
 
   it("sweeps only old failed or cancelled worktrees, never running jobs", async () => {

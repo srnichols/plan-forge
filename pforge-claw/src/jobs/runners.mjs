@@ -2,6 +2,7 @@ import { spawn } from "node:child_process";
 import { readFile, readdir, stat } from "node:fs/promises";
 import path from "node:path";
 import { ClawError } from "../errors.mjs";
+import { QUORUM_MODES } from "../approvals.mjs";
 import { FEATURES } from "../features/index.mjs";
 import { toSessionMcpServers } from "../runtime/copilot-session.mjs";
 import {
@@ -9,6 +10,7 @@ import {
   isInside,
   removeWorktree,
   resolvePforgeCommand,
+  resolveGhCommand,
   run,
 } from "./worktree.mjs";
 import { bootstrapWorktree } from "./bootstrap.mjs";
@@ -19,7 +21,6 @@ const TASK_CONTEXT_TIMEOUT_MS = 10_000;
 const TASK_CONTEXT_LIMIT = 8 * 1024;
 const EVENT_LIMIT = 8 * 1024;
 const ABORT_TIMEOUT_MS = 5_000;
-const QUORUM_MODES = new Set(["auto", "power", "speed", "false"]);
 
 function safeText(value, secrets) {
   const text = String(value ?? "").slice(0, EVENT_LIMIT);
@@ -36,13 +37,21 @@ function appendOutput(current, chunk, other = "") {
   return current + bytes.toString("utf8");
 }
 
-function getJobs(store) {
-  return currentJobs(store);
+function createStoredJobs(store) {
+  return {
+    get(id) {
+      return currentJobs(store)[id] ?? null;
+    },
+    append(job, state, meta) {
+      const result = transition(job, state, meta);
+      store.append(JOBS_STREAM, result.event);
+      return result;
+    },
+  };
 }
 
-function persistTransition({ store, bus, job, state, meta }) {
-  const result = transition(job, state, meta);
-  store.append(JOBS_STREAM, result.event);
+function persistTransition({ jobs, bus, job, state, meta }) {
+  const result = jobs.append(job, state, meta);
   bus?.emit("job.transition", result.event);
   return result.job;
 }
@@ -104,16 +113,19 @@ async function publish({ ctx, job, project, worktree, summary }) {
     ], { cwd: worktree });
   }
   if (!(await hasCommitsAhead(ctx.runner, worktree, baseBranch))) {
-    return { pr: null, note: "empty diff" };
+    return { pr: false };
   }
   const branch = `claw/${job.id}`;
   await runCommand(ctx.runner, "git", ["-C", worktree, "push", "-u", "origin", branch], { cwd: worktree });
   const body = await pullRequestBody({ job, project, worktree, summary });
   const title = `[claw] ${summary}`;
-  await runCommand(ctx.runner, "gh", [
-    "pr", "create", "--base", baseBranch, "--head", branch, "--title", title, "--body", body,
+  const gh = resolveGhCommand({ config: ctx.config });
+  const result = await runCommand(ctx.runner, gh[0], [
+    ...gh.slice(1), "pr", "create", "--base", baseBranch, "--head", branch, "--title", title, "--body", body,
   ], { cwd: worktree });
-  return { pr: true, branch };
+  const urls = result.stdout.match(/https:\/\/\S+/g) ?? [];
+  const prUrl = urls.at(-1);
+  return { pr: true, branch, ...(prUrl ? { prUrl } : {}) };
 }
 
 function emitFinished({ bus, job, state, reason, secrets }) {
@@ -122,12 +134,14 @@ function emitFinished({ bus, job, state, reason, secrets }) {
     projectId: job.projectId,
     type: job.type,
     state,
+    ...(job.branch ? { branch: job.branch } : {}),
+    ...(job.prUrl ? { prUrl: job.prUrl } : {}),
     ...(reason ? { reason: safeText(reason, secrets) } : {}),
   });
 }
 
 function findStoredJob(ctx, jobId) {
-  return getJobs(ctx.store)[jobId];
+  return ctx.jobs.get(jobId);
 }
 
 async function callWithTimeout(operation, timeoutMs) {
@@ -187,76 +201,100 @@ function failureReason(error) {
   return typeof error?.code === "string" ? error.code : "JOB_RUN_FAILED";
 }
 
+function createDefaultWorkspace(ctx) {
+  return {
+    async prepare(job) {
+      const project = projectFor(ctx.config, job);
+      if (!project?.repo?.path) throw new ClawError("PROJECT_UNAVAILABLE");
+      const worktree = await addWorktree({ home: ctx.home, project, job, runner: ctx.runner });
+      const handle = { ...worktree, repoPath: project.repo.path };
+      try {
+        const bootstrap = await bootstrapWorktree({
+          job,
+          worktree: handle.path,
+          forgeHome: ctx.home,
+          homeRepo: project.repo.path,
+          config: ctx.config,
+          secrets: ctx.secrets,
+          runner: ctx.runner,
+        });
+        if (!bootstrap.ok) {
+          throw new ClawError("BOOTSTRAP_FAILED", {
+            reason: "bootstrap",
+            step: bootstrap.step,
+            code: bootstrap.code,
+          });
+        }
+        return { handle, env: bootstrap.env };
+      } catch (error) {
+        error.worktreeHandle = handle;
+        throw error;
+      }
+    },
+    async release(handle, { success } = {}) {
+      if (!success || !handle) return;
+      if (!handle.repoPath) throw new ClawError("PROJECT_UNAVAILABLE");
+      await removeWorktree({ repoPath: handle.repoPath, path: handle.path, runner: ctx.runner });
+    },
+  };
+}
+
 function createLifecycle(ctx) {
-  async function withWorktree(job, fn, { signal } = {}) {
+  async function withWorktree(job, fn, { signal, emit } = {}) {
     const stored = findStoredJob(ctx, job.id);
-    const readQueued = stored?.mutating === false && stored.state === "queued";
-    if (!stored || (!readQueued && !["approved", "leased"].includes(stored.state))) {
-      throw new ClawError("JOB_NOT_APPROVED");
-    }
+    if (!stored || stored.state !== "leased") throw new ClawError("JOB_NOT_LEASED");
     const project = projectFor(ctx.config, stored);
     if (!project?.repo?.path) throw new ClawError("PROJECT_UNAVAILABLE");
-    let running = stored;
-    if (running.state === "approved" || readQueued) {
-      running = persistTransition({ store: ctx.store, bus: ctx.bus, job: running, state: "leased" });
-    }
-    running = persistTransition({ store: ctx.store, bus: ctx.bus, job: running, state: "running" });
-    let worktree = null;
-    let outcome = null;
+    persistTransition({ jobs: ctx.jobs, bus: ctx.bus, job: stored, state: "running" });
+    let handle = null;
+    let success = false;
     try {
-      worktree = await addWorktree({
-        home: ctx.home,
-        project,
-        job: stored,
-        runner: ctx.runner,
-      });
-      const bootstrap = await bootstrapWorktree({
-        job: stored,
-        worktree,
-        forgeHome: ctx.home,
-        homeRepo: project.repo.path,
-        config: ctx.config,
-        secrets: ctx.secrets,
-        runner: ctx.runner,
-      });
-      if (!bootstrap.ok) {
-        throw new ClawError("BOOTSTRAP_FAILED", {
-          reason: "bootstrap",
-          step: bootstrap.step,
-          code: bootstrap.code,
-        });
-      }
-      const returned = await fn({ job: stored, project, worktree, env: bootstrap.env, signal });
+      const prepared = await ctx.workspace.prepare(stored, { signal });
+      handle = prepared?.handle ?? prepared?.worktree ?? null;
+      if (!handle?.path) throw new ClawError("WORKSPACE_BAD_CONTRACT");
+      const worktree = handle;
+      const returned = await fn({ job: stored, project, worktree, env: prepared.env, signal });
       const summary = stored.summary ?? stored.description ?? `${stored.type} ${stored.id}`;
       let published;
       try {
         published = await publish({ ctx, job: stored, project, worktree: worktree.path, summary });
-      } catch {
-        throw new ClawError("PUBLISH_FAILED", { reason: "publish" });
+      } catch (error) {
+        throw new ClawError("PUBLISH_FAILED", { reason: "publish", code: failureReason(error) });
       }
-      outcome = returned ?? published;
+      if (published.pr && published.prUrl) emit?.("artifact", {
+        kind: "pr", url: published.prUrl, branch: published.branch,
+      });
       const latest = findStoredJob(ctx, stored.id);
       const completed = persistTransition({
-        store: ctx.store, bus: ctx.bus, job: latest, state: "succeeded",
+        jobs: ctx.jobs,
+        bus: ctx.bus,
+        job: latest,
+        state: "succeeded",
+        meta: { result: {
+          ...(published.branch ? { branch: published.branch } : {}),
+          ...(published.prUrl ? { prUrl: published.prUrl } : {}),
+        } },
       });
       emitFinished({ bus: ctx.bus, job: completed, state: "succeeded", secrets: ctx.secrets });
-      await removeWorktree({ repoPath: project.repo.path, path: worktree.path, runner: ctx.runner });
-      return { status: "succeeded", result: outcome };
+      success = true;
+      return { status: "succeeded", result: { ...(returned ?? {}), publish: published } };
     } catch (error) {
+      handle ??= error?.worktreeHandle ?? null;
       const latest = findStoredJob(ctx, stored.id);
       if (latest?.state === "running") {
         persistTransition({
-          store: ctx.store,
+          jobs: ctx.jobs,
           bus: ctx.bus,
           job: latest,
           state: signal?.aborted ? "cancelled" : "failed",
           meta: { reason: error?.details?.reason ?? failureReason(error) },
         });
       }
-      if (worktree && ctx.config?.jobs?.pushOnFailure) {
+      if (handle?.path && ctx.config?.jobs?.pushOnFailure) {
         try {
-          await runCommand(ctx.runner, "git", ["-C", worktree.path, "push", "-u", "origin", `claw/${stored.id}`], { cwd: worktree.path });
-        } catch {
+          await runCommand(ctx.runner, "git", ["-C", handle.path, "push", "-u", "origin", `claw/${stored.id}`], { cwd: handle.path });
+        } catch (pushError) {
+          ctx.logger?.warn?.("Failed worktree push failed", { code: failureReason(pushError) });
           ctx.bus?.emit("job.warning", {
             jobId: stored.id,
             code: "FAILURE_PUSH_FAILED",
@@ -266,6 +304,8 @@ function createLifecycle(ctx) {
       const latestState = findStoredJob(ctx, stored.id)?.state ?? "failed";
       emitFinished({ bus: ctx.bus, job: stored, state: latestState, reason: failureReason(error), secrets: ctx.secrets });
       return { status: latestState === "cancelled" ? "cancelled" : "failed", error: failureReason(error) };
+    } finally {
+      await ctx.workspace.release(handle, { success });
     }
   }
   return { withWorktree };
@@ -301,7 +341,7 @@ async function executeTask(ctx, job, { emit, signal, features }) {
 }
 
 function normalizePlanQuorum(value) {
-  if (QUORUM_MODES.has(value)) return value;
+  if (QUORUM_MODES.includes(value)) return value;
   return "auto";
 }
 
@@ -346,20 +386,27 @@ export async function resolvePlan({ root, input } = {}) {
   return { kind: candidates.length ? "multiple" : "none", candidates };
 }
 
-export function createRunners(ctx = {}) {
-  const dependencies = { runner: run, features: FEATURES, now: Date.now, ...ctx };
+export function createRunners(ctx = {}, { jobs = createStoredJobs(ctx.store), workspace } = {}) {
+  const dependencies = {
+    runner: run,
+    features: FEATURES,
+    now: Date.now,
+    ...ctx,
+    jobs,
+    workspace: workspace ?? createDefaultWorkspace({ ...ctx, runner: ctx.runner ?? run }),
+  };
   const lifecycle = createLifecycle(dependencies);
 
   async function runJob(job, { emit, signal } = {}) {
     const stored = job?.id ? findStoredJob(dependencies, job.id) : null;
     if (!stored) throw new ClawError("JOB_NOT_APPROVED");
-    const startable = stored.mutating
-      ? ["approved", "leased"].includes(stored.state)
-      : ["queued", "leased"].includes(stored.state);
-    if (!startable) throw new ClawError("JOB_NOT_APPROVED");
+    if (stored.state !== "leased") throw new ClawError("JOB_NOT_LEASED");
     const handler = stored.type === "task" ? task : stored.type === "skill" ? skill : stored.type === "plan" ? plan : null;
     if (!handler) throw new ClawError("JOB_TYPE_UNSUPPORTED");
-    return handler(stored, { emit, signal });
+    return handler({
+      ...stored,
+      ...(QUORUM_MODES.includes(job.quorum) ? { quorum: job.quorum } : {}),
+    }, { emit, signal });
   }
 
   async function task(job, { emit, signal } = {}) {
@@ -370,10 +417,10 @@ export function createRunners(ctx = {}) {
         .then(async (result) => {
           if (result?.status === "failed" || result?.status === "cancelled") throw new ClawError(result.error ?? "RUNTIME_FAILED");
           return result;
-        }), { signal });
+        }), { signal, emit });
   }
 
-  async function skill(job, { signal } = {}) {
+  async function skill(job, { signal, emit } = {}) {
     checkService(dependencies.mcp, "mcp");
     return lifecycle.withWorktree(job, async ({ job: approvedJob, worktree, project }) => {
       const client = typeof dependencies.mcp === "function"
@@ -387,7 +434,7 @@ export function createRunners(ctx = {}) {
       });
       if (result?.isError || result?.ok === false) throw new ClawError(result.error ?? "SKILL_FAILED");
       return result;
-    }, { signal });
+    }, { signal, emit });
   }
 
   async function plan(job, { emit, signal } = {}) {
@@ -427,7 +474,7 @@ export function createRunners(ctx = {}) {
       const abortPoll = async () => {
         try {
           await callWithTimeout(
-            client.call("forge_abort", {}),
+            client.call("forge_abort", { path: worktree.path }),
             ABORT_TIMEOUT_MS,
           );
         } catch {
@@ -478,7 +525,7 @@ export function createRunners(ctx = {}) {
         signal?.removeEventListener("abort", onAbort);
         void polling;
       }
-    }, { signal });
+    }, { signal, emit });
   }
 
   return { task, skill, plan, runJob };

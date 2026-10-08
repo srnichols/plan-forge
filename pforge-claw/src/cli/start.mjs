@@ -8,6 +8,12 @@ import { createRegistry, resolveMcpLaunch } from "../registry.mjs";
 import { createProjectClients } from "../mcp/project-client.mjs";
 import { bus } from "../events.mjs";
 import { ClawError } from "../errors.mjs";
+import { bindPlacementService, createPlacementService } from "../placement.mjs";
+import { createLaneDirectory, buildLanes } from "../lanes/directory.mjs";
+import { createJobExecutor } from "../jobs/executor.mjs";
+import { createDispatcher } from "../dispatcher.mjs";
+import { getApprovalService } from "../approvals.mjs";
+import { getBudgetService } from "../budget.mjs";
 
 const USAGE = "Usage: pforge claw start [--home <dir>]";
 
@@ -26,6 +32,156 @@ function startupError(error) {
   return new ClawError("STARTUP_FAILED");
 }
 
+function cleanupAction(errors, operation) {
+  return async () => {
+    try {
+      await operation();
+    } catch (error) {
+      errors.push(error);
+    }
+  };
+}
+
+export async function bootDispatcher(opts = {}) {
+  const home = opts.home ?? resolveHome({ env: opts.env ?? process.env });
+  const load = opts.loadConfig ?? loadConfig;
+  const loaded = opts.loadedConfig ?? await load({ home });
+  const config = loaded.config;
+  if (config && (!Array.isArray(config.allowlist) || config.allowlist.length === 0)) {
+    throw new ClawError("ALLOWLIST_EMPTY", { hint: "Add at least one allowed Telegram user." });
+  }
+  if (!loaded.ok) {
+    const problem = loaded.errors[0];
+    throw new ClawError(problem.code, { hint: problem.hint });
+  }
+  assertStartable(config);
+  const validation = await (opts.validateConfig ?? validateConfig)(config, { mode: "runtime" });
+  if (!validation.ok) {
+    const issue = validation.errors[0];
+    throw new ClawError(issue.code, { hint: issue.hint });
+  }
+  const secrets = opts.secrets ?? await (opts.createSecrets ?? createSecrets)({
+    env: opts.env ?? process.env,
+    file: path.join(home, "secrets.json"),
+    trackNames: requiredSecretNames(config),
+  });
+  for (const { name } of requiredSecretNames(config)) {
+    if (!secrets.has(name)) {
+      throw new ClawError("SECRET_MISSING", {
+        hint: `Set ${name} in the environment or ${path.join(home, "secrets.json")}.`,
+      });
+    }
+  }
+
+  const store = opts.store ?? (opts.createStore ?? createStore)(
+    path.join(home, "state"), { redact: secrets.redact },
+  );
+  const errors = [];
+  let releaseLock = null;
+  let clients = null;
+  let app = null;
+  let dispatcher = null;
+  let unbindPlacement = null;
+  let appStarted = false;
+  let stopped = false;
+  let stopPromise = null;
+  const rollback = async () => {
+    await cleanupAction(errors, () => dispatcher?.stop?.())();
+    await cleanupAction(errors, () => app?.stop?.())();
+    await cleanupAction(errors, () => unbindPlacement?.())();
+    await cleanupAction(errors, () => clients?.closeAll?.())();
+    await cleanupAction(errors, () => releaseLock?.())();
+  };
+
+  try {
+    releaseLock = store.lock();
+    const projectRegistry = (opts.createRegistry ?? createRegistry)(config);
+    const registry = { ...projectRegistry, resolveMcpLaunch };
+    const logger = opts.logger ?? redactingLogger(secrets);
+    clients = (opts.createProjectClients ?? createProjectClients)({ config, registry, logger });
+    const lanes = (opts.createLaneDirectory ?? createLaneDirectory)();
+    const ctx = {
+      home,
+      config,
+      secrets,
+      store,
+      registry,
+      projectRegistry,
+      logger,
+      bus: opts.bus ?? bus,
+      mcp: clients,
+      lanes,
+    };
+    const placementService = (opts.createPlacementService ?? createPlacementService)({
+      store,
+      config,
+      health: () => lanes.snapshot(),
+    });
+    unbindPlacement = (opts.bindPlacementService ?? bindPlacementService)(placementService);
+    app = (opts.createApp ?? createApp)(ctx);
+    await app.start();
+    appStarted = true;
+    const executor = (opts.createJobExecutor ?? createJobExecutor)({
+      ctx,
+      clients,
+      runtimeFactory: opts.runtimeFactory,
+      createSession: opts.createSession,
+      jobsFor: opts.jobsFor,
+      workspaceFor: opts.workspaceFor,
+    });
+    (opts.buildLanes ?? buildLanes)({
+      directory: lanes,
+      config,
+      bus: ctx.bus,
+      runtimeFor: executor.runtimeFor,
+      logger,
+      workers: opts.workers,
+      k8sApiFactory: opts.k8sApiFactory,
+    });
+    dispatcher = (opts.createDispatcher ?? createDispatcher)(ctx, {
+      directory: lanes,
+      placement: placementService,
+      approvals: getApprovalService(),
+      budget: getBudgetService(),
+      now: opts.now,
+      defer: opts.defer,
+      tickMs: opts.tickMs,
+      stopTimeoutMs: opts.stopTimeoutMs,
+    });
+    await dispatcher.start();
+    void Promise.resolve(app.doctor()).then((results) => {
+      for (const check of results) {
+        if (check.status === "warn" || check.status === "fail") {
+          logger.warn(`doctor ${check.id}: ${check.message}`, { code: check.code });
+        }
+      }
+    }).catch((error) => {
+      logger.warn("Dispatcher doctor check failed", { code: error?.code ?? "DOCTOR_FAILED" });
+    });
+
+    async function stop() {
+      if (stopPromise) return stopPromise;
+      stopPromise = (async () => {
+        await rollback();
+        stopped = true;
+        if (errors.length) throw new AggregateError(errors, "Claw dispatcher shutdown was incomplete.");
+      })();
+      return stopPromise;
+    }
+
+    return {
+      home, config, secrets, store, registry, projectRegistry, logger, clients, lanes, ctx, app,
+      executor, dispatcher, stop,
+      get stopped() { return stopped; },
+      get appStarted() { return appStarted; },
+    };
+  } catch (error) {
+    await rollback();
+    if (errors.length) throw new AggregateError([error, ...errors], "Claw startup failed and rollback was incomplete.");
+    throw error;
+  }
+}
+
 async function run(argv = []) {
   let parsed;
   try {
@@ -40,61 +196,9 @@ async function run(argv = []) {
     return 2;
   }
 
-  const home = parsed.values.home ?? resolveHome();
-  let releaseLock = null;
-  let app = null;
-  let clients = null;
+  let handles;
   try {
-    const loaded = await loadConfig({ home });
-    const config = loaded.config;
-    if (config && (!Array.isArray(config.allowlist) || config.allowlist.length === 0)) {
-      throw new ClawError("ALLOWLIST_EMPTY", { hint: "Add at least one allowed Telegram user." });
-    }
-    if (!loaded.ok) {
-      const problem = loaded.errors[0];
-      throw new ClawError(problem.code, { hint: problem.hint });
-    }
-    assertStartable(config);
-    const validation = await validateConfig(config, { mode: "runtime" });
-    if (!validation.ok) {
-      const issue = validation.errors[0];
-      throw new ClawError(issue.code, { hint: issue.hint });
-    }
-    const secrets = await createSecrets({
-      env: process.env,
-      file: path.join(home, "secrets.json"),
-      trackNames: requiredSecretNames(config),
-    });
-    for (const { name } of requiredSecretNames(config)) {
-      if (!secrets.has(name)) {
-        throw new ClawError("SECRET_MISSING", { hint: `Set ${name} in the environment or ${path.join(home, "secrets.json")}.` });
-      }
-    }
-    const store = createStore(path.join(home, "state"), { redact: secrets.redact });
-    releaseLock = store.lock();
-    const projectRegistry = createRegistry(config);
-    const registry = { ...projectRegistry, resolveMcpLaunch };
-    const logger = redactingLogger(secrets);
-    clients = createProjectClients({ config, registry, logger });
-    const ctx = {
-      home,
-      config,
-      secrets,
-      store,
-      registry,
-      projectRegistry,
-      logger,
-      bus,
-      mcp: clients,
-    };
-    app = createApp(ctx);
-    await app.start();
-    // Startup self-check: surface feature warnings (observer down, memory unreachable, …) in the dispatcher log.
-    void app.doctor().then((results) => {
-      for (const check of results) {
-        if (check.status === "warn" || check.status === "fail") logger.warn(`doctor ${check.id}: ${check.message}`, { code: check.code });
-      }
-    });
+    handles = await bootDispatcher({ home: parsed.values.home });
     await new Promise((resolve) => {
       let stopping = false;
       const shutdown = async () => {
@@ -103,19 +207,19 @@ async function run(argv = []) {
         process.off("SIGINT", onSignal);
         process.off("SIGTERM", onSignal);
         try {
-          await app.stop();
+          await handles.stop();
           process.exitCode = 0;
         } finally {
-          releaseLock?.();
           resolve();
         }
       };
-      const onSignal = () => { void shutdown().catch((error) => {
-        logger.error("Dispatcher shutdown failed", { code: error?.code ?? "STOP_FAILED" });
-        process.exitCode = 1;
-        releaseLock?.();
-        resolve();
-      }); };
+      const onSignal = () => {
+        void shutdown().catch((error) => {
+          handles.logger.error("Dispatcher shutdown failed", { code: error?.code ?? "STOP_FAILED" });
+          process.exitCode = 1;
+          resolve();
+        });
+      };
       process.once("SIGINT", onSignal);
       process.once("SIGTERM", onSignal);
     });
@@ -123,13 +227,10 @@ async function run(argv = []) {
   } catch (error) {
     const failure = startupError(error);
     process.stderr.write(`${failure.code}${failure.details?.hint ? `: ${failure.details.hint}` : ""}\n`);
-    try {
-      await app?.stop();
-      await clients?.closeAll();
-    } catch (cleanupError) {
-      process.stderr.write(`Cleanup failed: ${cleanupError?.code ?? "STOP_FAILED"}\n`);
-    } finally {
-      releaseLock?.();
+    if (error instanceof AggregateError) {
+      for (const cleanupError of error.errors.slice(1)) {
+        process.stderr.write(`Cleanup failed: ${cleanupError?.code ?? "STOP_FAILED"}\n`);
+      }
     }
     return 1;
   }

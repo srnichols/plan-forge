@@ -18,6 +18,7 @@ const NPM_ENTRY_CANDIDATES = [
   path.join(path.dirname(process.execPath), "node_modules", "npm", "bin"),
   path.join(path.dirname(path.dirname(process.execPath)), "lib", "node_modules", "npm", "bin"),
 ];
+const SHIM_REFUSAL_HINT = "Configure runtimes.ghCommand or runtimes.pforgeCommand with an executable, not a .cmd/.bat shim.";
 
 function appendBounded(current, chunk, limit) {
   const remaining = limit;
@@ -29,18 +30,66 @@ function appendBounded(current, chunk, limit) {
   return current + bytes.toString("utf8");
 }
 
-export function resolveCommand(cmd) {
+function isBareCommand(cmd, platform) {
+  const pathApi = platform === "win32" ? path.win32 : path;
+  return !pathApi.isAbsolute(cmd) && !cmd.includes(pathApi.sep)
+    && !(platform === "win32" && cmd.includes("/"));
+}
+
+function windowsCandidates(cmd, env, exists) {
+  const directories = String(env.PATH ?? "").split(";").filter(Boolean);
+  const configured = String(env.PATHEXT ?? ".COM;.EXE;.BAT;.CMD")
+    .split(";").filter(Boolean).map((extension) => extension.startsWith(".") ? extension : `.${extension}`);
+  const safeExtensions = [".EXE", ".COM"];
+  const shimExtensions = [".CMD", ".BAT"];
+  const candidate = (directory, extension) => path.win32.join(directory, `${cmd}${extension}`);
+  const firstMatch = (extensions) => {
+    for (const directory of directories) {
+      for (const extension of extensions) {
+        const match = configured.find((item) => item.toUpperCase() === extension);
+        if (match && exists(candidate(directory, match))) return candidate(directory, match);
+      }
+    }
+    return null;
+  };
+  return { safe: firstMatch(safeExtensions), shim: firstMatch(shimExtensions) };
+}
+
+export function resolveCommand(cmd, { platform = process.platform, env = process.env, exists = existsSync } = {}) {
   if (typeof cmd !== "string" || !cmd) throw new ClawError("COMMAND_INVALID");
-  if (/\.(?:cmd|bat)$/i.test(cmd)) throw new ClawError("CMD_SHIM_REFUSED");
-  if (process.platform === "win32" && ["npm", "npx"].includes(cmd.toLowerCase())) {
+  if (/\.(?:cmd|bat)$/i.test(cmd)) throw new ClawError("CMD_SHIM_REFUSED", { hint: SHIM_REFUSAL_HINT });
+  if (platform === "win32" && ["npm", "npx"].includes(cmd.toLowerCase())) {
     const entry = cmd.toLowerCase() === "npm" ? "npm-cli.js" : "npx-cli.js";
     const executable = NPM_ENTRY_CANDIDATES
       .map((directory) => path.join(directory, entry))
-      .find((candidate) => existsSync(candidate));
+      .find((candidate) => exists(candidate));
     if (!executable) throw new ClawError("NPM_CLI_NOT_FOUND");
     return [process.execPath, executable];
   }
+  if (platform === "win32" && isBareCommand(cmd, platform)) {
+    const { safe, shim } = windowsCandidates(cmd, env, exists);
+    if (safe) return [safe];
+    if (shim) {
+      throw new ClawError("CMD_SHIM_REFUSED", {
+        hint: SHIM_REFUSAL_HINT,
+      });
+    }
+    throw new ClawError("COMMAND_NOT_FOUND");
+  }
   return [cmd];
+}
+
+export function resolveGhCommand({ config = {} } = {}) {
+  const configured = config?.runtimes?.ghCommand ?? "auto";
+  if (configured === "auto") return ["gh"];
+  if (!Array.isArray(configured) || configured.length === 0
+    || configured.some((part) => typeof part !== "string" || !part)) {
+    throw new ClawError("CONFIG_INVALID");
+  }
+  if (/\.(?:cmd|bat)$/i.test(configured[0])) {
+    throw new ClawError("CMD_SHIM_REFUSED", { hint: SHIM_REFUSAL_HINT });
+  }
+  return [...configured];
 }
 
 export function resolvePforgeCommand({ config = {}, cwd, platform = process.platform } = {}) {
@@ -55,7 +104,9 @@ export function resolvePforgeCommand({ config = {}, cwd, platform = process.plat
     || configured.some((part) => typeof part !== "string" || !part)) {
     throw new ClawError("PFORGE_COMMAND_INVALID");
   }
-  if (/\.(?:cmd|bat)$/i.test(configured[0])) throw new ClawError("CMD_SHIM_REFUSED");
+  if (/\.(?:cmd|bat)$/i.test(configured[0])) {
+    throw new ClawError("CMD_SHIM_REFUSED", { hint: SHIM_REFUSAL_HINT });
+  }
   return [...configured];
 }
 
@@ -76,7 +127,7 @@ export function run(cmd, args = [], options = {}) {
     };
     const onAbort = () => child?.kill();
     try {
-      const [executable, ...prefix] = resolveCommand(cmd);
+      const [executable, ...prefix] = resolveCommand(cmd, options);
       child = spawn(executable, [...prefix, ...args], {
         cwd,
         env,

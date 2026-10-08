@@ -14,9 +14,9 @@ function freezeDeep(value) {
 }
 
 const RUN_TAIL = freezeDeep({
-  leased: ["running"],
+  leased: ["running", "failed", "cancelled"],
   running: ["needs-input", "succeeded", "failed", "cancelled"],
-  "needs-input": ["running"],
+  "needs-input": ["running", "failed", "cancelled"],
 });
 
 export const TRANSITIONS = Object.freeze({
@@ -74,6 +74,18 @@ export function createJob({ id, type, projectId, readOnly, parentId }) {
 
 export function transition(job, to, meta = {}) {
   if (!isPlainObject(meta)) throw new ClawError("JOB_BAD_META");
+  if (Object.hasOwn(meta, "lane")
+    && (to !== "leased" || !validIdentifier(meta.lane))) throw new ClawError("JOB_BAD_META");
+  if (Object.hasOwn(meta, "result")) {
+    const result = meta.result;
+    if (to !== "succeeded" || !isPlainObject(result)
+      || (Object.hasOwn(result, "branch")
+        && (typeof result.branch !== "string" || result.branch.length > 200))
+      || (Object.hasOwn(result, "prUrl")
+        && (typeof result.prUrl !== "string" || !/^https:\/\/\S{1,300}$/.test(result.prUrl)))) {
+      throw new ClawError("JOB_BAD_META");
+    }
+  }
   const from = job.state;
   const table = TRANSITIONS[job.mutating ? "mutating" : "read"];
   if (!JOB_STATES.includes(to) || !table[from]?.includes(to)) {
@@ -87,9 +99,19 @@ export function transition(job, to, meta = {}) {
   const reason = typeof meta.reason === "string" && meta.reason.length <= 200
     ? meta.reason
     : undefined;
-  return {
-    job: { ...job, state: to },
+  const result = {
+    job: {
+      ...job,
+      state: to,
+      ...(to === "leased" && Object.hasOwn(meta, "lane") ? { lane: meta.lane } : {}),
+      ...(to === "succeeded" && meta.result ? meta.result : {}),
+    },
     event: { kind: "job.transition", jobId: job.id, from, to, reason },
+  };
+  if (to === "leased" && Object.hasOwn(meta, "lane")) result.event.lane = meta.lane;
+  if (to === "succeeded" && meta.result) result.event.result = { ...meta.result };
+  return {
+    ...result,
   };
 }
 
@@ -109,7 +131,11 @@ export function reduceJobs(acc, event) {
         state: job.state,
       });
     }
-    return { ...acc, [event.jobId]: transition(job, event.to).job };
+    const updated = transition(job, event.to, {
+      ...(event.lane !== undefined ? { lane: event.lane } : {}),
+      ...(event.result !== undefined ? { result: event.result } : {}),
+    }).job;
+    return { ...acc, [event.jobId]: updated };
   }
   throw new ClawError("JOB_BAD_EVENT");
 }

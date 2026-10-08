@@ -8,6 +8,7 @@ import { ClawError } from "../src/errors.mjs";
 import { createRegistry } from "../src/registry.mjs";
 import { createStore } from "../src/state/store.mjs";
 import { createRouter } from "../src/router.mjs";
+import { bindTriageService } from "../src/capture.mjs";
 
 const directories = [];
 const project = (id, chatId, topicId) => ({
@@ -30,7 +31,7 @@ function makeConfig() {
   };
 }
 
-function makeRig({ config = makeConfig(), commandRegistry, storeOverride } = {}) {
+function makeRig({ config = makeConfig(), commandRegistry, storeOverride, clients, services } = {}) {
   const stateDir = mkdtempSync(path.join(os.tmpdir(), "claw-router-"));
   directories.push(stateDir);
   const store = createStore(stateDir);
@@ -46,6 +47,8 @@ function makeRig({ config = makeConfig(), commandRegistry, storeOverride } = {})
     store: storeOverride?.(store) ?? store,
     registry: createRegistry(config),
     logger: { error: vi.fn() },
+    clients,
+    services,
     ...(commandRegistry ? { commandRegistry } : {}),
   });
   return { config, store, calls, channel, router };
@@ -79,6 +82,46 @@ afterEach(() => {
 });
 
 describe("identity and topic router", () => {
+  it("routes forwarded /run to triage before command parsing", async () => {
+    const handleInbound = vi.fn(async () => ({ captured: true }));
+    const unbind = bindTriageService({ handleInbound });
+    try {
+      const rig = makeRig();
+      await rig.router.route(update({ text: "/run plan", forwarded: true }));
+      expect(handleInbound).toHaveBeenCalledWith(expect.objectContaining({
+        project: expect.objectContaining({ id: "alpha" }),
+        caller: expect.objectContaining({ userId: "owner-id" }),
+      }));
+      expect(rig.calls).toEqual([]);
+      expect(auditRecords(rig.store)).not.toContainEqual(expect.objectContaining({ kind: "command", name: "run" }));
+    } finally {
+      unbind();
+    }
+  });
+
+  it("attaches services and project-scoped MCP only to project contexts", async () => {
+    const contexts = [];
+    const commandRegistry = availableCommands((context) => {
+      contexts.push(context);
+      return { text: "ok" };
+    });
+    const clients = { call: vi.fn(async () => ({ ok: true })) };
+    const rig = makeRig({ commandRegistry, clients, services: { marker: "injected" } });
+    await rig.router.route(update({ text: "/help" }));
+    await rig.router.route(update({
+      text: "/help", chatId: "general-chat", threadId: "general-topic",
+    }));
+    expect(contexts[0].services).toMatchObject({
+      store: rig.store, config: rig.config, marker: "injected",
+      pending: expect.any(Map), now: expect.any(Function),
+    });
+    expect(contexts[0].mcp).toBeDefined();
+    await contexts[0].mcp.call("forge_search", { query: "needle" });
+    expect(clients.call).toHaveBeenCalledWith("alpha", "forge_search", { query: "needle" });
+    expect(contexts[1].services).toBeDefined();
+    expect(contexts[1]).not.toHaveProperty("mcp");
+  });
+
   it("silent drop: unknown user ignores commands, free text and callbacks without channel calls", async () => {
     for (const value of [
       update({ text: "/help", userId: "stranger" }),
@@ -274,7 +317,7 @@ describe("identity and topic router", () => {
     // A real handler with no wired services takes the same friendly path.
     const realRig = makeRig();
     await realRig.router.route(update({ text: "/run plan" }));
-    if (findAvailable("run")) expect(realRig.calls[0].text).toBe(friendly);
+    if (findAvailable("run")) expect(realRig.calls[0].text).toBe('No plan found matching "plan".');
   });
 });
 

@@ -58,10 +58,14 @@ function createRunningJob(store, {
     ...fields,
   };
   store.append(JOBS_STREAM, { kind: "job.created", job });
-  const path = targetState === "failed"
+  const states = targetState === "failed"
     ? ["awaiting-approval", "approved", "leased", "running", "failed"]
-    : ["awaiting-approval", "approved", "leased", "running"];
-  for (const next of path) {
+    : targetState === "leased"
+      ? ["awaiting-approval", "approved", "leased"]
+      : targetState === "needs-input"
+        ? ["awaiting-approval", "approved", "leased", "running", "needs-input"]
+        : ["awaiting-approval", "approved", "leased", "running"];
+  for (const next of states) {
     const result = transition(job, next);
     store.append(JOBS_STREAM, result.event);
     job = result.job;
@@ -435,6 +439,23 @@ describe("progress recovery actions", () => {
       kind: "progress.discarded",
       jobId: failed.id,
     }));
+    await service.stop();
+  });
+
+  it("aborts leased and needs-input jobs through their recorded lane", async () => {
+    const store = createMemoryStore();
+    const lane = { cancel: vi.fn(async () => ({ ok: true })) };
+    const leased = createRunningJob(store, {
+      id: "abcdef0123456789abcdef10", state: "leased", fields: { lane: "local" },
+    });
+    const waiting = createRunningJob(store, {
+      id: "abcdef0123456789abcdef11", state: "needs-input", fields: { lane: "local" },
+    });
+    const service = createService(store, { lanes: new Map([["local", lane]]) });
+    expect(await service.abortJob(leased, { userId: "owner-1" })).toMatchObject({ ok: true });
+    expect(await service.abortJob(waiting, { userId: "owner-1" })).toMatchObject({ ok: true });
+    expect(lane.cancel).toHaveBeenNthCalledWith(1, leased.id);
+    expect(lane.cancel).toHaveBeenNthCalledWith(2, waiting.id);
     await service.stop();
   });
 

@@ -281,7 +281,8 @@ describe("budget ledger", () => {
     })).toMatchObject({ ok: true });
     expect(currentJobs(store)[job.id].state).toBe("held-budget");
     const runners = createRunners({ store });
-    await expect(runners.runJob(job, {})).rejects.toMatchObject({ code: "JOB_NOT_APPROVED" });
+    // D28: only the dispatcher leases; runners refuse anything not leased (held-budget included).
+    await expect(runners.runJob(job, {})).rejects.toMatchObject({ code: "JOB_NOT_LEASED" });
   });
 
   it("does not hold read jobs and pins the synchronous gate boundary with a source guard", () => {

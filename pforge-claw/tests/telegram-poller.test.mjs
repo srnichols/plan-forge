@@ -90,6 +90,44 @@ describe("Telegram update normalization", () => {
       data: "approve",
     });
   });
+
+  it("marks modern and legacy forwards without keeping sender identities", () => {
+      const modern = normalize({
+        update_id: 10,
+        message: {
+          message_id: 20,
+          chat: { id: -100 },
+          from: { id: 42, first_name: "Current" },
+          text: "forwarded content",
+          forward_origin: {
+            type: "channel",
+            date: 123,
+            chat: { id: -200, title: "Original" },
+            message_id: 5,
+          },
+        },
+      });
+      expect(modern).toMatchObject({
+        userId: "42", forwarded: true, forwardOrigin: { type: "channel" },
+      });
+      expect(modern).not.toHaveProperty("forward_origin");
+      expect(JSON.stringify(modern)).not.toMatch(/Original|-200|first_name/);
+
+      const legacy = normalize({
+        update_id: 11,
+        message: {
+          chat: { id: -100 },
+          from: { id: 43, username: "current-user" },
+          text: "legacy forward",
+          forward_from: { id: 900, first_name: "Original" },
+          forward_sender_name: "Hidden Sender",
+        },
+      });
+      expect(legacy).toMatchObject({
+        userId: "43", forwarded: true, forwardOrigin: { type: "legacy" },
+      });
+      expect(JSON.stringify(legacy)).not.toMatch(/900|Original|Hidden Sender/);
+  });
 });
 
 describe("Telegram long poll receiver", () => {

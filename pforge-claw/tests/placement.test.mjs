@@ -6,6 +6,7 @@ import {
   PLACEMENT_ERRORS,
   placeJob,
   readLaneState,
+  createPlacementService,
   setLaneOptIn,
 } from "../src/placement.mjs";
 import { createStore } from "../src/state/store.mjs";
@@ -158,6 +159,43 @@ describe("lane opt-in state", () => {
       on: true,
       by: "owner-1",
     }));
+  });
+
+  describe("placement preview", () => {
+    it("returns null with no lanes and skips configured lanes that are offline", () => {
+      const { store } = makeStore();
+      expect(createPlacementService({ store, config: { lanes: [] } }).preview({ project: {} })).toBeNull();
+      const service = createPlacementService({
+        store,
+        config: {
+          projects: [{ id: "p", homeLane: "offline" }],
+          lanes: [
+            { id: "offline", kind: "remote" },
+            { id: "local", kind: "local" },
+          ],
+        },
+        health: () => ({
+          offline: { ok: false },
+          local: { ok: true, queued: 0 },
+        }),
+      });
+      expect(service.preview({ project: { id: "p", homeLane: "offline" } }))
+        .toMatchObject({
+          ok: true,
+          laneId: "local",
+          skipped: [{ id: "offline", reason: "offline" }],
+        });
+    });
+
+    it("never throws when lane preview health cannot be read", () => {
+      const { store } = makeStore();
+      const service = createPlacementService({
+        store,
+        config: { lanes: [{ id: "local", kind: "local" }] },
+        health: () => { throw new Error("health unavailable"); },
+      });
+      expect(service.preview({ project: { id: "p", homeLane: "local" } })).toBeNull();
+    });
   });
 
   it("fails closed when lanes.json is corrupt", () => {

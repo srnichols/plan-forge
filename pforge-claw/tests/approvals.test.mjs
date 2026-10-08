@@ -9,6 +9,7 @@ import { createJob, currentJobs, JOBS_STREAM, transition } from "../src/jobs/mod
 import { createRegistry } from "../src/registry.mjs";
 import { createRouter } from "../src/router.mjs";
 import { createStore } from "../src/state/store.mjs";
+import { bindPlacementService, createPlacementService } from "../src/placement.mjs";
 
 const directories = [];
 const unbinders = [];
@@ -355,6 +356,23 @@ describe("approval callback flow", () => {
     expect(failed.error).not.toContain("$");
   });
 
+  it("adapts project client managers for the plan estimate MCP call", async () => {
+    const store = makeStore();
+    const job = createAwaitingJob(store, { type: "plan" });
+    const manager = {
+      get: vi.fn(),
+      call: vi.fn(async (_projectId, tool) => {
+        expect(tool).toBe("forge_estimate_quorum");
+        return makeEstimate();
+      }),
+    };
+    const card = await buildApprovalCard({ job, project, mcp: manager });
+    expect(card.text).toContain("Estimated cost");
+    expect(manager.call).toHaveBeenCalledWith(job.projectId, "forge_estimate_quorum", {
+      planPath: job.planPath,
+    });
+  });
+
   it("builds task and skill cards without quorum buttons or cost", async () => {
     for (const type of ["task", "skill"]) {
       const store = makeStore();
@@ -379,7 +397,55 @@ describe("approval callback flow", () => {
     }
   });
 
-  it("shows the placement explanation on the approval card", async () => {
+  it("placement preview shows the selected lane and skipped-lane explanation", async () => {
+    const store = makeStore();
+    const previewProject = {
+      ...project,
+      homeLane: "local",
+      placement: { prefer: ["remote"] },
+    };
+    const unbind = bindPlacementService(createPlacementService({
+      store,
+      config: {
+        projects: [previewProject],
+        lanes: [
+          { id: "remote", kind: "remote" },
+          { id: "local", kind: "local" },
+        ],
+      },
+      health: () => ({
+        remote: { ok: false },
+        local: { ok: true, queued: 0 },
+      }),
+    }));
+    unbinders.push(unbind);
+    const job = {
+      id: "abcdef0123456789abcdef03",
+      projectId: project.id,
+      type: "task",
+      description: "Improve the parser",
+    };
+    const approval = issueApproval({
+      jobId: job.id,
+      chatId: "chat-1",
+      requesterId: "requester-1",
+      now: () => NOW,
+    });
+    const card = await buildApprovalCard({ job, project: previewProject, approval });
+    expect(card.text).toContain("Expected to run on: local (remote offline)");
+    expect(card.text).toContain("Skipped lanes: remote offline");
+    expect(card.text).not.toContain("Lane:");
+
+    const override = await buildApprovalCard({
+      job: { ...job, placement: { explanation: "precomputed lane" } },
+      project: previewProject,
+      approval,
+    });
+    expect(override.text).toContain("Expected to run on: precomputed lane");
+    expect(override.text).not.toContain("remote offline");
+  });
+
+  it("falls back to the configured lane when placement preview is unavailable", async () => {
     const job = {
       id: "abcdef0123456789abcdef03",
       type: "task",
@@ -393,7 +459,7 @@ describe("approval callback flow", () => {
       now: () => NOW,
     });
     const card = await buildApprovalCard({ job, project, approval });
-    expect(card.text).toContain("Will run on: k8s-jobs (mac-1 offline)");
+    expect(card.text).toContain("Expected to run on: k8s-jobs (mac-1 offline)");
     expect(card.text).not.toContain("Lane:");
   });
 

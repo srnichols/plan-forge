@@ -47,6 +47,7 @@ const ALLOWED_HOSTS = new Set([
 const K8S_API_GROUPS = new Set([
   "kubernetes.io", // in-cluster service-account mount path (/var/run/secrets/kubernetes.io/...)
   "app.kubernetes.io", // recommended label prefix (app.kubernetes.io/name, ...)
+  "cilium.io", // CiliumNetworkPolicy API group (documented CNI alternative)
   "rbac.authorization.k8s.io",
   "networking.k8s.io",
   "kustomize.config.k8s.io",
@@ -133,7 +134,7 @@ function hasUnapprovedHost(text) {
     if (!TLD_PATTERN.test(host)) continue;
     if (ALLOWED_HOSTS.has(host)) continue;
     if (K8S_API_GROUPS.has(host)) continue;
-    if (host.endsWith(`.${COPILOT_HOST_SUFFIX}`) || host.endsWith(".example")) continue;
+    if (host === COPILOT_HOST_SUFFIX || host.endsWith(`.${COPILOT_HOST_SUFFIX}`) || host.endsWith(".example")) continue;
     return true;
   }
   return false;

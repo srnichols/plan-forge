@@ -1,5 +1,5 @@
 ---
-lockHash: b5549d949d3ad338a2de09c7e994453a3a2da099c70cbf09f01fa2194162473a
+lockHash: 90575de026e66abc357ddd0443c31f7a996545617c250b70aadbea2f2da82c11
 lane: full
 source: agent
 phaseId: Phase-62
@@ -15,7 +15,7 @@ relatedIssues: []
 > **Manual steps**: a few tasks need a human (creating the Telegram bot, live runs on real hardware, confirming CI after a push). They are labelled **MANUAL (operator)**: the agent prepares everything, writes a handoff note, and stops; no gate depends on them.
 > **Cost estimate** (`forge_estimate_quorum`, 2026-10-07, historical calibration; re-run after hardening): this plan (after hardening): auto **$14.45** (27/29 slices quorum, recommended) · speed $15.49 · power $207.27 · off $0.44. Companion FORGE-MASTER-CLAW-AWARE: auto **$4.30** · speed $5.34 · power $71.47 · off $0.15. The 25 % budget stop condition is measured against the mode actually chosen.
 > **Session breaks**: recommended after Slice 10 (tracks A + B merged), Slice 17 (M1 complete), and Slice 25 (all lanes + memory); resume with `pforge run-plan --resume-from <n>`.
-> **Session budget**: 29 slices across 4 milestones, executed **continuously M0 → M4 with no hold points** so the result is a complete, testable environment (single host + remote workers + K8s Job lanes) in one pass. Milestones are logical groupings and Re-anchor points, not pauses. Use `pforge run-plan --resume-from <n>` to break across sessions. Slice 27 stands up the full end-to-end test environment (offline harness + a live multi-host topology). The author's macOS host, Windows host and Linux Kubernetes cluster are the **reference validation environment**; nothing in the package is specific to them.
+> **Session budget**: 31 slices across 4 milestones (Slices 30–31 wire the composition root and remote execution, executed between Slices 26 and 27), executed **continuously M0 → M4 with no hold points** so the result is a complete, testable environment (single host + remote workers + K8s Job lanes) in one pass. Milestones are logical groupings and Re-anchor points, not pauses. Use `pforge run-plan --resume-from <n>` to break across sessions. Slice 27 stands up the full end-to-end test environment (offline harness + a live multi-host topology). The author's macOS host, Windows host and Linux Kubernetes cluster are the **reference validation environment**; nothing in the package is specific to them.
 
 ---
 
@@ -182,6 +182,7 @@ Several slices run at the same time (see **Parallelism map**). To stop them coll
 | `src/callbacks/<prefix>.mjs` + static `callbacks/index.mjs` | Slice 5 | Prefixes: `a` approve (10), `b` budget (11), `f` failure (12), `x` alert (14), `t` triage (15), `m` memory type (7), `c` memory confirm (24), `p` proposed action (6), `s` select plan (9). The router answers every callback first, then dispatches by prefix. |
 | `src/events.mjs` bus | Slice 1 | Runners emit `job.transition`, `job.finished`, `lane.event`; features subscribe instead of editing runners. |
 | `config.schema.json` | Slice 2 (complete) | Add a key only if the Complete config reference lacks it, and update the examples in the same slice. |
+| `src/cli/start.mjs` `bootDispatcher` + `src/dispatcher.mjs` + `src/lanes/directory.mjs` | Slice 30 (Slice 31 extends `buildLanes` only) | The composition root is assembled once. Later work extends dispatch through `placement.mjs` (lane choice), lane modules (`lanes/*`, incl. an optional `prepareLease` hook) and bus subscriptions, never by editing `start.mjs` or `dispatcher.mjs`. Features read lanes from `ctx.lanes` (live directory) and the channel from `ctx.channel` (set by the chat feature). |
 
 
 ### Host state directory
@@ -384,6 +385,7 @@ Plan Forge is open source. Forge-Claw ships as a **generic, configurable** capab
 | D25 | Job bootstrap | Worktrees and clones lack gitignored state (`.forge.json`, `.forge/`, `node_modules`). Before a mutating job: (1) worktree / clone from `baseBranch`; (2) copy the `bootstrap.copy` allow-list from forgeHome (default `.forge.json`, `.forge/fm-prefs.json`; **never** `.forge/secrets.json`); (3) secrets only as environment variables from the executing lane's own store (`bootstrap.env` names), never as files in the worktree; (4) dependencies by `bootstrap.install`: `link` (default for worktrees; reuse the home checkout's `node_modules` via a directory junction on Windows or a symlink elsewhere), `ci` (`npm ci`; default for pods) or `none`; (5) run `pforge smith`, and a non-zero exit fails the job with `reason: bootstrap`. Pods receive the copy set from the home lane over the worker protocol. |
 | D26 | Long-lived project processes | Projects with `keepAlive: true` (needed for observer-based alerts) keep their project MCP server running on the home lane with the hub on and `forge_master_observe start` issued. Other projects start on demand and stop after `mcp.idleMinutes` (default 10). `doctor` verifies keepAlive projects have a live hub and observer. |
 | D27 | Observer-insight transport (pull) | **Decided 2026-10-07 (operator):** the Forge-Master observer runs in the pforge-master studio child of each project's pforge-mcp, and the pforge-mcp hub does not accept events from other processes, so `forge-master-insight` hub events are not visible to `forge_watch_live`. Forge-Claw **pulls** insights with `forge_master_observe { action:"status", limit, cursor }` through the project's MCP client (pforge-mcp proxies the call to the same studio child that owns the insight ring; added as a Phase-61 follow-up). Insights are de-duplicated by insight `id`; the paging cursor is persisted per project. No hub/WebSocket security-boundary change. |
+| D28 | Composition root, dispatch loop, lease proof | `pforge claw start` has one composition root: `bootDispatcher` in `src/cli/start.mjs`. It builds the shared `ctx` and a live lane directory (`ctx.lanes`, which exists before any feature starts), binds the placement service, starts the feature app, builds the lanes, and then starts the dispatcher (`src/dispatcher.mjs`). The dispatcher is not a feature, because it must start after the budget, workers and chat features. It is the only component that moves a job to `leased`. Before leasing it re-runs the budget gate (and fails closed if the gate is unavailable, D9), requires a consumed approval for the job or its fan-out parent in `approvals.jsonl` (D6), and places the job with `placeJob` (Slice 23). It then records the lane on the `leased` transition and submits the job. Local lanes run `jobs/runners.mjs` against the dispatcher store. Remote and K8s lanes receive a lease grant: an HMAC over the job id, lane, subject, a digest of the allow-listed job payload, and the approval proof. Long-lived remote workers verify it with their per-worker secret. K8s Job pods never receive a lane-wide credential: the dispatcher derives `jobKey = HMAC-SHA256(laneSecret, "pforge-claw/job/v1:" + jobId)` and puts only `jobKey`, `jobId` and the dispatcher URL in that Job's pod env. The one-shot worker authenticates with a job-scoped HMAC challenge using `jobKey`. The dispatcher accepts that connection only for that `jobId`, and only for that job's lease, events, sync and ack. The worker verifies a grant signed with `jobKey`. A pod therefore cannot authenticate as the lane, see or claim other jobs, or forge grants. `jobKey` is readable by anyone with Job or Pod read access in the claw namespace, and is valid only for its one job until that job ends or reaches its deadline. Workers and pods run the same runners (a worktree, or a pod clone, then a PR) against a lease-scoped job record, so the dispatcher stays the single writer of `jobs.jsonl` and settles remote jobs from LaneEvents. Lanes own `lane.event` fan-out. The dispatcher emits `job.transition` and `job.finished` only for transitions it writes. On start, orphaned `leased`, `running` and `needs-input` jobs fail with `reason: orphaned`, and the operator retries them. On stop, in-flight jobs are cancelled. Tests substitute the runtime by dependency injection on `bootDispatcher` only, never through an environment variable. |
 | D21 | Memory integration | Project-scoped writes only through the project's MCP (`forge_memory_capture`), inheriting Plan Forge's queue, dedupe, dead-letter and Hallmark behaviour. Optional direct OpenBrain client only for cross-project reads and the bot namespace. No channel user ids or names in shared memory. `/remember` asks for the type with buttons (`decision` · `lesson` · `convention` · `pattern` · `gotcha`). Content from forwards, links or transcripts is written only after an explicit confirm card, with `origin: "untrusted"`. Per-project `memory.l3` and `visibility` decide what reaches shared L3. |
 | D22 | L2 consolidation | **Verified:** pforge-mcp has no `.forge` directory override, so jobs in worktrees, remote workers and pods produce L2 history outside the operator's checkout. Forge-Claw merges each job's `.forge` delta back into the project's canonical L2 home (`repo.forgeHome`): verbatim copies of orchestrator-produced artifacts, append-only, idempotent. Pods drain the OpenBrain queue and ship leftovers before exit. Upstreaming a `.forge` override or a `pforge import-runs` command is a follow-up. |
 
@@ -424,7 +426,7 @@ Node.js ESM (`.mjs`), no build step, Node `>=22.12.0`, vitest with the repo's ex
 2. **Prompt injection**: forwarded messages, links, photos, voice transcripts and file contents are *data*. They can only produce `capture` or `ask` jobs directly; anything mutating requires an approval the model cannot issue. The permission policy (Slice 9) denies writes and shell for `ask`, restricts writes to the job worktree for `task` / `skill`, and allows network access only through allowlisted commands (`git`, `gh`, `npm`/`npx`, `pforge`) and MCP. Agent-initiated fetch/browse tools are denied for every job type.
 3. **Secrets**: env → `secrets.json` resolution at call time; redaction helper wraps every log/audit/Telegram write; canary-based guard tests.
 4. **Approvals**: D6 — hashed, single-use, TTL, user- and chat-bound; replay and forgery tests.
-5. **Transport**: worker protocol over TLS (`wss`) with HMAC challenge; webhook mode verifies Telegram secret header; dispatcher HTTP binds `127.0.0.1` unless explicitly configured behind ingress.
+5. **Transport**: worker protocol over TLS (`wss`) with HMAC challenge; webhook mode verifies Telegram secret header; dispatcher HTTP binds `127.0.0.1` unless explicitly configured behind ingress. Every job lease carries a grant (HMAC over job, lane, subject, payload digest and approval proof, D28). K8s Job pods hold only a per-job derived key (`jobKey`, never the lane secret). It authenticates exactly one job-scoped connection and lease, is visible to principals with Job/Pod read in the claw namespace, and is valid only for that job until it ends or reaches its deadline.
 6. **Blast radius**: worktree-per-job; K8s Job pods with resource limits, `activeDeadlineSeconds`, non-root, read-only root FS where possible, default-deny egress (D13); namespace-scoped RBAC (D12).
 7. **Audit**: `audit.jsonl` records every inbound command (user ID, chat, topic, parsed intent — not raw message bodies of forwarded content), every approval decision, and every job mutation summary (branch, PR URL, commit SHAs).
 8. **Memory poisoning**: untrusted content reaches memory only after an explicit confirm, always tagged `origin: "untrusted"`, and is fenced again on every recall (companion D11). Restricted projects never leave their own scope.
@@ -474,7 +476,7 @@ export default {
 export default { prefix: "a", available: false, async handle(ctx, { payload, caller, chatId }) {} };
 
 // ctx is built once in app.mjs and passed everywhere:
-// { config, secrets, store, log, bus, channel, mcp(projectId), jobs, lanes, approvals, budget }
+// { home, config, secrets, store, registry, projectRegistry, logger, bus, mcp, lanes } built by bootDispatcher (D28); the chat feature adds channel + onTelegramUpdate; services (approvals, budget, progress, placement) are reached via their bind*/get* accessors
 ```
 
 ### SC-2 — Secrets and redaction (Slices 2, 26)
@@ -1019,12 +1021,12 @@ export default defineConfig({ test: { environment: "node", include: ["tests/**/*
 ```
 S1 → S2 → S3 ─┬─ A: S4 → S5 → S6 → S7 ─┐
               └─ B: S8 → S9 ───────────┴─▶ S10 ─▶ { S11 ∥ S12 } ─┬─ D: S13 ∥ S14 ∥ S15 ∥ S16 ─▶ S17 ─────────────────┐
-S2 ─▶ S20 (YAML only, any time after S2)                          ├─ D: S18 ─▶ { S19 ∥ S21 };  S9 + S20 + S21 ─▶ S22 ─▶ S23 ┼─▶ S26 ─▶ S27 ─▶ S28 ─▶ S29
+S2 ─▶ S20 (YAML only, any time after S2)                          ├─ D: S18 ─▶ { S19 ∥ S21 };  S9 + S20 + S21 ─▶ S22 ─▶ S23 ┼─▶ S26 ─▶ S30 ─▶ S31 ─▶ S27 ─▶ S28 ─▶ S29
                                                                   └─ D: S24 ──────────── S18 + S22 + S24 ─▶ S25 ────────┘
 ```
 
 - Up to six slices can be in flight at once (after S12: S13–S16, S18, S24; S20 floats from S2 onward).
-- **Merge checkpoints** (coherence slices whose gate runs the whole `pforge-claw` suite): **S10** (tracks A + B), **S17** (group D, M1 complete), **S22** (images + manifests + lanes), **S25** (memory + all lane kinds), **S26** (everything).
+- **Merge checkpoints** (coherence slices whose gate runs the whole `pforge-claw` suite): **S10** (tracks A + B), **S17** (group D, M1 complete), **S22** (images + manifests + lanes), **S25** (memory + all lane kinds), **S26** (everything), **S30** (composition root + local dispatch; S23 must have landed), **S31** (remote + one-shot execution through runners).
 - Parallel slices never edit the same file: shared extension points are stub modules created in Slices 1 and 5 (Shared Contract → Module seams). If a parallel slice finds it must edit another slice's file, that is a scope violation: stop.
 - The companion phase can run alongside Slices 1–5; Slice 6 waits for it (Execution Hold).
 
@@ -1554,24 +1556,788 @@ node -e 'const fs=require("fs");if(!fs.existsSync("docs/PFORGE-CLAW-THREAT-MODEL
 node -e "process.chdir('pforge-claw'); require('child_process').execSync('npx vitest run', {stdio:'inherit',shell:true});"
 ```
 
+#### Slice 30 — Composition root and local dispatch [sequential]
+
+**Depends On**: Slice 23, Slice 25, Slice 26
+**Context Files**: `.github/instructions/architecture-principles.instructions.md`, `.github/instructions/security.instructions.md`, `.github/instructions/testing.instructions.md`
+
+> **Why this slice exists.** Slices 1–26 built the parts but nothing assembles them, and nothing moves an `approved` job onward.
+> - `src/cli/start.mjs:79–91` builds `ctx` and starts features, but creates no agent runtime, lanes or runners.
+> - `src/approvals.mjs:254 transitionJob` writes `approved`, and nothing leases it after that.
+> - `src/features/chat.mjs:56` awaits the poller, which never returns. Feature start is sequential (`src/app.mjs:30`), so features after chat never start. Chat also never exposes `ctx.channel`.
+> - `src/jobs/runners.mjs:116` drops the PR URL.
+> - Nothing binds the Slice 23 placement service (`src/placement.mjs:236 bindPlacementService`), so `/lane` and `/lanes` have no backing service.
+>
+> Tracked by #332 and #336.
+>
+> This slice owns the composition root and **local** dispatch (D28). It registers **only local lanes**. Remote and K8s lanes are not registered, so they report offline to placement, which falls back to a local lane or keeps the job `approved`. This is deliberate: today's remote worker runs agents inside the operator's checkout (`src/cli/worker.mjs:151`). Slice 31 wires remote and K8s execution through the same runners.
+
+Tasks:
+1. **Orient first (no edits yet):** read `docs/plans/Phase-62-PFORGE-CLAW-PLAN.md` sections **Shared Contract** (incl. Module seams, Job model, LaneEvent), **Portability & Configurability Contract**, **Scope Contract → Forbidden** and **Security Posture**, then Required Decisions D5, D6, D8, D9, D24, D25, D28, then the **Seed Code** sections SC-1, SC-8, SC-10 (start from them), then this slice's Context Files (`.github/instructions/architecture-principles.instructions.md`, `.github/instructions/security.instructions.md`, `.github/instructions/testing.instructions.md`). The worker prompt contains only this slice, so treat those sections as binding. If anything conflicts with them, stop and report a blocker instead of guessing.
+   Then confirm that Slice 23 landed `src/placement.mjs` with these exports:
+   - `placeJob({ project, projects = [], lanes = [], laneState, health })` returning either `{ ok: true, laneId, skipped: [{ id, reason }], explanation }` or `{ ok: false, error, skipped, explanation }`. `health` may be an object, a `Map`, or a function `(laneId, lane) → { ok, … }`.
+   - `readLaneState(store)` returning `{ v: 1, lanes: {} }`.
+   - `createPlacementService({ store, config, health })`, `bindPlacementService(service)` and `getPlacementService()`.
+
+   If any of these is missing or has a different shape, stop and report a blocker.
+
+2. **Job model additions (`src/jobs/model.mjs`).**
+   - `transition(job, to, meta)` (`model.mjs:75`) accepts two new `meta` fields:
+     - `meta.lane`, only when `to === "leased"`. It must be a valid identifier and is stored on the event as `lane`.
+     - `meta.result`, only when `to === "succeeded"`. Shape: `{ branch?: string ≤ 200, prUrl?: string matching /^https:\/\/\S{1,300}$/ }`. It is stored on the event as `result`.
+   - Any other `meta` field keeps today's behaviour: only `reason` survives.
+   - `reduceJobs` (`model.mjs:96`) folds `event.lane` into `job.lane`, and `event.result.branch` / `event.result.prUrl` into `job.branch` / `job.prUrl`. `features/memory.mjs:47–48` and `src/progress.mjs:545` already read these fields.
+   - Extend `RUN_TAIL` (`model.mjs:16`) with `leased → running | failed | cancelled` and `needs-input → running | failed | cancelled`. This covers cancel-before-start, submit failure and orphan recovery without writing a fake `running`.
+   - Tests in `tests/job-model.test.mjs`:
+     - "records the lane on the leased transition"
+     - "records branch and prUrl on success"
+     - "allows leased and needs-input jobs to fail or be cancelled"
+     - "rejects lane/result meta on other transitions"
+
+3. **Runners (`src/jobs/runners.mjs`, `src/jobs/worktree.mjs`).**
+   - **Job source.** `createRunners(ctx)` (`runners.mjs:349`) takes `jobs = { get(jobId) → job|null, append(event) }`. The default is store-backed: `get` reads `currentJobs(store)[id]` and `append` calls `store.append(JOBS_STREAM, event)`. `findStoredJob` (`:129`) and `persistTransition` (`:43`) both go through it. `bus` emission stays in runners.
+   - **Workspace strategy.** `createRunners(ctx)` takes `workspace = { prepare({ job, project, ctx }) → { path, env }, release({ job, project, path, status }) }`. The default `worktreeWorkspace` is today's behaviour: `addWorktree` + `bootstrapWorktree` on prepare, and `removeWorktree` only on success (`:243`). Failed worktrees are still kept for `jobs.keepFailedWorktreeHours`. `withWorktree` uses the strategy.
+   - **`ghCommand`.** Add `resolveGhCommand({ config })` next to `resolvePforgeCommand` (`worktree.mjs:46`):
+     - `runtimes.ghCommand` is `"auto"` → `["gh"]`, or a non-empty string array.
+     - A `.cmd` or `.bat` first element is refused with `CMD_SHIM_REFUSED`, with a hint to point the setting at the real executable.
+     - `publish` (`:96`) spawns `[...ghCommand, "pr", "create", …]` through the args-array `run`.
+   - **Windows command resolution.** `resolveCommand(cmd, { platform, env, exists })` (`worktree.mjs:32`) becomes Windows-aware for bare names other than `npm` / `npx`:
+     - Search `PATH` × `PATHEXT` for a `.exe` or `.com` and return it.
+     - If only `.cmd` / `.bat` matches exist, throw `CMD_SHIM_REFUSED` with a hint naming `runtimes.ghCommand` / `runtimes.pforgeCommand`.
+     - Never use `shell: true`.
+   - **PR URL.**
+     - `publish` returns `{ pr: true, branch, prUrl }`, where `prUrl` is the last `https://` URL on `gh` stdout.
+     - `withWorktree` gets an `emit` option. After publishing it emits the LaneEvent `artifact` `{ kind: "pr", url: prUrl, branch }`, which `progress.mjs:374` already consumes.
+     - Replace `outcome = returned ?? published` (`:237`), which drops the PR for task jobs, with `{ ...(returned ?? {}), publish: published }`.
+     - Persist `succeeded` with `meta.result = { branch, prUrl }`, and `emitFinished` (`:119`) adds `result: { branch, prUrl }`.
+   - **Abort path.** Call `forge_abort` (`:430`) with `{ path: worktree.path }` instead of `{}`, so it aborts the worktree run and not the home checkout's.
+   - **Quorum.** For `plan` jobs, `runJob(job)` (`:353`) takes `quorum` from the job passed in when it is a valid mode. That value is the approval card's choice, supplied by the dispatcher in task 6. State and authorisation always come from the job source.
+   - Tests in `tests/runners.test.mjs`:
+     - "propagates the pull request URL"
+     - "uses runtimes.ghCommand for pull requests"
+     - "reads and writes job state through an injected job source"
+     - "uses an injected workspace strategy"
+     - "aborts a plan with the worktree path"
+     - "honours a quorum passed by the dispatcher"
+   - Tests in `tests/worktree.test.mjs` (inject `platform`, `env`, `exists`):
+     - "resolves runtimes.ghCommand auto to gh"
+     - "refuses a Windows .cmd shim for ghCommand"
+     - "resolves a bare command to its .exe on Windows and refuses .cmd-only matches"
+
+4. **Executor (new `src/jobs/executor.mjs`).** This is the one adapter from a lane to runners, shared by the dispatcher host here and by workers and pods in Slice 31.
+   - `createJobExecutor(deps)` returns `{ runtimeFor(job) }`. It builds one `createRunners` per job and returns `{ id, run: ({ emit, signal }) => runners.runJob(job, { emit, signal }) }`. This matches what `LocalLane` calls at `local-lane.mjs:198–200`.
+   - Optional deps `jobsFor(job)`, `workspaceFor(job)`, `runtimeFactory` and `createSession` pass straight through. Slice 31 uses them; nothing here reads them from the environment.
+   - **Runtime selection.**
+     - Export `resolveJobRuntime({ config, job, project, lane })`. It uses `resolveRuntimeId` and enforces D8: if `job.callerId` maps through `config.allowlist` to a role outside `policy.ghcpRoles`, and the resolved runtime is `copilot-sdk`, it throws `RUNTIME_POLICY_DENIED`.
+     - A job that already carries a `runtime` (Slice 31 leases) uses that runtime as given.
+     - Runtimes are created with `createAgentRuntime({ id, config, secrets, createSession })` and cached per id.
+     - `runtimeFactory({ job, project, runtimeId })` is the only test override, and only `bootDispatcher` can pass it. Never read a runtime override from environment variables.
+   - **MCP adapter.** `mcp: ({ projectId }) => ({ call: (tool, args) => clients.call(projectId, tool, args) })`. This bridges runners' `client.call(tool, args)` to `createProjectClients().call(projectId, tool, args)` (`project-client.mjs:160`).
+   - **Worktree MCP launch.** `mcpLaunchForWorktree: ({ project, cwd }) => buildLaunch({ ...project, homeLane: "local", repo: { ...project.repo, path: cwd } }, config, { registry })`.
+
+5. **Lane directory (new `src/lanes/directory.mjs`).**
+   - `createLaneDirectory()` returns a live object `{ register(lane), get(id), all(), snapshot() }`.
+     - `register` calls `assertLane` (`lanes/lane.mjs`) and rejects duplicate ids with `LANE_DUPLICATE`.
+     - A lane may define an optional `prepareLease({ job, proof, project })` that returns the payload for `submit`, or a promise of it. With no hook, the payload is the stored job.
+   - `buildLanes({ ctx, directory, executor, workers, k8sApiFactory })` registers one `createLocalLane({ id, config, bus: ctx.bus, runtimeFor: executor.runtimeFor })` for every enabled `kind: "local"` entry in `config.lanes`.
+     - In this slice, `remote` and `k8s` entries are **not registered**. They are logged once as `LANE_NOT_WIRED` at info level.
+     - The `workers` and `k8sApiFactory` parameters are accepted now so Slice 31 changes only `buildLanes`.
+   - **Placement service.** `bootDispatcher` binds the placement service so `/lane` and `/lanes` work: `bindPlacementService(createPlacementService({ store, config, health: (id) => directory.get(id)?.health() ?? { ok: false, code: "LANE_NOT_RUNNING" } }))`.
+
+6. **Dispatcher (new `src/dispatcher.mjs`, `createDispatcher(ctx, deps)`).** It is the only code that moves a job to `leased`.
+   - **Candidates.** A job is dispatchable when its `type` is in `DISPATCHABLE_TYPES = ["task", "skill", "plan"]` and either:
+     - it is mutating and in `approved`, or
+     - it is a read-only `skill` in `queued`.
+
+     Never dispatch `ask` or `capture` (they run inline on the home lane, D24) or `fanout` parents (driven by `features/crossproject.mjs`).
+   - **Steps per candidate** (seed below):
+     1. **Budget.** Re-run the budget gate with `getBudgetService().gate(jobId)` (`budget.mjs:312`), then re-read the job. If it is now `held-budget`, skip it. If no budget service is bound, fail closed: do not lease, and audit `dispatch.waiting` with `budget-unavailable` once (D9).
+     2. **Approval proof (D6).** A mutating job needs an `approval.consumed` record with `decision: "approve"` for `job.id`, or for `job.parentId` when the parent is a `fanout`. Read it from the dispatcher's own `approvals.jsonl` via `createApprovalService({ store }).fold().byHash` (`approvals.mjs:91,207`). With no proof, audit `dispatch.refused` with `approval-proof-missing` once and never lease.
+     3. **Placement.** Call `placeJob({ project, projects: config.projects ?? [], lanes: config.lanes ?? [], laneState: readLaneState(store), health: (id) => directory.get(id)?.health() ?? { ok: false, code: "LANE_NOT_RUNNING" } })`. If it returns `ok: false`, the job stays `approved`, and `dispatch.waiting` with `placement.error` (`NO_ELIGIBLE_LANE` / `NO_DEDICATED_LANE`) and `explanation` is audited once per change. The job is retried on every tick.
+     4. **Lease.** Transition `approved | queued → leased` with `meta.lane` (task 2).
+     5. **Submit.** Call `lane.submit((await lane.prepareLease?.({ job, proof, project })) ?? job)` and consume the event stream. `prepareLease` runs inside the pump's `try`, so if it throws, the job still settles as `failed`.
+        - For `plan` jobs, the submitted job carries the approval card's `quorum` when the consumed record has one (`approvals.mjs:288`).
+   - **Who settles the job.**
+     - **Local lanes:** runners own `leased → running → terminal` against the dispatcher store. The dispatcher only settles if the stream ends while the stored state is not terminal (submit threw, runner failed before its lifecycle, or the stream ended): it writes `failed` / `cancelled` from `leased` or `running` and emits `job.finished`.
+     - **Any other lane kind** (generic now, used by Slice 31): `started` → `running`. An `artifact {kind:"pr"}` is remembered. `finished` → terminal per `data.status` (anything unknown becomes `failed`), with `reason = data.reason ?? data.error ?? data.code` and, on success, `result = { branch, prUrl }`. Then emit `job.finished { jobId, projectId, type, state, reason?, result? }`.
+   - **Bus events.** The dispatcher emits `job.transition` / `job.finished` only for transitions it writes. It never re-emits `lane.event`: lanes own that (`LocalLane` via its `bus` option, `local-lane.mjs:109`).
+   - **Triggers.**
+     - A `job.transition` with `to === "approved"` schedules a coalesced sweep on `setImmediate`, so the budget feature's listener (`features/budget.mjs:112`) runs first.
+     - An interval tick (`tickMs`, default 5000 ms, an injectable dependency rather than a config key) catches read-only skills, lanes coming online and opt-in switches.
+     - One sweep runs immediately at start.
+   - **Restart and orphans.**
+     - `approved` jobs are re-dispatched by the normal sweep.
+     - Orphans are dispatchable jobs in `leased`, `running` or `needs-input` at `start()`. For each: call `directory.get(job.lane)?.cancel(job.id)` (best effort), transition to `failed` with `reason: "orphaned"`, and emit `job.finished`, so the operator gets the usual 🔁 Retry card.
+     - Orphan recovery runs before the first sweep and ignores `ask`, `capture` and `fanout`.
+   - **Cancel.** `dispatcher.cancel(jobId)` routes to `directory.get(job.lane).cancel(jobId)`. `progress.mjs:541 abortJob` must treat `leased` and `needs-input` like `running`, so `/abort` reaches jobs still queued in a lane.
+   - **Stop.** `stop()` unsubscribes, clears the tick, and cancels in-flight jobs; they settle as `cancelled` with `dispatcher-stopped`. It waits for them with a bounded timeout (10 s, injectable).
+   - **Exactly-once dispatch** rests on four guarantees:
+     - a single writer (`start` holds the store lock);
+     - the `leased` transition is written before `submit`;
+     - an in-process `inFlight` map;
+     - a coalescing flag on the sweep.
+
+7. **Composition root (`src/cli/start.mjs`).**
+   - Extract `export async function bootDispatcher({ home, env = process.env, bus = <events.mjs bus>, features = FEATURES, runtimeFactory, k8sApiFactory, logger } = {})`, which returns `{ ctx, app, dispatcher, lanes, stop() }`.
+   - It keeps today's validation unchanged (`start.mjs:47–78`, same error codes), then runs these steps in order:
+     1. `lanes = createLaneDirectory()`.
+     2. Build `ctx = { home, config, secrets, store, registry, projectRegistry, logger, bus, mcp: clients, lanes }`. Features get the live directory before they start, because `features/progress.mjs:35` captures `ctx.lanes` at start.
+     3. Bind the placement service (task 5).
+     4. `app = createApp(ctx); await app.start()`.
+     5. `executor = createJobExecutor({ ...ctx, runtimeFactory })`.
+     6. `buildLanes({ ctx, directory: lanes, executor, workers: workersFeature, k8sApiFactory })`.
+     7. `dispatcher = createDispatcher(ctx, { lanes }); await dispatcher.start()`.
+     8. Log the `app.doctor()` startup results, as today.
+   - `stop()` runs `dispatcher.stop()`, then `app.stop()`, then unbinds placement, then `clients.closeAll()`, then releases the lock.
+   - The CLI `run()` calls `bootDispatcher` and keeps today's signal handling.
+   - **The dispatcher is not a feature.** It must start after every feature (budget service, workers registry, chat channel). `ctx.lanes` must exist before any feature starts. And `app.mjs` should stay a generic feature runner. So `features/index.mjs` and `app.mjs` are not edited.
+
+8. **Chat, router services, forwarded messages (`src/features/chat.mjs`, `src/router.mjs`, `src/channels/telegram/poller.mjs`).**
+   - **Chat startup.**
+     - Never `await channel.start()` (`chat.mjs:56`).
+     - In `poll` mode, start the poller as a background task and route its rejection to `onError`. In `webhook` mode, do not start the poller at all: Telegram refuses `getUpdates` while a webhook is set.
+     - Set `ctx.channel = channel` and `ctx.onTelegramUpdate = (update) => router.route(update)` on the shared feature context. `app.mjs:5` passes one `featureContext` object to every feature, and approvals, budget, progress, scheduler, alerts, capture, crossproject and webhook all read these fields.
+     - `stop()` awaits `channel.stop()`.
+   - **Router services.** `createRouter({ …, services })`, and `resolveContext` (`router.mjs:86`) attaches `services: { store, config, registry, pending: Map, now, get budget() { return getBudgetService(); } }` to the command context.
+     - In **project** scope, also add `mcp: { call: (tool, args) => clients.call(project.id, tool, args) }`. This is the shape `commands/run.mjs`, `commands/skill.mjs` and `callbacks/s.mjs` expect.
+     - In **general** scope, leave `mcp` out, so `commands/fanout.mjs` and `commands/status.mjs` keep using `getCrossprojectDependencies()`.
+     - This fixes the `SERVICE_UNAVAILABLE` replies in Slice 27's help scenario (#336).
+   - **Forwarded messages.** This is the root cause of the Slice 27 safety failure.
+     - Root cause: `normalize()` (`poller.mjs:28`) drops `forward_origin`, `forward_from`, `forward_from_chat`, `forward_date`, `forward_sender_name` and `is_automatic_forward`. As a result `classifyMessage` (`capture.mjs:24`) never sees a forward, and a forwarded `/run …` is parsed and audited as a real command.
+     - Fix: set `forwarded: true` and `forwardOrigin: { type }` (type only; never sender ids or names, per Security Posture §7 and D21). `routeForward` (`router.mjs:230`) then sends the message to triage. Webhook mode shares `normalize()`.
+   - **Tests:**
+     - `tests/telegram-poller.test.mjs`: "marks forwarded messages without keeping sender identities".
+     - `tests/router.test.mjs`: "routes a forwarded /run to triage and never dispatches the command"; "passes project-scoped services to command handlers".
+     - New `tests/chat-feature.test.mjs`: "returns from start while the poller keeps running"; "exposes the channel and the update sink on the shared feature context"; "does not start the poller in webhook mode"; "stops the poller on stop".
+
+9. **Config and examples.**
+   - Add `runtimes.ghCommand` to `config.schema.json` as `$ref: "#/$defs/runtimeCommand"`, and add `"ghCommand": "auto"` to all three `examples/*.json`.
+   - Add the lane key `k8s.laneSecret` to the schema: a secret **name**, default `PFORGE_CLAW_K8S_LANE_SECRET`, consumed by Slice 31's per-job derived keys. Add it to `examples/k8s.json` so Slice 31 does not touch the schema.
+   - Add to `tests/config.test.mjs`: "accepts runtimes.ghCommand auto or an array"; "accepts lanes[].k8s.laneSecret".
+
+10. **Tests for the composition root.**
+    - New `tests/dispatcher.test.mjs`. It uses a temp-dir `createStore`, the real approvals and budget services, the real `placeJob`, fake lanes (`kind: "local"` plus one fake `kind: "remote"` registered directly) that record `submit` / `cancel`, and `vi.useFakeTimers()`. Every job moves through the real `jobs/model.mjs` transitions. Tests:
+      - "dispatches an approved job exactly once"
+      - "does not dispatch a held-budget job until the owner releases it"
+      - "fails closed when the budget service is unavailable"
+      - "refuses to lease a mutating job without approval proof"
+      - "accepts a fan-out child approved through its parent approval"
+      - "re-dispatches approved jobs after restart"
+      - "fails orphaned leased, running and needs-input jobs after restart"
+      - "cancels a running job through its lane"
+      - "cancels a leased job still queued in its lane"
+      - "fans each lane event out to the bus exactly once"
+      - "records the lane on the leased transition"
+      - "settles non-local lanes from lane events with the PR URL"
+      - "settles a job as failed when prepareLease throws"
+      - "waits when placement finds no lane and audits the reason once"
+      - "skips unregistered remote and k8s lanes as offline"
+      - "honours the quorum chosen on the approval card"
+      - "dispatches queued read-only skill jobs without approval"
+      - "never dispatches ask, capture or fanout jobs"
+      - "refuses the GHCP runtime for a non-ghcp requester"
+      - "cancels in-flight jobs on stop"
+    - New `tests/start.test.mjs`:
+      - "boots features, lanes and the dispatcher and stops them in reverse order"
+      - "starts every feature even though the poller runs forever"
+      - "gives features the live lane directory before they start"
+      - "binds the placement service for /lane and /lanes"
+      - "production start never reads a runtime override from the environment" (source-read guard: `src/cli/start.mjs` and `src/jobs/executor.mjs` contain no `process.env.*RUNTIME*` read)
+    - **Single-host smoke.** Replace `tests/single-host-smoke.test.mjs`, which is currently `it.todo`, with a real test named "ask → /run → approve → progress → PR link through the real dispatcher".
+      - **Setup:**
+        - Boot with `bootDispatcher({ home, env, runtimeFactory: () => createScriptedCopilot().runtime })`.
+        - Run against `startFakeTelegram()` and `createFixtureRepos(3, { withForge: true, ghShim: true })`.
+        - Config: `runtimes.pforgeCommand: [process.execPath, <tests/helpers/fake-pforge.mjs>]`, `runtimes.ghCommand: repos.ghShim.command`, `http.port: 0`.
+      - **Flow:**
+        1. Send a free-text ask and assert the Forge-Master reply.
+        2. Send `/run Phase-1-DEMO-PLAN.md`.
+        3. Read the approval card's `a:` callback from the fake Telegram calls, and tap it as the owner.
+      - **Assertions:**
+        - `jobs.jsonl` shows `approved → leased(lane: local) → running → succeeded`, with `prUrl` on the success event.
+        - A Telegram edit contains `Pull request: <fake PR URL>`.
+        - The fake-gh log records `pr create`.
+        - The fixture origin has `claw/<jobId>`.
+        - The operator checkout is clean and its `HEAD` is unchanged.
+        - The stack stops cleanly.
+      - No canned responses, no `it.todo`, no `it.skip`.
+    - **Helpers.**
+      - Extend `tests/helpers/fake-pforge.mjs` with `smith` → exit 0, because bootstrap runs `pforge smith` (`bootstrap.mjs:143`).
+      - Extend `tests/helpers/fake-project-mcp.mjs` / `scripted-copilot.mjs` only if a tool or event the real path calls is missing.
+    - **Other test updates.**
+      - Update `tests/progress.test.mjs` with "aborts a leased job through its lane".
+      - Update `tests/ask.test.mjs` only if it relied on chat's blocking start.
+
+11. **Clean code and boundaries.**
+    - Keep every new module under 400 LOC (`dispatcher.mjs` ≤ 350), with no function over the clean-code thresholds.
+    - Imports stay inside `pforge-claw/` (D1).
+    - Spawn with args arrays only.
+    - Wrap every new audit or log line in redaction.
+
+12. **Approval-card placement preview (`src/placement.mjs`, `src/approvals.mjs`).** The card's "Will run on" line (`approvals.mjs` ~188) reads `job.placement`, which nothing sets before approval. Add `preview({ project })` to `createPlacementService` (returns `placeJob(...)` using the bound lane directory's health and `readLaneState(store)`, never throws, `null` when no lanes are configured). The card uses `job.placement ?? getPlacementService()?.preview({ project })`. The dispatcher still decides the real lane at lease time; the card says "expected". Tests: "placement preview" in `tests/approvals.test.mjs` (card shows the expected lane and a skipped-lane explanation) and `tests/placement.test.mjs` (preview with no lanes → null; offline lane skipped).
+
+**Seed code (reference skeletons; adapt names to the Shared Contract; the tests are the authority):**
+
+```js
+// src/dispatcher.mjs: dispatch loop skeleton (D28)
+import { createApprovalService } from "./approvals.mjs";
+import { getBudgetService } from "./budget.mjs";
+import { currentJobs, JOBS_STREAM, TERMINAL, transition } from "./jobs/model.mjs";
+import { placeJob, readLaneState } from "./placement.mjs"; // Slice 23
+
+export const DISPATCHABLE_TYPES = Object.freeze(["task", "skill", "plan"]);
+const ORPHAN_STATES = new Set(["leased", "running", "needs-input"]);
+const FINISH_STATES = new Set(["succeeded", "failed", "cancelled"]);
+
+export function approvalProof(store, job, jobs) {
+  if (!job.mutating) return job.type === "skill" ? { kind: "read-only" } : null;
+  const consumed = [...createApprovalService({ store }).fold().byHash.values()]
+    .filter((r) => r.kind === "approval.consumed" && r.decision === "approve");
+  const own = consumed.find((r) => r.jobId === job.id);
+  if (own) return { kind: "consumed", ref: own.nonceHash.slice(0, 16), decidedAt: own.usedAt, quorum: own.quorum };
+  const parent = job.parentId ? jobs[job.parentId] : null;
+  const viaParent = parent?.type === "fanout" && consumed.find((r) => r.jobId === parent.id);
+  return viaParent ? { kind: "parent-consumed", ref: viaParent.nonceHash.slice(0, 16), decidedAt: viaParent.usedAt } : null;
+}
+
+export function createDispatcher(ctx, {
+  lanes, budget = getBudgetService, tickMs = 5_000, stopTimeoutMs = 10_000,
+  setTick = setInterval, clearTick = clearInterval, defer = setImmediate,
+} = {}) {
+  const { store, bus, config, projectRegistry } = ctx;
+  const inFlight = new Map(); // jobId -> { laneId, done }
+  const waiting = new Map();  // jobId -> last audited reason
+  let tick = null; let pending = false; let running = null; let stopped = true;
+
+  const jobs = () => currentJobs(store);
+  const persist = (job, to, meta) => {
+    const r = transition(job, to, meta); store.append(JOBS_STREAM, r.event); bus.emit("job.transition", r.event); return r.job;
+  };
+  const finished = (job, state, extra = {}) =>
+    bus.emit("job.finished", { jobId: job.id, projectId: job.projectId, type: job.type, state, ...extra });
+  const audit = (job, kind, reason, detail) => {
+    if (waiting.get(job.id) === reason) return;
+    waiting.set(job.id, reason); store.append("audit", { v: 1, kind, jobId: job.id, reason, ...(detail ? { detail } : {}) });
+  };
+  const health = (id) => lanes.get(id)?.health() ?? { ok: false, code: "LANE_NOT_RUNNING" };
+
+  function candidates(all) {
+    return Object.values(all).filter((j) => DISPATCHABLE_TYPES.includes(j.type) && !inFlight.has(j.id)
+      && ((j.mutating && j.state === "approved") || (!j.mutating && j.type === "skill" && j.state === "queued")));
+  }
+
+  async function dispatchOne(job) {
+    if (job.mutating) {
+      const service = budget();
+      if (!service) return audit(job, "dispatch.waiting", "budget-unavailable");  // D9: fail closed
+      service.gate(job.id);
+      job = jobs()[job.id];
+      if (job?.state !== "approved") return;                                        // now held-budget
+    }
+    const proof = approvalProof(store, job, jobs());
+    if (!proof) return audit(job, "dispatch.refused", "approval-proof-missing");   // D6
+    const project = projectRegistry.byId(job.projectId);
+    const placed = placeJob({
+      project, projects: config.projects ?? [], lanes: config.lanes ?? [],
+      laneState: readLaneState(store), health,
+    });
+    if (!placed.ok) return audit(job, "dispatch.waiting", placed.error, placed.explanation);
+    const lane = lanes.get(placed.laneId);
+    const leased = persist(job, "leased", { lane: lane.id, reason: `placement:${lane.id}` });
+    waiting.delete(job.id);
+    const quorum = job.type === "plan" && proof.quorum ? { quorum: proof.quorum } : {};
+    const leaseJob = { ...leased, ...quorum };
+    // prepareLease (Slice 31) may be async and may throw (e.g. RUNTIME_POLICY_DENIED); it runs inside pump's try so the job still settles.
+    const preparePayload = async () => (await lane.prepareLease?.({ job: leaseJob, proof, project })) ?? leaseJob;
+    const entry = { laneId: lane.id };
+    inFlight.set(job.id, entry);
+    entry.done = pump(leased, lane, preparePayload).finally(() => { inFlight.delete(job.id); requestSweep(); });
+  }
+
+  async function pump(job, lane, preparePayload) {
+    const pr = {};
+    try {
+      const payload = await preparePayload();
+      for await (const event of await lane.submit(payload)) {
+        if (event.type === "started" && lane.kind !== "local") settleStarted(job.id);
+        if (event.type === "artifact" && event.data?.kind === "pr") Object.assign(pr, { prUrl: event.data.url, branch: event.data.branch });
+        if (event.type === "finished") return settle(job.id, event.data ?? {}, pr);
+      }
+      settle(job.id, { status: "failed", error: "LANE_STREAM_ENDED" }, pr);
+    } catch (error) {
+      settle(job.id, { status: "failed", error: error?.code ?? "LANE_SUBMIT_FAILED" }, pr);
+    }
+  }
+
+  function settleStarted(jobId) {
+    const job = jobs()[jobId];
+    if (job?.state === "leased") persist(job, "running", { reason: "lane:started" });
+  }
+
+  function settle(jobId, data, pr) {
+    let job = jobs()[jobId];
+    if (!job || TERMINAL.includes(job.state)) return;               // local runners already settled
+    const to = FINISH_STATES.has(data.status) ? data.status : "failed";
+    if (to === "succeeded" && job.state === "leased") job = persist(job, "running", { reason: "lane:finished" });
+    const reason = String(data.reason ?? data.error ?? data.code ?? "").slice(0, 200) || undefined;
+    const result = to === "succeeded" ? { branch: pr.branch, prUrl: pr.prUrl } : undefined;
+    const done = persist(job, to, { reason, ...(result ? { result } : {}) });
+    finished(done, to, { ...(reason ? { reason } : {}), ...(result ? { result } : {}) });
+  }
+
+  function recoverOrphans() {
+    for (const job of Object.values(jobs())) {
+      if (!DISPATCHABLE_TYPES.includes(job.type) || !ORPHAN_STATES.has(job.state)) continue;
+      void Promise.resolve(lanes.get(job.lane)?.cancel(job.id)).catch(() => {});
+      finished(persist(job, "failed", { reason: "orphaned" }), "failed", { reason: "orphaned" });
+    }
+  }
+
+  function requestSweep() {
+    if (stopped) return;
+    if (running) { pending = true; return; }
+    running = new Promise((resolve) => defer(resolve)).then(sweep).finally(() => { running = null; });
+  }
+  async function sweep() {
+    do {
+      pending = false;
+      for (const job of candidates(jobs())) {
+        await dispatchOne(job).catch((e) => ctx.logger?.error?.("Dispatch failed", { code: e?.code ?? "DISPATCH_FAILED" }));
+      }
+    } while (pending && !stopped);
+  }
+  const onTransition = (event) => { if (event?.to === "approved") requestSweep(); };
+
+  return {
+    async start() {
+      stopped = false; recoverOrphans();
+      bus.on("job.transition", onTransition);
+      tick = setTick(requestSweep, tickMs); tick.unref?.();
+      requestSweep(); await running;
+    },
+    async cancel(jobId) {
+      const job = jobs()[jobId]; const lane = job?.lane && lanes.get(job.lane);
+      return lane ? lane.cancel(jobId) : { ok: false, error: "LANE_UNAVAILABLE" };
+    },
+    async stop() {
+      stopped = true; bus.off("job.transition", onTransition); clearTick(tick);
+      await running?.catch(() => {});
+      for (const [jobId, { laneId }] of inFlight) void Promise.resolve(lanes.get(laneId)?.cancel(jobId)).catch(() => {});
+      await Promise.race([Promise.allSettled([...inFlight.values()].map((e) => e.done)),
+        new Promise((r) => setTimeout(r, stopTimeoutMs).unref?.())]);
+    },
+    snapshot: () => ({ inFlight: [...inFlight].map(([jobId, e]) => ({ jobId, laneId: e.laneId })), waiting: waiting.size }),
+  };
+}
+```
+
+```js
+// src/jobs/executor.mjs: LocalLane runtimeFor(job) → runners.runJob adapter (reused by Slice 31 workers and pods)
+import { buildLaunch } from "../mcp/project-client.mjs";
+import { createAgentRuntime, resolveRuntimeId } from "../runtime/agent-runtime.mjs";
+import { ClawError } from "../errors.mjs";
+import { createRunners } from "./runners.mjs";
+
+export function resolveJobRuntime({ config, job, project, lane }) {
+  if (job.runtime) return job.runtime;                                   // dispatcher-resolved (Slice 31 leases)
+  const runtimeId = resolveRuntimeId({ config, lane, project });
+  const role = (config.allowlist ?? []).find((e) => String(e.userId) === String(job.callerId ?? ""))?.role;
+  const ghcpRoles = config.policy?.ghcpRoles ?? ["owner"];
+  if (runtimeId === "copilot-sdk" && job.callerId && !ghcpRoles.includes(role)) throw new ClawError("RUNTIME_POLICY_DENIED"); // D8
+  return runtimeId;
+}
+
+export function createJobExecutor({
+  config, secrets, home, store, bus, clients, registry, laneConfigFor = () => null,
+  jobsFor, workspaceFor, runtimeFactory, createSession,
+} = {}) {
+  const cache = new Map();
+  async function runtimeForJob(job, project) {
+    const runtimeId = resolveJobRuntime({ config, job, project, lane: laneConfigFor(job) });
+    if (runtimeFactory) return runtimeFactory({ job, project, runtimeId });       // DI from bootDispatcher only
+    if (!cache.has(runtimeId)) cache.set(runtimeId, createAgentRuntime({ id: runtimeId, config, secrets, createSession }));
+    return cache.get(runtimeId);
+  }
+  return {
+    async runtimeFor(job) {
+      const project = registry.byId(job.projectId);
+      if (!project) throw new ClawError("PROJECT_NOT_FOUND");
+      const runtime = job.type === "task" ? await runtimeForJob(job, project) : null;
+      const runners = createRunners({
+        config, secrets, home, store, bus, runtime,
+        mcp: ({ projectId }) => ({ call: (tool, args) => clients.call(projectId, tool, args) }),
+        mcpLaunchForWorktree: ({ project: p, cwd }) =>
+          buildLaunch({ ...p, homeLane: "local", repo: { ...p.repo, path: cwd } }, config, { registry }),
+        ...(jobsFor ? { jobs: jobsFor(job) } : {}),
+        ...(workspaceFor ? { workspace: workspaceFor(job) } : {}),
+      });
+      return { id: runtime?.id ?? job.type, run: ({ emit, signal }) => runners.runJob(job, { emit, signal }) };
+    },
+  };
+}
+// Dispatcher host: createLocalLane({ id, config, bus, runtimeFor: executor.runtimeFor })   (local-lane.mjs:157, 198)
+```
+
+**Files**:
+- **New source:** `pforge-claw/src/dispatcher.mjs`, `pforge-claw/src/lanes/directory.mjs`, `pforge-claw/src/jobs/executor.mjs`.
+- **Changed source:** `pforge-claw/src/placement.mjs` (`preview` only), `pforge-claw/src/approvals.mjs` (card line only), `pforge-claw/src/cli/start.mjs`, `pforge-claw/src/features/chat.mjs`, `pforge-claw/src/router.mjs`, `pforge-claw/src/channels/telegram/poller.mjs`, `pforge-claw/src/jobs/runners.mjs`, `pforge-claw/src/jobs/worktree.mjs`, `pforge-claw/src/jobs/model.mjs`, `pforge-claw/src/progress.mjs`.
+- **Config:** `pforge-claw/config.schema.json`, `pforge-claw/examples/single-host.json`, `pforge-claw/examples/multi-host.json`, `pforge-claw/examples/k8s.json`.
+- **New tests:** `pforge-claw/tests/dispatcher.test.mjs`, `pforge-claw/tests/start.test.mjs`, `pforge-claw/tests/chat-feature.test.mjs`.
+- **Rewritten test:** `pforge-claw/tests/single-host-smoke.test.mjs`.
+- **Updated tests:** `pforge-claw/tests/runners.test.mjs`, `pforge-claw/tests/worktree.test.mjs`, `pforge-claw/tests/job-model.test.mjs`, `pforge-claw/tests/telegram-poller.test.mjs`, `pforge-claw/tests/router.test.mjs`, `pforge-claw/tests/progress.test.mjs`, `pforge-claw/tests/config.test.mjs`, `pforge-claw/tests/approvals.test.mjs`, `pforge-claw/tests/placement.test.mjs`, and `pforge-claw/tests/ask.test.mjs` (only if it relied on chat's blocking start).
+- **Test helpers:** `pforge-claw/tests/helpers/fake-pforge.mjs`, `pforge-claw/tests/helpers/fake-project-mcp.mjs`, `pforge-claw/tests/helpers/scripted-copilot.mjs`.
+
+**Validation Gate**:
+```bash
+node -e "for (const f of ['pforge-claw/src/placement.mjs','pforge-claw/src/dispatcher.mjs','pforge-claw/src/lanes/directory.mjs','pforge-claw/src/jobs/executor.mjs','pforge-claw/tests/dispatcher.test.mjs','pforge-claw/tests/start.test.mjs','pforge-claw/tests/chat-feature.test.mjs','pforge-claw/tests/single-host-smoke.test.mjs']) require('fs').accessSync(f)"
+node -e "const p=require('fs').readFileSync('pforge-claw/src/placement.mjs','utf8');for(const n of ['export function placeJob','export function readLaneState','export function createPlacementService','export function bindPlacementService'])if(!p.includes(n))throw new Error('Slice 23 placement API missing: '+n)"
+node -e "const fs=require('fs');const r=(f)=>fs.readFileSync(f,'utf8');if(/\b(it|test)\.(todo|skip)\b/.test(r('pforge-claw/tests/single-host-smoke.test.mjs')))throw new Error('single-host smoke must be a real test');if(/await\s+channel\.start\(/.test(r('pforge-claw/src/features/chat.mjs')))throw new Error('chat must not await the poller');if(!r('pforge-claw/src/jobs/runners.mjs').includes('prUrl'))throw new Error('runners drop the PR URL');if(!r('pforge-claw/config.schema.json').includes('ghCommand'))throw new Error('runtimes.ghCommand missing from schema');if(!r('pforge-claw/src/cli/start.mjs').includes('bindPlacementService'))throw new Error('placement service not bound')"
+node -e "const fs=require('fs');const need={'pforge-claw/tests/dispatcher.test.mjs':['exactly once','held-budget','approval proof','after restart','orphaned','cancels a running job','out to the bus exactly once','quorum','fails closed','as offline'],'pforge-claw/tests/chat-feature.test.mjs':['poller keeps running','shared feature context','webhook mode'],'pforge-claw/tests/start.test.mjs':['reverse order','placement service','runtime override'],'pforge-claw/tests/runners.test.mjs':['pull request URL','ghCommand','injected job source'],'pforge-claw/tests/worktree.test.mjs':['.cmd'],'pforge-claw/tests/router.test.mjs':['forwarded /run to triage'],'pforge-claw/tests/telegram-poller.test.mjs':['without keeping sender identities'],'pforge-claw/tests/single-host-smoke.test.mjs':['through the real dispatcher'],'pforge-claw/tests/approvals.test.mjs':['placement preview']};for(const [f,ns] of Object.entries(need)){const s=fs.readFileSync(f,'utf8');for(const n of ns)if(!s.includes(n))throw new Error(f+' missing test: '+n)}"
+node -e "process.chdir('pforge-claw'); require('child_process').execSync('npx vitest run tests/dispatcher.test.mjs tests/start.test.mjs tests/chat-feature.test.mjs tests/single-host-smoke.test.mjs tests/runners.test.mjs tests/worktree.test.mjs tests/job-model.test.mjs tests/telegram-poller.test.mjs tests/router.test.mjs tests/progress.test.mjs tests/config.test.mjs tests/approvals.test.mjs tests/placement.test.mjs', {stdio:'inherit',shell:true});"
+node node_modules/eslint/bin/eslint.js --config scripts/audit/eslint-clean-code.config.mjs pforge-claw/src/dispatcher.mjs pforge-claw/src/lanes/directory.mjs pforge-claw/src/jobs/executor.mjs pforge-claw/src/cli/start.mjs pforge-claw/src/jobs/runners.mjs pforge-claw/src/features/chat.mjs
+node scripts/audit/dep-boundaries.mjs
+node -e "process.chdir('pforge-claw'); require('child_process').execSync('npx vitest run', {stdio:'inherit',shell:true});"
+```
+
+#### Slice 31 — Remote and one-shot execution through runners [sequential]
+
+**Depends On**: Slice 30
+**Context Files**: `.github/instructions/security.instructions.md`, `.github/instructions/testing.instructions.md`, `.github/instructions/architecture-principles.instructions.md`
+
+> **Why this slice exists.** Slice 30 dispatches only to local lanes. Remote and K8s lanes stay unregistered, which is safe because today's execution paths for them are wrong:
+> - `src/cli/worker.mjs:132–155 makeWorkerRuntime` runs the agent with `cwd: project.repo.path`: the operator's checkout, with no worktree and no PR.
+> - `src/cli/worker.mjs:167,243` rejects `--one-shot` / `--job`.
+> - `src/lanes/k8s-job-lane.mjs:162` starts pods with exactly that command.
+> - `buildJobSpec` (`k8s-job-lane.mjs:76`) mounts a lane-wide worker secret into every pod.
+>
+> This slice routes remote and one-shot execution through the same runner lifecycle (worktree or pod clone, then PR). It binds every lease to a dispatcher-verified approval with a signed grant. K8s pods get only a per-job derived key (D28, operator decision). Tracked by #336.
+
+Tasks:
+1. **Orient first (no edits yet).**
+   - Read `docs/plans/Phase-62-PFORGE-CLAW-PLAN.md` sections **Shared Contract** (incl. Module seams, LaneEvent), **Portability & Configurability Contract**, **Scope Contract → Forbidden** and **Security Posture** (§5).
+   - Then read Required Decisions D6, D8, D11, D12, D22, D24, D25, D28, and the **Seed Code** sections SC-10, SC-12, SC-13 (start from them).
+   - Then read this slice's Context Files (`.github/instructions/security.instructions.md`, `.github/instructions/testing.instructions.md`, `.github/instructions/architecture-principles.instructions.md`).
+   - The worker prompt contains only this slice, so treat those sections as binding. If anything conflicts with them, stop and report a blocker instead of guessing.
+   - Confirm Slice 30 landed. All of these must exist:
+     - `src/dispatcher.mjs`, which calls `lane.prepareLease`;
+     - `src/lanes/directory.mjs` (`createLaneDirectory`, `buildLanes`);
+     - `src/jobs/executor.mjs` (`createJobExecutor` with `jobsFor` / `workspaceFor`, `resolveJobRuntime`);
+     - `runners.mjs` `jobs` / `workspace` ports;
+     - `lanes[].k8s.laneSecret` in `config.schema.json`.
+
+     If anything is missing, stop.
+
+2. **Lease grant and per-job keys (new `src/protocol/lease-grant.mjs`).**
+   - **Exports:**
+     - `deriveJobKey({ laneSecret, jobId })` = hex `HMAC-SHA256(laneSecret, "pforge-claw/job/v1:" + jobId)`.
+     - `buildLeaseGrant({ leaseJob, laneId, proof, now, ttlMs = 300_000 })`, which returns `{ v: 1, jobId, projectId, type, mutating, laneId, approval: { kind, ref, decidedAt }, jobDigest: sha256(canonical(leaseJob without leaseGrant)), issuedAt, exp }`.
+     - `signGrant({ grant, subject, key })`, which adds `subject` and `mac = HMAC-SHA256(key, "pforge-claw-lease-grant:v1\n" + canonical(grant))`.
+     - `verifyGrant({ grant, job, subject, laneId, key, now, expectJobId? })`.
+   - **Subjects.** A long-lived worker's subject is its `workerId`, and its key is the per-worker secret. A K8s job's subject is `job:<jobId>`, and its key is `jobKey`.
+   - **What `verifyGrant` checks:** version, subject, laneId, jobId (and `expectJobId`), projectId, type, mutating, digest, expiry, and the MAC via `timingSafeEqual`. For a mutating job, `approval.kind` must be `consumed` or `parent-consumed`. For a non-mutating job, it must be `read-only` and the job must be a read-only skill.
+   - **Failure.** On any failed check it throws `LEASE_GRANT_INVALID` with a `details.reason` (`subject`, `digest`, `expired`, `mac`, `approval`, `job`) and never includes key material.
+   - **Canonical JSON** uses sorted keys.
+
+3. **Lease payload (new `src/jobs/lease-payload.mjs`).**
+   - **The hook.** `createLeasePreparer({ ctx, laneConfig, directory })` returns the `prepareLease({ job, proof, project })` that Slice 30's dispatcher calls (async).
+   - **What the payload holds.** It returns an allow-listed copy of the job: id, type, projectId, mutating, readOnly, parentId, description, summary, planPath, quorum, resumeFrom, skill, args.
+     - Add `runtime: resolveJobRuntime({ config, job, project, lane: laneConfig })`. This is the D8 check, run with the dispatcher's allowlist. It throws `RUNTIME_POLICY_DENIED`, so the job settles as `failed`.
+     - Add `leaseGrant: buildLeaseGrant(...)`, unsigned. The worker registry signs it per subject (task 5).
+     - **Never** include chatId, threadId, callerId or estimate, so channel identities never leave the dispatcher.
+   - **K8s lanes only.** Also add:
+     - `project: { id, repo: { remote, baseBranch }, models, bootstrap: { install: "ci", env: config.bootstrap?.env ?? [] } }`.
+     - `bootstrapFiles`, from `collectCopySet` (task 9). For a local home lane, read `project.repo.path`. For a remote home lane, use `directory.get(project.homeLane).read({ projectId, tool: "claw.bootstrap.copySet", args: { paths } })`.
+
+4. **Lane registration (`src/lanes/directory.mjs`: extend `buildLanes` only).**
+   - **Why this file is shared with Slice 30.** Slice 30 created `buildLanes` to register only local lanes. The remote/K8s branch can only land once the grant machinery exists. Slice 31 depends on Slice 30, and edits only `buildLanes`.
+   - **Remote lanes.** For each enabled `kind: "remote"` lane, register `workers.getLane(id)`, wrapped with `prepareLease: createLeasePreparer(...)`.
+   - **K8s lanes.** For each enabled `kind: "k8s"` lane, register `createK8sJobLane({ id, config, api: k8sApiFactory(), registry: workers.registry(), jobKeyFor: (jobId) => workers.jobKeyFor(id, jobId), canDeriveJobKeys: () => workers.hasLaneSecret(id) })`, with the same wrapping.
+   - **No registry.** If `workers.registry()` is null, log `LANE_NO_REGISTRY` and skip.
+
+5. **Workers feature and protocol (`src/features/workers.mjs`, `src/protocol/messages.mjs`, `worker-registry.mjs`, `ws-server.mjs`).**
+   - **`features/workers.mjs`.**
+     - Starts when any `remote` **or** `k8s` lane is enabled (`:28`).
+     - `allowedLanes` = remote ids (`:53`); a new `jobLanes` = K8s ids.
+     - New accessors:
+       - `registry()`;
+       - `hasLaneSecret(laneId)`;
+       - `jobKeyFor(laneId, jobId)`. This reads `ctx.secrets.get(lane.k8s.laneSecret ?? "PFORGE_CLAW_K8S_LANE_SECRET")` at call time and derives through `deriveJobKey`. The lane secret is never cached, logged or returned.
+     - It passes `signLease` to `createWorkerRegistry`:
+       - for a job-scoped connection: key = `jobKeyFor(laneId, jobScope)`, subject `job:<jobScope>`;
+       - otherwise: key = `secrets.get(<worker secret prefix> + identity)`, subject = identity.
+     - It passes `jobKeyFor` and `hasActiveJob` to `createWorkerServer`.
+   - **`messages.mjs`.**
+     - `hello` gains a job variant `{ v, t: "hello", mode: "job", laneId, jobId, capabilities }` (`:43`).
+     - `lease` gains an optional `grant` object for `kind: "job"` (`:55`).
+     - `auth` is unchanged: a job connection sends `workerId: "job:<jobId>"`.
+   - **`ws-server.mjs`, job mode** (`authenticate`, `:134`). The connection is closed if any check fails:
+     - `laneId` must be in `jobLanes`, else `WORKER_JOB_MODE_DENIED`.
+     - `hasActiveJob(laneId, jobId)` must be true (an unfinished registry entry on that lane), else `WORKER_JOB_UNKNOWN`.
+     - `auth.workerId` must equal `job:<jobId>`.
+     - The MAC must verify with `verifyMac(jobKeyFor(laneId, jobId), nonce, "job:<jobId>", mac)` (`auth.mjs`, unchanged).
+
+     On success, call `registry.connect("job:" + jobId, { laneId, jobScope: jobId, capabilities, send })` (`:156`). No enrollment lookup is made for job mode.
+   - **`worker-registry.mjs`.**
+     - **`eligible`** (`:72`). A connection with `jobScope` is eligible only for the `job` entry whose id equals `jobScope`, and never for `read` entries.
+     - **Single-job gate.** Job-scoped leases are exempt from the per-lane single-active-job gate (`:132`). Each pod is its own connection key, so concurrent K8s jobs run in parallel and never evict each other.
+     - **`hasActiveJob(laneId, jobId)`.** New.
+     - **Signing in `sendLease`** (`:99`). Sign `entry.payload.leaseGrant` via `signLease({ worker, grant })`, send `job` without `leaseGrant`, and add `grant`. If signing fails, finish the entry `failed` / `LEASE_GRANT_UNAVAILABLE`.
+     - **Isolation.** `onAck`, `onEvent` and `onHeartbeat` already reject leases owned by other connections, so a job connection only ever sees its own lease, events, L2 sync and ack.
+
+6. **K8s Job lane (`src/lanes/k8s-job-lane.mjs`).**
+   - **`buildJobSpec`** (`:76`) takes `jobKey`.
+     - **Removed:** the `PFORGE_CLAW_WORKER_SECRET` secretKeyRef, and the `k8s.secrets.worker` requirement that throws `LANE_BAD_CONFIG`. The lane secret never enters a pod.
+     - **Added:**
+       - `PFORGE_CLAW_JOB_KEY` (the derived key as a literal env value);
+       - `PFORGE_CLAW_LANE_ID`;
+       - `PFORGE_CLAW_JOB_DEADLINE_SECONDS` (= `activeDeadlineSeconds`);
+       - `PFORGE_CLAW_DISPATCHER_URL` and `PFORGE_CLAW_JOB_ID`, kept as today.
+     - The GitHub / Copilot / bridge secret refs are unchanged.
+   - **`createK8sJobLane`** (`:449`) takes `jobKeyFor` and `canDeriveJobKeys`.
+     - If the key cannot be derived, `submit` yields `finished` `failed` / `K8S_LANE_SECRET_MISSING`.
+     - `health()` returns `ok: false, code: "K8S_LANE_SECRET_MISSING"`, so placement treats the lane as offline.
+   - **`cancel(jobId)`.** Delete the Job by its derived name even when the job is not in the in-memory `activeJobs`. Slice 30's orphan recovery on restart reaches pods this way.
+
+7. **Worker CLI (`src/cli/worker.mjs`).**
+   - **Long-lived worker.** Delete `makeWorkerRuntime` (`:132–155`). The worker's `LocalLane` uses `createJobExecutor`:
+     - `jobsFor: (job) => createLeaseJobSource(job)`;
+     - `workspaceFor: () => deferredWorktreeWorkspace`;
+     - a private `EventEmitter` bus;
+     - `runtimeFor` runs `verifyGrant` first, with subject = `workerId`, key = its own secret, and its own `laneId`.
+
+     So mutating remote jobs run in `<worker PFORGE_CLAW_HOME>/worktrees/<project>/<jobId>` on `claw/<jobId>` and open a PR like local jobs. A missing or invalid grant fails with `LEASE_GRANT_INVALID` before any workspace exists. The job uses the lease's `runtime`.
+   - **L2 and the read handler.**
+     - Pass `l2` to `createWorkerAgent`: `forgeDirFor` returns the job workspace's `.forge`, and `collect` diffs against the post-bootstrap snapshot. Pass `afterJob` to remove the worktree only after the delta has shipped.
+     - The read handler serves the reserved tool `claw.bootstrap.copySet` through `collectCopySet` from `repo.path`, only for projects whose `homeLane` is this lane.
+   - **One-shot (`--one-shot --job <id>`).** Remove both `WORKER_MODE_NOT_SUPPORTED` refusals (`:167`, `:243`).
+     - **Env.** Requires `PFORGE_CLAW_DISPATCHER_URL`, `PFORGE_CLAW_JOB_ID` (must equal `--job`), `PFORGE_CLAW_JOB_KEY` and `PFORGE_CLAW_LANE_ID`, else exit 2 with `ONE_SHOT_ENV_MISSING`. A local `config.json` is optional.
+     - **Connect.** Use `createWorkerAgent({ jobScope: { jobId, jobKey }, … })`, which sends a job-mode hello and authenticates as `job:<jobId>` with `jobKey`.
+     - **On the lease:**
+       1. `verifyGrant` with subject `job:<jobId>`, key `jobKey`, and `expectJobId`.
+       2. `runPodJob({ job, project: lease.job.project, config, requestCopySet: decode(lease.job.bootstrapFiles) })` (`k8s-job-lane.mjs:370`).
+       3. Take a `.forge` snapshot.
+       4. Run through the executor with `createLeaseJobSource` and `clonedWorkspace({ repoDir })`.
+       5. Before reporting `finished`, drain memory with `finalizePodJob` (`:317`), passing `collectDelta: async () => null` and `awaitAck: async () => true`. The delta itself ships as `artifact` events via `l2`.
+     - **Exit.** Exit 0 after `onLeaseAcked`. If the deadline passes first, exit 1; the lane reports `l2-sync-incomplete`.
+   - **K8s lane secret.** `worker enroll --lane <k8s-lane>` generates a 256-bit secret. It writes the secret to the dispatcher's `<home>/secrets.json` under the lane's `k8s.laneSecret` name via `writeSecret`, prints only the secret's name, and refuses to overwrite unless `--rotate` is given. In-cluster dispatchers can use a K8s Secret env with the same name instead. Document this in `deploy/k8s/README.md`.
+
+8. **Worker agent and lease-scoped execution (`src/protocol/worker-agent.mjs`, new `src/jobs/lease-jobs.mjs`).**
+   - **`worker-agent.mjs`** (`createWorkerAgent`, `:92`):
+     - It accepts `jobScope: { jobId, jobKey }`, which drives hello/auth in job mode.
+     - It passes `{ ...lease.job, leaseGrant: lease.grant }` to `localLane.submit` (`:200`).
+     - It calls `afterJob(job)` after the L2 delta and the `finished` event are emitted.
+     - It calls `onLeaseAcked({ jobId })` from `finishLease` (`:135`) once the heartbeat acknowledges the finished seq.
+   - **`lease-jobs.mjs`:**
+     - `createLeaseJobSource(job)` holds the job in memory with `state: "leased"`. `append` validates `from` against the current state, and the source never touches a dispatcher store.
+     - `deferredWorktreeWorkspace({ home, runner })` does the default prepare plus a post-bootstrap `.forge` snapshot. It exposes `forgeDirFor(jobId)`, `delta(forgeDir)` and `settle(jobId)`, which removes the worktree on success after L2.
+     - `clonedWorkspace({ repoDir, env })`, whose `release` is a no-op.
+
+9. **Bootstrap copy set (`src/jobs/bootstrap.mjs`).** Add `collectCopySet({ repoPath, paths, maxBytes })`. It reads only the allow-listed relative paths (`config.bootstrap.copy`, default per D25) and returns `[{ path, content: base64 }]`. It refuses `.forge/secrets.json`, absolute paths and `..`, and enforces the same size cap as `runPodJob`.
+
+10. **Tests.**
+    - **New `tests/lease-grant.test.mjs`:**
+      - "derives a per-job key that differs per job and per lane secret"
+      - "signs and verifies a grant bound to subject, lane and job"
+      - "rejects a tampered job payload"
+      - "rejects a grant for another subject"
+      - "rejects an expired grant"
+      - "rejects a mutating grant without approval proof"
+    - **New `tests/remote-dispatch.test.mjs`.** Uses the Slice 30 dispatcher plus the real worker registry and `ws-server` on a loopback `ws://` server with `allowInsecureLan` off.
+      - "dispatches an approved job to a remote lane with a signed grant"
+      - "pod cannot claim another job's lease"
+      - "job-scoped connection refused for a different jobId"
+      - "job-scoped connection refused after the job finished"
+      - "concurrent job-scoped connections on one K8s lane run in parallel"
+      - "copies the bootstrap set into a K8s lease, never secrets.json"
+      - "refuses the GHCP runtime for a non-ghcp requester on remote lanes"
+      - "lease payload never carries channel identities"
+    - **New `tests/worker-execution.test.mjs`.** Uses fixture repos (`tests/helpers/fixture-repos.mjs`), the scripted runtime, and fake pforge / gh.
+      - "runs a remote mutating job in a worktree, never the checkout". Assertions:
+        - the runtime's `cwd` is under the worker home;
+        - the checkout's `git status --porcelain` is empty and its `HEAD` is unchanged;
+        - `claw/<jobId>` reached the origin;
+        - a PR URL is propagated.
+      - "refuses a remote lease without a valid approval grant"
+      - "runs a one-shot job end to end and exits after the dispatcher acks"
+      - "refuses a one-shot lease without a valid approval grant"
+      - "fails with l2-sync-incomplete when the ack misses the deadline"
+      - "enroll generates a K8s lane secret without printing it"
+    - **Update `tests/protocol.test.mjs`:**
+      - "job-mode hello is refused on a non-k8s lane"
+      - "job-scoped worker is never given read leases"
+      - "lease grant is signed per subject"
+    - **Update `tests/k8s-job-lane.test.mjs`:**
+      - "lane secret never appears in the Job spec". Plant a canary lane secret and assert it is absent from `JSON.stringify(spec)`, that no secretKeyRef names it, and that `PFORGE_CLAW_JOB_KEY` equals the derived key.
+      - "job pod receives job key, lane id and deadline"
+      - "cancel deletes an unknown job's pod by name"
+      - "health reports a missing lane secret"
+    - **Update `tests/remote-lane.test.mjs`:** "workers feature starts for k8s-only configs and exposes registry()".
+    - **Update `tests/l2-sync.test.mjs`:** "afterJob runs after the delta is emitted"; "onLeaseAcked fires once the finished seq is acknowledged".
+    - **Update `tests/bootstrap.test.mjs`:** "collectCopySet refuses .forge/secrets.json and oversize sets".
+
+11. **Clean code and boundaries.**
+    - Keep new modules under 400 LOC.
+    - Keep `worker.mjs` under 600 LOC; if it grows past that, move the one-shot flow into `src/protocol/one-shot.mjs` and add it to this slice's Files before editing.
+    - No key material in errors, logs, audit or LaneEvents.
+    - Spawn with an args array only.
+
+**Seed code (reference skeletons; adapt names to the Shared Contract; the tests are the authority):**
+
+```js
+// src/protocol/lease-grant.mjs
+import { createHash, createHmac, timingSafeEqual } from "node:crypto";
+import { ClawError } from "../errors.mjs";
+
+const canonical = (value) => JSON.stringify(value, (key, v) => (v && typeof v === "object" && !Array.isArray(v)
+  ? Object.fromEntries(Object.keys(v).sort().map((k) => [k, v[k]])) : v));
+const hmac = (key, text) => createHmac("sha256", key).update(text).digest("hex");
+
+export const deriveJobKey = ({ laneSecret, jobId }) => hmac(laneSecret, `pforge-claw/job/v1:${jobId}`);
+
+export function buildLeaseGrant({ leaseJob, laneId, proof, now = Date.now(), ttlMs = 300_000 }) {
+  const { leaseGrant, ...job } = leaseJob;
+  return { v: 1, jobId: job.id, projectId: job.projectId, type: job.type, mutating: job.mutating, laneId,
+    approval: { kind: proof.kind, ref: proof.ref ?? null, decidedAt: proof.decidedAt ?? null },
+    jobDigest: createHash("sha256").update(canonical(job)).digest("hex"), issuedAt: now, exp: now + ttlMs };
+}
+
+export function signGrant({ grant, subject, key }) {
+  const body = { ...grant, subject };
+  return { ...body, mac: hmac(key, `pforge-claw-lease-grant:v1\n${canonical(body)}`) };
+}
+
+export function verifyGrant({ grant, job, subject, laneId, key, now = Date.now(), expectJobId }) {
+  const fail = (reason) => { throw new ClawError("LEASE_GRANT_INVALID", { reason }); };
+  if (!grant || grant.v !== 1 || typeof grant.mac !== "string") fail("shape");
+  const { mac, ...body } = grant;
+  const expected = Buffer.from(hmac(key, `pforge-claw-lease-grant:v1\n${canonical(body)}`), "hex");
+  const given = Buffer.from(mac, "hex");
+  if (expected.length !== given.length || !timingSafeEqual(expected, given)) fail("mac");
+  if (body.subject !== subject) fail("subject");
+  if (body.laneId !== laneId || body.jobId !== job.id || (expectJobId && body.jobId !== expectJobId)) fail("job");
+  if (body.projectId !== job.projectId || body.type !== job.type || body.mutating !== job.mutating) fail("job");
+  if (body.jobDigest !== createHash("sha256").update(canonical(job)).digest("hex")) fail("digest");
+  if (!(now < body.exp)) fail("expired");
+  const kind = body.approval?.kind;
+  if (job.mutating ? !["consumed", "parent-consumed"].includes(kind) : !(kind === "read-only" && job.type === "skill")) fail("approval");
+  return body;
+}
+```
+
+```js
+// src/protocol/ws-server.mjs (authenticate, job mode)
+if (context.mode === "job") {
+  const { laneId, jobId } = context.hello;
+  if (!jobLanes.has(laneId)) return failHandshake("WORKER_JOB_MODE_DENIED");
+  if (!hasActiveJob(laneId, jobId)) return failHandshake("WORKER_JOB_UNKNOWN");
+  const subject = `job:${jobId}`;
+  if (authMessage.workerId !== subject) return failHandshake("WORKER_AUTH_FAILED");
+  let key;
+  try { key = jobKeyFor(laneId, jobId); } catch { return failHandshake("K8S_LANE_SECRET_MISSING"); }
+  if (!verifyMac(key, context.nonce, subject, authMessage.mac)) return failHandshake("WORKER_AUTH_FAILED");
+  context.workerId = subject; context.nonce = null; context.state = HANDSHAKE_STATES.READY; clearTimeout(context.timer);
+  send(message("ready", { leaseMs: registry.leaseMs ?? 60_000, heartbeatMs }));
+  registry.connect(subject, { laneId, jobScope: jobId, capabilities: context.capabilities, send });
+  return audit(logger, "WORKER_JOB_AUTHENTICATED");
+}
+```
+
+```js
+// src/cli/worker.mjs: long-lived remote path and one-shot path through the same runners
+function leasedJob(job, { subject, laneId, key, expectJobId }) {
+  const { leaseGrant, ...plain } = job;
+  verifyGrant({ grant: leaseGrant, job: plain, subject, laneId, key, expectJobId }); // throws LEASE_GRANT_INVALID
+  return plain;
+}
+
+// Long-lived worker (replaces makeWorkerRuntime, which ran with cwd = checkout)
+const workspaces = deferredWorktreeWorkspace({ home, runner: run });
+const executor = createJobExecutor({
+  config, secrets, home, store: null, bus: new EventEmitter(), clients, registry: projectRegistry,
+  jobsFor: (job) => createLeaseJobSource(job), workspaceFor: () => workspaces,
+});
+const localLane = createLocalLane({ id: laneId, config,
+  runtimeFor: async (job) => executor.runtimeFor(leasedJob(job, { subject: workerId, laneId, key: secret })) });
+const agent = createWorkerAgent({ url, workerId, secret, laneId, capabilities, localLane, readHandler, logger,
+  l2: { forgeDirFor: (job) => workspaces.forgeDirFor(job.id), snapshot: async () => null,
+        collect: ({ forgeDir }) => workspaces.delta(forgeDir) },
+  afterJob: (job) => workspaces.settle(job.id) });
+
+// One-shot (K8s pod): pforge claw worker --one-shot --job <id>
+async function runOneShot({ jobId, env = process.env }) {
+  const need = ["PFORGE_CLAW_DISPATCHER_URL", "PFORGE_CLAW_JOB_KEY", "PFORGE_CLAW_LANE_ID"];
+  if (need.some((n) => !env[n]) || env.PFORGE_CLAW_JOB_ID !== jobId) throw new ClawError("ONE_SHOT_ENV_MISSING");
+  const jobKey = env.PFORGE_CLAW_JOB_KEY; const laneId = env.PFORGE_CLAW_LANE_ID;
+  const deadline = Date.now() + Number(env.PFORGE_CLAW_JOB_DEADLINE_SECONDS ?? 3600) * 1000;
+  let pod = null; let onAcked;
+  const acked = new Promise((resolve) => { onAcked = resolve; });
+  const runtimeFor = async (job) => {
+    const plain = leasedJob(job, { subject: `job:${jobId}`, laneId, key: jobKey, expectJobId: jobId });
+    const prepared = await runPodJob({ job: plain, project: plain.project, config: podConfig(plain),
+      requestCopySet: async () => decodeCopySet(plain.bootstrapFiles) });
+    if (!prepared.ok) return { id: "pod", run: async () => ({ status: "failed", error: "BOOTSTRAP_FAILED" }) };
+    pod = { ...prepared, snapshot: await snapshotForge({ forgeDir: path.join(prepared.repoDir, ".forge") }) };
+    const inner = await createJobExecutor({ ...podDeps(plain, pod),
+      jobsFor: () => createLeaseJobSource(plain),
+      workspaceFor: () => clonedWorkspace({ repoDir: pod.repoDir, env: prepared.env }) }).runtimeFor(plain);
+    return { id: inner.id, run: async (turn) => {
+      const result = await inner.run(turn);
+      await finalizePodJob({ repoDir: pod.repoDir, deadlineMs: deadline,
+        collectDelta: async () => null, awaitAck: async () => true });   // drain-memory; delta ships via l2
+      return result;
+    } };
+  };
+  const agent = createWorkerAgent({ url: env.PFORGE_CLAW_DISPATCHER_URL, laneId, jobScope: { jobId, jobKey },
+    capabilities: { ...(await detectCapabilities({ laneId })), projects: [] },
+    localLane: createLocalLane({ id: laneId, runtimeFor }),
+    readHandler: async () => { throw new ClawError("READ_NOT_SUPPORTED"); },
+    l2: { forgeDirFor: () => path.join(pod?.repoDir ?? "/work/repo", ".forge"), snapshot: async () => null,
+          collect: ({ forgeDir }) => computeDelta({ forgeDir, snapshot: pod?.snapshot }) },
+    onLeaseAcked: ({ jobId: done }) => done === jobId && onAcked(true) });
+  agent.start();
+  const ok = await Promise.race([acked, new Promise((r) => setTimeout(() => r(false), Math.max(0, deadline - Date.now())))]);
+  agent.stop();
+  return ok ? 0 : 1; // false → the lane reports failed / l2-sync-incomplete
+}
+```
+
+**Files**:
+- **New source:** `pforge-claw/src/protocol/lease-grant.mjs`, `pforge-claw/src/jobs/lease-payload.mjs`, `pforge-claw/src/jobs/lease-jobs.mjs`.
+- **Edited source:** `pforge-claw/src/lanes/directory.mjs` (`buildLanes` only; shared with Slice 30, see task 4), `pforge-claw/src/cli/worker.mjs`, `pforge-claw/src/features/workers.mjs`, `pforge-claw/src/protocol/messages.mjs`, `pforge-claw/src/protocol/worker-registry.mjs`, `pforge-claw/src/protocol/ws-server.mjs`, `pforge-claw/src/protocol/worker-agent.mjs`, `pforge-claw/src/lanes/k8s-job-lane.mjs`, `pforge-claw/src/jobs/bootstrap.mjs`.
+- **Docs:** `pforge-claw/deploy/k8s/README.md` (lane secret row; pods hold only per-job keys).
+- **New tests:** `pforge-claw/tests/lease-grant.test.mjs`, `pforge-claw/tests/remote-dispatch.test.mjs`, `pforge-claw/tests/worker-execution.test.mjs`.
+- **Updated tests:** `pforge-claw/tests/protocol.test.mjs`, `pforge-claw/tests/k8s-job-lane.test.mjs`, `pforge-claw/tests/remote-lane.test.mjs`, `pforge-claw/tests/l2-sync.test.mjs`, `pforge-claw/tests/bootstrap.test.mjs`.
+
+**Validation Gate**:
+```bash
+node -e "for (const f of ['pforge-claw/src/dispatcher.mjs','pforge-claw/src/lanes/directory.mjs','pforge-claw/src/jobs/executor.mjs','pforge-claw/src/protocol/lease-grant.mjs','pforge-claw/src/jobs/lease-payload.mjs','pforge-claw/src/jobs/lease-jobs.mjs','pforge-claw/tests/lease-grant.test.mjs','pforge-claw/tests/remote-dispatch.test.mjs','pforge-claw/tests/worker-execution.test.mjs']) require('fs').accessSync(f)"
+node -e "const fs=require('fs');const r=(f)=>fs.readFileSync(f,'utf8');const w=r('pforge-claw/src/cli/worker.mjs');if(w.includes('WORKER_MODE_NOT_SUPPORTED'))throw new Error('one-shot still rejected');if(/cwd:\s*job\.cwd\s*\?\?\s*project\.repo\.path/.test(w))throw new Error('worker still runs in the checkout');if(r('pforge-claw/src/lanes/k8s-job-lane.mjs').includes('PFORGE_CLAW_WORKER_SECRET'))throw new Error('lane/worker secret still mounted into job pods');if(!r('pforge-claw/src/protocol/ws-server.mjs').includes('WORKER_JOB_UNKNOWN'))throw new Error('job-scoped connection check missing')"
+node -e "const fs=require('fs');const need={'pforge-claw/tests/lease-grant.test.mjs':['per-job key','tampered job payload','another subject','expired grant','without approval proof'],'pforge-claw/tests/remote-dispatch.test.mjs':['cannot claim another job','refused for a different jobId','after the job finished','run in parallel','never secrets.json','channel identities'],'pforge-claw/tests/worker-execution.test.mjs':['never the checkout','without a valid approval grant','one-shot job end to end','l2-sync-incomplete','without printing it'],'pforge-claw/tests/k8s-job-lane.test.mjs':['lane secret never appears in the Job spec','job key, lane id and deadline','unknown job'],'pforge-claw/tests/protocol.test.mjs':['non-k8s lane','never given read leases','signed per subject']};for(const [f,ns] of Object.entries(need)){const s=fs.readFileSync(f,'utf8');for(const n of ns)if(!s.includes(n))throw new Error(f+' missing test: '+n)}"
+node -e "process.chdir('pforge-claw'); require('child_process').execSync('npx vitest run tests/lease-grant.test.mjs tests/remote-dispatch.test.mjs tests/worker-execution.test.mjs tests/protocol.test.mjs tests/k8s-job-lane.test.mjs tests/remote-lane.test.mjs tests/l2-sync.test.mjs tests/bootstrap.test.mjs tests/dispatcher.test.mjs', {stdio:'inherit',shell:true});"
+node node_modules/eslint/bin/eslint.js --config scripts/audit/eslint-clean-code.config.mjs pforge-claw/src/protocol/lease-grant.mjs pforge-claw/src/jobs/lease-payload.mjs pforge-claw/src/jobs/lease-jobs.mjs pforge-claw/src/cli/worker.mjs pforge-claw/src/protocol/ws-server.mjs pforge-claw/src/protocol/worker-registry.mjs pforge-claw/src/lanes/directory.mjs
+node scripts/audit/dep-boundaries.mjs
+node -e "process.chdir('pforge-claw'); require('child_process').execSync('npx vitest run', {stdio:'inherit',shell:true});"
+```
+
+
 #### Slice 27 — Full test environment and end-to-end validation [sequential]
 
-**Depends On**: Slice 26
+**Depends On**: Slice 23, Slice 26, Slice 30, Slice 31
 **Context Files**: `.github/instructions/testing.instructions.md`, `.github/instructions/security.instructions.md`, `.github/instructions/status-reporting.instructions.md`
 
 Tasks:
 1. **Orient first (no edits yet):** read `docs/plans/Phase-62-PFORGE-CLAW-PLAN.md` sections **Shared Contract** (incl. Module seams), **Portability & Configurability Contract**, **Scope Contract → Forbidden** and **Security Posture**, Required Decisions D4, the **Seed Code** sections SC-15 (start from them), then this slice's Context Files (`.github/instructions/testing.instructions.md`, `.github/instructions/security.instructions.md`, `.github/instructions/status-reporting.instructions.md`). The worker prompt contains only this slice, so treat those sections as binding. If anything conflicts with them, stop and report a blocker instead of guessing.
-2. Offline e2e suite `pforge-claw/tests/e2e/*.test.mjs` + `test:e2e` script, built on `fake-telegram.mjs`, `fixture-repos.mjs` (three throwaway git repos with a minimal plan-forge setup and a tiny plan, created in a temp dir per run) and `scripted-copilot.mjs` (deterministic Copilot session events). Runs fully offline, no GHCP spend.
+2. Offline e2e suite `pforge-claw/tests/e2e/*.test.mjs` + `test:e2e` script, built on `fake-telegram.mjs`, `fixture-repos.mjs` (three throwaway git repos with a minimal plan-forge setup and a tiny plan, created in a temp dir per run) and `scripted-copilot.mjs` (deterministic Copilot session events). Runs fully offline, no GHCP spend. `tests/helpers/e2e-rig.mjs` boots through `bootDispatcher` (Slice 30) with an injected scripted runtime, `runtimes.pforgeCommand` = fake pforge and `runtimes.ghCommand` = the fixture gh shim, so every scenario exercises the real approval → dispatch → runner → PR path (no direct `createApp` boot, no `chat.stop()` workaround, no test-only dispatch wiring). `tests/helpers/e2e-rig.mjs` boots through `bootDispatcher` (Slice 30) with an injected scripted runtime, `runtimes.pforgeCommand` = fake pforge and `runtimes.ghCommand` = the fixture gh shim, so every scenario exercises the real approval → dispatch → runner → PR path (no direct `createApp` boot, no `chat.stop()` workaround, no test-only dispatch wiring).
 3. `pforge claw dev up|down|status` in `src/cli/dev.mjs`: boots a local multi-process topology — dispatcher + LocalLane + two RemoteLane workers (fixture lane ids `worker-a` labelled `macos` and `worker-b` labelled `windows`, both opt-in) with separate `PFORGE_CLAW_HOME`s on localhost — pointed at either the fake Telegram server (`--fake`) or the real bot (`--live`).
-4. Scenarios (each a named test): (a) away-from-desk loop — ask → `/run` → estimate card → approve → slice progress edits → PR link (success metric 1); (b) three projects concurrent, one held by budget cap then owner-released (metric 3); (c) safety — unknown user silent, approval replay/expiry/wrong-user, forwarded-text injection, canary secrets absent everywhere (metric 4); (d) simulated 7-day digest + alerts with fake clock and two injected dispatcher restarts — no miss/duplicate (metric 2); (e) worker disconnect mid-job → lease expiry → requeue → resume by `seq` with no duplicate Telegram edits; (f) placement — `macos`-labelled job pinned to `worker-a`, `restricted` project never on a shared lane, `/lane worker-b off` respected; (g) help — `/help` in a project topic vs `#general` vs as a `viewer` shows the right command sets, every listed command is runnable by that caller, and the `setMyCommands` menu captured by the fake server matches `/help`; (h) memory — OpenBrain offline (fake) → captures queue then drain on recovery, a forwarded message is never stored without confirm, a restricted project never appears in `/recall --all`, and a K8s-style one-shot worker's `.forge` history and undelivered queue records reach the canonical L2 home after it exits.
+4. Scenarios (each a named test): (a) away-from-desk loop — ask → `/run` → estimate card → approve → slice progress edits → PR link (success metric 1); (b) three projects concurrent, one held by budget cap then owner-released (metric 3); (c) safety — unknown user silent, approval replay/expiry/wrong-user, forwarded-text injection (a forwarded `/run …` produces no `command` audit row and no job; it reaches the triage card, and choosing "ask" sends the text to Forge-Master only as `untrustedContext`), canary secrets (planted as real secret values so redaction applies) absent everywhere (metric 4); (d) simulated 7-day digest + alerts with fake clock and two injected dispatcher restarts — no miss/duplicate (metric 2); (e) worker disconnect mid-job → lease expiry → requeue → resume by `seq` with no duplicate Telegram edits; (f) placement — `macos`-labelled job pinned to `worker-a`, `restricted` project never on a shared lane, `/lane worker-b off` respected; (g) help — `/help` in a project topic vs `#general` vs as a `viewer` shows the right command sets, every listed command is runnable by that caller, and the `setMyCommands` menu captured by the fake server matches `/help`; (h) memory — OpenBrain offline (fake) → captures queue then drain on recovery, a forwarded message is never stored without confirm, a restricted project never appears in `/recall --all`, and a K8s-style one-shot worker's `.forge` history and undelivered queue records reach the canonical L2 home after it exits.
 5. K8s dev overlay `deploy/k8s/overlays/dev/` (k3d/kind) plus `scripts/e2e-k8s.ps1` **and** `scripts/e2e-k8s.sh` twins: build dispatcher + worker images, load into the local cluster, apply, run scenario (a) through a `K8sJobLane`, assert Job cleanup and NetworkPolicy denial of a non-allowlisted egress host, then tear down. Skipped (not failed) when no cluster is reachable; `doctor` explains why.
-6. **MANUAL (operator)** for the live part. The agent writes the generic live-environment runbook (`docs/PFORGE-CLAW-GUIDE.md` §Live test environment, drafted here and finalised in Slice 29), written for any topology. Then execute it on the **reference validation environment**: dispatcher on the Linux K8s cluster, macOS worker, Windows worker (opt-in), K8s Job lane, three real projects registered; run scenarios (a) and (b) with real Telegram + GHCP; capture evidence (message screenshots, job ids, PR links, `budget.jsonl` excerpt) in the slice artifact. Record the D4 outcome observed live.
-7. **MANUAL (operator)**: create the Telegram bot with BotFather (token into `PFORGE_CLAW_TELEGRAM_TOKEN`, privacy mode off or bot as admin, forum group with topics), enroll the workers, then run the live scenarios. The agent prepares a checklist and an evidence template in the slice notes and stops here.
+6. **MANUAL (operator)** for the live part. The agent writes the generic live-environment runbook (`docs/PFORGE-CLAW-GUIDE.md` §Live test environment, drafted here and finalised in Slice 29), written for any topology, including creating each K8s Job lane's secret (`pforge claw worker enroll --lane <k8s-lane>` writes a generated `k8s.laneSecret` into the dispatcher's secret store; pods only ever receive per-job keys). Then execute it on the **reference validation environment**: dispatcher on the Linux K8s cluster, macOS worker, Windows worker (opt-in), K8s Job lane, three real projects registered; run scenarios (a) and (b) with real Telegram + GHCP; capture evidence (message screenshots, job ids, PR links, `budget.jsonl` excerpt) in the slice artifact. Record the D4 outcome observed live.
+7. **MANUAL (operator)**: create the Telegram bot with BotFather (token into `PFORGE_CLAW_TELEGRAM_TOKEN`, privacy mode off or bot as admin, forum group with topics), enroll the workers, then run the live scenarios. The agent prepares a checklist and an evidence template in `docs/PFORGE-CLAW-GUIDE.md` §Live test environment and stops here.
 
-**Files**: `pforge-claw/tests/e2e/*`, `pforge-claw/tests/helpers/*`, `pforge-claw/package.json`, `pforge-claw/src/cli/dev.mjs`, `pforge-claw/deploy/k8s/overlays/dev/*`, `pforge-claw/scripts/e2e-k8s.ps1`, `pforge-claw/scripts/e2e-k8s.sh`, `pforge-claw/vitest.e2e.config.mjs`
+**Files**: `pforge-claw/tests/e2e/*`, `pforge-claw/tests/helpers/*`, `pforge-claw/package.json`, `pforge-claw/src/cli/dev.mjs`, `pforge-claw/deploy/k8s/overlays/dev/*`, `pforge-claw/scripts/e2e-k8s.ps1`, `pforge-claw/scripts/e2e-k8s.sh`, `pforge-claw/vitest.e2e.config.mjs`, `docs/PFORGE-CLAW-GUIDE.md` (§Live test environment runbook, BotFather checklist and evidence template only; Slice 29 finalises the rest)
 
 **Validation Gate**:
 ```bash
+node -e "for (const f of ['pforge-claw/src/dispatcher.mjs','pforge-claw/src/placement.mjs','pforge-claw/src/protocol/lease-grant.mjs','pforge-claw/tests/helpers/e2e-rig.mjs','docs/PFORGE-CLAW-GUIDE.md']) require('fs').accessSync(f)"
 node -e 'const p=require("./pforge-claw/package.json");if(!p.scripts||!p.scripts["test:e2e"])throw new Error("test:e2e script missing")'
 node -e 'const fs=require("fs");for(const f of ["pforge-claw/scripts/e2e-k8s.ps1","pforge-claw/scripts/e2e-k8s.sh","pforge-claw/deploy/k8s/overlays/dev/kustomization.yaml"])if(!fs.existsSync(f))throw new Error("missing: "+f)'
 node -e 'const fs=require("fs");const d="pforge-claw/tests/e2e";const all=fs.readdirSync(d).map(f=>fs.readFileSync(d+"/"+f,"utf8")).join("\n");for(const n of ["away-from-desk","concurrent","safety","7-day","requeue","placement","help","memory"])if(!all.includes(n))throw new Error("e2e scenario missing: "+n)'
@@ -1613,7 +2379,7 @@ Tasks:
 5. Top-level docs: `README.md` (feature list + link to the guide), `docs/CLI-GUIDE.md` (`pforge claw`), `docs/UNIFIED-SYSTEM-ARCHITECTURE.md` (Forge-Claw as the native front door; OpenClaw remains an alternative integration), `ROADMAP.md`, `CHANGELOG.md` `[Unreleased]` (experimental `pforge-claw` package, `pforge claw` CLI, cross-platform support, link to the guide), `docs/plans/DEPLOYMENT-ROADMAP.md` status for both phases.
 6. Sweep for stale or operator-specific text across all touched docs: no personal hosts, chat ids or paths; every example uses placeholders; every cross-link resolves.
 7. Update `docs/manual/remote-bridge.html` (Forge-Claw as the inbound side of the bridge; OpenClaw section cross-links the guide).
-8. Retro (last task, after everything else): append `## What actually shipped` to this plan and rewrite the status line at the top of the plan so it reads "✅ Complete. All 29 slices shipped. See [What actually shipped](#what-actually-shipped)." (keep the existing bold Status label); do not touch `lockHash`.
+8. Retro (last task, after everything else): append `## What actually shipped` to this plan and rewrite the status line at the top of the plan so it reads "✅ Complete. All 31 slices shipped. See [What actually shipped](#what-actually-shipped)." (keep the existing bold Status label); do not touch `lockHash`.
 
 **Files**: `docs/PFORGE-CLAW-GUIDE.md`, `pforge-mcp/capabilities/surface.mjs`, `docs/capabilities.md`, `docs/capabilities.html`, `docs/manual/*`, `README.md`, `docs/CLI-GUIDE.md`, `docs/UNIFIED-SYSTEM-ARCHITECTURE.md`, `ROADMAP.md`, `CHANGELOG.md`, `docs/plans/DEPLOYMENT-ROADMAP.md`, `docs/plans/Phase-62-PFORGE-CLAW-PLAN.md`
 
@@ -1638,6 +2404,8 @@ node -e 'const c=require("fs").readFileSync("docs/plans/Phase-62-PFORGE-CLAW-PLA
 - **After Slice 20**: re-read D12/D13. Confirm RBAC verbs and namespace scope.
 - **After Slice 23**: re-read placement rules and `restricted` semantics. Re-read the Portability & Configurability Contract: no lane or label names in code.
 - **After Slice 25**: re-read D21/D22 and Security Posture §8. Confirm no channel user ids in memory, untrusted captures need a confirm, and every lane kind merges `.forge` history back.
+- **After Slice 30**: re-read D6, D9, D28. Confirm no code path leases a job without a consumed approval (or parent fan-out approval), held-budget jobs are never leased, remote/K8s lanes stay unregistered (offline to placement), and the single-host smoke is a real (not `todo`) test.
+- **After Slice 31**: re-read D11, D12, D28 and Security Posture §5. Confirm no worker runs an agent in the operator's checkout, every remote/one-shot lease is refused without a valid grant, no Job spec contains the lane secret, and a job-scoped connection cannot see or claim another job.
 - **After Slice 28**: the CI matrix is green on all three OSes plus kind; the Tested Platforms matrix is seeded.
 - **Before Slice 29**: all code is frozen; the doc sweep documents what actually shipped, not what was planned.
 
@@ -1673,7 +2441,7 @@ The package is additive and opt-in: nothing starts it unless the operator runs `
 
 ## Definition of Done
 
-- [ ] All 29 slices complete with gates passing (or M3 formally descoped per Stop Conditions with the D4 outcome recorded)
+- [ ] All 31 slices complete with gates passing (or M3 formally descoped per Stop Conditions with the D4 outcome recorded)
 - [ ] Every **MUST** acceptance criterion traceable to a passing test or gate
 - [ ] Offline e2e suite green (all six scenarios); K8s e2e run green on the dev overlay
 - [ ] Reference validation environment up (Linux K8s dispatcher + macOS worker + Windows worker + K8s Job lane) with scenarios (a) and (b) evidenced, and results recorded in the Tested Platforms matrix

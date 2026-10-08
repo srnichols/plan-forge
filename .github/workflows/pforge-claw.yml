@@ -1,0 +1,176 @@
+name: pforge-claw
+
+on:
+  push:
+    paths:
+      - 'pforge-claw/**'
+      - 'pforge.ps1'
+      - 'pforge.sh'
+      - '.github/workflows/pforge-claw.yml'
+  pull_request:
+    paths:
+      - 'pforge-claw/**'
+      - 'pforge.ps1'
+      - 'pforge.sh'
+      - '.github/workflows/pforge-claw.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pforge-claw-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    env:
+      PFORGE_CLAW_OFFLINE: '1'
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+        node: ['22.12', '24']
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: ${{ matrix.node }}
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci --no-audit --no-fund
+
+      - name: Run dependency boundary guards
+        working-directory: pforge-claw
+        run: npx vitest run tests/boundaries.test.mjs
+
+      - name: Run unit tests
+        run: npm test --workspace=pforge-claw
+
+      - name: Run offline end-to-end tests
+        run: npm run test:e2e --workspace=pforge-claw
+
+      - name: Prepare doctor home
+        shell: bash
+        run: mkdir -p "$RUNNER_TEMP/claw-home" && cp pforge-claw/examples/single-host.json "$RUNNER_TEMP/claw-home/config.json"
+
+      - name: Run doctor on Unix
+        if: runner.os != 'Windows'
+        shell: bash
+        run: |
+          set +e
+          bash ./pforge.sh claw doctor --json --home "$RUNNER_TEMP/claw-home" > "$RUNNER_TEMP/doctor.json"
+          echo $? > "$RUNNER_TEMP/doctor.exit"
+          exit 0
+
+      - name: Run doctor on Windows
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          ./pforge.ps1 claw doctor --json --home "$env:RUNNER_TEMP/claw-home" | Out-File -Encoding utf8NoBOM "$env:RUNNER_TEMP/doctor.json"
+          "$LASTEXITCODE" | Out-File -Encoding ascii "$env:RUNNER_TEMP/doctor.exit"
+          exit 0
+
+      - name: Assert doctor report
+        shell: bash
+        run: |
+          node -e 'const fs=require("node:fs");const report=JSON.parse(fs.readFileSync(process.env.RUNNER_TEMP+"/doctor.json","utf8"));const exitCode=Number(fs.readFileSync(process.env.RUNNER_TEMP+"/doctor.exit","utf8").trim());const counts=["ok","warn","fail","skip"];if(typeof report.ok!=="boolean"||!report.summary||counts.some((key)=>typeof report.summary[key]!=="number")||!Array.isArray(report.checks))throw new Error("doctor report has an invalid shape");if(exitCode!==0&&exitCode!==1)throw new Error("doctor exited unexpectedly: "+exitCode);if((exitCode===0)!==(report.ok===true))throw new Error("doctor exit code does not match report.ok");const summary=`### Example diagnostics passed (placeholder config; deployment incomplete expected)\n\n- Result: \`${report.ok ? "ok" : "incomplete"}\`\n- Summary: ${counts.map((key)=>`${key} ${report.summary[key]}`).join(", ")}\n`;fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY,summary);'
+
+      - name: Record runner summary
+        if: always()
+        shell: bash
+        run: |
+          {
+            echo "### pforge-claw CI runner"
+            echo
+            echo "- runner.os: $RUNNER_OS"
+            echo "- runner.arch: $RUNNER_ARCH"
+            echo "- Node: $(node -v 2>/dev/null || echo unavailable)"
+            echo "- Commit: $GITHUB_SHA"
+            echo "- Run: $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  k8s-kind:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci --no-audit --no-fund
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Write kind configuration
+        shell: bash
+        run: |
+          cat > "$RUNNER_TEMP/kind.yaml" <<'EOF'
+          kind: Cluster
+          apiVersion: kind.x-k8s.io/v1alpha4
+          networking:
+            disableDefaultCNI: true
+            podSubnet: 192.168.0.0/16
+          EOF
+
+      - uses: helm/kind-action@v1.12.0
+        with:
+          cluster_name: kind
+          config: ${{ runner.temp }}/kind.yaml
+          node_image: kindest/node:v1.32.2
+
+      - name: Install Calico CNI
+        shell: bash
+        run: |
+          kubectl apply -f https://raw.githubusercontent.com/projectcalico/calico/v3.30.3/manifests/calico.yaml
+          kubectl wait --for=condition=Ready nodes --all --timeout=300s
+          kubectl -n kube-system wait --for=condition=Ready pods -l k8s-app=calico-node --timeout=300s
+          kubectl -n kube-system wait --for=condition=Ready pods -l k8s-app=calico-kube-controllers --timeout=300s
+
+      - name: Record Kubernetes environment
+        shell: bash
+        run: |
+          kubectl cluster-info
+          kubernetes_version=$(kubectl version -o json | node -e 'let input="";process.stdin.on("data",(chunk)=>input+=chunk).on("end",()=>process.stdout.write(JSON.parse(input).serverVersion.gitVersion))')
+          runtime_version=$(kubectl get nodes -o jsonpath='{.items[0].status.nodeInfo.containerRuntimeVersion}')
+          {
+            echo "### kind Kubernetes environment"
+            echo
+            echo "- Kubernetes: $kubernetes_version"
+            echo "- CNI: Calico 3.30.3"
+            echo "- Runtime: $runtime_version"
+            echo "- kind node image: kindest/node:v1.32.2"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Run Kubernetes end-to-end tests
+        shell: bash
+        run: |
+          set -o pipefail
+          bash pforge-claw/scripts/e2e-k8s.sh 2>&1 | tee "$RUNNER_TEMP/e2e-k8s.log"
+          if grep -q '^SKIPPED:' "$RUNNER_TEMP/e2e-k8s.log"; then echo "::error::e2e-k8s skipped in CI"; exit 1; fi
+
+      - name: Collect Kubernetes diagnostics
+        if: failure()
+        shell: bash
+        run: |
+          set +e
+          kubectl get pods,jobs,networkpolicies -A 2>&1 | head -500
+          kubectl get pods -A --no-headers 2>/dev/null | awk '$3 != "Running" && $3 != "Completed" { print $1, $2 }' |
+            while read -r namespace pod; do
+              [ -n "$pod" ] || continue
+              echo "### Failed pod: $namespace/$pod"
+              kubectl describe pod "$pod" -n "$namespace" 2>&1 | head -500
+            done
+
+      - name: Delete kind cluster
+        if: always()
+        shell: bash
+        run: kind delete cluster --name kind

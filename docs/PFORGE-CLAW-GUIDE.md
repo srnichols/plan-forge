@@ -1,5 +1,28 @@
 # Forge-Claw Guide
 
+## Tested Platforms
+
+CI covers offline unit and end-to-end tests, scripted/fake Telegram interactions, and a doctor smoke test against the placeholder example configuration. It does not cover authenticated GitHub Copilot or BYOK, or live Telegram. The doctor smoke test confirms example diagnostics and does not prove Kubernetes/CNI or authentication readiness.
+
+| OS | Arch | Node | K8s distro/version | CNI | Runtime | Channel | Result | Date | Reporter | Evidence |
+|---|---|---:|---|---|---|---|---|---|---|---|
+| ubuntu-latest | pending | 22.12 | N/A | N/A | N/A | fake (offline) | pending | pending | pending | pending |
+| ubuntu-latest | pending | 24 | N/A | N/A | N/A | fake (offline) | pending | pending | pending | pending |
+| windows-latest | pending | 22.12 | N/A | N/A | N/A | fake (offline) | pending | pending | pending | pending |
+| windows-latest | pending | 24 | N/A | N/A | N/A | fake (offline) | pending | pending | pending | pending |
+| macos-latest | pending | 22.12 | N/A | N/A | N/A | fake (offline) | pending | pending | pending | pending |
+| macos-latest | pending | 24 | N/A | N/A | N/A | fake (offline) | pending | pending | pending | pending |
+| ubuntu-latest (kind) | amd64 | 24 | kind / v1.32.2 | Calico 3.30.3 | containerd | pending | pending | pending | pending | pending |
+| macOS reference host | unknown | unknown | N/A | N/A | unknown | unknown | pending | pending | pending | pending |
+| Windows reference host | unknown | unknown | N/A | N/A | unknown | unknown | pending | pending | pending | pending |
+| Linux reference cluster | unknown | unknown | unknown | unknown | unknown | unknown | pending | pending | pending | pending |
+
+### Submitting a result
+
+For a community issue, include every table column (OS, architecture, Node, Kubernetes distribution/version, CNI, runtime, channel, result, date, reporter, and evidence), plus the commit SHA or version and install method; commands run and scenario; expected and actual results; redacted `pforge claw doctor --json` output; evidence URL; and any skip or failure reason. Use the `forge-claw-platform` label. No issue template is required.
+
+Maintainers replace `pending` cells after the first green run and include the CI run URL in the Evidence field. Missing environment details should remain `unknown`; use `N/A` only when a field does not apply.
+
 ## Live test environment
 
 **MANUAL (operator)** — Live Telegram, GitHub, authenticated GitHub Copilot,

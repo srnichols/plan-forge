@@ -85,10 +85,11 @@ describe("forge-master integration — capabilities", () => {
     expect(surface.forgeMaster.routerModel).toBeTruthy();
   });
 
-  it("forgeMaster subsystem description mentions Phase-28", async () => {
+  it("forgeMaster subsystem description states the caller/untrustedContext contract and proposal-only actions", async () => {
     const { buildCapabilitySurface } = await import("../capabilities.mjs");
     const surface = buildCapabilitySurface([]);
-    expect(surface.forgeMaster.description).toContain("Phase-28");
+    expect(surface.forgeMaster.description).toContain("untrustedContext");
+    expect(surface.forgeMaster.description).toContain("proposedActions");
   });
 });
 

@@ -11,6 +11,7 @@ import {
   renderSummaryBlock,
   RETAIN_WINDOW,
   selectEvicted,
+  settleSessionCompaction,
   shouldRegenerate,
   SUMMARY_HEADING,
   truncateUtf8,
@@ -93,11 +94,16 @@ async function seedTenTurns() {
   await saveSessionSummary(SESSION_ID, state, cwd);
 }
 
-afterEach(() => {
+afterEach(async () => {
   vi.useRealTimers();
+  await settleSessionCompaction();
   if (cwd) rmSync(cwd, { recursive: true, force: true });
   cwd = null;
 });
+
+function readSettledSummary() {
+  return settleSessionCompaction(SESSION_ID).then(() => JSON.parse(readFileSync(SUMMARY_PATH(cwd), "utf8")));
+}
 
 describe("rolling session summary", () => {
   it("does not summarize the first ten turns", async () => {
@@ -108,11 +114,11 @@ describe("rolling session summary", () => {
     await runCount(10, provider, { summarizeSession });
 
     expect(summarizeSession).not.toHaveBeenCalled();
-    expect(JSON.parse(readFileSync(SUMMARY_PATH(cwd), "utf8")).summary).toBeNull();
+    expect((await readSettledSummary()).summary).toBeNull();
     expect(promptCapture.every((prompt) => !prompt.includes(SUMMARY_HEADING))).toBe(true);
   });
 
-  it("generates the first summary after turn 11 and charges that turn", async () => {
+  it("generates the first summary after turn 11 and charges it to the next turn", async () => {
     makeCwd();
     const provider = makeProvider();
     const summarizeSession = vi.fn(async ({ prompt }) => ({
@@ -121,19 +127,21 @@ describe("rolling session summary", () => {
       tokensOut: 3,
     }));
 
-    const results = await runCount(11, provider, { summarizeSession });
-    const state = JSON.parse(readFileSync(SUMMARY_PATH(cwd), "utf8"));
+    const results = await runCount(12, provider, { summarizeSession });
+    const state = await readSettledSummary();
 
     expect(summarizeSession).toHaveBeenCalledTimes(1);
     expect(summarizeSession.mock.calls[0][0].prompt).toContain("Conclusion-T1");
     expect(state.generatedAtTurn).toBe(11);
-    expect(results[10].usage.tokensIn).toBe(17);
-    expect(results[10].usage.tokensOut).toBe(8);
-    expect(results[10].usage.costUSD).toBe(
+    expect(results[10].usage.tokensIn).toBe(10);
+    expect(results[11].usage.tokensIn).toBe(17);
+    expect(results[11].usage.tokensOut).toBe(8);
+    expect(results[11].usage.costUSD).toBe(
       computeTurnCost("gpt-4o-mini", 10, 5) + computeTurnCost("gpt-4o-mini", 7, 3),
     );
-    expect(results[10].tokensIn).toBe(10);
-    expect(results[10].totalCostUSD).toBe(computeTurnCost("gpt-4o-mini", 10, 5));
+    expect(results[11].tokensIn).toBe(10);
+    expect(results[11].totalCostUSD).toBe(computeTurnCost("gpt-4o-mini", 10, 5));
+    expect(state.pendingUsage).toBeNull();
     expect(state.summary).toContain("Conclusion-T1");
   });
 
@@ -148,7 +156,7 @@ describe("rolling session summary", () => {
 
     expect(systemPrompt).toContain(SUMMARY_HEADING);
     expect(systemPrompt.indexOf(SUMMARY_HEADING)).toBeLessThan(systemPrompt.indexOf("## Prior conversation turns"));
-    expect(turn12.usage.tokensIn).toBe(10);
+    expect(turn12.usage.tokensIn).toBe(12);
     expect(summarizeSession).toHaveBeenCalledTimes(1);
   });
 
@@ -164,11 +172,13 @@ describe("rolling session summary", () => {
     const firstEleven = await runCount(11, provider, { summarizeSession });
     const middleTurns = await runCount(4, provider, { summarizeSession });
     const turn16 = await runOne(provider, { summarizeSession });
+    const turn17 = await runOne(provider, { summarizeSession });
 
     expect(summarizeSession).toHaveBeenCalledTimes(2);
-    for (const result of middleTurns) expect(result.usage.tokensIn).toBe(10);
-    expect(firstEleven[10].usage.tokensIn).toBe(17);
-    expect(turn16.usage.tokensIn).toBe(17);
+    expect(firstEleven[10].usage.tokensIn).toBe(10);
+    expect(middleTurns.map((result) => result.usage.tokensIn)).toEqual([17, 10, 10, 10]);
+    expect(turn16.usage.tokensIn).toBe(10);
+    expect(turn17.usage.tokensIn).toBe(17);
     const secondPrompt = summarizeSession.mock.calls[1][0].prompt;
     expect(secondPrompt).toContain("Summary-1:");
     for (let turn = 2; turn <= 6; turn++) expect(secondPrompt).toContain(`Conclusion-T${turn}`);
@@ -180,7 +190,7 @@ describe("rolling session summary", () => {
     const summarizeSession = vi.fn(async ({ prompt }) => ({ content: `Echo: ${prompt}`, tokensIn: 1, tokensOut: 1 }));
 
     await runCount(11, provider, { summarizeSession });
-    const state = JSON.parse(readFileSync(SUMMARY_PATH(cwd), "utf8"));
+    const state = await readSettledSummary();
 
     expect(state.ledger[0].conclusion).toContain("Conclusion-T2");
     expect(renderSummaryBlock(state)).toContain("Conclusion-T1");
@@ -194,10 +204,12 @@ describe("rolling session summary", () => {
       .mockImplementation(async ({ prompt }) => ({ content: `Recovered: ${prompt}`, tokensIn: 2, tokensOut: 1 }));
 
     await runCount(10, provider, { summarizeSession });
+    await settleSessionCompaction(SESSION_ID);
     const state = await loadSessionSummary(SESSION_ID, cwd);
     await saveSessionSummary(SESSION_ID, { ...state, summary: "Existing summary" }, cwd);
 
     const failedTurn = await runOne(provider, { summarizeSession });
+    await settleSessionCompaction(SESSION_ID);
     const afterFailure = await loadSessionSummary(SESSION_ID, cwd);
     expect(failedTurn.reply).toContain("Conclusion-T11");
     expect(failedTurn.error).toBeUndefined();
@@ -208,6 +220,7 @@ describe("rolling session summary", () => {
     await runCount(4, provider, { summarizeSession });
     expect(summarizeSession).toHaveBeenCalledTimes(1);
     await runOne(provider, { summarizeSession });
+    await settleSessionCompaction(SESSION_ID);
     expect(summarizeSession).toHaveBeenCalledTimes(2);
   });
 
@@ -216,14 +229,95 @@ describe("rolling session summary", () => {
     const provider = makeProvider({ tokensIn: null, tokensOut: null });
     const summarizeSession = vi.fn(async () => ({ content: "A compact summary", tokensIn: undefined, tokensOut: undefined }));
 
-    const results = await runCount(11, provider, { summarizeSession });
+    const results = await runCount(12, provider, { summarizeSession });
     const result = results.at(-1);
 
+    expect(summarizeSession).toHaveBeenCalledTimes(1);
     expect(result.usage.tokensIn).toBeNull();
     expect(result.usage.tokensOut).toBeNull();
     expect(result.usage.costUSD).toBeNull();
     expect(result.tokensIn).toBe(0);
     expect(result.totalCostUSD).toBe(0);
+  });
+
+  it("forwards the turn's resolved API key to the summary model", async () => {
+    makeCwd();
+    const provider = makeProvider();
+    provider.PROVIDER_NAME = "anthropic";
+    const resolveApiKey = vi.fn((name) => (name === "anthropic" ? "sk-test-anthropic" : null));
+
+    await runCount(11, provider, { resolveApiKey });
+    await settleSessionCompaction(SESSION_ID);
+
+    const summaryCall = provider.sendTurn.mock.calls
+      .map(([request]) => request)
+      .find((request) => request.messages[0]?.content.startsWith("Summarize earlier conversation turns"));
+    expect(summaryCall).toBeDefined();
+    expect(summaryCall.apiKey).toBe("sk-test-anthropic");
+    expect(summaryCall.tools).toEqual([]);
+    expect((await loadSessionSummary(SESSION_ID, cwd)).generatedAtTurn).toBe(11);
+  });
+
+  it("summarizes with the provider, model, and key that served the turn after a fallback", async () => {
+    makeCwd();
+    await seedTenTurns();
+    const primaryRunLoop = vi.fn(async () => {
+      throw Object.assign(new Error("not signed in"), { code: "COPILOT_SDK_SESSION_FAILED" });
+    });
+    const fallback = {
+      PROVIDER_NAME: "anthropic",
+      sendTurn: vi.fn(async () => ({ type: "reply", content: "Fallback summary or answer.", tokensIn: 4, tokensOut: 2 })),
+    };
+
+    const result = await runTurn(
+      { message: "What is my plan status? Question 11?", cwd, sessionId: SESSION_ID },
+      {
+        config: { ...CONFIG, reasoningProvider: null, reasoningProviderExplicit: false, defaultProvider: "githubCopilot" },
+        skipPlanner: true,
+        forceKeywordOnly: true,
+        dispatcher: async () => ({ result: "ok" }),
+        recall: async () => null,
+        resolveApiKey: (name) => (name === "anthropic" ? "sk-fallback" : null),
+        _providers: {
+          githubCopilot: { module: { PROVIDER_NAME: "githubCopilot", runLoop: primaryRunLoop }, isAvailable: () => true },
+          anthropic: { module: fallback, isAvailable: () => true },
+        },
+      },
+    );
+    await settleSessionCompaction(SESSION_ID);
+
+    expect(result.fallbackFromTier).toBe("githubCopilot");
+    expect(primaryRunLoop).toHaveBeenCalledTimes(1);
+    const summaryCall = fallback.sendTurn.mock.calls.at(-1)[0];
+    expect(summaryCall.messages[0].content).toMatch(/^Summarize earlier conversation turns/);
+    expect(summaryCall.apiKey).toBe("sk-fallback");
+    expect(summaryCall.model).toBe(result.resolvedModel);
+    expect((await loadSessionSummary(SESSION_ID, cwd)).summary).toBe("Fallback summary or answer.");
+  });
+
+  it("returns the turn result without waiting for a slow summary", async () => {
+    makeCwd();
+    const provider = makeProvider();
+    let releaseSummary;
+    const summaryGate = new Promise((resolve) => { releaseSummary = resolve; });
+    const summarizeSession = vi.fn(async () => {
+      await summaryGate;
+      return { content: "Slow summary", tokensIn: 7, tokensOut: 3 };
+    });
+
+    await runCount(10, provider, { summarizeSession });
+    const turn11 = await runOne(provider, { summarizeSession });
+
+    expect(turn11.reply).toContain("Conclusion-T11");
+    expect(turn11.usage.tokensIn).toBe(10);
+    await vi.waitFor(() => expect(summarizeSession).toHaveBeenCalledOnce(), { timeout: 1000 });
+    expect((await loadSessionSummary(SESSION_ID, cwd)).summary).toBeNull();
+
+    releaseSummary();
+    await settleSessionCompaction(SESSION_ID);
+    expect((await loadSessionSummary(SESSION_ID, cwd)).summary).toBe("Slow summary");
+    const turn12 = await runOne(provider, { summarizeSession });
+    expect(turn12.usage.tokensIn).toBe(17);
   });
 
   it("does not charge for empty summaries and times out a stalled summary call", async () => {

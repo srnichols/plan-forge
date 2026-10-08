@@ -12,6 +12,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 - `forge_master_ask` accepts optional `caller`, `responseFormat`, `untrustedContext`, `contextBlocks`, and `proposeActions` inputs, and returns a `usage` block. These changes are additive; existing response fields are unchanged.
 - `proposedActions` and `proposedActionsMessage` provide up to three role-filtered, proposal-only suggestions; Forge-Master does not execute them.
 - A structured `forge-master-insight` event and paginated observer status.
+- `forge_master_observe` is now registered on `pforge-mcp` as a proxy to the Forge-Master studio child, so any MCP client connected to a project can start/stop the observer and page insights (`limit`, `cursor`). There is no in-process fallback; an unreachable child returns `FORGE_MASTER_UNAVAILABLE`. Listed in the `liveguard` tool profile.
 - Memory provenance (`origin`, `tags`, `visibility`) and recall fencing, including fencing of untrusted recall.
 
 ## [3.32.0] — 2026-10-07 — Analyze and diagnose from the CLI, .NET gates on Microsoft.Testing.Platform

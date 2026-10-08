@@ -1130,7 +1130,7 @@ export const TOOLS = [
   },
   {
     name: "forge_master_ask",
-    description: "Ask Forge-Master to reason about Plan Forge workflows — ideate features via Crucible, troubleshoot failures, query run status, or get operational guidance. Classifies intent, fetches memory context, and orchestrates read-only tool calls. Returns reply text, tool call history, token counts, usage, and session ID. Optional fields: caller (role/channel) and responseFormat shape the reply for the caller (e.g. brief, length-capped for chat); untrustedContext is fenced as third-party data and narrows the tools Forge-Master may use; contextBlocks add caller-supplied context; proposeActions:true returns up to 3 schema-validated proposedActions that Forge-Master never executes.",
+    description: "Ask Forge-Master to reason about Plan Forge workflows — ideate features via Crucible, troubleshoot failures, query run status, or get operational guidance. Classifies intent, fetches memory context, and orchestrates read-only tool calls. Returns reply text, tool call history, token counts, usage, and session ID. Optional fields: caller (role/channel) and responseFormat shape the reply for the caller (e.g. brief, length-capped for chat); untrustedContext is fenced as third-party data and narrows the tools Forge-Master may use; contextBlocks add caller-supplied context; proposeActions:true returns up to 3 schema-validated proposedActions that Forge-Master never executes. When any optional field is supplied, truncated is an object with budget, reply, context, and untrusted flags.",
     inputSchema: {
       type: "object",
       properties: {
@@ -1139,7 +1139,7 @@ export const TOOLS = [
         maxToolCalls: { type: "number", description: "Max tool calls per turn (default: 5, max: 10)" },
         caller: {
           type: "object",
-          description: "Optional caller metadata; fields are accepted and validated.",
+          description: "Optional caller identity. role and channel add a Caller section to the prompt; role also filters proposedActions (viewer: bug, idea, remember only). surface, projectId, and topic are informational.",
           properties: {
             role: { type: "string", enum: ["owner", "approver", "viewer"] },
             channel: { type: "string", enum: ["dashboard", "vscode", "chat", "api"] },
@@ -1151,7 +1151,7 @@ export const TOOLS = [
         },
         responseFormat: {
           type: "object",
-          description: "Optional response-format metadata; fields are accepted and validated.",
+          description: "Optional reply shaping. style 'brief' leads with a short answer and uses bullets instead of tables; maxChars hard-caps the reply, cutting on a sentence boundary and appending '…(truncated — ask for more)'.",
           properties: {
             style: { type: "string", enum: ["standard", "brief"] },
             maxChars: { type: "integer", minimum: 200, maximum: 20000 },
@@ -1159,7 +1159,7 @@ export const TOOLS = [
         },
         untrustedContext: {
           type: "array",
-          description: "Optional untrusted context; entries are accepted and validated, with text capped at 8 KB total.",
+          description: "Optional third-party text (forwards, links, transcripts, files), fenced as data in the user message and never followed as instructions. When present, tools narrow to a read-only subset, tool calls cap at 3, and proposals are marked origin 'untrusted'. Text capped at 8 KB total.",
           items: {
             type: "object",
             properties: {
@@ -1172,7 +1172,7 @@ export const TOOLS = [
         },
         contextBlocks: {
           type: "array",
-          description: "Optional context blocks; entries are accepted and validated, with text capped at 4 KB total.",
+          description: "Optional trusted context supplied by the caller, rendered under 'Operator context (supplied by caller)'. Text capped at 4 KB total.",
           items: {
             type: "object",
             properties: {
@@ -1184,11 +1184,51 @@ export const TOOLS = [
         },
         proposeActions: {
           type: "boolean",
-          description: "Optional proposal preference; accepted and validated, with no proposal behavior in this release.",
+          description: "When true, returns up to 3 schema-validated proposedActions (or an empty list plus proposedActionsMessage). Proposals are suggestions only: Forge-Master never executes, enqueues, or approves them.",
         },
         path: { type: "string", description: "Project directory (default: current)" },
       },
       required: ["message"],
+    },
+  },
+  {
+    // Proxied to the long-lived pforge-master studio child, which owns the
+    // observer and its insight ring. Property text matches pforge-master/server.mjs.
+    name: "forge_master_observe",
+    description: "Control the Forge-Master observer — a background hub subscriber that batches live Plan Forge events and can narrate notable patterns. status with limit or cursor returns insights with total, limit, cursor, nextCursor, hasMore, truncated, and an optional message. Read-only: cannot invoke write tools or modify project files. Proxied to the Forge-Master studio child so start, stop, and status share one observer and insight ring; when the child is unavailable returns { ok: false, error: 'FORGE_MASTER_UNAVAILABLE', message } (no in-process fallback). Kill switch: PFORGE_FORGE_MASTER_OBSERVE_DISABLE=1.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        action: {
+          type: "string",
+          enum: ["start", "stop", "status"],
+          description: "start — begin observing hub events; stop — halt the observer; status — return current state.",
+        },
+        sessionId: {
+          type: "string",
+          description: "Optional session ID for tracing.",
+        },
+        detach: {
+          type: "boolean",
+          description: "If true, observer runs as a detached background process (not yet implemented — reserved for Slice 8).",
+        },
+        limit: {
+          type: "integer",
+          minimum: 1,
+          maximum: 25,
+          default: 10,
+          description: "Optional insight page size for status (default 10, maximum 25).",
+        },
+        cursor: {
+          type: "string",
+          description: "Optional opaque numeric sequence cursor for the next insight status page.",
+        },
+        path: {
+          type: "string",
+          description: "Project directory (default: current)",
+        },
+      },
+      required: ["action"],
     },
   },
   {

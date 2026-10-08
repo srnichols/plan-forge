@@ -6195,7 +6195,7 @@
   },
   {
     "name": "forge_master_ask",
-    "description": "Ask Forge-Master to reason about Plan Forge workflows — ideate features via Crucible, troubleshoot failures, query run status, or get operational guidance. Classifies intent, fetches memory context, and orchestrates read-only tool calls. Returns reply text, tool call history, token counts, usage, and session ID. Optional fields: caller (role/channel) and responseFormat shape the reply for the caller (e.g. brief, length-capped for chat); untrustedContext is fenced as third-party data and narrows the tools Forge-Master may use; contextBlocks add caller-supplied context; proposeActions:true returns up to 3 schema-validated proposedActions that Forge-Master never executes.",
+    "description": "Ask Forge-Master to reason about Plan Forge workflows — ideate features via Crucible, troubleshoot failures, query run status, or get operational guidance. Classifies intent, fetches memory context, and orchestrates read-only tool calls. Returns reply text, tool call history, token counts, usage, and session ID. Optional fields: caller (role/channel) and responseFormat shape the reply for the caller (e.g. brief, length-capped for chat); untrustedContext is fenced as third-party data and narrows the tools Forge-Master may use; contextBlocks add caller-supplied context; proposeActions:true returns up to 3 schema-validated proposedActions that Forge-Master never executes. When any optional field is supplied, truncated is an object with budget, reply, context, and untrusted flags.",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -6213,7 +6213,7 @@
         },
         "caller": {
           "type": "object",
-          "description": "Optional caller metadata; fields are accepted and validated.",
+          "description": "Optional caller identity. role and channel add a Caller section to the prompt; role also filters proposedActions (viewer: bug, idea, remember only). surface, projectId, and topic are informational.",
           "properties": {
             "role": {
               "type": "string",
@@ -6249,7 +6249,7 @@
         },
         "responseFormat": {
           "type": "object",
-          "description": "Optional response-format metadata; fields are accepted and validated.",
+          "description": "Optional reply shaping. style 'brief' leads with a short answer and uses bullets instead of tables; maxChars hard-caps the reply, cutting on a sentence boundary and appending '…(truncated — ask for more)'.",
           "properties": {
             "style": {
               "type": "string",
@@ -6267,7 +6267,7 @@
         },
         "untrustedContext": {
           "type": "array",
-          "description": "Optional untrusted context; entries are accepted and validated, with text capped at 8 KB total.",
+          "description": "Optional third-party text (forwards, links, transcripts, files), fenced as data in the user message and never followed as instructions. When present, tools narrow to a read-only subset, tool calls cap at 3, and proposals are marked origin 'untrusted'. Text capped at 8 KB total.",
           "items": {
             "type": "object",
             "properties": {
@@ -6296,7 +6296,7 @@
         },
         "contextBlocks": {
           "type": "array",
-          "description": "Optional context blocks; entries are accepted and validated, with text capped at 4 KB total.",
+          "description": "Optional trusted context supplied by the caller, rendered under 'Operator context (supplied by caller)'. Text capped at 4 KB total.",
           "items": {
             "type": "object",
             "properties": {
@@ -6315,7 +6315,7 @@
         },
         "proposeActions": {
           "type": "boolean",
-          "description": "Optional proposal preference; accepted and validated, with no proposal behavior in this release."
+          "description": "When true, returns up to 3 schema-validated proposedActions (or an empty list plus proposedActionsMessage). Proposals are suggestions only: Forge-Master never executes, enqueues, or approves them."
         },
         "path": {
           "type": "string",
@@ -6404,6 +6404,200 @@
           "model": "resolved-model",
           "provider": "resolved-provider"
         }
+      }
+    }
+  },
+  {
+    "name": "forge_master_observe",
+    "description": "Control the Forge-Master observer — a background hub subscriber that batches live Plan Forge events and can narrate notable patterns. status with limit or cursor returns insights with total, limit, cursor, nextCursor, hasMore, truncated, and an optional message. Read-only: cannot invoke write tools or modify project files. Proxied to the Forge-Master studio child so start, stop, and status share one observer and insight ring; when the child is unavailable returns { ok: false, error: 'FORGE_MASTER_UNAVAILABLE', message } (no in-process fallback). Kill switch: PFORGE_FORGE_MASTER_OBSERVE_DISABLE=1.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "action": {
+          "type": "string",
+          "enum": [
+            "start",
+            "stop",
+            "status"
+          ],
+          "description": "start — begin observing hub events; stop — halt the observer; status — return current state."
+        },
+        "sessionId": {
+          "type": "string",
+          "description": "Optional session ID for tracing."
+        },
+        "detach": {
+          "type": "boolean",
+          "description": "If true, observer runs as a detached background process (not yet implemented — reserved for Slice 8)."
+        },
+        "limit": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 25,
+          "default": 10,
+          "description": "Optional insight page size for status (default 10, maximum 25)."
+        },
+        "cursor": {
+          "type": "string",
+          "description": "Optional opaque numeric sequence cursor for the next insight status page."
+        },
+        "path": {
+          "type": "string",
+          "description": "Project directory (default: current)"
+        }
+      },
+      "required": [
+        "action"
+      ]
+    },
+    "intent": [
+      "observe",
+      "observer",
+      "narrate",
+      "forge-master",
+      "start-observer",
+      "stop-observer",
+      "insights"
+    ],
+    "aliases": [
+      "observe_forge",
+      "forge_observe"
+    ],
+    "cost": "medium",
+    "maxConcurrent": 1,
+    "addedIn": "3.8.0",
+    "prerequisites": [
+      "forgeMaster.observer.enabled: true in .forge.json",
+      "ANTHROPIC_API_KEY or OPENAI_API_KEY or XAI_API_KEY (for narration)",
+      "pforge-master installed next to pforge-mcp (pforge-mcp proxies this tool to the Forge-Master studio child)"
+    ],
+    "produces": [
+      ".forge/forge-master-observer-state.json (observer budget state)"
+    ],
+    "consumes": [
+      ".forge.json (observer config)",
+      ".forge/runs/** (hub events via WebSocket)"
+    ],
+    "sideEffects": [
+      "starts or stops the hub subscriber inside the Forge-Master studio child (pforge-mcp spawns the child on first use and proxies every call to it, so start, stop, and status share one observer and insight ring)",
+      "retains up to 50 forge-master-insight entries in the studio child's in-memory ring (lost when the child exits)",
+      "emits observer:narration and forge-master-insight events to the hub when one is attached"
+    ],
+    "writesFiles": false,
+    "network": true,
+    "risk": "low",
+    "agentGuidance": "Use forge_master_observe to start/stop the live observer that narrates notable hub events during plan execution, and action:'status' with limit (1–25, default 10) and cursor (pass the previous page's nextCursor) to page retained insights. On pforge-mcp this tool is a proxy to the long-lived Forge-Master studio child — there is no in-process fallback, so FORGE_MASTER_UNAVAILABLE means the child could not be spawned or was lost (a respawned child starts stopped with an empty ring; call start again). Observer is muted by default — enable with forgeMaster.observer.enabled: true in .forge.json. Budget-capped via maxUsdPerDay and maxNarrationsPerHour. Read-only: cannot invoke write tools or modify project files. Kill switch: PFORGE_FORGE_MASTER_OBSERVE_DISABLE=1 (start returns observer-disabled; batches are not analysed).",
+    "errors": {
+      "observer-disabled": {
+        "message": "Observer is disabled (config flag off or PFORGE_FORGE_MASTER_OBSERVE_DISABLE=1)",
+        "recovery": "Set forgeMaster.observer.enabled: true in .forge.json and unset PFORGE_FORGE_MASTER_OBSERVE_DISABLE"
+      },
+      "observer-budget-exceeded": {
+        "message": "Daily USD or hourly narration cap reached — the turn is skipped and lastTurn.reason explains why",
+        "recovery": "Widen cap in .forge.json#forgeMaster.observer or wait for daily reset"
+      },
+      "INVALID_INPUT": {
+        "message": "action, limit, cursor, sessionId, detach, or path is invalid",
+        "recovery": "Use action start|stop|status, an integer limit from 1 to 25, and a cursor copied from nextCursor"
+      },
+      "FORGE_MASTER_UNAVAILABLE": {
+        "message": "The Forge-Master studio child could not be spawned or the proxy connection was lost",
+        "recovery": "Ensure pforge-master is installed (cd pforge-master && npm install), check pforge-mcp stderr, then retry and call start again"
+      }
+    },
+    "example": {
+      "input": {
+        "action": "start"
+      },
+      "output": {
+        "ok": true,
+        "message": "Observer started. Subscribing to hub events.",
+        "status": {
+          "connected": false,
+          "stopped": false,
+          "retryCount": 0,
+          "bufferSize": 0,
+          "lastError": null,
+          "lastFlushAt": null,
+          "totalEventsReceived": 0,
+          "totalBatchesFlushed": 0,
+          "batchWindowMs": 60000
+        }
+      }
+    },
+    "statusExample": {
+      "input": {
+        "action": "status",
+        "limit": 2
+      },
+      "output": {
+        "ok": true,
+        "status": {
+          "connected": true,
+          "stopped": false,
+          "retryCount": 0,
+          "bufferSize": 3,
+          "lastError": null,
+          "lastFlushAt": "2026-10-07T17:10:00.000Z",
+          "totalEventsReceived": 42,
+          "totalBatchesFlushed": 4,
+          "batchWindowMs": 60000
+        },
+        "recentBatches": [
+          {
+            "receivedAt": "2026-10-07T17:10:00.000Z",
+            "events": [
+              {
+                "type": "slice-failed"
+              }
+            ]
+          }
+        ],
+        "lastTurn": {
+          "at": "2026-10-07T17:10:01.000Z",
+          "ok": true,
+          "insightCount": 1
+        },
+        "insights": {
+          "ok": true,
+          "insights": [
+            {
+              "seq": 7,
+              "insight": {
+                "id": "fmi-0123456789abcdef",
+                "severity": "warn",
+                "summary": "Slice 3 failed twice on the same gate.",
+                "evidence": [
+                  {
+                    "eventType": "slice-failed",
+                    "ref": "slice-3"
+                  }
+                ],
+                "suggestedAction": null
+              },
+              "runId": "run-123",
+              "ts": "2026-10-07T17:10:01.000Z",
+              "count": 1,
+              "lastSeenAt": "2026-10-07T17:10:01.000Z"
+            }
+          ],
+          "total": 3,
+          "limit": 2,
+          "cursor": null,
+          "nextCursor": "7",
+          "hasMore": true,
+          "truncated": false
+        }
+      }
+    },
+    "unavailableExample": {
+      "input": {
+        "action": "status"
+      },
+      "output": {
+        "ok": false,
+        "error": "FORGE_MASTER_UNAVAILABLE",
+        "message": "The Forge-Master studio child is unavailable: pforge-master/server.mjs was not found next to pforge-mcp or failed to spawn. …"
       }
     }
   },

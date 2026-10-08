@@ -100,8 +100,17 @@ function findReadableCut(prefix, budget) {
   return cut >= 0 ? cut : budget;
 }
 
+function stripTrailingMarkers(reply) {
+  let body = reply.trimEnd();
+  while (body.endsWith(REPLY_TRUNCATION_MARKER)) {
+    body = body.slice(0, -REPLY_TRUNCATION_MARKER.length).trimEnd();
+  }
+  return body;
+}
+
 /**
  * Enforce a character budget while preserving a readable cut and explicit marker.
+ * The ceiling always applies: a trailing marker is stripped and re-applied, never trusted.
  * @param {string} reply — generated reply text
  * @param {number} maxChars — maximum allowed JavaScript string length
  * @returns {{ reply: string, truncated: boolean }} Bounded reply and truncation status
@@ -110,16 +119,15 @@ export function enforceMaxChars(reply, maxChars) {
   if (!isValidReplyBudget(reply, maxChars) || reply.length <= maxChars) {
     return { reply, truncated: false };
   }
-  if (reply.endsWith(REPLY_TRUNCATION_MARKER)) return { reply, truncated: false };
 
   const budget = maxChars - (REPLY_TRUNCATION_MARKER.length + 1);
   if (budget < 0) throw new RangeError("maxChars is too small to fit the truncation marker");
 
-  const prefix = reply.slice(0, budget);
-  let cut = findReadableCut(prefix, budget);
+  const body = stripTrailingMarkers(reply);
+  let cut = body.length <= budget ? body.length : findReadableCut(body.slice(0, budget), budget);
 
-  if (cut > 0 && /[\uD800-\uDBFF]/.test(reply[cut - 1])) cut--;
-  const result = `${reply.slice(0, cut).trimEnd()} ${REPLY_TRUNCATION_MARKER}`;
+  if (cut > 0 && /[\uD800-\uDBFF]/.test(body[cut - 1])) cut--;
+  const result = `${body.slice(0, cut).trimEnd()} ${REPLY_TRUNCATION_MARKER}`;
   if (result.length > maxChars) throw new RangeError("Truncated reply exceeded maxChars");
   return { reply: result, truncated: true };
 }

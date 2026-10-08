@@ -35,8 +35,7 @@ import { NEW_TURN_FIELDS } from "./src/turn-input.mjs";
 import { getForgeMasterConfig } from "./src/config.mjs";
 import { resolveAllowlist } from "./src/allowlist.mjs";
 import { createMcpClient } from "./src/mcp-client.mjs";
-import { startObserver } from "./src/observer-loop.mjs";
-import { paginateInsights } from "./src/observer-insights.mjs";
+import { createObserverController } from "./src/observer-control.mjs";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -52,9 +51,12 @@ const FORGE_MASTER_ASK_TOOL = {
     "Ask Forge-Master a question about your Plan Forge project. " +
     "Forge-Master classifies the intent, retrieves relevant context from memory tiers, " +
     "and calls read-only Plan Forge tools to ground its answer. " +
-    "Write tools require an approval card before execution. Optional caller, responseFormat, " +
-    "untrustedContext, contextBlocks, and proposeActions fields are accepted and validated; " +
-    "this version does not shape responses or propose actions. Turn results include usage telemetry.",
+    "Write tools require an approval card before execution. Optional fields: caller (role/channel) and " +
+    "responseFormat shape the reply for the caller (e.g. brief, length-capped for chat); untrustedContext is " +
+    "fenced as third-party data and narrows the tools Forge-Master may use; contextBlocks add caller-supplied " +
+    "context; proposeActions:true returns up to 3 schema-validated proposedActions that Forge-Master never executes. " +
+    "Turn results include usage telemetry; when any optional field is supplied, truncated is an object with " +
+    "budget, reply, context, and untrusted flags.",
   inputSchema: {
     type: "object",
     properties: {
@@ -72,7 +74,7 @@ const FORGE_MASTER_ASK_TOOL = {
       },
       caller: {
         type: "object",
-        description: "Optional caller metadata; fields are accepted and validated.",
+        description: "Optional caller identity. role and channel add a Caller section to the prompt; role also filters proposedActions (viewer: bug, idea, remember only). surface, projectId, and topic are informational.",
         properties: {
           role: { type: "string", enum: ["owner", "approver", "viewer"] },
           channel: { type: "string", enum: ["dashboard", "vscode", "chat", "api"] },
@@ -84,7 +86,7 @@ const FORGE_MASTER_ASK_TOOL = {
       },
       responseFormat: {
         type: "object",
-        description: "Optional response-format metadata; fields are accepted and validated.",
+        description: "Optional reply shaping. style 'brief' leads with a short answer and uses bullets instead of tables; maxChars hard-caps the reply, cutting on a sentence boundary and appending '…(truncated — ask for more)'.",
         properties: {
           style: { type: "string", enum: ["standard", "brief"] },
           maxChars: { type: "integer", minimum: 200, maximum: 20000 },
@@ -92,7 +94,7 @@ const FORGE_MASTER_ASK_TOOL = {
       },
       untrustedContext: {
         type: "array",
-        description: "Optional untrusted context; entries are accepted and validated, with text capped at 8 KB total.",
+        description: "Optional third-party text (forwards, links, transcripts, files), fenced as data in the user message and never followed as instructions. When present, tools narrow to a read-only subset, tool calls cap at 3, and proposals are marked origin 'untrusted'. Text capped at 8 KB total.",
         items: {
           type: "object",
           properties: {
@@ -105,7 +107,7 @@ const FORGE_MASTER_ASK_TOOL = {
       },
       contextBlocks: {
         type: "array",
-        description: "Optional context blocks; entries are accepted and validated, with text capped at 4 KB total.",
+        description: "Optional trusted context supplied by the caller, rendered under 'Operator context (supplied by caller)'. Text capped at 4 KB total.",
         items: {
           type: "object",
           properties: {
@@ -117,7 +119,7 @@ const FORGE_MASTER_ASK_TOOL = {
       },
       proposeActions: {
         type: "boolean",
-        description: "Optional proposal preference; accepted and validated, with no proposal behavior in this release.",
+        description: "When true, returns up to 3 schema-validated proposedActions (or an empty list plus proposedActionsMessage). Proposals are suggestions only: Forge-Master never executes, enqueues, or approves them.",
       },
       path: {
         type: "string",
@@ -162,6 +164,10 @@ const FORGE_MASTER_OBSERVE_TOOL = {
         type: "string",
         description: "Optional opaque numeric sequence cursor for the next insight status page.",
       },
+      path: {
+        type: "string",
+        description: "Project directory (default: current)",
+      },
     },
     required: ["action"],
   },
@@ -169,10 +175,9 @@ const FORGE_MASTER_OBSERVE_TOOL = {
 
 // ─── Active observer (singleton) ─────────────────────────────────────
 
-let _activeObserver = null;
-/** Echoed batches (ring-buffer of last 20 batches — for status echo before Slice 7 LLM). */
-const _observedBatches = [];
-const MAX_OBSERVED_BATCHES = 20;
+// This stdio process has no in-process hub, so insights are retained in the
+// ring buffer (paged by `status`) and returned per turn; no hub is broadcast to.
+const _observerController = createObserverController({ hub: null });
 
 // ─── Downstream MCP client ────────────────────────────────────────────
 
@@ -213,71 +218,6 @@ function _textResult(obj, isError = false) {
   return isError ? { content: [{ type: "text", text }], isError: true } : { content: [{ type: "text", text }] };
 }
 
-function _handleObserveStart(cwd) {
-  const fmConfig = getForgeMasterConfig({ cwd });
-  if (!fmConfig.observer.enabled) {
-    return { response: _textResult({
-      ok: false,
-      error: "observer-disabled",
-      message: "Observer is disabled. Set forgeMaster.observer.enabled: true in .forge.json to enable.",
-    }, true) };
-  }
-
-  if (_activeObserver && !_activeObserver.getStatus().stopped) {
-    return { response: _textResult({
-      ok: true,
-      message: "Observer already running.",
-      status: _activeObserver.getStatus(),
-    }) };
-  }
-  _observedBatches.length = 0;
-  const observer = startObserver({
-    cwd,
-    onBatch: (batch) => {
-      _observedBatches.push({ receivedAt: new Date().toISOString(), events: batch });
-      if (_observedBatches.length > MAX_OBSERVED_BATCHES) _observedBatches.shift();
-      console.error(`[forge_master_observe] batch: ${batch.length} event(s)`);
-      // Slice 7 will call runObserverTurn here
-    },
-  });
-  console.error(`forge-master-server: observer started`);
-  return {
-    observer,
-    response: _textResult({
-      ok: true,
-      message: "Observer started. Subscribing to hub events.",
-      status: observer.getStatus(),
-    }),
-  };
-}
-
-function _handleObserveStop() {
-  if (!_activeObserver || _activeObserver.getStatus().stopped) {
-    return _textResult({ ok: true, message: "Observer is not running." });
-  }
-  _activeObserver.stop();
-  const finalStatus = _activeObserver.getStatus();
-  console.error(`forge-master-server: observer stopped`);
-  return _textResult({ ok: true, message: "Observer stopped.", status: finalStatus });
-}
-
-function _handleObserveStatus(args = {}) {
-  const includeInsights = args.limit !== undefined || args.cursor !== undefined;
-  const page = includeInsights ? paginateInsights(args) : null;
-  if (page && !page.ok) return _textResult(page, true);
-
-  const status = _activeObserver
-    ? _activeObserver.getStatus()
-    : { connected: false, stopped: true, message: "Observer has not been started." };
-  const response = {
-    ok: true,
-    status,
-    recentBatches: _observedBatches.slice(-5),
-  };
-  if (page) response.insights = page;
-  return _textResult(response);
-}
-
 function _handleObserve(args) {
   const { action } = args;
   const cwd = args.path || process.cwd();
@@ -287,16 +227,16 @@ function _handleObserve(args) {
   }
 
   if (action === "start") {
-    const { observer, response } = _handleObserveStart(cwd);
-    if (observer) _activeObserver = observer;
-    return response;
+    const response = _observerController.start(cwd);
+    return _textResult(response, response.ok === false);
   }
 
   if (action === "stop") {
-    return _handleObserveStop();
+    return _textResult(_observerController.stop());
   }
 
-  return _handleObserveStatus(args);
+  const response = _observerController.status(args);
+  return _textResult(response, response.ok === false);
 }
 
 async function _handleAsk(args) {

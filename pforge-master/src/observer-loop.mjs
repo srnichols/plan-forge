@@ -360,8 +360,9 @@ if (isMain) {
 
   if (cliCmd === "daemon") {
     // Running as the observer daemon — keep process alive until killed.
-    // The onBatch callback is intentionally a no-op here: narration is
-    // handled by Slice 7's observer-reasoning layer.
+    // The onBatch callback is intentionally a no-op: this process has no hub to
+    // broadcast to and no reader for its insight ring. Observer reasoning turns
+    // run in the forge_master_observe server path (src/observer-control.mjs).
     startObserver({
       onBatch: () => {},
     });

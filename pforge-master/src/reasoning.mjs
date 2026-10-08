@@ -30,9 +30,10 @@ import { resolveAllowlist, USAGE_HINTS } from "./allowlist.mjs";
 import { invokeMany, invokeAllowlisted } from "./tool-bridge.mjs";
 import { plan as runPlanner } from "./planner.mjs";
 import { executePlan } from "./plan-executor.mjs";
-import { ensureSessionId, appendTurn, summarizeIfNeeded, loadSessionSummary } from "./persistence.mjs";
+import { ensureSessionId, appendTurn, summarizeIfNeeded } from "./persistence.mjs";
 import { appendTurn as storeAppendTurn, loadSession, hashReply } from "./session-store.mjs";
-import { maybeCompactSession, renderSummaryBlock, foldUsage } from "./session-compaction.mjs";
+import { scheduleSessionCompaction, loadSettledSessionSummary, pendingSummaryUsage, renderSummaryBlock, foldUsage } from "./session-compaction.mjs";
+import { resolveEnvApiKey } from "./provider-keys.mjs";
 import { loadIndex, queryIndex } from "./recall-index.mjs";
 import { loadPrinciples, UNIVERSAL_BASELINE } from "./principles.mjs";
 import { resolveModel, VALID_TIERS } from "./reasoning-tier.mjs";
@@ -384,17 +385,10 @@ async function _resolveFallbackProvider(config, deps, failedProvider) {
   return autoSelectProvider(config, process.env, injected);
 }
 
-function _providerKeyName(providerName) {
-  if (providerName === "anthropic") return "ANTHROPIC_API_KEY";
-  if (providerName === "openai") return "OPENAI_API_KEY";
-  if (providerName === "xai") return "XAI_API_KEY";
-  return null;
-}
-
 function _resolveApiKey(config, deps, providerName = config.reasoningProvider) {
   if (deps.resolveApiKey) return deps.resolveApiKey(providerName);
-  const envName = _providerKeyName(providerName);
-  if (envName && process.env[envName]) return process.env[envName];
+  const envKey = resolveEnvApiKey(providerName);
+  if (envKey) return envKey;
   if (deps.detectApiProvider) return deps.detectApiProvider(config.reasoningModel)?.apiKey || null;
   return null;
 }
@@ -603,17 +597,6 @@ async function _persistTurnToStores({ isEphemeral, effectiveSessionId, message, 
   }
 }
 
-async function _compactSuccessfulTurn({ isEphemeral, effectiveSessionId, priorTurns, sessionSummary, message, reply, untrusted, cwd, provider, config, deps }) {
-  if (isEphemeral) return null;
-  const lastLedgerTurn = sessionSummary?.ledger?.at(-1)?.turn ?? 0;
-  const lastPriorTurn = priorTurns.at(-1)?.turn ?? priorTurns.length;
-  const turnNumber = Math.max(lastLedgerTurn, lastPriorTurn) + 1;
-  const compaction = await maybeCompactSession({
-    sessionId: effectiveSessionId, turnNumber, message, reply, untrusted, cwd, provider, config, deps,
-  });
-  return compaction.usage;
-}
-
 function _notifyClassification(deps, classification) {
   try { if (typeof deps.onClassification === "function") deps.onClassification(classification); } catch { /* observer */ }
 }
@@ -818,6 +801,8 @@ async function _executeFallbackLoopAfterProviderError({ err, provider, conversat
       ...telemetry,
       }),
       providerName: fallbackProvider.PROVIDER_NAME,
+      servingProvider: fallbackProvider,
+      servingApiKey: fallbackApiKey,
     },
   };
 }
@@ -933,7 +918,7 @@ async function _prepareTurn(input, deps) {
   const effectiveSessionId = ensureSessionId(deps.sessionId ?? input.sessionId);
   const isEphemeral = !effectiveSessionId || effectiveSessionId === "ephemeral";
   const priorTurns = await _loadPriorTurns(effectiveSessionId, isEphemeral, cwd);
-  const sessionSummary = isEphemeral ? null : await loadSessionSummary(effectiveSessionId, cwd);
+  const sessionSummary = isEphemeral ? null : await loadSettledSessionSummary(effectiveSessionId, cwd);
   const tierState = _resolveTierState(input, config);
   const { inputModel, requestedTier } = tierState;
   const { currentModel } = tierState;
@@ -1028,13 +1013,12 @@ async function _runPreparedTurn({ input, deps, config, effectiveSessionId, isEph
 
   // ── 8. Persist + emit ─────────────────────────────────────────────
   await _persistTurnToStores({ isEphemeral, effectiveSessionId, message, classification, finalReply: loopResult.finalReply, allToolCalls: loopResult.allToolCalls, totalTokensIn: loopResult.totalTokensIn, totalTokensOut: loopResult.totalTokensOut, truncated: loopResult.truncated, cwd, deps });
-  const summaryUsage = await _compactSuccessfulTurn({
-    isEphemeral, effectiveSessionId, priorTurns, sessionSummary, message, reply: loopResult.finalReply,
-    untrusted: turn.untrusted, cwd, provider, config, deps,
-  });
+  const summaryUsage = pendingSummaryUsage(sessionSummary);
+  const result = _successResult({ loopResult, effectiveSessionId, requestedTier, provider: provider.PROVIDER_NAME, autoEscalation, classification, relatedTurns, quorumResult: quorumOut.quorumResult, truncated: buildTruncated({ legacy: loopResult.truncated, optIn: hasNewTurnFields(input), inputFlags: inputTruncated, reply: shaped.truncated }), proposals, summaryUsage });
+  // Background: the summary model never delays this reply; its cost is charged on the next turn.
+  scheduleSessionCompaction({ isEphemeral, sessionId: effectiveSessionId, priorTurns, sessionSummary, message, reply: loopResult.finalReply, untrusted: turn.untrusted, cwd, config, deps, provider: loopResult.servingProvider ?? provider, apiKey: loopResult.servingApiKey ?? apiKey, model: loopResult.servingProvider ? loopResult.currentModel : undefined, consumedPendingUsage: summaryUsage !== null });
   _emitTurnComplete(deps.hub, { tokensIn: loopResult.totalTokensIn, tokensOut: loopResult.totalTokensOut, toolCallCount: loopResult.allToolCalls.length, truncated: loopResult.truncated, sessionId: effectiveSessionId, timestamp: new Date().toISOString() });
-
-  return _successResult({ loopResult, effectiveSessionId, requestedTier, provider: provider.PROVIDER_NAME, autoEscalation, classification, relatedTurns, quorumResult: quorumOut.quorumResult, truncated: buildTruncated({ legacy: loopResult.truncated, optIn: hasNewTurnFields(input), inputFlags: inputTruncated, reply: shaped.truncated }), proposals, summaryUsage });
+  return result;
 }
 
 export async function runTurn(input, deps = {}) {
@@ -1099,7 +1083,7 @@ function resolveObserverModel(config, observerConfig) {
     ?? null;
 }
 
-async function callObserverModel(provider, resolvedModel, batch) {
+async function callObserverModel(provider, resolvedModel, batch, apiKey) {
   const { systemPrompt, userMessage } = buildObserverPrompt(batch);
   if (typeof provider.runLoop === "function") {
     const response = await provider.runLoop({
@@ -1119,7 +1103,7 @@ async function callObserverModel(provider, resolvedModel, batch) {
     ],
     tools: buildToolSchemas(OBSERVER_TOOL_ALLOWLIST),
     model: resolvedModel,
-    apiKey: "",
+    apiKey: apiKey || "",
   });
 }
 
@@ -1173,6 +1157,7 @@ function emitObserverNarration({ hub, batch, narration, usd, observerConfig }) {
  *                               Reads: config.observer.{maxUsdPerDay, maxNarrationsPerHour,
  *                                      modelTier, brainCapture}, config.reasoningModel.
  *   provider?: object,          Pre-resolved provider adapter with sendTurn(). Auto-selected if absent.
+ *   apiKey?: string,            API key for direct-API providers (default: the provider's env var).
  *   hub?: object|null,          Hub for broadcasting observer:narration + observer:budget-blocked.
  *   cwd?: string,               Working directory (for budget state I/O and provider auto-select).
  *   remember?: Function,        brain.remember-compatible fn for L2 narration capture (optional).
@@ -1220,7 +1205,7 @@ export async function runObserverTurn(batch, opts = {}) {
 
   let response;
   try {
-    response = await callObserverModel(provider, resolvedModel, batch);
+    response = await callObserverModel(provider, resolvedModel, batch, opts.apiKey ?? resolveEnvApiKey(provider.PROVIDER_NAME));
   } catch (err) {
     return {
       ok: false,

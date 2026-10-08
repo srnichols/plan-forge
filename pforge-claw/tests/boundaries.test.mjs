@@ -37,12 +37,16 @@ const ALLOWED_HOSTS = new Set([
   "registry.npmjs.org",
   "github.com",
   "api.github.com",
+  "cli.github.com",
+  "dot.net",
   "api.githubcopilot.com",
   "copilot-proxy.githubusercontent.com",
   "copilot-telemetry.githubusercontent.com",
   "objects.githubusercontent.com",
 ]);
 const K8S_API_GROUPS = new Set([
+  "kubernetes.io", // in-cluster service-account mount path (/var/run/secrets/kubernetes.io/...)
+  "app.kubernetes.io", // recommended label prefix (app.kubernetes.io/name, ...)
   "rbac.authorization.k8s.io",
   "networking.k8s.io",
   "kustomize.config.k8s.io",
@@ -50,9 +54,18 @@ const K8S_API_GROUPS = new Set([
 const COPILOT_HOST_SUFFIX = "githubcopilot.com";
 const IMPORT_SPECIFIER = /\b(?:from\s*|import\s*|import\s*\(\s*|require\s*\(\s*)["']([^"']+)["']/g;
 const GITHUB_OWNER_PATTERN = new RegExp(
-  "github\\.com\\/(?!<[^>]+>)([A-Za-z0-9-]+)",
-  "i",
+  "(?<![\\w.-])github\\.com\\/(?!<[^>]+>)([A-Za-z0-9-]+)",
+  "gi",
 );
+// Public upstream vendors pinned by build images (not operator-specific). Keep this list explicit and short.
+const UPSTREAM_GITHUB_OWNERS = new Set(["powershell"]);
+
+function hasOperatorGithubOwner(text) {
+  for (const match of text.matchAll(GITHUB_OWNER_PATTERN)) {
+    if (!UPSTREAM_GITHUB_OWNERS.has(match[1].toLowerCase())) return true;
+  }
+  return false;
+}
 const LONG_CHAT_ID_PATTERN = /-100\d{6,}/;
 const KEYED_LONG_ID_PATTERN = /\b(?:chat|id|user)[\w-]*\b["']?\s*[:=]\s*["']?\d{9,}\b|\b\d{9,}\b["']?\s*[:=]\s*["']?\b(?:chat|id|user)[\w-]*\b/i;
 const DRIVE_USER_PATH_PATTERN = /[A-Za-z]:\\(?:Users|home)\\/i;
@@ -145,9 +158,9 @@ const detectorSamples = [
   },
   {
     name: "GitHub owner URLs",
-    detect: (text) => GITHUB_OWNER_PATTERN.test(text),
+    detect: hasOperatorGithubOwner,
     bad: "https://github.com/operator/project",
-    safe: "https://github.com/<owner>/project",
+    safe: "https://github.com/<owner>/project https://github.com/PowerShell/PowerShell/releases https://cli.github.com/packages",
   },
   {
     name: "unapproved FQDNs",

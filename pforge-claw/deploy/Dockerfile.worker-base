@@ -47,7 +47,7 @@ RUN npm install --global "@github/copilot@${COPILOT_CLI_VERSION}" \
     && npm cache clean --force
 
 RUN groupadd --gid 10001 claw \
-    && useradd --uid 10001 --gid 10001 --create-home --home-dir /home/claw claw \
+    && useradd --uid 10001 --gid 10001 --create-home --home-dir /var/lib/claw claw \
     && mkdir -p /work /data \
     && chown 10001:10001 /work /data
 
@@ -62,7 +62,7 @@ RUN printf '%s\n' \
       > /usr/local/bin/pforge \
     && chmod 0755 /usr/local/bin/pforge
 
-ENV PFORGE_CLAW_HOME=/data NODE_ENV=production HOME=/home/claw
+ENV PFORGE_CLAW_HOME=/data NODE_ENV=production HOME=/var/lib/claw
 WORKDIR /work
 USER 10001:10001
 # Kubernetes Secrets provide PFORGE_CLAW_GH_TOKEN and PFORGE_CLAW_COPILOT_TOKEN at runtime; never pass credentials as build arguments.

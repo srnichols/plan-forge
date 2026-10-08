@@ -6,6 +6,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const FAKE_PR_URL = ["https://example", ".test/pr/1"].join("");
+let fixtureRoot = process.env.PFORGE_CLAW_FIXTURE_ROOT;
 
 function run(command, args, { cwd, env } = {}) {
   return new Promise((resolve, reject) => {
@@ -50,20 +51,10 @@ async function waitForFile(file) {
 }
 
 async function runPlan(args) {
-  const root = process.env.PFORGE_CLAW_FIXTURE_ROOT;
-  const cwd = process.cwd();
-  const relative = root ? path.relative(path.resolve(root), path.resolve(cwd)) : "..";
-  if (!root || relative === ".." || relative.startsWith(`..${path.sep}`) || path.isAbsolute(relative)) {
-    process.stderr.write("FAKE_PFORGE_OUTSIDE_FIXTURE\n");
-    return 2;
-  }
-  const mcpFile = path.join(cwd, ".vscode", "mcp.json");
-  try {
-    await readFile(mcpFile, "utf8");
-  } catch {
-    process.stderr.write("FAKE_PFORGE_FIXTURE_INVALID\n");
-    return 2;
-  }
+  const cwd = await fixtureProject();
+  await mkdir(path.join(cwd, ".forge", "e2e"), { recursive: true });
+  await appendFile(path.join(cwd, ".forge", "e2e", "commands.jsonl"),
+    `${JSON.stringify({ argv: ["run-plan", ...args], cwd })}\n`);
   const options = new Map();
   for (let index = 0; index < args.length; index += 1) {
     if (args[index].startsWith("--")) options.set(args[index], args[index + 1] ?? "");
@@ -88,10 +79,9 @@ async function runPlan(args) {
 }
 
 async function fixtureProject() {
-  const root = process.env.PFORGE_CLAW_FIXTURE_ROOT;
   const cwd = process.cwd();
-  const relative = root ? path.relative(path.resolve(root), path.resolve(cwd)) : "..";
-  if (!root || relative === ".." || relative.startsWith(`..${path.sep}`) || path.isAbsolute(relative)) {
+  const relative = fixtureRoot ? path.relative(path.resolve(fixtureRoot), path.resolve(cwd)) : "..";
+  if (!fixtureRoot || relative === ".." || relative.startsWith(`..${path.sep}`) || path.isAbsolute(relative)) {
     throw new Error("FAKE_PFORGE_OUTSIDE_FIXTURE");
   }
   try {
@@ -111,6 +101,13 @@ async function writeFixtureArtifact(name, record) {
 
 async function handleCommand(command, args) {
   if (command === "smith") return 0;
+  if (command === "plan" || command === "estimate") {
+    await fixtureProject();
+    process.stdout.write(`${JSON.stringify({
+      command, planPath: args[0] ?? null, estimatedCostUSD: 0,
+    })}\n`);
+    return 0;
+  }
   if (command === "run-plan" || command === "run") return runPlan(args);
   if (command === "bootstrap") {
     await writeFixtureArtifact("bootstrap.json", { ok: true, args });
@@ -127,7 +124,7 @@ async function handleCommand(command, args) {
     process.stdout.write(`${JSON.stringify({ type: "aborted", runId: args[0] ?? null })}\n`);
     return 0;
   }
-  if (command === "memory" && args[0] === "drain") {
+  if (command === "drain-memory" || (command === "memory" && args[0] === "drain")) {
     await writeFixtureArtifact("memory-drain.json", { ok: true });
     process.stdout.write(`${JSON.stringify({ type: "memory-drained" })}\n`);
     return 0;
@@ -143,8 +140,15 @@ export async function createFakeGh({ logPath, directory } = {}) {
   const body = `#!/usr/bin/env node
 import { appendFile } from "node:fs/promises";
 const args = process.argv.slice(2);
-if (process.env.PFORGE_CLAW_GH_LOG) await appendFile(process.env.PFORGE_CLAW_GH_LOG, JSON.stringify({ args }) + "\\n");
-if (args[0] === "pr" && args[1] === "create") process.stdout.write(${JSON.stringify(FAKE_PR_URL)} + "\\n");
+const logPath = ${JSON.stringify(logPath ?? null)};
+const fields = ["--base", "--head", "--title", "--body"];
+const valid = args[0] === "pr" && args[1] === "create"
+  && fields.every((field) => args.includes(field) && args[args.indexOf(field) + 1]);
+if (logPath) await appendFile(logPath, JSON.stringify({ args, cwd: process.cwd(), valid }) + "\\n");
+if (!valid) {
+  process.stderr.write("FAKE_GH_PR_CREATE_INVALID\\n");
+  process.exitCode = 2;
+} else process.stdout.write(${JSON.stringify(FAKE_PR_URL)} + "\\n");
 `;
   await writeFile(scriptPath, body, { mode: 0o700 });
   return {
@@ -156,7 +160,12 @@ if (args[0] === "pr" && args[1] === "create") process.stdout.write(${JSON.string
 }
 
 async function main() {
-  const [command, ...args] = process.argv.slice(2);
+  const argv = process.argv.slice(2);
+  if (argv[0] === "--fixture-root") {
+    fixtureRoot = argv[1];
+    argv.splice(0, 2);
+  }
+  const [command, ...args] = argv;
   try {
     return await handleCommand(command, args);
   } catch (error) {

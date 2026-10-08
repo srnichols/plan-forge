@@ -4,7 +4,7 @@ import { createE2ERig } from "../helpers/e2e-rig.mjs";
 const EXPECTED = Object.freeze({
   projectOwner: ["ask", "new", "remember", "recall", "idea", "bug", "run", "skill", "task", "abort", "retry", "status", "jobs", "budget", "help"],
   projectViewer: ["ask", "status", "help"],
-  generalOwner: ["recall", "fanout", "status", "jobs", "budget", "help"],
+  generalOwner: ["recall", "fanout", "status", "jobs", "budget", "help", "lane", "lanes"],
   generalViewer: ["status", "help"],
 });
 
@@ -17,7 +17,7 @@ afterEach(async () => {
 
 async function sendAndCapture(options) {
   const prior = rig.fakeTelegram.calls.filter(({ method }) => method === "sendMessage").length;
-  rig.send(options);
+  rig.send(options.text, { thread: options.threadId, user: options.userId });
   const call = await rig.fakeTelegram.waitForCall("sendMessage", (_args, entry) =>
     rig.fakeTelegram.calls.indexOf(entry) >= 0
       && rig.fakeTelegram.calls.filter(({ method }) => method === "sendMessage").indexOf(entry) >= prior);
@@ -71,6 +71,8 @@ describe("scenario (g) help command visibility", () => {
       abort: "/abort latest",
       retry: "/retry latest",
       fanout: "/fanout inspect fixtures",
+      lane: "/lane worker-b off",
+      lanes: "/lanes",
     };
     const cases = [
       ["projectOwner", "101", "701"],
@@ -84,7 +86,7 @@ describe("scenario (g) help command visibility", () => {
       try {
         for (const command of EXPECTED[scope]) {
           const before = rig.fakeTelegram.calls.filter(({ method }) => method === "sendMessage").length;
-          rig.send({ text: inputs[command], threadId, userId });
+          rig.send(inputs[command], { thread: threadId, user: userId });
           try {
             const response = await rig.fakeTelegram.waitForCall("sendMessage", (_args, entry) =>
               rig.fakeTelegram.calls.indexOf(entry) >= 0

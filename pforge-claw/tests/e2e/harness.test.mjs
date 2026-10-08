@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { access, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
@@ -7,21 +7,48 @@ import { startFakeOpenBrain } from "../helpers/fake-openbrain.mjs";
 import { createFakeClock } from "../helpers/fake-clock.mjs";
 import { createFixtureRepos } from "../helpers/fixture-repos.mjs";
 import { createSessionFactory } from "../helpers/scripted-copilot.mjs";
+import { cleanChildEnvironment, createE2ERig } from "../helpers/e2e-rig.mjs";
 
 let temporary;
 let openbrain;
 let fixtures;
+const rigs = [];
 
 afterEach(async () => {
   await openbrain?.close();
   openbrain = undefined;
   await fixtures?.cleanup();
   fixtures = undefined;
+  await Promise.all(rigs.splice(0).map((rig) => rig.teardown()));
   if (temporary) await rm(temporary, { recursive: true, force: true });
   temporary = undefined;
 });
 
 describe("scenario test-harness contracts", () => {
+  it("boots through the dispatcher, scrubs ambient credentials, and isolates each rig", async () => {
+    const source = await readFile(new URL("../helpers/e2e-rig.mjs", import.meta.url), "utf8");
+    expect(source).not.toContain("createApp");
+    expect(source).not.toContain("chat.stop(");
+    expect(cleanChildEnvironment({
+      PATH: "safe-path",
+      GH_TOKEN: "gh-test-inherited",
+      GITHUB_TOKEN: "github-test-inherited",
+      COPILOT_TOKEN: "copilot-test-inherited",
+      COPILOT_GITHUB_TOKEN: "copilot-github-test-inherited",
+      PFORGE_CLAW_TELEGRAM_TOKEN: "telegram-test-inherited",
+    })).toEqual({ PATH: "safe-path" });
+
+    const first = await createE2ERig();
+    rigs.push(first);
+    const firstHome = first.home;
+    await first.teardown();
+    await expect(access(firstHome)).rejects.toMatchObject({ code: "ENOENT" });
+    rigs.splice(rigs.indexOf(first), 1);
+    const second = await createE2ERig();
+    rigs.push(second);
+    expect(firstHome).not.toBe(second.home);
+  });
+
   it("keeps fixture repository opt-ins isolated and supports paths with spaces", async () => {
     temporary = await mkdtemp(path.join(os.tmpdir(), "claw harness with spaces-"));
     const directory = path.join(temporary, "caller-owned fixtures");

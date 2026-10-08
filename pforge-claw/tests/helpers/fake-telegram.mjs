@@ -8,6 +8,7 @@ export async function startFakeTelegram() {
   const files = new Map();
   const failures = new Map();
   const pendingPolls = new Set();
+  const callListeners = new Set();
   let nextUpdateId = 1;
   let nextMessageId = 1;
   let closed = false;
@@ -150,6 +151,7 @@ export async function startFakeTelegram() {
       return;
     }
     calls.push({ method, args });
+    for (const notify of callListeners) notify(calls.at(-1));
     await handleApi(request, response, method, args);
   });
 
@@ -210,13 +212,25 @@ export async function startFakeTelegram() {
       predicate = () => true;
       timeoutMs = options.timeoutMs ?? timeoutMs;
     }
-    const until = Date.now() + timeoutMs;
-    while (Date.now() <= until) {
-      const match = calls.find((call) => call.method === method && predicate(call.args, call));
-      if (match) return match;
-      await new Promise((resolve) => setTimeout(resolve, 5));
-    }
-    throw new Error(`Timed out waiting for fake Telegram method ${method}`);
+    return waitFor((call) => call.method === method && predicate(call.args, call), timeoutMs);
+  }
+
+  function waitFor(predicate, timeoutMs = 3000) {
+    const match = calls.find(predicate);
+    if (match) return Promise.resolve(match);
+    return new Promise((resolve, reject) => {
+      const timer = setTimeout(() => {
+        callListeners.delete(check);
+        reject(new Error("Timed out waiting for fake Telegram call"));
+      }, timeoutMs);
+      function check(call) {
+        if (!predicate(call)) return;
+        clearTimeout(timer);
+        callListeners.delete(check);
+        resolve(call);
+      }
+      callListeners.add(check);
+    });
   }
 
   function edits(chatId, messageId) {
@@ -259,6 +273,7 @@ export async function startFakeTelegram() {
     failNext,
     addFile,
     waitForCall,
+    waitFor,
     edits,
     menus,
     sentTo,

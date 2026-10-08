@@ -15,6 +15,8 @@ const TOOLS = Object.freeze([
   "forge_alerts",
   "forge_capture",
   "forge_recall",
+  "forge_master_observe",
+  "forge_plan_status",
 ]);
 let logPath;
 
@@ -45,7 +47,7 @@ function toolResult(name) {
       false: estimate("false"),
     },
     forge_cost_report: { totalCostUSD: 0, runs: [] },
-    forge_watch_live: { state: "idle", active: false },
+    forge_watch_live: { state: "idle", active: false, events: [] },
     forge_abort: { ok: true, aborted: false },
     forge_search: { hits: [], total: 0, message: "No fixture matches." },
     forge_capabilities: { tools: TOOLS },
@@ -54,6 +56,11 @@ function toolResult(name) {
     forge_alerts: { alerts: [], total: 0, message: "No fixture alerts." },
     forge_capture: { ok: true, id: "fixture-capture-1" },
     forge_recall: { hits: [], total: 0, message: "No fixture memories." },
+    forge_master_observe: {
+      status: { running: true },
+      insights: { items: [], total: 0, hasMore: false },
+    },
+    forge_plan_status: { plans: [], total: 0, message: "No active fixture plans." },
   };
   if (!Object.hasOwn(outputs, name)) throw new Error(`Unexpected fake MCP tool call: ${name}`);
   return outputs[name];
@@ -86,7 +93,13 @@ async function respond(message) {
   if (method === "tools/call") {
     const name = params.name;
     if (logPath) await appendFile(logPath, `${JSON.stringify({ name, arguments: params.arguments ?? {} })}\n`);
-    if (!TOOLS.includes(name)) throw new Error(`Unexpected fake MCP tool call: ${name}`);
+    if (!TOOLS.includes(name)) {
+      process.stdout.write(`${JSON.stringify({
+        jsonrpc: "2.0", id,
+        error: { code: -32601, message: `Unexpected fake MCP tool call: ${name}` },
+      })}\n`);
+      return;
+    }
     const result = { content: [{ type: "text", text: JSON.stringify(toolResult(name)) }] };
     process.stdout.write(`${JSON.stringify({ jsonrpc: "2.0", id, result })}\n`);
     return;

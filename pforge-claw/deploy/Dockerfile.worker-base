@@ -1,0 +1,70 @@
+ARG NODE_VERSION=24
+FROM node:${NODE_VERSION}-slim AS build
+WORKDIR /app
+COPY package.json ./
+RUN npm install --omit=dev --ignore-scripts
+COPY cli.mjs config.schema.json ./
+COPY src/ ./src/
+
+FROM node:${NODE_VERSION}-slim
+ARG TARGETARCH
+ARG PWSH_VERSION=7.4.6
+ARG COPILOT_CLI_VERSION=latest
+LABEL io.pforge.claw.d4="container-copilot-auth=supported; runtime token PFORGE_CLAW_COPILOT_TOKEN -> COPILOT_GITHUB_TOKEN; absent => BYOK-only"
+
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends bash ca-certificates curl git gnupg libicu-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN install -d -m 0755 /etc/apt/keyrings \
+    && curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg -o /etc/apt/keyrings/githubcli-archive-keyring.gpg \
+    && chmod 0644 /etc/apt/keyrings/githubcli-archive-keyring.gpg \
+    && printf 'deb [arch=%s signed-by=/etc/apt/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main\n' "$(dpkg --print-architecture)" > /etc/apt/sources.list.d/github-cli.list \
+    && apt-get update \
+    && apt-get install -y --no-install-recommends gh \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN case "$TARGETARCH" in \
+      amd64) pwsh_arch=x64 ;; \
+      arm64) pwsh_arch=arm64 ;; \
+      *) echo "Unsupported PowerShell target architecture: $TARGETARCH" >&2; exit 1 ;; \
+    esac \
+    && pwsh_archive="powershell-${PWSH_VERSION}-linux-${pwsh_arch}.tar.gz" \
+    && pwsh_release="https://github.com/PowerShell/PowerShell/releases/download/v${PWSH_VERSION}" \
+    && curl -fsSL "${pwsh_release}/hashes.sha256" -o /tmp/pwsh-hashes.sha256 \
+    && grep " ${pwsh_archive}\$" /tmp/pwsh-hashes.sha256 > /tmp/pwsh.sha256 \
+    && test -s /tmp/pwsh.sha256 \
+    && curl -fsSL "${pwsh_release}/${pwsh_archive}" -o "/tmp/${pwsh_archive}" \
+    && (cd /tmp && sha256sum -c pwsh.sha256) \
+    && mkdir -p /opt/microsoft/powershell/7 \
+    && tar -xzf "/tmp/${pwsh_archive}" -C /opt/microsoft/powershell/7 \
+    && chmod 755 /opt/microsoft/powershell/7/pwsh \
+    && ln -s /opt/microsoft/powershell/7/pwsh /usr/local/bin/pwsh \
+    && rm -f /tmp/pwsh-hashes.sha256 /tmp/pwsh.sha256 "/tmp/${pwsh_archive}"
+RUN pwsh -v
+
+RUN npm install --global "@github/copilot@${COPILOT_CLI_VERSION}" \
+    && npm cache clean --force
+
+RUN groupadd --gid 10001 claw \
+    && useradd --uid 10001 --gid 10001 --create-home --home-dir /home/claw claw \
+    && mkdir -p /work /data \
+    && chown 10001:10001 /work /data
+
+COPY --from=build /app /app
+RUN printf '%s\n' \
+      '#!/bin/sh' \
+      'if [ -n "${PFORGE_CLAW_COPILOT_TOKEN:-}" ]; then export COPILOT_GITHUB_TOKEN="$PFORGE_CLAW_COPILOT_TOKEN"; fi' \
+      'if [ -n "${PFORGE_CLAW_GH_TOKEN:-}" ]; then export GH_TOKEN="$PFORGE_CLAW_GH_TOKEN"; fi' \
+      'if [ "$1" = claw ]; then shift; exec node /app/cli.mjs "$@"; fi' \
+      'if [ -x ./pforge.sh ]; then exec ./pforge.sh "$@"; fi' \
+      'echo "pforge: not found" >&2; exit 127' \
+      > /usr/local/bin/pforge \
+    && chmod 0755 /usr/local/bin/pforge
+
+ENV PFORGE_CLAW_HOME=/data NODE_ENV=production HOME=/home/claw
+WORKDIR /work
+USER 10001:10001
+# Kubernetes Secrets provide PFORGE_CLAW_GH_TOKEN and PFORGE_CLAW_COPILOT_TOKEN at runtime; never pass credentials as build arguments.
+# Slice 22 adds worker one-shot support; keep this entrypoint aligned with that contract.
+ENTRYPOINT ["pforge","claw","worker","--one-shot"]

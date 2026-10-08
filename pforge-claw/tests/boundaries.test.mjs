@@ -71,6 +71,8 @@ const KEYED_LONG_ID_PATTERN = /\b(?:chat|id|user)[\w-]*\b["']?\s*[:=]\s*["']?\d{
 const DRIVE_USER_PATH_PATTERN = /[A-Za-z]:\\(?:Users|home)\\/i;
 const UNIX_HOME_PATTERN = /\/(?:Users|home)\/[^/\s]+/;
 const PRIVATE_IP_PATTERN = /\b(?:10\.(?:\d{1,3}\.){2}\d{1,3}|192\.168\.(?:\d{1,3}\.)\d{1,3}|172\.(?:1[6-9]|2\d|3[01])\.(?:\d{1,3}\.)\d{1,3})\b/;
+// Canonical RFC 1918 block notations (e.g. egress `except` lists) are generic, not operator hosts.
+const RFC_PRIVATE_RANGES = /\b(?:10\.0\.0\.0\/8|172\.16\.0\.0\/12|192\.168\.0\.0\/16)\b/g;
 const FQDN_PATTERN = /\b(?:(?:https?:\/\/)?)([a-z\d-]+(?:\.[a-z\d-]+)+)\b/gi;
 const TLD_PATTERN = /\.(?:com|org|net|io|dev|app|co|ai|invalid)$/i;
 const EXEC_IMPORT_PATTERN = new RegExp(
@@ -152,9 +154,9 @@ const detectorSamples = [
   },
   {
     name: "private IP addresses",
-    detect: (text) => PRIVATE_IP_PATTERN.test(text),
+    detect: (text) => PRIVATE_IP_PATTERN.test(text.replace(RFC_PRIVATE_RANGES, "")),
     bad: "10.24.3.8",
-    safe: "203.0.113.8",
+    safe: "203.0.113.8 except: [10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16]",
   },
   {
     name: "GitHub owner URLs",

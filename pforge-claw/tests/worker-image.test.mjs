@@ -5,6 +5,9 @@ import { fileURLToPath } from "node:url";
 import { spawnSync } from "node:child_process";
 import { afterEach, describe, expect, it } from "vitest";
 
+// Spawns real git / shell processes; the default 5 s budget flakes under full-suite load.
+const PROCESS_TEST_TIMEOUT_MS = 30_000;
+
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PACKAGE_ROOT = path.join(__dirname, "..");
 const tempDirectories = [];
@@ -247,5 +250,5 @@ describe("image build scripts", () => {
       env: failingBuildxEnv,
     });
     expect(failedPowerShellBuildx.stderr).toContain("docker buildx is required");
-  });
+  }, PROCESS_TEST_TIMEOUT_MS);
 });

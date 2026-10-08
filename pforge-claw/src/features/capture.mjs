@@ -2,10 +2,12 @@ import {
   bindTriageService,
   createTriageService,
 } from "../capture.mjs";
+import { bindCaptureService, createCaptureService } from "../handlers/capture-commands.mjs";
 import { createStt } from "../stt.mjs";
 
 let service = null;
 let unbind = null;
+let unbindCapture = null;
 let channelWarningLogged = false;
 
 export default {
@@ -14,7 +16,10 @@ export default {
   async start(ctx = {}) {
     await this.stop();
     const stt = createStt(ctx);
-    service = createTriageService({ ...ctx, channel: ctx.channel, sttService: stt });
+    // One capture service backs both the triage buttons and the /remember, /recall, /idea, /bug commands.
+    const captureService = createCaptureService({ ...ctx, channel: ctx.channel });
+    unbindCapture = bindCaptureService(captureService);
+    service = createTriageService({ ...ctx, channel: ctx.channel, sttService: stt, captureService });
     unbind = bindTriageService(service);
     if (!ctx.channel && !channelWarningLogged) {
       channelWarningLogged = true;
@@ -24,6 +29,8 @@ export default {
   async stop() {
     unbind?.();
     unbind = null;
+    unbindCapture?.();
+    unbindCapture = null;
     service = null;
   },
   snapshot() {

@@ -87,11 +87,13 @@ async function checkIdentity(update, indexes, store, logger) {
 function resolveContext(config, registry, chatId, threadId, { services, clients } = {}) {
   const project = registry.byChat(chatId, threadId);
   if (project?.channel?.adapter === GROUP_CHANNEL) {
+    // Project-bound MCP client: exposed on the context and in services so every command reaches it the same way.
+    const mcp = clients ? { call: (tool, args) => clients.call(project.id, tool, args) } : undefined;
     return {
       scope: "project",
       project,
-      services,
-      ...(clients ? { mcp: { call: (tool, args) => clients.call(project.id, tool, args) } } : {}),
+      services: mcp ? { ...services, mcp } : services,
+      ...(mcp ? { mcp } : {}),
     };
   }
   const general = config.channels?.telegram?.generalChat;

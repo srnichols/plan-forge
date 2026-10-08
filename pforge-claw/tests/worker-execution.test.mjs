@@ -13,6 +13,9 @@ import { createHttpServer } from "../src/http.mjs";
 import { run } from "../src/jobs/worktree.mjs";
 import { collectCopySet } from "../src/jobs/bootstrap.mjs";
 
+// Spawns real git / shell processes; the default 5 s budget flakes under full-suite load.
+const PROCESS_TEST_TIMEOUT_MS = 30_000;
+
 const cleanups = [];
 const key = "b".repeat(64);
 const runtimeFactory = ({ id }) => ({ id, run: async () => ({ status: "succeeded" }) });
@@ -95,7 +98,7 @@ describe("lease-scoped runner execution", () => {
     await access(cwd);
     await execution.afterJob({ job, event: { data: { status: "succeeded" } } });
     await expect(access(cwd)).rejects.toMatchObject({ code: "ENOENT" });
-  });
+  }, PROCESS_TEST_TIMEOUT_MS);
   it("refuses execution without a valid approval grant before a workspace exists", async () => {
     const { ctx, home } = await fixture();
     const execution = createLeaseExecution({ ctx, clients: {}, subject: "w1", laneId: "remote", key, runtimeFactory });

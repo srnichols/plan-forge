@@ -36,7 +36,7 @@ export async function startFakeTelegram() {
     return JSON.parse(Buffer.concat(chunks).toString("utf8"));
   }
 
-  async function handleApi(request, response, method, args) {
+  async function handleApi(request, response, method, args, callRecord) {
     const scripted = failures.get(method)?.shift();
     if (scripted) {
       if (scripted.body === "non-json") {
@@ -88,17 +88,21 @@ export async function startFakeTelegram() {
       return;
     }
     if (method === "sendMessage") {
-      sendJson(response, 200, { ok: true, result: {
+      const result = {
         message_id: nextMessageId++,
         chat: { id: args.chat_id },
         text: args.text,
         ...(args.message_thread_id === undefined ? {} : { message_thread_id: args.message_thread_id }),
         ...(args.reply_markup === undefined ? {} : { reply_markup: args.reply_markup }),
-      } });
+      };
+      callRecord.result = result;
+      sendJson(response, 200, { ok: true, result });
       return;
     }
     if (method === "editMessageText") {
-      sendJson(response, 200, { ok: true, result: { message_id: args.message_id, text: args.text } });
+      const result = { message_id: args.message_id, text: args.text };
+      callRecord.result = result;
+      sendJson(response, 200, { ok: true, result });
       return;
     }
     if (method === "answerCallbackQuery" || method === "sendChatAction"
@@ -150,9 +154,10 @@ export async function startFakeTelegram() {
       sendJson(response, 400, { ok: false, description: "Invalid request" });
       return;
     }
-    calls.push({ method, args });
+    const callRecord = { method, args };
+    calls.push(callRecord);
     for (const notify of callListeners) notify(calls.at(-1));
-    await handleApi(request, response, method, args);
+    await handleApi(request, response, method, args, callRecord);
   });
 
   await new Promise((resolve, reject) => {
@@ -179,13 +184,16 @@ export async function startFakeTelegram() {
     } });
   }
 
-  function pushCallback({ chatId = 42, userId = 7, data = "tap", callbackId = "callback-1", threadId } = {}) {
+  function pushCallback({
+    chatId = 42, userId = 7, data = "tap", callbackId = `callback-${nextUpdateId}`,
+    messageId, threadId,
+  } = {}) {
     return push({ callback_query: {
       id: callbackId,
       from: { id: userId },
       data,
       message: {
-        message_id: nextMessageId++,
+        message_id: messageId ?? nextMessageId++,
         chat: { id: chatId },
         ...(threadId === undefined ? {} : { message_thread_id: threadId }),
       },
@@ -243,6 +251,17 @@ export async function startFakeTelegram() {
     return calls.filter(({ method }) => method === "setMyCommands").map(({ args }) => args);
   }
 
+  function checkpoint() {
+    return calls.length;
+  }
+
+  function callsSince(index) {
+    if (!Number.isInteger(index) || index < 0 || index > calls.length) {
+      throw new RangeError("checkpoint must be a valid call index");
+    }
+    return calls.slice(index);
+  }
+
   function sentTo(chatId) {
     return calls.filter(({ method, args }) => method === "sendMessage"
       && String(args.chat_id) === String(chatId));
@@ -276,6 +295,8 @@ export async function startFakeTelegram() {
     waitFor,
     edits,
     menus,
+    checkpoint,
+    callsSince,
     sentTo,
     reset,
     close,

@@ -14,6 +14,7 @@ const TOOLS = Object.freeze([
   "forge_digest_inputs",
   "forge_alerts",
   "forge_capture",
+  "forge_memory_capture",
   "forge_recall",
   "forge_master_observe",
   "forge_plan_status",
@@ -55,6 +56,7 @@ function toolResult(name) {
     forge_digest_inputs: { jobs: [], alerts: [], captured: [] },
     forge_alerts: { alerts: [], total: 0, message: "No fixture alerts." },
     forge_capture: { ok: true, id: "fixture-capture-1" },
+    forge_memory_capture: { ok: true, id: "fixture-memory-capture-1" },
     forge_recall: { hits: [], total: 0, message: "No fixture memories." },
     forge_master_observe: {
       status: { running: true },

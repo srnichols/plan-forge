@@ -16,13 +16,13 @@ bot an administrator so it can read messages in the test forum.
 Use a Telegram forum with topics enabled. Configure a general topic and three
 separate project topics in the dispatcher's configuration. Register each
 project with its repository path, base branch, channel/chat/topic route,
-home lane, and placement preferences. Make the third project restricted.
+home lane, and placement preferences. Make the third project restricted. Use
+three disposable repositories with test remotes and a `main` branch; approved
+plan runs push a `claw/<job-id>` branch and create a pull request.
 
 Set the Telegram allowlist explicitly: one owner, an approver, and a viewer,
 using their actual user IDs. Keep unknown users outside the allowlist. Check
 that help and menus reflect each caller's role and topic before running work.
-Use test repositories and test remotes: approved runs push branches and create
-pull requests.
 
 ### Local and remote lanes
 
@@ -35,9 +35,19 @@ For a live bot, set the token in the environment before
 unverified for the environment-only token requirement until its implementation
 and live-mode tests demonstrate that the token is never written to disk.
 
-Remote lanes are opt-in. Enable them deliberately, give each worker its own
-home, enroll it, and verify authenticated connectivity before assigning work.
-Do not assign restricted projects to remote workers.
+For live remote workers, run `pforge claw worker enroll --lane <remote-lane>`
+and complete the one-time join with a worker-specific `PFORGE_CLAW_HOME`.
+Verify each authenticated WebSocket connection and opt in each lane before
+assigning work. Keep restricted projects on the local lane.
+
+### D4 runtime options
+
+Before running a mutating plan, choose an operator-controlled authentication
+path: an existing seat-holder Copilot login, `PFORGE_CLAW_COPILOT_TOKEN`, or
+BYOK credentials supported by the selected runtime. Keep credentials in the
+environment or ignored `.forge/secrets.json`; never place them in fixture
+repositories, generated files, command logs, screenshots, or evidence. A fake
+runtime does not validate any live authentication path.
 
 Use TLS (`wss://`) for remote worker connections outside the deliberately
 isolated local test environment. Do not expose an insecure worker endpoint to
@@ -66,18 +76,32 @@ are not currently supplied by doctor; preserve doctor output without claiming
 it verifies those conditions. The current scripts and probe still require
 end-to-end validation before their output can be used as live lane evidence.
 
-### Evidence: away-from-desk and concurrent runs
+### Scenario (a): away from the desk
 
-For scenario (a), ask about the plan, request a run, retain the estimate card,
-approve it, and retain progress updates and the final PR link. Verify that
-there was no mutation before approval, that the branch reached the test
-remote, and that exactly one PR was created.
+In a project topic, send `/ask` with a question about the plan, then request
+`/run Phase-1-DEMO-PLAN.md`. Retain the estimate card and confirm the checkout,
+remote branches, and pull-request list are unchanged before approval. Have the
+designated approver approve the card. Retain the consumed approval, monotonic
+progress edits, pushed branch, one PR creation call, and final PR URL. Confirm
+that the original checkout remains clean and at its original commit.
 
-For scenario (b), run three project jobs with overlapping execution under a
-low budget cap. Retain the held-budget card, rejection of a non-owner release,
-successful owner release, terminal results, and per-project ledger attribution.
+### Scenario (b): concurrent work and budget hold
 
-Record the following for both scenarios:
+Run one job for each of the three projects under a deliberately low daily
+budget cap. Keep the restricted project on the local lane. Hold two jobs at
+their runtime barriers and verify their active windows overlap on distinct
+lanes and workspaces. Retain the third job's `held-budget` audit row and card.
+Verify a non-owner cannot release the hold, then have the owner release it and
+record terminal results and per-job/project `budget.jsonl` rows.
+
+### Cleanup and evidence
+
+Stop workers and the dispatcher, disable temporary lanes, remove only the
+dedicated test namespace and disposable repositories, and revoke worker
+enrollment where applicable. Do not clean up operator-owned resources or
+credentials.
+
+Record the following for each scenario:
 
 | Evidence | Operator record |
 |---|---|
@@ -92,4 +116,5 @@ Record the following for both scenarios:
 | D4 outcome | Authenticated GHCP, BYOK only, or not tested; observed provider/runtime |
 
 **MANUAL (operator): stop here.** An agent must not infer live authentication,
-egress enforcement, or a successful operator run from offline fixtures.
+egress enforcement, or a successful operator run from offline fixtures. Leave
+the evidence table blank until the operator performs and records the scenarios.

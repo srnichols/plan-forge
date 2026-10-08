@@ -1,3 +1,4 @@
+import path from "node:path";
 import { assertAgentRuntime } from "../../src/runtime/agent-runtime.mjs";
 
 export function createSessionFactory({
@@ -62,6 +63,9 @@ export function createScriptedCopilot({
   scriptsByJobType = {},
 } = {}) {
   const permissionRequests = [];
+  const heldJobs = new Map();
+  const activeJobs = new Set();
+  const runWindows = [];
   const sessionFactory = createSessionFactory({
     defaultEvents: events,
     scriptsByJobType,
@@ -69,26 +73,43 @@ export function createScriptedCopilot({
   const runtime = assertAgentRuntime({
     id: "copilot-sdk",
     async run(turn) {
-      const scriptedEvents = scriptsByJobType[turn.jobType] ?? events;
-      for (const event of scriptedEvents) {
-        turn.emit?.(event.type, event.data ?? {});
-        sessionFactory.emitted.push(event);
+      const jobId = turn.jobId ?? turn.job?.id
+        ?? (typeof turn.cwd === "string" ? path.basename(turn.cwd) : null);
+      const barrier = jobId ? heldJobs.get(jobId) : null;
+      if (jobId) {
+        activeJobs.add(jobId);
+        runWindows.push({
+          jobId,
+          cwd: turn.cwd,
+          projectId: path.basename(path.dirname(turn.cwd ?? "")),
+        });
       }
-      if (turn.signal?.aborted) {
-        return { ok: false, status: "cancelled", usage: { inputTokens: null, outputTokens: null, costUSD: null } };
+      try {
+        if (barrier) await barrier.promise;
+        const scriptedEvents = scriptsByJobType[turn.jobType] ?? events;
+        for (const event of scriptedEvents) {
+          turn.emit?.(event.type, event.data ?? {});
+          sessionFactory.emitted.push(event);
+        }
+        if (turn.signal?.aborted) {
+          return { ok: false, status: "cancelled", usage: { inputTokens: null, outputTokens: null, costUSD: null } };
+        }
+        if (typeof turn.onPermissionRequest === "function") {
+          permissionRequests.push(await turn.onPermissionRequest({
+            toolName: "fixture-tool",
+            arguments: {},
+          }));
+        }
+        return {
+          ok: true,
+          status: "succeeded",
+          usage: { inputTokens: 10, outputTokens: 5, costUSD: 0 },
+          ...result,
+        };
+      } finally {
+        if (jobId) activeJobs.delete(jobId);
+        if (barrier && heldJobs.get(jobId) === barrier) heldJobs.delete(jobId);
       }
-      if (typeof turn.onPermissionRequest === "function") {
-        permissionRequests.push(await turn.onPermissionRequest({
-          toolName: "fixture-tool",
-          arguments: {},
-        }));
-      }
-      return {
-        ok: true,
-        status: "succeeded",
-        usage: { inputTokens: 10, outputTokens: 5, costUSD: 0 },
-        ...result,
-      };
     },
   });
   return {
@@ -98,6 +119,25 @@ export function createScriptedCopilot({
     sessionFactory,
     injectDisconnectAfter: sessionFactory.injectDisconnectAfter,
     emitCanary: sessionFactory.emitCanary,
+    hold(jobId) {
+      if (typeof jobId !== "string" || !jobId) throw new TypeError("jobId must be a non-empty string");
+      if (heldJobs.has(jobId)) throw new Error(`Job ${jobId} already has an execution barrier`);
+      let release;
+      const promise = new Promise((resolve) => { release = resolve; });
+      heldJobs.set(jobId, { promise, release });
+      return () => {
+        if (!heldJobs.has(jobId)) return;
+        this.release(jobId);
+      };
+    },
+    release(jobId) {
+      const barrier = heldJobs.get(jobId);
+      if (!barrier) throw new Error(`Job ${jobId} has no execution barrier`);
+      heldJobs.delete(jobId);
+      barrier.release();
+    },
+    activeJobs,
+    runWindows,
     get seq() { return sessionFactory.seq; },
   };
 }

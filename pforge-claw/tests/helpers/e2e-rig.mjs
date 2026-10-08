@@ -1,8 +1,10 @@
+import { createServer } from "node:http";
 import { mkdir, mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { bootDispatcher } from "../../src/cli/start.mjs";
+import approvalsFeature from "../../src/features/approvals.mjs";
 import { currentJobs } from "../../src/jobs/model.mjs";
 import { createSecrets } from "../../src/secrets.mjs";
 import { createStore } from "../../src/state/store.mjs";
@@ -19,6 +21,21 @@ const OWNER_ID = "701";
 const APPROVER_ID = "702";
 const VIEWER_ID = "703";
 
+function escapeMarkdownV2(value) {
+  return String(value).replace(/([_*\[\]()~`>#+\-=|{}.!\\])/g, "\\$1");
+}
+
+async function allocatePort() {
+  const server = createServer();
+  await new Promise((resolve, reject) => {
+    server.once("error", reject);
+    server.listen(0, "127.0.0.1", resolve);
+  });
+  const { port } = server.address();
+  await new Promise((resolve, reject) => server.close((error) => error ? reject(error) : resolve()));
+  return port;
+}
+
 export function cleanChildEnvironment(source = process.env) {
   const env = { ...source };
   for (const name of Object.keys(env)) {
@@ -28,7 +45,20 @@ export function cleanChildEnvironment(source = process.env) {
   return env;
 }
 
-function buildConfig({ fakeTelegram, projects, repos, home, schedules = [] }) {
+function buildConfig({
+  fakeTelegram, projects, repos, home, schedules = [], budget, openbrain, remoteWorkers, k8sLane,
+  projectOverrides = {}, httpPort,
+}) {
+  const lanes = [
+    { id: "local", kind: "local", labels: ["local"], enabled: true, concurrency: 3 },
+    ...(remoteWorkers ?? [
+      { id: "worker-a", labels: ["macos"] },
+      { id: "worker-b", labels: ["windows"] },
+    ]).map((worker) => ({
+      id: worker.id, kind: "remote", labels: worker.labels, enabled: true, optIn: true,
+    })),
+    ...(k8sLane ? [{ id: k8sLane, kind: "k8s", enabled: true, k8s: { namespace: "fixture" } }] : []),
+  ];
   return {
     v: 1,
     instanceId: "e2e-fixture",
@@ -53,22 +83,27 @@ function buildConfig({ fakeTelegram, projects, repos, home, schedules = [] }) {
       pforgeCommand: [process.execPath, FAKE_PFORGE_PATH, "--fixture-root", home],
       ghCommand: repos.ghShim.command,
     },
-    lanes: [
-      { id: "local", kind: "local", labels: ["local"], enabled: true, concurrency: 3 },
-      { id: "worker-a", kind: "remote", labels: ["macos"], enabled: true, optIn: true },
-      { id: "worker-b", kind: "remote", labels: ["windows"], enabled: true, optIn: true },
-    ],
-    projects: projects.map((project, index) => ({
-      id: project.id,
-      displayName: `Fixture ${index + 1}`,
-      repo: { path: project.repoPath, baseBranch: "main" },
-      channel: { adapter: "telegram", chatId: "42", topicId: String(101 + index) },
-      placement: { prefer: ["local"], requires: [] },
-      homeLane: "local",
-      keepAlive: false,
-      ...(index === 2 ? { visibility: "restricted" } : {}),
-    })),
+    lanes,
+    projects: projects.map((project, index) => {
+      const restricted = index === 2;
+      return {
+        id: project.id,
+        displayName: `Fixture ${index + 1}`,
+        repo: { path: project.repoPath, baseBranch: "main" },
+        channel: { adapter: "telegram", chatId: "42", topicId: String(101 + index) },
+        placement: { prefer: ["local"], requires: [] },
+        homeLane: "local",
+        keepAlive: false,
+        ...(restricted ? { visibility: "restricted" } : {}),
+        ...(projectOverrides[project.id] ?? {}),
+      };
+    }),
+    ...(budget ? { budget } : {}),
+    ...(openbrain ? {
+      memory: { openbrain: { endpoint: openbrain.endpoint, tokenSecret: "OPENBRAIN_KEY" } },
+    } : {}),
     schedules,
+    http: { bind: "127.0.0.1", port: httpPort },
   };
 }
 
@@ -106,8 +141,20 @@ export async function createE2ERig({
   schedulerTickMs,
   copilot = createScriptedCopilot(),
   secrets: extraSecrets = {},
+  budget,
+  openbrain,
+  remoteWorkers,
+  leaseMs,
+  k8sLane,
+  home: requestedHome,
+  runtimeFactory,
+  createSession,
+  workers,
+  k8sApiFactory,
+  projectOverrides,
 } = {}) {
-  const home = await mkdtemp(path.join(os.tmpdir(), "pforge claw e2e-"));
+  const home = requestedHome ?? await mkdtemp(path.join(os.tmpdir(), "pforge claw e2e-"));
+  await mkdir(home, { recursive: true });
   const fixtureRoot = path.join(home, "fixture repos with spaces");
   const repos = await createFixtureRepos(3, {
     directory: fixtureRoot,
@@ -115,7 +162,12 @@ export async function createE2ERig({
     ghShim: true,
   });
   const fakeTelegram = await startFakeTelegram();
-  const config = buildConfig({ fakeTelegram, projects: repos.projects, repos, home, schedules });
+  const httpPort = await allocatePort();
+  const config = buildConfig({
+    fakeTelegram, projects: repos.projects, repos, home, schedules, budget, openbrain, remoteWorkers, k8sLane,
+    projectOverrides, httpPort,
+  });
+  if (leaseMs !== undefined) config.worker = { leaseMs };
   const env = cleanChildEnvironment();
   const logs = [];
   let handles = null;
@@ -130,7 +182,7 @@ export async function createE2ERig({
     const secrets = await createSecrets({
       env,
       file: path.join(home, "secrets.json"),
-      trackNames: [TOKEN_NAME],
+      trackNames: [TOKEN_NAME, ...Object.keys(extraSecrets)],
     });
     const store = createStore(path.join(home, "state"), { redact: secrets.redact });
     const logger = Object.fromEntries(["info", "warn", "error"].map((level) => [
@@ -143,10 +195,12 @@ export async function createE2ERig({
       loadedConfig: { ok: true, config },
       secrets,
       store,
-      createSession: copilot.createSession,
-      runtimeFactory: async ({ id }) => ({ ...copilot.runtime, id }),
+      createSession: createSession ?? copilot.createSession,
+      runtimeFactory: runtimeFactory ?? (async ({ id }) => ({ ...copilot.runtime, id })),
       logger,
       now: () => clock.now().getTime(),
+      workers,
+      k8sApiFactory,
       ...(schedulerTickMs ? { schedulerTickMs } : {}),
     });
     await fakeTelegram.waitForCall("setMyCommands", (_args, entry) =>
@@ -164,14 +218,17 @@ export async function createE2ERig({
       const rows = await readJsonLines(path.join(home, "state", "audit.jsonl"));
       return type ? rows.filter((row) => row.kind === type || row.type === type) : rows;
     }
-    async function waitForJob(id, status, { timeoutMs = 5000 } = {}) {
+    async function waitForJob(idOrPredicate, status, { timeoutMs = 5000 } = {}) {
       const deadline = Date.now() + timeoutMs;
       while (Date.now() <= deadline) {
-        const job = currentJobs(active.store)[id];
-        if (job?.state === status) return job;
+        const allJobs = Object.values(currentJobs(active.store));
+        const job = typeof idOrPredicate === "function"
+          ? allJobs.find(idOrPredicate)
+          : allJobs.find((entry) => entry.id === idOrPredicate && (!status || entry.state === status));
+        if (job) return job;
         await new Promise((resolve) => setTimeout(resolve, 10));
       }
-      throw new Error(`Timed out waiting for job ${id} to reach ${status}`);
+      throw new Error(`Timed out waiting for a matching job${status ? ` in state ${status}` : ""}`);
     }
     async function grepStateFor(value) {
       const candidates = await listFiles(home);
@@ -180,7 +237,36 @@ export async function createE2ERig({
         .filter(({ method }) => method === "sendMessage" || method === "editMessageText")
         .map(({ args }) => String(args.text ?? ""))
         .join("\n");
-      return [...persisted, logs.join("\n"), outbound].some((text) => text.includes(value));
+      const forms = [String(value), escapeMarkdownV2(value)];
+      return [...persisted, logs.join("\n"), outbound]
+        .some((text) => forms.some((form) => text.includes(form)));
+    }
+    async function budgetRows() {
+      return readJsonLines(path.join(home, "state", "budget.jsonl"));
+    }
+    async function prCalls() {
+      return readJsonLines(path.join(fixtureRoot, "fake-gh-calls.jsonl"));
+    }
+    function cardFor(textMatch) {
+      const matches = fakeTelegram.calls.filter(({ method, args }) =>
+        method === "sendMessage" && String(args.text ?? "").includes(textMatch));
+      return matches.at(-1) ?? null;
+    }
+    async function approveLatest(user = APPROVER_ID) {
+      const messages = fakeTelegram.calls.filter(({ method, args }) =>
+        method === "sendMessage" && args.reply_markup?.inline_keyboard);
+      const message = messages.at(-1);
+      if (!message) throw new Error("No approval card is available to approve");
+      const approval = message.args.reply_markup.inline_keyboard.flat()
+        .find(({ callback_data }) => callback_data?.startsWith("a:"));
+      if (!approval) throw new Error("Latest card does not contain an approval callback");
+      return fakeTelegram.pushCallback({
+        data: approval.callback_data,
+        userId: user,
+        chatId: message.args.chat_id,
+        messageId: message.result?.message_id,
+        threadId: message.args.message_thread_id,
+      });
     }
     const rig = {
       home,
@@ -194,21 +280,34 @@ export async function createE2ERig({
       get handles() { return handles; },
       async jobs() { return jobs(); },
       async audit(type) { return audit(type); },
+      async auditRows(type) { return audit(type); },
+      async budgetRows() { return budgetRows(); },
+      async prCalls() { return prCalls(); },
+      cardFor,
       async mcpCalls(projectId = repos.projects[0].id) {
         const project = repos.projects.find((entry) => entry.id === projectId);
         return project ? readJsonLines(project.logPath) : [];
       },
       waitForJob,
+      edits(messageId) {
+        return fakeTelegram.edits("42", messageId).map(({ args }) => args.text);
+      },
       editsFor(messageId) {
         return fakeTelegram.edits("42", messageId).map(({ args }) => args.text);
       },
       grepStateFor,
-      send(text, { user = OWNER_ID, thread, forwarded = false, chat = "42" } = {}) {
+      send(userOrText, topicOrOptions, text, options = {}) {
+        const positional = typeof topicOrOptions === "string";
+        const messageText = positional ? text : userOrText;
+        const { user = OWNER_ID, thread, forwarded = false, chat = "42" } = positional
+          ? { ...options, user: userOrText, topic: topicOrOptions }
+          : (topicOrOptions ?? {});
+        const topic = positional ? topicOrOptions : (topicOrOptions?.topic ?? thread);
         return fakeTelegram.pushMessage({
-          text,
+          text: messageText,
           userId: user,
           chatId: chat,
-          ...(thread === undefined ? {} : { threadId: thread }),
+          ...(topic === undefined ? {} : { threadId: topic }),
           ...(forwarded ? { forward_origin: { type: "user", sender_user: { id: "999" }, date: 1 } } : {}),
         });
       },
@@ -220,33 +319,70 @@ export async function createE2ERig({
           ...(thread === undefined ? {} : { threadId: thread }),
         });
       },
+      tapCallback(user, data, options = {}) {
+        if (typeof user === "object") {
+          options = user;
+          user = options.user ?? OWNER_ID;
+          data = options.data;
+        }
+        return fakeTelegram.pushCallback({
+          data,
+          userId: user ?? OWNER_ID,
+          chatId: options.chat ?? "42",
+          messageId: options.messageId,
+          threadId: options.topic ?? options.thread,
+        });
+      },
+      async approveLatest(user) {
+        return approveLatest(user);
+      },
+      async tickApprovals() {
+        await approvalsFeature.tick();
+      },
       async restart() {
         await handles.stop();
         handles = null;
         active = await boot();
       },
+      async stop() {
+        await rig.teardown();
+      },
       async teardown() {
         if (disposed) return;
         disposed = true;
-        try {
-          await handles?.stop();
-        } finally {
-          handles = null;
-          await fakeTelegram.close();
-          await repos.cleanup();
-          await rm(home, { recursive: true, force: true, maxRetries: 5, retryDelay: 20 });
+        const failures = [];
+        for (const cleanup of [
+          () => handles?.stop(),
+          () => fakeTelegram.close(),
+          () => repos.cleanup(),
+          () => rm(home, { recursive: true, force: true, maxRetries: 5, retryDelay: 20 }),
+        ]) {
+          try {
+            await cleanup();
+          } catch (error) {
+            failures.push(error);
+          }
         }
+        handles = null;
+        if (failures.length) throw new AggregateError(failures, "E2E rig cleanup was incomplete.");
       },
     };
     return rig;
   } catch (error) {
-    try {
-      await handles?.stop();
-    } finally {
-      await fakeTelegram.close();
-      await repos.cleanup();
-      await rm(home, { recursive: true, force: true, maxRetries: 5, retryDelay: 20 });
+    const failures = [];
+    for (const cleanup of [
+      () => handles?.stop(),
+      () => fakeTelegram.close(),
+      () => repos.cleanup(),
+      () => rm(home, { recursive: true, force: true, maxRetries: 5, retryDelay: 20 }),
+    ]) {
+      try {
+        await cleanup();
+      } catch (cleanupError) {
+        failures.push(cleanupError);
+      }
     }
+    if (failures.length) throw new AggregateError([error, ...failures], "E2E rig boot and rollback failed.");
     throw error;
   }
 }

@@ -66,6 +66,20 @@ async function runPlan(args) {
   const events = path.join(runPath, "events.jsonl");
   await writeFile(events, `${JSON.stringify({ type: "started", plan: args[0] ?? null })}\n`);
   process.stdout.write(`${JSON.stringify({ type: "progress", progress: 0.25 })}\n`);
+  const controlDirectory = path.join(fixtureRoot, ".e2e-control");
+  const jobId = path.basename(cwd);
+  const holdFile = path.join(controlDirectory, `${jobId}.hold`);
+  let shouldHold = true;
+  try {
+    await stat(holdFile);
+  } catch (error) {
+    if (error.code === "ENOENT") shouldHold = false;
+    else throw error;
+  }
+  if (shouldHold) {
+    await writeFile(path.join(controlDirectory, `${jobId}.active`), "active\n");
+    await waitForFile(path.join(controlDirectory, `${jobId}.release`));
+  }
   if (options.has("--gate")) await waitForFile(options.get("--gate"));
   if (options.has("--delay")) await new Promise((resolve) => {
     setTimeout(resolve, Math.max(0, Number(options.get("--delay")) || 0));

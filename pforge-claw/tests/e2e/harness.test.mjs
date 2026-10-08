@@ -8,6 +8,7 @@ import { createFakeClock } from "../helpers/fake-clock.mjs";
 import { createFixtureRepos } from "../helpers/fixture-repos.mjs";
 import { createSessionFactory } from "../helpers/scripted-copilot.mjs";
 import { cleanChildEnvironment, createE2ERig } from "../helpers/e2e-rig.mjs";
+import { createE2EWorkerServer } from "../helpers/e2e-worker.mjs";
 
 let temporary;
 let openbrain;
@@ -29,6 +30,7 @@ describe("scenario test-harness contracts", () => {
     const source = await readFile(new URL("../helpers/e2e-rig.mjs", import.meta.url), "utf8");
     expect(source).not.toContain("createApp");
     expect(source).not.toContain("chat.stop(");
+    expect(source).not.toContain("runDispatcherWiring");
     expect(cleanChildEnvironment({
       PATH: "safe-path",
       GH_TOKEN: "gh-test-inherited",
@@ -118,5 +120,33 @@ describe("scenario test-harness contracts", () => {
     });
     expect(emitted).toContainEqual({ type: "progress", data: { text: "fixture progress" } });
     expect(sessions.seq).toBe(2);
+  });
+
+  it("enrols real worker agents into isolated homes and reconnects their WebSocket transport", async () => {
+    temporary = await mkdtemp(path.join(os.tmpdir(), "claw-worker-harness-"));
+    const server = await createE2EWorkerServer({
+      home: path.join(temporary, "dispatcher home"),
+      lanes: ["worker-a"],
+    });
+    try {
+      const worker = await server.startWorker({
+        id: "worker-a",
+        laneId: "worker-a",
+        workerHome: path.join(temporary, "worker home"),
+        capabilities: {
+          os: "linux", arch: "x64", macos: false, toolchains: ["node"], projects: ["fixture-1"],
+        },
+        config: { lanes: [{ id: "worker-a", kind: "local", maxHeavy: 1 }] },
+        runtimeFactory: ({ id }) => ({ id, async run() { return { status: "succeeded" }; } }),
+      });
+      expect(server.registry.current(worker.workerId)).toBeTruthy();
+      expect(worker.env.PFORGE_CLAW_HOME).toBe(worker.home);
+      await worker.killWorker();
+      await worker.reconnectWorker();
+      expect(worker.sockets.length).toBeGreaterThan(1);
+      expect(worker.l2Acks).toEqual([]);
+    } finally {
+      await server.stop();
+    }
   });
 });

@@ -185,7 +185,9 @@ export async function buildApprovalCard({ job, project, mcp, approval, now = Dat
       `Description: ${job.description ?? job.skill ?? "No description"}`,
       `Branch: ${job.targetBranch ?? `claw/${job.id}`}`,
       `Base branch: ${project?.repo?.baseBranch ?? "main"}`,
-      `Lane: ${job.lane ?? project?.homeLane ?? "not assigned"}`,
+      ...(job.placement?.explanation
+        ? [`Will run on: ${job.placement.explanation}`]
+        : [`Lane: ${job.lane ?? project?.homeLane ?? "not assigned"}`]),
     ];
   }
 

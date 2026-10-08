@@ -3,6 +3,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import { validateConfig } from "../src/config.mjs";
+import { buildJobSpec } from "../src/lanes/k8s-job-lane.mjs";
 
 const PACKAGE_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const K8S_ROOT = path.join(PACKAGE_ROOT, "deploy", "k8s");
@@ -397,6 +398,77 @@ describe("Kubernetes dispatcher manifests", () => {
       .map((entry) => entry.name)
       .sort();
     expect([...base.resources].sort()).toEqual(manifests);
+  });
+
+  it("selects job pods with deny-by-default, core-only and public HTTPS policies", () => {
+    const base = parseYamlSubset(readFileSync(BASE_KUSTOMIZATION, "utf8"))[0];
+    expect(base.resources.filter((resource) => resource === "networkpolicy-jobs.yaml"))
+      .toHaveLength(1);
+
+    const policies = parseYamlSubset(readFileSync(path.join(BASE_ROOT, "networkpolicy-jobs.yaml"), "utf8"));
+    const deny = policies.find(({ metadata }) => metadata.name === "pforge-claw-jobs-default-deny");
+    const core = policies.find(({ metadata }) => metadata.name === "pforge-claw-jobs-allow-core");
+    const https = policies.find(({ metadata }) => metadata.name === "pforge-claw-jobs-allow-https-public");
+    expect(deny.spec).toMatchObject({
+      policyTypes: ["Ingress", "Egress"],
+      ingress: [],
+      egress: [],
+    });
+
+    const dnsRule = core.spec.egress.find(({ ports }) => ports.some(({ port }) => port === 53));
+    expect(dnsRule.ports).toEqual([
+      { protocol: "UDP", port: 53 },
+      { protocol: "TCP", port: 53 },
+    ]);
+    expect(dnsRule.to).toEqual([{
+      namespaceSelector: { matchLabels: { "kubernetes.io/metadata.name": "kube-system" } },
+      podSelector: { matchLabels: { "k8s-app": "kube-dns" } },
+    }]);
+    const dispatcherRule = core.spec.egress.find(({ ports }) => ports.some(({ port }) => port === 3190));
+    expect(dispatcherRule.ports).toEqual([{ protocol: "TCP", port: 3190 }]);
+    expect(dispatcherRule.to).toEqual([{
+      podSelector: { matchLabels: { app: "pforge-claw", component: "dispatcher" } },
+    }]);
+    const httpsRule = https.spec.egress[0];
+    expect(httpsRule.ports).toEqual([{ protocol: "TCP", port: 443 }]);
+    expect(httpsRule.to[0].ipBlock).toMatchObject({
+      cidr: "0.0.0.0/0",
+      except: ["10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16", "169.254.0.0/16", "100.64.0.0/10"],
+    });
+    for (const policy of policies) {
+      for (const rule of policy.spec.egress ?? []) expect(rule.ports).toBeDefined();
+    }
+
+    const jobSpec = buildJobSpec({
+      job: { id: "job-id-1", projectId: "project-id-1" },
+      project: { id: "project-id-1", image: "worker:latest" },
+      lane: { id: "lane-id-1", kind: "k8s" },
+      dispatcherUrl: "https://dispatcher.example",
+    });
+    const templateLabels = jobSpec.spec.template.metadata.labels;
+    for (const policy of policies) {
+      const selector = policy.spec.podSelector.matchLabels;
+      expect(Object.keys(selector).length).toBeGreaterThan(0);
+      for (const [key, value] of Object.entries(selector)) expect(templateLabels[key]).toBe(value);
+    }
+    expect(templateLabels["pforge-claw/role"]).toBe("job");
+    expect(templateLabels["app.kubernetes.io/part-of"]).toBe("pforge-claw");
+
+    const comments = readFileSync(path.join(BASE_ROOT, "networkpolicy-jobs.yaml"), "utf8");
+    for (const hostname of [
+      "api.githubcopilot.com",
+      "*.githubcopilot.com",
+      "copilot-proxy.githubusercontent.com",
+      "copilot-telemetry.githubusercontent.com",
+      "github.com",
+      "api.github.com",
+      "*.github.com",
+      "objects.githubusercontent.com",
+      "registry.npmjs.org",
+    ]) expect(comments).toContain(hostname);
+    expect(comments).toContain("never hostnames");
+    expect(comments).toContain("rules:");
+    expect(comments).toContain("dns:");
   });
 
   it("keeps service, deployment, storage, service account and RBAC references aligned", () => {

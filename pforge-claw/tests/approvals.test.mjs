@@ -379,6 +379,24 @@ describe("approval callback flow", () => {
     }
   });
 
+  it("shows the placement explanation on the approval card", async () => {
+    const job = {
+      id: "abcdef0123456789abcdef03",
+      type: "task",
+      description: "Improve the parser",
+      placement: { explanation: "k8s-jobs (mac-1 offline)" },
+    };
+    const approval = issueApproval({
+      jobId: job.id,
+      chatId: "chat-1",
+      requesterId: "requester-1",
+      now: () => NOW,
+    });
+    const card = await buildApprovalCard({ job, project, approval });
+    expect(card.text).toContain("Will run on: k8s-jobs (mac-1 offline)");
+    expect(card.text).not.toContain("Lane:");
+  });
+
   it("keeps callback data and persisted streams free of raw nonces", async () => {
     const store = makeStore();
     const channel = makeChannel();

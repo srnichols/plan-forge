@@ -3,11 +3,15 @@ import {
   createHash, createPublicKey, diffieHellman, generateKeyPairSync, hkdfSync,
 } from "node:crypto";
 import { promisify } from "node:util";
+import path from "node:path";
 import { WebSocket } from "ws";
 import { ClawError } from "../errors.mjs";
 import { assertTransport, challenge, connectForever, enrollmentMac, mac, verifyEnrollmentMac } from "./auth.mjs";
 import { createLaneEvent } from "../lanes/lane.mjs";
 import { decode, encode, message } from "./messages.mjs";
+import {
+  applyDelta, computeDelta, encodeDeltaChunks, L2_ERROR_CODES, L2_SYNC_INCOMPLETE, snapshotForge,
+} from "../memory/l2-sync.mjs";
 
 const execFileAsync = promisify(execFile);
 
@@ -89,8 +93,16 @@ export function createWorkerAgent({
   url, workerId, secret, laneId, capabilities, localLane, readHandler,
   allowInsecureLan = false, logger = console, WebSocketImpl = WebSocket,
   rand = Math.random, setTimeoutFn = setTimeout, clearTimeoutFn = clearTimeout,
-  heartbeatMs = 15_000, maxReplay = 1000,
+  heartbeatMs = 15_000, maxReplay = 1000, l2 = null,
 } = {}) {
+  const l2Options = l2 ? {
+    forgeDirFor: l2.forgeDirFor ?? ((job) => path.join(job.worktree ?? process.cwd(), ".forge")),
+    snapshot: l2.snapshot ?? snapshotForge,
+    collect: l2.collect ?? computeDelta,
+    encode: l2.encode ?? encodeDeltaChunks,
+    apply: l2.apply ?? applyDelta,
+    forgeHome: l2.forgeHome,
+  } : null;
   const active = new Map();
   let socket = null;
   let reconnect = null;
@@ -137,9 +149,59 @@ export function createWorkerAgent({
     lease.expiryTimer?.unref?.();
   }
 
+  async function emitL2Finished(lease, event, snap) {
+    try {
+      const forgeDir = l2Options.forgeDirFor(lease.job);
+      const delta = await l2Options.collect({ forgeDir, snapshot: snap });
+      const chunks = delta
+        ? l2Options.encode({ delta, deltaId: lease.job.id })
+        : [];
+      if (chunks.length + lease.replay.length + 1 > maxReplay) {
+        const finishedEvent = createLaneEvent({
+          jobId: event.jobId,
+          seq: (lease.replay.at(-1)?.seq ?? 0) + 1,
+          type: "finished",
+          data: {
+            ...event.data,
+            status: "failed",
+            reason: L2_SYNC_INCOMPLETE,
+            l2: { ok: false, code: L2_ERROR_CODES.DELTA_TOO_LARGE },
+          },
+        });
+        remember(lease, finishedEvent);
+        return;
+      }
+      let sequence = lease.replay.at(-1)?.seq ?? 0;
+      for (const chunk of chunks) {
+        remember(lease, createLaneEvent({
+          jobId: event.jobId, seq: ++sequence, type: "artifact", data: chunk,
+        }));
+      }
+      remember(lease, createLaneEvent({
+        jobId: event.jobId,
+        seq: sequence + 1,
+        type: "finished",
+        data: event.data,
+      }));
+    } catch (error) {
+      remember(lease, createLaneEvent({
+        jobId: event.jobId,
+        seq: (lease.replay.at(-1)?.seq ?? 0) + 1,
+        type: "finished",
+        data: { ...event.data, l2: { ok: false, code: getCode(error) } },
+      }));
+    }
+  }
+
   async function runJob(lease) {
     try {
+      const forgeDir = l2Options?.forgeDirFor(lease.job);
+      const snap = l2Options ? await l2Options.snapshot({ forgeDir }) : null;
       for await (const event of localLane.submit(lease.job)) {
+        if (event.type === "finished" && l2Options) {
+          await emitL2Finished(lease, event, snap);
+          break;
+        }
         remember(lease, event);
         if (event.type === "finished") break;
       }
@@ -158,7 +220,19 @@ export function createWorkerAgent({
 
   async function runRead(lease) {
     try {
-      const result = await readHandler(lease.request);
+      let result;
+      if (lease.request.tool === "l2.apply" && l2Options?.apply) {
+        const configuredHome = typeof l2Options.forgeHome === "function"
+          ? l2Options.forgeHome(lease.request)
+          : l2Options.forgeHome;
+        if (typeof configuredHome !== "string" || typeof lease.request.args?.forgeHome !== "string"
+          || path.resolve(lease.request.args.forgeHome) !== path.resolve(configuredHome)) {
+          throw new ClawError("L2_PATH_REJECTED");
+        }
+        result = await l2Options.apply(lease.request.args);
+      } else {
+        result = await readHandler(lease.request);
+      }
       remember(lease, createLaneEvent({
         jobId: lease.request.requestId ?? lease.leaseId,
         seq: 1, type: "finished", data: { status: "ok", result },

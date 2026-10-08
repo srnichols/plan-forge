@@ -1,16 +1,24 @@
+import { spawn } from "node:child_process";
 import { createHash } from "node:crypto";
-import { mkdir, writeFile } from "node:fs/promises";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { ClawError } from "../errors.mjs";
 import { bootstrapWorktree } from "../jobs/bootstrap.mjs";
-import { assertInside, run } from "../jobs/worktree.mjs";
+import { assertInside, resolvePforgeCommand, run } from "../jobs/worktree.mjs";
 import { assertLane } from "./lane.mjs";
+import { L2_SYNC_INCOMPLETE } from "../memory/l2-sync.mjs";
 
 const DNS_LABEL_VALUE = /[^a-z0-9-]+/g;
 const DNS_LABEL_EDGES = /^-+|-+$/g;
 const MAX_COPY_BYTES = 1024 * 1024;
 const CONNECT_TIMEOUT_REASON = "worker-connect-timeout";
 const FINAL_EVENT_TIMEOUT_MS = 10_000;
+const MCP_READY_TIMEOUT_MS = 15_000;
+const MCP_POLL_INTERVAL_MS = 200;
+const MCP_STOP_TIMEOUT_MS = 1000;
+const MCP_REQUEST_TIMEOUT_MS = 500;
+const MCP_PORT = "3100";
+const SYNC_ACK_POLL_MS = 100;
 const DEFAULT_RESOURCES = Object.freeze({
   requests: Object.freeze({ cpu: "500m", memory: "1Gi" }),
   limits: Object.freeze({ cpu: "2", memory: "4Gi" }),
@@ -99,11 +107,15 @@ export function buildJobSpec({ job, project, lane, dispatcherUrl } = {}) {
   const workerSecret = configuredSecret(secrets, "worker", "pforge-claw-worker", "secret");
   const githubSecret = configuredSecret(secrets, "github", "pforge-claw-github", "token");
   const copilotSecret = configuredSecret(secrets, "copilot", null, "token");
+  const bridgeSecretRef = configuredSecret(secrets, "bridge", null, "secret");
   if (!workerSecret || !githubSecret) throw new ClawError("LANE_BAD_CONFIG");
   env.push({ name: "PFORGE_CLAW_WORKER_SECRET", ...secretKeyRef(workerSecret.name, workerSecret.key) });
   env.push({ name: "PFORGE_CLAW_GH_TOKEN", ...secretKeyRef(githubSecret.name, githubSecret.key) });
   if (copilotSecret) {
     env.push({ name: "PFORGE_CLAW_COPILOT_TOKEN", ...secretKeyRef(copilotSecret.name, copilotSecret.key) });
+  }
+  if (bridgeSecretRef) {
+    env.push({ name: "PFORGE_BRIDGE_SECRET", ...secretKeyRef(bridgeSecretRef.name, bridgeSecretRef.key) });
   }
   for (const [envName, reference] of Object.entries(secrets.env ?? {})) {
     if (!/^[A-Z][A-Z0-9_]*$/.test(envName)
@@ -190,6 +202,153 @@ function hasCondition(job, conditionType) {
 
 function isNotFound(error) {
   return error?.code === "K8S_API" && error.details?.status === 404;
+}
+
+async function probeMcp(url) {
+  try {
+    const response = await fetch(url, { signal: AbortSignal.timeout(MCP_REQUEST_TIMEOUT_MS) });
+    return Number.isInteger(response.status);
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Start the project MCP HTTP server on the pod-local fixed port.
+ * @param {{repoDir: string, runner?: Function, spawnFn?: Function, now?: Function, sleep?: Function}} options
+ */
+export async function startPodMcp({
+  repoDir, runner = run, spawnFn = spawn, now = Date.now,
+  sleep = (duration) => new Promise((resolve) => setTimeout(resolve, duration)),
+} = {}) {
+  void runner;
+  if (typeof repoDir !== "string" || !repoDir || typeof spawnFn !== "function"
+    || typeof now !== "function" || typeof sleep !== "function") {
+    throw new ClawError("L2_MCP_START_FAILED");
+  }
+  let child;
+  try {
+    child = spawnFn(process.execPath, [
+      path.join(repoDir, "pforge-mcp", "server.mjs"), "--port", MCP_PORT,
+    ], { cwd: repoDir, env: process.env, stdio: "ignore", windowsHide: true });
+  } catch {
+    throw new ClawError("L2_MCP_START_FAILED");
+  }
+  if (!child || typeof child.once !== "function" || typeof child.kill !== "function") {
+    throw new ClawError("L2_MCP_START_FAILED");
+  }
+  let spawnFailed = false;
+  child.once("error", () => { spawnFailed = true; });
+  const stop = async () => {
+    if (spawnFailed || child.exitCode !== null || child.signalCode !== null) return;
+    await new Promise((resolve) => {
+      const timer = setTimeout(resolve, MCP_STOP_TIMEOUT_MS);
+      child.once("exit", () => {
+        clearTimeout(timer);
+        resolve();
+      });
+      child.kill();
+    });
+  };
+  const expiresAt = now() + MCP_READY_TIMEOUT_MS;
+  while (!spawnFailed && now() < expiresAt && child.exitCode === null && child.signalCode === null) {
+    if (await probeMcp(`http://127.0.0.1:${MCP_PORT}/mcp`)) {
+      await sleep(MCP_POLL_INTERVAL_MS);
+      if (!spawnFailed && child.exitCode === null && child.signalCode === null) return { stop };
+      break;
+    }
+    await sleep(Math.min(MCP_POLL_INTERVAL_MS, Math.max(0, expiresAt - now())));
+  }
+  await stop();
+  throw new ClawError("L2_MCP_START_FAILED");
+}
+
+async function bridgeSecret(repoDir, suppliedEnv) {
+  if (suppliedEnv.PFORGE_BRIDGE_SECRET) return suppliedEnv.PFORGE_BRIDGE_SECRET;
+  try {
+    return (await readFile(path.join(repoDir, ".forge", "bridge-secret"), "utf8")).trim();
+  } catch (error) {
+    if (error.code === "ENOENT") return "";
+    throw error;
+  }
+}
+
+async function drainPodMemory({ repoDir, runner, suppliedEnv }) {
+  const pforgeCommand = resolvePforgeCommand({
+    config: suppliedEnv.config ?? suppliedEnv,
+    cwd: repoDir,
+  });
+  const childEnv = Object.fromEntries(Object.entries({ ...process.env, ...suppliedEnv })
+    .filter(([key, value]) => key !== "config" && typeof value === "string"));
+  const secret = await bridgeSecret(repoDir, suppliedEnv);
+  if (secret) childEnv.PFORGE_BRIDGE_SECRET = secret;
+  try {
+    return await runner(pforgeCommand[0], [...pforgeCommand.slice(1), "drain-memory"], {
+      cwd: repoDir, env: childEnv,
+    });
+  } catch {
+    return { code: -1 };
+  }
+}
+
+/**
+ * Poll a dispatcher sequence acknowledgement until it arrives or its deadline expires.
+ * @param {{getAckedSeq: Function, targetSeq: number, deadlineMs: number, now?: Function, sleep?: Function}} options
+ */
+export async function awaitSyncAck({
+  getAckedSeq, targetSeq, deadlineMs, now = Date.now,
+  sleep = (duration) => new Promise((resolve) => setTimeout(resolve, duration)),
+} = {}) {
+  if (typeof getAckedSeq !== "function" || !Number.isFinite(targetSeq)
+    || !Number.isFinite(deadlineMs) || typeof now !== "function" || typeof sleep !== "function") {
+    throw new ClawError("L2_MALFORMED");
+  }
+  while (now() < deadlineMs) {
+    if (await getAckedSeq() >= targetSeq) return true;
+    await sleep(Math.min(SYNC_ACK_POLL_MS, Math.max(0, deadlineMs - now())));
+  }
+  return false;
+}
+
+/**
+ * Run the pod's final memory drain and transfer, always stopping the MCP server.
+ * @param {object} options
+ */
+export async function finalizePodJob({
+  repoDir, runner = run, env = process.env, startMcp = startPodMcp,
+  collectDelta, awaitAck, deadlineMs, now = Date.now,
+} = {}) {
+  if (typeof collectDelta !== "function" || typeof awaitAck !== "function"
+    || !Number.isFinite(deadlineMs) || typeof now !== "function") {
+    throw new ClawError("L2_MALFORMED");
+  }
+  const mcp = await startMcp({ repoDir, runner });
+  try {
+    await drainPodMemory({ repoDir, runner, suppliedEnv: env });
+    const delta = await collectDelta({ repoDir });
+    if (!delta) return { status: "ok" };
+    const remainingMs = Math.max(0, deadlineMs - now());
+    if (!remainingMs) return { status: "failed", reason: L2_SYNC_INCOMPLETE };
+    let timeoutId;
+    const timeout = new Promise((resolve) => {
+      timeoutId = setTimeout(() => resolve(false), remainingMs);
+    });
+    try {
+      const acknowledgement = await Promise.race([
+        awaitAck({ delta, deadlineMs, timeoutMs: remainingMs }),
+        timeout,
+      ]);
+      const acknowledged = acknowledgement !== false && acknowledgement?.ok !== false
+        && acknowledgement?.status !== "failed";
+      return acknowledged
+        ? { status: "ok" }
+        : { status: "failed", reason: L2_SYNC_INCOMPLETE };
+    } finally {
+      clearTimeout(timeoutId);
+    }
+  } finally {
+    await mcp?.stop?.();
+  }
 }
 
 function copyRelativePath(input) {
@@ -317,6 +476,7 @@ export function createK8sJobLane({
   const copilot = configuredSecret(k8s.secrets ?? {}, "copilot", null, "token");
   const byokOnly = !copilot;
   let lastError;
+  let incompleteSyncs = 0;
 
   async function deleteIgnoringNotFound(name) {
     try {
@@ -351,6 +511,7 @@ export function createK8sJobLane({
     let watchController;
     let workerDone = false;
     let terminalSent = false;
+    let transferOpen = false;
     let lastSeq = 0;
     let connectTimer;
     let finalTimer;
@@ -425,7 +586,9 @@ export function createK8sJobLane({
               record.started = true;
               clearTimeout(connectTimer);
             }
+            if (event?.type === "artifact" && event.data?.kind === "l2-delta") transferOpen = true;
             if (event?.type === "finished") {
+              transferOpen = false;
               workerDone = true;
               clearTimeout(connectTimer);
               clearTimeout(finalTimer);
@@ -450,9 +613,15 @@ export function createK8sJobLane({
             if (watchController.signal.aborted || terminalSent) break;
             const failedReason = conditionReason(event?.object, "Failed");
             if (failedReason) {
+              const incompleteTransfer = failedReason === "DeadlineExceeded" && transferOpen;
+              if (incompleteTransfer) {
+                incompleteSyncs += 1;
+                lastError = { code: L2_SYNC_INCOMPLETE, reason: L2_SYNC_INCOMPLETE };
+              }
               emitTerminal({
                 status: "failed",
-                reason: failedReason === "DeadlineExceeded" ? "deadline" : "pod-failed",
+                reason: incompleteTransfer ? L2_SYNC_INCOMPLETE
+                  : failedReason === "DeadlineExceeded" ? "deadline" : "pod-failed",
               });
               break;
             }
@@ -528,6 +697,7 @@ export function createK8sJobLane({
       namespace,
       active: activeJobs.size,
       byokOnly,
+      incompleteSyncs,
       ...(lastError ? { lastError } : {}),
     };
   }

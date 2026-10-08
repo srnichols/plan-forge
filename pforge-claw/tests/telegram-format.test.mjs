@@ -5,6 +5,7 @@ import {
   chunkForTelegram,
   chunkText,
   escapeMdV2,
+  formatMdV2,
   keyboard,
 } from "../src/channels/telegram/format.mjs";
 
@@ -61,5 +62,23 @@ describe("Telegram MarkdownV2 formatting", () => {
     expect(() => keyboard(Array.from({ length: 13 }, (_, row) =>
       Array.from({ length: 8 }, (_, column) => ({ text: `${row}-${column}`, data: "x" })))))
       .toThrowError("TELEGRAM_KEYBOARD_INVALID");
+  });
+});
+
+describe("formatMdV2 (channel-owned escaping + clickable links)", () => {
+  it("escapes plain text exactly once and renders bare https URLs as inline links", () => {
+    expect(formatMdV2("Done. PR: https://example.com/pr/42")).toBe(
+      "Done\\. PR: [https://example\\.com/pr/42](https://example.com/pr/42)",
+    );
+  });
+
+  it("keeps trailing punctuation outside the link and never links non-https schemes", () => {
+    expect(formatMdV2("See https://example.com/a.")).toBe("See [https://example\\.com/a](https://example.com/a)\\.");
+    expect(formatMdV2("http://example.com")).toBe("http://example\\.com");
+  });
+
+  it("does not let a URL break out of the link target with ) or \\", () => {
+    const rendered = formatMdV2("x https://example.com/a)b");
+    expect(rendered).toBe("x [https://example\\.com/a](https://example.com/a)\\)b");
   });
 });

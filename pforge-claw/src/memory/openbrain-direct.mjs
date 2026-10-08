@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { MEMORY_ORIGINS } from "./memory-client.mjs";
+import { isCrossProjectReadable, MEMORY_ORIGINS } from "./memory-client.mjs";
 
 export const QUEUE_STREAM = "memory-queue";
 export const BASE_BACKOFF_MS = 30_000;
@@ -56,7 +56,7 @@ function registryProjects(registry, config) {
 
 function allowedProjects(registry, config) {
   return new Map(registryProjects(registry, config)
-    .filter((project) => project.visibility !== "restricted")
+    .filter(isCrossProjectReadable)
     .map((project) => [String(project.id), project]));
 }
 
@@ -273,9 +273,7 @@ export function createDirectClient({
       const hits = Array.isArray(normalized.hits) ? normalized.hits : [];
       const visibleHits = hits.filter((hit) => {
         const project = allowed.get(String(hit?.project ?? ""));
-        return Boolean(project)
-          && project.visibility !== "restricted"
-          && hit?.visibility !== "restricted";
+        return isCrossProjectReadable(project) && hit?.visibility !== "restricted";
       });
       return {
         ok: true,

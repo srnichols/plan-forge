@@ -152,28 +152,28 @@ describe("progress renderers", () => {
 
   it("renders unknown spend and known zero distinctly", () => {
     expect(renderProgress({ ...state, spend: null })).toContain("Spend: n/a");
-    expect(renderProgress({ ...state, spend: 0 })).toContain("Spend: $0\\.00");
+    expect(renderProgress({ ...state, spend: 0 })).toContain("Spend: $0.00");
     expect(renderProgress({ ...state, lane: null })).toContain("Lane: n/a");
   });
 
-  it("escapes MarkdownV2 and redacts secrets in dynamic text", () => {
+  it("redacts secrets in dynamic text and leaves MarkdownV2 escaping to the channel adapter", () => {
     const secrets = { redact: (text) => String(text).replaceAll("secret-token", "[redacted]") };
     const text = renderFailure({
       ...state,
       secrets,
       lane: "secret-token_lane",
     }, "failed_secret-token!");
-    expect(text).toContain("\\[redacted\\]\\_lane");
-    expect(text).toContain("\\[redacted\\]\\!");
+    expect(text).toContain("[redacted]_lane");
+    expect(text).toContain("[redacted]!");
     expect(text).not.toContain("secret-token");
   });
 
   it("shows PR URLs only when supplied by an artifact and truncates long reasons", () => {
     expect(renderRunSummary({ ...state, artifacts: [] }, {})).toContain("No artifacts reported");
     expect(renderRunSummary({ ...state, prUrl: "https://example.test/pr/42" }, {}))
-      .toContain("https://example\\.test/pr/42");
+      .toContain("https://example.test/pr/42");
     const rendered = renderFailure(state, "x".repeat(1800));
-    expect(rendered).toContain("\\[truncated\\]");
+    expect(rendered).toContain("[truncated]");
     expect(rendered.length).toBeLessThan(1700);
   });
 
@@ -205,7 +205,7 @@ describe("progress service throttling and persistence", () => {
     await vi.advanceTimersByTimeAsync(1);
     await drainMicrotasks();
     expect(channel.edit).toHaveBeenCalledTimes(2);
-    expect(channel.edit.mock.calls[1][0].text).toContain("$3\\.00");
+    expect(channel.edit.mock.calls[1][0].text).toContain("$3.00");
     await service.stop();
   });
 
@@ -306,7 +306,7 @@ describe("progress service throttling and persistence", () => {
     service.onJobFinished({ jobId: secondJob.id, state: "succeeded" });
     await drainMicrotasks();
     expect(channel.edit.mock.calls.at(-1)[0].text).toContain("Pull request:");
-    expect(channel.edit.mock.calls.at(-1)[0].text).toContain("https://example\\.test/pr/42");
+    expect(channel.edit.mock.calls.at(-1)[0].text).toContain("https://example.test/pr/42");
     await service.stop();
   });
 
@@ -523,7 +523,7 @@ describe("progress recovery actions", () => {
       caller: { userId: "owner-1", role: "owner" }, chatId: CHAT_ID, threadId: THREAD_ID,
     });
     expect(channel.send).toHaveBeenCalledWith(expect.objectContaining({
-      text: expect.stringContaining("MCP\\_TOOL\\_ERROR"),
+      text: expect.stringContaining("MCP_TOOL_ERROR"),
     }));
     await progressCallback.handle({ project: { id: PROJECT_ID } }, {
       payload: `r:${job.id.slice(0, 8)}`,

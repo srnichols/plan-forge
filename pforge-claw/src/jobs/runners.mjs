@@ -37,6 +37,28 @@ function appendOutput(current, chunk, other = "") {
   return current + bytes.toString("utf8");
 }
 
+function planProgressPercent(line) {
+  let record;
+  try {
+    record = JSON.parse(line);
+  } catch {
+    return null;
+  }
+  const value = record?.type === "progress" ? record.progress : undefined;
+  return Number.isFinite(value) && value >= 0 && value <= 1 ? Math.round(value * 100) : null;
+}
+
+// Emits a structured `progress` event per complete JSON progress line; returns the unfinished tail.
+function emitPlanProgress(buffer, emit) {
+  const lines = buffer.split(/\r?\n/);
+  const rest = lines.pop();
+  for (const line of lines) {
+    const percent = planProgressPercent(line.trim());
+    if (percent !== null) emit?.("progress", { percent });
+  }
+  return rest.length > EVENT_LIMIT ? "" : rest;
+}
+
 function createStoredJobs(store) {
   return {
     get(id) {
@@ -461,8 +483,11 @@ export function createRunners(ctx = {}, { jobs = createStoredJobs(ctx.store), wo
       });
       let stdout = "";
       let stderr = "";
+      let stdoutTail = "";
       child.stdout?.on("data", (chunk) => {
-        stdout = appendOutput(stdout, safeText(chunk.toString("utf8"), dependencies.secrets), stderr);
+        const text = chunk.toString("utf8");
+        stdout = appendOutput(stdout, safeText(text, dependencies.secrets), stderr);
+        stdoutTail = emitPlanProgress(stdoutTail + text, emit);
       });
       child.stderr?.on("data", (chunk) => {
         stderr = appendOutput(stderr, safeText(chunk.toString("utf8"), dependencies.secrets), stdout);

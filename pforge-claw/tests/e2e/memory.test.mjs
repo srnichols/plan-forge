@@ -45,11 +45,18 @@ describe("scenario memory confirmation and project isolation", () => {
     });
   });
 
-  it.fails("BUG_REF S27-BLOCKER-MEMORY-RESTRICTED: /recall --all must exclude restricted fixture-3", async () => {
+  it("/recall --all searches shared projects and never queries restricted fixture-3", async () => {
     rig = await createE2ERig();
     rig.send("/recall --all fixture memory query", { thread: "101" });
+    // The startup memory doctor probes every project's own scope with forge_search, so match the recall query.
+    const recallSearches = async (projectId) => (await rig.mcpCalls(projectId))
+      .filter(({ name, arguments: args }) => name === "forge_search" && args?.query === "fixture memory query");
     await expect.poll(async () => Promise.all(["fixture-1", "fixture-2"].map(async (projectId) =>
-      (await rig.mcpCalls(projectId)).some(({ name }) => name === "forge_search")))).toEqual([true, true]);
-    expect((await rig.mcpCalls("fixture-3")).some(({ name }) => name === "forge_search")).toBe(false);
+      (await recallSearches(projectId)).length > 0))).toEqual([true, true]);
+    const reply = await rig.fakeTelegram.waitForCall("sendMessage", (args) =>
+      String(args.text).includes("No matches for"));
+    expect(String(reply.args.message_thread_id)).toBe("101");
+    expect(await recallSearches("fixture-3")).toEqual([]);
+    expect(rig.fakeTelegram.calls.some(({ args }) => String(args?.text ?? "").includes("Fixture 3"))).toBe(false);
   });
 });

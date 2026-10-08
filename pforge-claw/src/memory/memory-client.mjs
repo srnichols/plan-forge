@@ -71,7 +71,7 @@ function cleanHit(hit, config, secrets) {
 function isAllowedHit(hit, allowedProjects) {
   const project = allowedProjects.get(String(hit?.project ?? ""));
   return Boolean(project)
-    && project.visibility !== "restricted"
+    && isCrossProjectReadable(project)
     && hit?.visibility !== "restricted";
 }
 
@@ -90,6 +90,12 @@ export function buildCreatedBy(config, { userId, role } = {}) {
 
 export function isL3Off(project) {
   return project?.memory?.l3 === "off";
+}
+
+// D21: restricted projects never leave their own scope, and `memory.l3: "off"` opts a project
+// out of shared memory, so neither is ever queried or surfaced by cross-project recall.
+export function isCrossProjectReadable(project) {
+  return Boolean(project) && project.visibility !== "restricted" && !isL3Off(project);
 }
 
 export function sanitizeRecord({ config, secrets, text } = {}) {
@@ -226,8 +232,7 @@ export function createMemoryClient({
   }
 
   async function fanoutSearch(query, { limit = 5 } = {}) {
-    const projects = (registry?.all?.() ?? config.projects ?? [])
-      .filter((project) => project.visibility !== "restricted");
+    const projects = (registry?.all?.() ?? config.projects ?? []).filter(isCrossProjectReadable);
     const allowedProjects = new Map(projects.map((project) => [String(project.id), project]));
     const results = await Promise.allSettled(projects.map((project) => search(project.id, query, { limit })));
     const hits = [];
@@ -243,7 +248,9 @@ export function createMemoryClient({
         return;
       }
       for (const hit of result.value.hits) {
-        if (isAllowedHit(hit, allowedProjects)) hits.push(hit);
+        // Project-scoped forge_search hits usually carry no project; attribute them to the searched project.
+        const attributed = { ...hit, project: hit.project ?? projectId };
+        if (isAllowedHit(attributed, allowedProjects)) hits.push(attributed);
       }
     });
     return { hits, errors };

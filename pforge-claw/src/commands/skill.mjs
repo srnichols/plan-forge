@@ -76,7 +76,8 @@ export default Object.freeze({
   available: true, sinceSlice: 9, group: "Work",
   async handle(context, input) {
     try {
-      return await prepareSkill({ ...context?.services, project: context?.project }, input);
+      const { caller, chatId, threadId } = input ?? {};
+      return await prepareSkill({ ...context?.services, project: context?.project, caller, chatId, threadId }, input);
     } catch (error) {
       return { text: `${error instanceof ClawError ? error.code : "SKILL_FAILED"}: The skill job was not created.` };
     }

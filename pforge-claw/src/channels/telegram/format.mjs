@@ -8,8 +8,33 @@ const CALLBACK_LIMIT = 64;
 const MAX_BUTTONS_PER_ROW = 8;
 const MAX_BUTTONS = 100;
 
+// The URL part of a MarkdownV2 inline link only needs `)` and `\` escaped; both are excluded here.
+const LINKABLE_URL = /https:\/\/[^\s<>()[\]\\`"']*[^\s<>()[\]\\`"'.,;:!?]/g;
+
 export function escapeMdV2(value) {
   return String(value).replace(MARKDOWN_V2_SPECIAL, "\\$&");
+}
+
+function characterTokens(text) {
+  return Array.from(text, (character) => ({ raw: character, markdown: escapeMdV2(character) }));
+}
+
+function markdownTokens(value) {
+  const text = String(value);
+  const tokens = [];
+  let last = 0;
+  for (const match of text.matchAll(LINKABLE_URL)) {
+    tokens.push(...characterTokens(text.slice(last, match.index)));
+    tokens.push({ raw: match[0], markdown: `[${escapeMdV2(match[0])}](${match[0]})` });
+    last = match.index + match[0].length;
+  }
+  tokens.push(...characterTokens(text.slice(last)));
+  return tokens;
+}
+
+// Escapes plain text for MarkdownV2 and renders bare https URLs as inline links so they stay clickable.
+export function formatMdV2(value) {
+  return markdownTokens(value).map(({ markdown }) => markdown).join("");
 }
 
 function safeBoundary(text, end) {
@@ -48,8 +73,10 @@ function splitEscapedChunk(text, limit) {
   const parts = [];
   let part = "";
   let length = 0;
-  for (const character of text) {
-    const escaped = escapeMdV2(character);
+  const tokens = markdownTokens(text).flatMap((token) => (
+    token.markdown.length > limit ? characterTokens(token.raw) : [token]
+  ));
+  for (const { markdown: escaped } of tokens) {
     if (length + escaped.length > limit && part) {
       parts.push(part);
       part = "";

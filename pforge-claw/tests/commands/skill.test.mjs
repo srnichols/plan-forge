@@ -2,7 +2,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { prepareSkill } from "../../src/commands/skill.mjs";
+import skillCommand, { prepareSkill } from "../../src/commands/skill.mjs";
 import { currentJobs } from "../../src/jobs/model.mjs";
 import { createStore } from "../../src/state/store.mjs";
 
@@ -49,5 +49,19 @@ describe("/skill", () => {
     expect(await prepareSkill({ store: jobsStore, project: { id: "p1" } }, { args: ["review"] }))
       .toMatchObject({ text: expect.stringContaining("SERVICE_UNAVAILABLE") });
     expect(Object.values(currentJobs(jobsStore))).toHaveLength(1);
+  });
+
+  it("binds a chat-issued skill job to the requesting chat, topic and caller", async () => {
+    const jobsStore = await store();
+    const metadata = { status: "dry-run", skillName: "review", readOnly: false };
+    const mcp = { call: vi.fn(async () => ({ content: [{ type: "text", text: JSON.stringify(metadata) }] })) };
+    const context = { services: { store: jobsStore, mcp }, project: { id: "p1", repo: { path: "C:\\repo" } } };
+    const result = await skillCommand.handle(context, {
+      args: ["review"], caller: { userId: "u1", role: "owner" }, chatId: "42", threadId: "101",
+    });
+    expect(result.text).toContain("awaiting approval");
+    expect(Object.values(currentJobs(jobsStore))[0]).toMatchObject({
+      callerId: "u1", chatId: "42", threadId: "101", state: "awaiting-approval",
+    });
   });
 });

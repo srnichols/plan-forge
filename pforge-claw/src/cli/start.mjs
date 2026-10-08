@@ -111,6 +111,9 @@ export async function bootDispatcher(opts = {}) {
       bus: opts.bus ?? bus,
       mcp: clients,
       lanes,
+      // D28 test seams (dependency injection only): features read ctx.now / ctx.schedulerTickMs.
+      ...(typeof opts.now === "function" ? { now: opts.now } : {}),
+      ...(Number.isFinite(opts.schedulerTickMs) && opts.schedulerTickMs > 0 ? { schedulerTickMs: opts.schedulerTickMs } : {}),
     };
     const placementService = (opts.createPlacementService ?? createPlacementService)({
       store,

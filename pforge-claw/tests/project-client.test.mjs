@@ -124,6 +124,27 @@ describe("project MCP client", () => {
     await manager.closeAll();
   });
 
+  it("never spawns a project MCP process after closeAll (shutdown race with late callers)", async () => {
+    const connected = [];
+    const manager = createProjectClients({
+      config: {},
+      registry: clientRegistry([project("p1"), project("p2")]),
+      resolveLaunch: async (target) => ({ command: target.id }),
+      connect: async (launch) => {
+        const client = { call: vi.fn(async () => "ok"), close: vi.fn() };
+        connected.push({ id: launch.command, client });
+        return client;
+      },
+    });
+    await manager.call("p1", "test");
+    await manager.closeAll();
+    // A background caller (e.g. the startup doctor) arriving after shutdown must be refused.
+    await expect(manager.call("p2", "test")).rejects.toMatchObject({ code: "MCP_TRANSPORT_CLOSED" });
+    await expect(manager.call("p1", "test")).rejects.toMatchObject({ code: "MCP_TRANSPORT_CLOSED" });
+    expect(connected.map(({ id }) => id)).toEqual(["p1"]);
+    expect(connected[0].client.close).toHaveBeenCalledOnce();
+  });
+
   it("does not close a client while a call is in flight", async () => {
     vi.useFakeTimers();
     const gate = deferred();

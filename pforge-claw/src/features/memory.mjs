@@ -1,3 +1,4 @@
+import { ClawError } from "../errors.mjs";
 import { createRegistry } from "../registry.mjs";
 import { JOBS_STREAM, reduceJobs } from "../jobs/model.mjs";
 import { createMemoryClient, MEMORY_STREAMS, sanitizeRecord } from "../memory/memory-client.mjs";
@@ -344,6 +345,15 @@ export function getMemoryClient() {
 
 export function getMemoryRuntime() {
   return { client, context, direct };
+}
+
+// Cross-project recall: direct OpenBrain when configured and reachable, else per-project forge_search fan-out.
+// Both paths exclude restricted and `memory.l3: "off"` projects before any query is sent (D21).
+export async function searchAcrossProjects(query, options = {}) {
+  if (!client) throw new ClawError("SERVICE_UNAVAILABLE");
+  const viaL3 = await direct?.searchAcross?.(query, options);
+  if (viaL3?.ok) return { hits: viaL3.hits, errors: [] };
+  return client.fanoutSearch(query, options);
 }
 
 export { captureInsight, doctorChecks, snapshot, taskContext };

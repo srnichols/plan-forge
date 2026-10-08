@@ -1,6 +1,7 @@
 import { randomBytes } from "node:crypto";
 import { ClawError } from "./errors.mjs";
 import { createJob, currentJobs, JOBS_STREAM, TERMINAL, transition } from "./jobs/model.mjs";
+import { isCrossProjectReadable } from "./memory/memory-client.mjs";
 
 export const FANOUT_MAX_TARGETS = 20;
 export const FANOUT_DELIM = "--";
@@ -384,28 +385,38 @@ export async function reconcile(deps = {}) {
   }
 }
 
+function recallHit(hit, allowed) {
+  const projectId = String(hit.projectId ?? hit.project?.id ?? hit.project ?? "");
+  const project = allowed.get(projectId);
+  if (!project || hit.visibility === "restricted") return [];
+  const snippet = String(hit.snippet ?? hit.content ?? hit.text ?? "")
+    .slice(0, 240)
+    .replace(/```/g, "'''");
+  return [{
+    project: { id: project.id, name: project.name ?? project.id },
+    recordRef: typeof (hit.recordRef ?? hit.id) === "string"
+      ? (hit.recordRef ?? hit.id).slice(0, 160)
+      : null,
+    origin: hit.origin === "trusted" ? "trusted" : "untrusted",
+    snippet: `\`\`\`\n${snippet}\n\`\`\``,
+  }];
+}
+
+function recallMessage(query, hits, errors) {
+  if (!hits.length && errors.length) return `No matches returned; ${errors.length} project searches failed.`;
+  if (!hits.length) return `No matches for "${query}".`;
+  if (errors.length) return `${hits.length} matches returned; ${errors.length} project searches failed.`;
+  return `${hits.length} matches returned.`;
+}
+
 export async function recallAll({ memory, config = {}, registry }, { query, limit } = {}) {
   if (!memory || typeof memory.fanoutSearch !== "function") {
     throw new ClawError("SERVICE_UNAVAILABLE");
   }
-  const visible = visibleProjects({ config, registry, scope: "general" });
+  const visible = visibleProjects({ config, registry, scope: "general" }).filter(isCrossProjectReadable);
   const allowed = new Map(visible.map((project) => [String(project.id), project]));
   const result = await memory.fanoutSearch(query, { limit });
-  const hits = (result?.hits ?? []).flatMap((hit) => {
-    const projectId = String(hit.projectId ?? hit.project?.id ?? "");
-    const project = allowed.get(projectId);
-    if (!project || hit.visibility === "restricted") return [];
-    const snippet = String(hit.snippet ?? hit.text ?? "")
-      .slice(0, 240)
-      .replace(/```/g, "'''");
-    return [{
-      project: { id: project.id, name: project.name ?? project.id },
-      recordRef: typeof (hit.recordRef ?? hit.id) === "string"
-        ? (hit.recordRef ?? hit.id).slice(0, 160)
-        : null,
-      snippet: `\`\`\`\n${snippet}\n\`\`\``,
-    }];
-  });
+  const hits = (result?.hits ?? []).flatMap((hit) => recallHit(hit, allowed));
   const errors = (result?.errors ?? []).filter((error) => allowed.has(String(error.projectId)))
     .map((error) => ({
       projectId: error.projectId,
@@ -413,17 +424,16 @@ export async function recallAll({ memory, config = {}, registry }, { query, limi
         ? error.code
         : "MEMORY_SEARCH_FAILED",
     }));
-  let message;
-  if (!hits.length && errors.length) {
-    message = `No matches returned; ${errors.length} project searches failed.`;
-  } else if (!hits.length) {
-    message = `No matches for "${query}".`;
-  } else if (errors.length) {
-    message = `${hits.length} matches returned; ${errors.length} project searches failed.`;
-  } else {
-    message = `${hits.length} matches returned.`;
-  }
-  return { hits, errors, total: hits.length, message };
+  return { hits, errors, total: hits.length, message: recallMessage(query, hits, errors) };
+}
+
+export function renderRecallAll(result) {
+  const rows = (result?.hits ?? []).map((hit) => [
+    `${hit.origin === "untrusted" ? "⚠ untrusted: " : ""}• [${hit.project.name}]`
+      + `${hit.recordRef ? ` (${hit.recordRef})` : ""}`,
+    hit.snippet,
+  ].join("\n"));
+  return [result?.message ?? "No matches.", ...rows].join("\n");
 }
 
 export function bindCrossprojectDependencies(dependencies) {

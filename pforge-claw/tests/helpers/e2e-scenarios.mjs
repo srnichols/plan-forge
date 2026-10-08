@@ -28,9 +28,10 @@ export async function runAwayFromDesk(rig) {
   await rig.approveLatest(APPROVER_ID);
   const completedJob = await rig.waitForJob(job.id, "succeeded", { timeoutMs: 20_000 });
   await expect.poll(async () => (await rig.prCalls()).length).toBe(1);
-  const finalMessage = rig.fakeTelegram.calls.findLast(({ method, args }) =>
+  // Progress edits are throttled to one per 3 s, so the terminal summary can trail the PR call.
+  const finalMessage = await rig.fakeTelegram.waitFor(({ method, args }) =>
     ["sendMessage", "editMessageText"].includes(method)
-      && String(args.text).includes("https://example.test/pr/1"));
+      && String(args.text).includes("https://example.test/pr/1"), 10_000).catch(() => null);
 
   return { job: completedJob, estimateCard, finalMessage };
 }

@@ -25,7 +25,7 @@ function git(args, cwd) {
 }
 
 describe("scenario (a) away-from-desk approval and publishing", () => {
-  it.fails("BUG_REF S27-BLOCKER-1: final PR notification is missing after successful publish", async () => {
+  it("final PR notification is sent after successful publish", async () => {
     rig = await createE2ERig();
     const project = rig.repos[0];
     const initialHead = await git(["rev-parse", "HEAD"], project.repoPath);
@@ -33,7 +33,8 @@ describe("scenario (a) away-from-desk approval and publishing", () => {
     expect(result.job.state).toBe("succeeded");
     expect(await git(["status", "--porcelain"], project.repoPath)).toBe("");
     expect(await git(["rev-parse", "HEAD"], project.repoPath)).toBe(initialHead);
-    expect(await git(["show-ref", "--verify", "refs/heads/claw/" + result.job.id], project.originPath))
+    expect(await git(["--git-dir", project.originPath, "show-ref", "--verify", "refs/heads/claw/" + result.job.id],
+      project.repoPath))
       .toContain("refs/heads/claw/");
     const progress = rig.fakeTelegram.edits("42")
       .map(({ args }) => Number(args.text.match(/(\d+)%/)?.[1]))

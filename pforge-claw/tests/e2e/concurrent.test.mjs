@@ -9,7 +9,7 @@ afterEach(async () => {
 });
 
 describe("scenario concurrent job isolation", () => {
-  it.fails("BUG_REF S27-BLOCKER-CONCURRENT: task jobs need approval cards before concurrent dispatch", async () => {
+  it("task jobs get approval cards before concurrent dispatch", async () => {
     rig = await createE2ERig();
     rig.send("/task inspect fixture one", { thread: "101" });
     rig.send("/task inspect fixture two", { thread: "102" });
@@ -22,5 +22,8 @@ describe("scenario concurrent job isolation", () => {
       reason: "missing-chat",
     }));
     expect(jobs.map((job) => job.chatId)).toEqual(["42", "42"]);
+    for (const job of jobs) {
+      expect(rig.cardFor(`Approval required for task job ${job.id}`)).not.toBeNull();
+    }
   });
 });

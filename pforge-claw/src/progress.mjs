@@ -1,6 +1,6 @@
 import { randomBytes } from "node:crypto";
 import { APPROVER_ROLES } from "./approvals.mjs";
-import { button, escapeMdV2, keyboard } from "./channels/telegram/format.mjs";
+import { button, keyboard } from "./channels/telegram/format.mjs";
 import { JOBS_STREAM, currentJobs, createJob, transition } from "./jobs/model.mjs";
 import { ClawError } from "./errors.mjs";
 
@@ -14,8 +14,9 @@ function redact(secrets, value) {
   return (secrets?.redact ?? String)(String(value));
 }
 
+// Rendered text stays plain; the channel adapter owns MarkdownV2 escaping.
 function display(state, value) {
-  return escapeMdV2(redact(state?.secrets, value));
+  return redact(state?.secrets, value);
 }
 
 function truncate(value, maxLength = MAX_REASON_LENGTH) {
@@ -46,6 +47,7 @@ function commonFields(state) {
     `State: ${display(state, state?.state ?? MISSING)}`,
     `Lane: ${display(state, state?.lane ?? MISSING)}`,
     `Slice: ${display(state, formatSlice(state?.slice))}`,
+    ...(Number.isFinite(state?.percent) ? [`Progress: ${state.percent}%`] : []),
     `Elapsed: ${display(state, formatDuration((state?.now ?? Date.now)() - state?.startedAt))}`,
     `Spend: ${display(state, formatSpend(state?.spend))}`,
   ];
@@ -122,6 +124,11 @@ function sliceValues(data = {}) {
   const n = Number.isFinite(raw) ? (raw === 0 ? 1 : raw) : null;
   const m = Number.isFinite(data.total ?? data.m) ? data.total ?? data.m : null;
   return { n, m };
+}
+
+function percentValue(data = {}) {
+  const value = data.percent;
+  return Number.isFinite(value) && value >= 0 && value <= 100 ? Math.round(value) : null;
 }
 
 function costValue(data = {}) {
@@ -216,6 +223,7 @@ export function createProgressService({
       startedAt,
       lane: job.lane ?? null,
       slice: { n: null, m: null },
+      percent: null,
       spend: null,
       artifacts: [],
       prUrl: null,
@@ -234,7 +242,7 @@ export function createProgressService({
   }
 
   function format(text) {
-    return escapeMdV2(redact(secrets, text));
+    return redact(secrets, text);
   }
 
   function trackPromise(promise) {
@@ -248,10 +256,11 @@ export function createProgressService({
     if (state.sending) return state.sending;
     const sendPromise = (async () => {
       try {
+        const text = renderProgress(state);
         const sent = await channel.send({
           chatId: state.chatId,
           threadId: state.threadId,
-          text: renderProgress(state),
+          text,
         });
         const ref = normalizeMessageRef(sent);
         if (!ref) {
@@ -259,7 +268,8 @@ export function createProgressService({
           return null;
         }
         state.messageId = ref.messageId;
-        state.lastText = renderProgress(state);
+        // Record what was actually sent so a pending identical edit is skipped.
+        state.lastText = text;
         state.lastEditAt = null;
         store?.append?.(PROGRESS_STREAM, {
           kind: "progress.message",
@@ -306,6 +316,8 @@ export function createProgressService({
     }
     const update = state.pending;
     state.pending = null;
+    // A redundant edit would spend the 3 s budget and delay the next real update.
+    if (update.text === state.lastText && !update.keyboard) return;
     const editPromise = (async () => {
       try {
         await channel.edit({
@@ -360,6 +372,8 @@ export function createProgressService({
       state.lane = data.lane ?? data.laneId ?? job.lane ?? null;
       scheduleEdit(state, renderProgress(state));
     } else if (event.type === "progress") {
+      const percent = percentValue(data);
+      if (percent !== null) state.percent = Math.max(state.percent ?? 0, percent);
       scheduleEdit(state, renderProgress(state));
     } else if (event.type === "slice") {
       state.slice = sliceValues(data);
@@ -397,6 +411,7 @@ export function createProgressService({
     if (!state) return;
     state.state = event.state ?? state.state;
     state.terminal = true;
+    if (state.state === "succeeded" && Number.isFinite(state.percent)) state.percent = 100;
     const done = async () => {
       await ensureMessage(state);
       const failure = ["failed", "cancelled"].includes(state.state);

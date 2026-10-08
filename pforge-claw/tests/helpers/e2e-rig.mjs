@@ -8,7 +8,6 @@ import approvalsFeature from "../../src/features/approvals.mjs";
 import { currentJobs } from "../../src/jobs/model.mjs";
 import { createSecrets } from "../../src/secrets.mjs";
 import { createStore } from "../../src/state/store.mjs";
-import { createFakeClock } from "./fake-clock.mjs";
 import { startFakeTelegram } from "./fake-telegram.mjs";
 import { createFixtureRepos } from "./fixture-repos.mjs";
 import { createScriptedCopilot } from "./scripted-copilot.mjs";
@@ -136,7 +135,7 @@ async function listFiles(root) {
 
 export async function createE2ERig({
   startupTimeoutMs = 5000,
-  clock = createFakeClock(),
+  clock: injectedClock,
   schedules = [],
   schedulerTickMs,
   copilot = createScriptedCopilot(),
@@ -198,7 +197,8 @@ export async function createE2ERig({
       createSession: createSession ?? copilot.createSession,
       runtimeFactory: runtimeFactory ?? (async ({ id }) => ({ ...copilot.runtime, id })),
       logger,
-      now: () => clock.now().getTime(),
+      // Only scenarios that pass a clock run on fake time; the rest keep real time (progress throttles, TTLs).
+      ...(injectedClock ? { now: () => injectedClock.now().getTime() } : {}),
       workers,
       k8sApiFactory,
       ...(schedulerTickMs ? { schedulerTickMs } : {}),
@@ -274,7 +274,7 @@ export async function createE2ERig({
       repos: repos.projects,
       fakeTelegram,
       env,
-      clock,
+      clock: injectedClock ?? null,
       copilot,
       logs,
       get handles() { return handles; },

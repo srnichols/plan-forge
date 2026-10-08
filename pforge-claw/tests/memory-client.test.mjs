@@ -10,6 +10,7 @@ import {
   buildCreatedBy,
   buildSource,
   createMemoryClient,
+  isCrossProjectReadable,
   isL3Off,
   MEMORY_STREAMS,
   normalizeTags,
@@ -17,6 +18,7 @@ import {
 } from "../src/memory/memory-client.mjs";
 import memoryFeature, {
   captureInsight,
+  searchAcrossProjects,
   taskContext,
 } from "../src/features/memory.mjs";
 import forgetCommand, {
@@ -314,6 +316,57 @@ describe("memory fanout restricted exclusion", () => {
     const result = await client.fanoutSearch("query");
     expect(calls).toEqual(["project-a"]);
     expect(result.hits.map((hit) => hit.id)).toEqual(["allowed"]);
+  });
+
+  it("never queries restricted or l3-off projects and attributes unlabelled hits to the searched project", async () => {
+    const store = await makeStore();
+    const calls = [];
+    const currentConfig = config();
+    currentConfig.projects.push(
+      { id: "project-b", visibility: "normal" },
+      { id: "private-project", visibility: "restricted" },
+      { id: "local-only", visibility: "normal", memory: { l3: "off" } },
+    );
+    const registry = {
+      all: () => currentConfig.projects,
+      byId: (id) => currentConfig.projects.find((project) => project.id === id),
+    };
+    const client = createMemoryClient({
+      config: currentConfig,
+      store,
+      registry,
+      mcp: { call: async (projectId, tool) => {
+        calls.push([projectId, tool]);
+        return { hits: [{ recordRef: `${projectId}-ref`, snippet: `${projectId} note` }] };
+      } },
+    });
+    const result = await client.fanoutSearch("query");
+    expect(calls).toEqual([["project-a", "forge_search"], ["project-b", "forge_search"]]);
+    expect(result.hits.map((hit) => [hit.id, hit.project])).toEqual([
+      ["project-a-ref", "project-a"],
+      ["project-b-ref", "project-b"],
+    ]);
+    expect(JSON.stringify(result)).not.toMatch(/private-project|local-only/);
+  });
+
+  it("reports restricted and l3-off projects as not cross-project readable", () => {
+    expect(isCrossProjectReadable({ id: "a", visibility: "normal" })).toBe(true);
+    expect(isCrossProjectReadable({ id: "b", visibility: "restricted" })).toBe(false);
+    expect(isCrossProjectReadable({ id: "c", memory: { l3: "off" } })).toBe(false);
+    expect(isCrossProjectReadable(null)).toBe(false);
+  });
+
+  it("fans cross-project recall out per project when no OpenBrain endpoint is configured", async () => {
+    const store = await makeStore();
+    const currentConfig = config();
+    currentConfig.projects.push({ id: "private-project", visibility: "restricted" });
+    const call = vi.fn(async () => ({ hits: [{ recordRef: "ref-1", snippet: "shared note" }] }));
+    await memoryFeature.start(featureContext({ store, currentConfig, mcp: { call } }));
+    const result = await searchAcrossProjects("query", { limit: 3 });
+    expect(call.mock.calls.map(([projectId]) => projectId)).toEqual(["project-a"]);
+    expect(result).toMatchObject({ hits: [{ id: "ref-1", project: "project-a" }], errors: [] });
+    await memoryFeature.stop();
+    await expect(searchAcrossProjects("query")).rejects.toMatchObject({ code: "SERVICE_UNAVAILABLE" });
   });
 });
 

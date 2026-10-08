@@ -32,7 +32,8 @@ export default Object.freeze({
   available: true, sinceSlice: 9, group: "Work",
   async handle(context, input) {
     try {
-      return await prepareTask({ ...context?.services, project: context?.project }, input);
+      const { caller, chatId, threadId } = input ?? {};
+      return await prepareTask({ ...context?.services, project: context?.project, caller, chatId, threadId }, input);
     } catch (error) {
       return { text: `${error instanceof ClawError ? error.code : "TASK_FAILED"}: The task was not created.` };
     }

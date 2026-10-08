@@ -2,7 +2,7 @@ import { createStore } from "../../state/store.mjs";
 import { ClawError } from "../../errors.mjs";
 import { assertChannelAdapter } from "../channel-adapter.mjs";
 import { createTelegramClient } from "./client.mjs";
-import { chunkForTelegram, escapeMdV2 } from "./format.mjs";
+import { chunkForTelegram, formatMdV2 } from "./format.mjs";
 import { createChatLimiter } from "./rate-limiter.mjs";
 
 const DEFAULT_TIMEOUT_SEC = 50, DEFAULT_WINDOW_SIZE = 1000;
@@ -284,7 +284,7 @@ export function createTelegramAdapter({
   }
 
   async function edit({ chatId, messageId, text, threadId, replyMarkup } = {}) {
-    const escaped = escapeMdV2(secrets.redact(String(text ?? "")));
+    const escaped = formatMdV2(secrets.redact(String(text ?? "")));
     if (escaped.length > TELEGRAM_LIMITS.maxMessageLength) throw new ClawError("MESSAGE_TOO_LONG", { length: escaped.length });
     return limiter.enqueue(chatId, () => client.editMessageText({
       chatId, messageId, text: escaped, threadId, replyMarkup, parseMode: TELEGRAM_LIMITS.parseMode,

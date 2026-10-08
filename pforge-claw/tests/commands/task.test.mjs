@@ -2,7 +2,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
-import { prepareTask } from "../../src/commands/task.mjs";
+import taskCommand, { prepareTask } from "../../src/commands/task.mjs";
 import { currentJobs } from "../../src/jobs/model.mjs";
 import { createStore } from "../../src/state/store.mjs";
 
@@ -38,5 +38,16 @@ describe("/task", () => {
     expect(await prepareTask({ store: jobsStore, project: { id: "p1" } }, { argsText: "" }))
       .toMatchObject({ text: expect.stringContaining("Usage:") });
     expect(Object.values(currentJobs(jobsStore))).toHaveLength(0);
+  });
+
+  it("binds a chat-issued task to the requesting chat, topic and caller so an approval card can be sent", async () => {
+    const jobsStore = await store();
+    const result = await taskCommand.handle({ services: { store: jobsStore }, project: { id: "p1" } }, {
+      argsText: "inspect fixture one", caller: { userId: "u1", role: "owner" }, chatId: "42", threadId: "101",
+    });
+    expect(result.text).toContain("awaiting approval");
+    expect(Object.values(currentJobs(jobsStore))[0]).toMatchObject({
+      callerId: "u1", chatId: "42", threadId: "101", state: "awaiting-approval",
+    });
   });
 });

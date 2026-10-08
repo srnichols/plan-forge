@@ -1,5 +1,5 @@
 ---
-lockHash: bd608eaa3e69edb9f8b234b16a2a8404c40017d8d1cca492c02079d7753cc1f0
+lockHash: b5549d949d3ad338a2de09c7e994453a3a2da099c70cbf09f01fa2194162473a
 lane: full
 source: agent
 phaseId: Phase-62
@@ -1484,11 +1484,12 @@ Tasks:
 3. `src/placement.mjs`: choose lane per job from registry `placement.prefer` + `requires` matched against each lane's configured `labels` (e.g. a project requiring `macos` → any enabled lane labelled `macos`), `restricted` projects → their dedicated lanes only, `optIn` lanes only while switched on via `/lane <id> on`; fallback order with explanation in the approval card ("will run on: k8s-jobs (mac-1 offline)"). `/lanes` lists lanes with labels, status and queue depth.
 4. Tests: placement table incl. offline fallbacks, restricted pinning, `/lane` opt-in toggle, label matching; manifest invariants for the egress policy.
 
-**Files**: `pforge-claw/deploy/k8s/base/networkpolicy-jobs.yaml`, `pforge-claw/src/placement.mjs`, `pforge-claw/tests/placement.test.mjs`, `pforge-claw/tests/k8s-manifests.test.mjs`, `pforge-claw/src/commands/lane.mjs`, `pforge-claw/src/commands/lanes.mjs`, `pforge-claw/tests/commands/*.test.mjs`
+**Files**: `pforge-claw/deploy/k8s/base/networkpolicy-jobs.yaml`, `pforge-claw/deploy/k8s/base/kustomization.yaml` (list the new policy in `resources`), `pforge-claw/src/placement.mjs`, `pforge-claw/tests/placement.test.mjs`, `pforge-claw/tests/k8s-manifests.test.mjs`, `pforge-claw/src/commands/lane.mjs`, `pforge-claw/src/commands/lanes.mjs`, `pforge-claw/tests/commands/*.test.mjs`, `pforge-claw/src/approvals.mjs` (approval-card "will run on" line only), `pforge-claw/tests/approvals.test.mjs`
 
 **Validation Gate**:
 ```bash
-node -e "process.chdir('pforge-claw'); require('child_process').execSync('npx vitest run tests/placement.test.mjs tests/k8s-manifests.test.mjs', {stdio:'inherit',shell:true});"
+node -e "for (const f of ['pforge-claw/src/placement.mjs','pforge-claw/tests/placement.test.mjs','pforge-claw/deploy/k8s/base/networkpolicy-jobs.yaml']) require('fs').accessSync(f)"
+node -e "process.chdir('pforge-claw'); require('child_process').execSync('npx vitest run tests/placement.test.mjs tests/k8s-manifests.test.mjs tests/approvals.test.mjs', {stdio:'inherit',shell:true});"
 ```
 
 ### Milestone M4 — Hardening, docs, ship

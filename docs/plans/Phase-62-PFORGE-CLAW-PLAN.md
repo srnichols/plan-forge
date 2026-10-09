@@ -8,9 +8,10 @@ relatedIssues: []
 ---
 # Phase-62: PFORGE-CLAW — A chat-native, always-on front door for Plan Forge, powered by GHCP models
 
-> **Status**: ✅ Complete. All 31 slices shipped. See [What actually shipped](#what-actually-shipped).
+> **Status**: **In progress (review remediation).** The experimental implementation reached checkpoint `c8c2af3d`; reviewer, cross-platform and live acceptance are not complete. See [What actually shipped](#what-actually-shipped) and [Review remediation](#review-remediation).
+> **Review scope (operator-approved 2026-10-08)**: review, fix confirmed blockers and validate; stop before merge, release or deployment. D29 records the narrowly expanded audit/source-tracking scope.
 > **Tracks**: `pforge-claw/` (new workspace package), `pforge.ps1` / `pforge.sh` (`claw` subcommand), root `package.json` (workspaces), `scripts/audit/dep-boundaries.mjs`, `pforge-mcp/capabilities/schemas.mjs` + `surface.mjs` (metadata only), `.github/workflows/pforge-claw.yml`, `docs/PFORGE-CLAW-GUIDE.md` (new), `docs/PFORGE-CLAW-THREAT-MODEL.md` (new), `docs/manual/forge-claw.html` (new), and the doc sweep set in Slice 29.
-> **Pipeline**: Specify ✅ (this doc) → Harden ⏳ → Execute → Review → Ship
+> **Pipeline**: Specify -> Harden -> Experimental implementation checkpoint -> Review in progress -> Ship not authorized
 > **Depends on**: [Phase-61-FORGE-MASTER-CLAW-AWARE-PLAN.md](./Phase-61-FORGE-MASTER-CLAW-AWARE-PLAN.md), the Forge-Master contract (`caller`, `responseFormat`, `untrustedContext`, `contextBlocks`, `proposeActions` → `proposedActions`, `usage`, observer insights pulled via `forge_master_observe status` per D27). Run it first, or in parallel with Slices 1–5 here. Slice 6 onward requires it complete.
 > **Manual steps**: a few tasks need a human (creating the Telegram bot, live runs on real hardware, confirming CI after a push). They are labelled **MANUAL (operator)**: the agent prepares everything, writes a handoff note, and stops; no gate depends on them.
 > **Cost estimate** (`forge_estimate_quorum`, 2026-10-07, historical calibration; re-run after hardening): this plan (after hardening): auto **$14.45** (27/29 slices quorum, recommended) · speed $15.49 · power $207.27 · off $0.44. Companion FORGE-MASTER-CLAW-AWARE: auto **$4.30** · speed $5.34 · power $71.47 · off $0.15. The 25 % budget stop condition is measured against the mode actually chosen.
@@ -103,6 +104,7 @@ Explicit non-metrics: this phase does not aim to be a general life assistant (em
 - **(k) Portability**: everything in the Portability & Configurability Contract; cross-platform CI (ubuntu / windows / macos + kind); a Tested Platforms matrix the community can extend.
 - **(l) Memory (L2/L3) integration**: project-scoped captures through each project's MCP with provenance; optional direct OpenBrain client for cross-project reads and a bot namespace; automatic task-outcome capture; untrusted captures confirmed and tagged; restricted projects kept out of shared recall; worktree / remote / pod `.forge` history merged back to each project's canonical L2 home.
 - **(j) Docs and capabilities sweep after all code is built**: guide, threat model, architecture doc, README, `docs/capabilities.md` / `.html`, `forge_capabilities` surface, CLI guide, manual chapters, glossary, event catalog, CHANGELOG, ROADMAP (Slice 29).
+- **(m) Owner-approved review remediation (D29)**: correct the root-only stale-dashboard ignore in `.gitignore` so required `pforge-claw/src/mcp/` source is tracked; include the workspace in `scripts/audit/eslint-clean-code.config.mjs` and `scripts/audit/run-eslint-clean-code.mjs`; enforce unchanged rules in the existing Claw CI workflow; add focused guard tests. The existing `pforge-mcp/tests/__baselines__/capabilities.snapshot.json` CLI-count update and `pforge-mcp/tests/forge-master.integration.test.mjs` companion-description assertion are permitted metadata regression support, not runtime/tool changes.
 
 ### Out of Scope
 
@@ -388,8 +390,9 @@ Plan Forge is open source. Forge-Claw ships as a **generic, configurable** capab
 | D28 | Composition root, dispatch loop, lease proof | `pforge claw start` has one composition root: `bootDispatcher` in `src/cli/start.mjs`. It builds the shared `ctx` and a live lane directory (`ctx.lanes`, which exists before any feature starts), binds the placement service, starts the feature app, builds the lanes, and then starts the dispatcher (`src/dispatcher.mjs`). The dispatcher is not a feature, because it must start after the budget, workers and chat features. It is the only component that moves a job to `leased`. Before leasing it re-runs the budget gate (and fails closed if the gate is unavailable, D9), requires a consumed approval for the job or its fan-out parent in `approvals.jsonl` (D6), and places the job with `placeJob` (Slice 23). It then records the lane on the `leased` transition and submits the job. Local lanes run `jobs/runners.mjs` against the dispatcher store. Remote and K8s lanes receive a lease grant: an HMAC over the job id, lane, subject, a digest of the allow-listed job payload, and the approval proof. Long-lived remote workers verify it with their per-worker secret. K8s Job pods never receive a lane-wide credential: the dispatcher derives `jobKey = HMAC-SHA256(laneSecret, "pforge-claw/job/v1:" + jobId)` and puts only `jobKey`, `jobId` and the dispatcher URL in that Job's pod env. The one-shot worker authenticates with a job-scoped HMAC challenge using `jobKey`. The dispatcher accepts that connection only for that `jobId`, and only for that job's lease, events, sync and ack. The worker verifies a grant signed with `jobKey`. A pod therefore cannot authenticate as the lane, see or claim other jobs, or forge grants. `jobKey` is readable by anyone with Job or Pod read access in the claw namespace, and is valid only for its one job until that job ends or reaches its deadline. Workers and pods run the same runners (a worktree, or a pod clone, then a PR) against a lease-scoped job record, so the dispatcher stays the single writer of `jobs.jsonl` and settles remote jobs from LaneEvents. Lanes own `lane.event` fan-out. The dispatcher emits `job.transition` and `job.finished` only for transitions it writes. On start, orphaned `leased`, `running` and `needs-input` jobs fail with `reason: orphaned`, and the operator retries them. On stop, in-flight jobs are cancelled. Tests substitute the runtime by dependency injection on `bootDispatcher` only, never through an environment variable. |
 | D21 | Memory integration | Project-scoped writes only through the project's MCP (`forge_memory_capture`), inheriting Plan Forge's queue, dedupe, dead-letter and Hallmark behaviour. Optional direct OpenBrain client only for cross-project reads and the bot namespace. No channel user ids or names in shared memory. `/remember` asks for the type with buttons (`decision` · `lesson` · `convention` · `pattern` · `gotcha`). Content from forwards, links or transcripts is written only after an explicit confirm card, with `origin: "untrusted"`. Per-project `memory.l3` and `visibility` decide what reaches shared L3. |
 | D22 | L2 consolidation | **Verified:** pforge-mcp has no `.forge` directory override, so jobs in worktrees, remote workers and pods produce L2 history outside the operator's checkout. Forge-Claw merges each job's `.forge` delta back into the project's canonical L2 home (`repo.forgeHome`): verbatim copies of orchestrator-produced artifacts, append-only, idempotent. Pods drain the OpenBrain queue and ship leftovers before exit. Upstreaming a `.forge` override or a `pforge import-runs` command is a follow-up. |
+| D29 | Review source tracking and audit coverage | **Decided 2026-10-08 (operator):** permit the narrowly related ignore-rule correction, Claw ESLint config/runner coverage, CI lint gate, focused regression tests and metadata test-support scope listed above. Keep existing lint rules, thresholds and baselines unchanged. Capture before/after findings; commit audit-coverage wiring separately from product behavior fixes. Stop before merge, release or deployment. |
 
-_All decisions were resolved at hardening on 2026-10-07; verification evidence is in Assumptions._
+_Original decisions were resolved at hardening on 2026-10-07; verification evidence is in Assumptions. D29 is the operator-approved review scope extension from 2026-10-08._
 
 ## Acceptance Criteria
 
@@ -419,6 +422,8 @@ _All decisions were resolved at hardening on 2026-10-07; verification evidence i
 ## Stack Boundary
 
 Node.js ESM (`.mjs`), no build step, Node `>=22.12.0`, vitest with the repo's existing config conventions. Deployment assets are YAML (Kustomize), Dockerfiles, a launchd plist, a systemd unit, and paired `install-service.ps1` / `install-service.sh`. No changes to `pforge-mcp/` runtime code or `pforge-master/` runtime code in this phase; the only edits outside `pforge-claw/` are the root `package.json` workspaces entry, `pforge.ps1` / `pforge.sh` dispatch, `scripts/audit/dep-boundaries.mjs` / `layer-policy.json`, CLI-schema registration (`pforge-mcp/capabilities/schemas.mjs` + regenerated `cli-schema.json`), the Forge-Claw entry in the capabilities surface (`pforge-mcp/capabilities/surface.mjs`, Slice 29, metadata only), a new CI workflow (`.github/workflows/pforge-claw.yml`), `CHANGELOG.md`, `ROADMAP.md`, `README.md`, and docs (incl. `docs/manual/`). Supported platforms: macOS, Windows and Linux (x64 + arm64) for dispatcher and workers; any conformant Kubernetes cluster for M2/M3.
+
+**Review-remediation exception (D29):** the closed outside-package list above also permits `.gitignore`, the two named ESLint audit files, the existing Claw workflow's lint wiring/path filters, and the two named metadata regression-support files. No MCP tool or runtime changes are authorized by this exception.
 
 ## Security Posture
 
@@ -2449,6 +2454,17 @@ Slices 1–31 delivered the experimental Forge-Claw package, its governed execut
 
 **Known limitations:** `/forget` is registered but unavailable; Tested Platforms entries are still pending; there are no `forge_claw_*` MCP tools and no npm publish.
 
+## Review remediation
+
+The operator approved the D29 scope extension after the reboot recovery review:
+
+- **Recovered baseline:** Windows Node 24.11.1; 967 tests passed, two expected host/cluster skips, zero failures. Server inventory, capabilities docs and manual checks passed. This proves only the executed offline assertions, not every phase acceptance claim.
+- **Source tracking:** the required project MCP client existed locally but was ignored and absent from the checkpoint commit (#342). The stale dashboard ignore is now root-only; source tracking and cold-source verification must close before handoff.
+- **Audit coverage:** the unchanged rules initially exposed 75 errors in 44 committed Claw files only through matching virtual filenames. Applying the same rules to actual workspace paths exposed 76 errors, including the previously ignored client (#340). Four new coverage/ignore regressions failed before the metadata fix, then passed; the CI gate has its own red/green guard.
+- **Behavioral review:** execution review identified gaps in foreground plan invocation, canonical history application/cleanup, remote-home routing, worker enrollment/recovery, signed runtime choices, SDK request/resource handling, cancellation, and Kubernetes lifecycle validation. Each repair requires a targeted failing regression and independent green evidence.
+- **Parallel ownership:** execution/dispatcher integration, worker protocol/credentials, signed runtime/SDK boundaries and Kubernetes deployment each have a single writer. Shared signed-payload and application-level history-ACK contracts are integrated serially. Receipt of an event is not proof of canonical history application.
+- **Acceptance remains open:** no cross-platform CI, live kind topology, real Telegram/GHCP or reference-host evidence is inferred from offline passes. `/forget` remains a documented unavailable command. Do not mark the phase Complete or merge/release/deploy from this review scope.
+
 ## Validation Gates (phase-level)
 
 ```bash
@@ -2456,6 +2472,7 @@ node pforge-mcp/server.mjs --check
 node -e "process.chdir('pforge-claw'); require('child_process').execSync('npx vitest run', {stdio:'inherit',shell:true});"
 node -e "process.chdir('pforge-claw'); require('child_process').execSync('npm run test:e2e', {stdio:'inherit',shell:true});"
 node scripts/audit/dep-boundaries.mjs
+node node_modules/eslint/bin/eslint.js --config scripts/audit/eslint-clean-code.config.mjs pforge-claw
 node scripts/generate-capabilities-doc.mjs --check
 node docs/manual/maintain.mjs --audit
 node -e "process.chdir('pforge-mcp'); require('child_process').execSync('npx vitest run tests/bridge.test.mjs', {stdio:'inherit',shell:true});"

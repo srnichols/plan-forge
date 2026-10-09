@@ -3,15 +3,25 @@ name: pforge-claw
 on:
   push:
     paths:
+      - '.gitignore'
+      - 'package.json'
+      - 'package-lock.json'
       - 'pforge-claw/**'
       - 'pforge.ps1'
       - 'pforge.sh'
+      - 'scripts/audit/eslint-clean-code.config.mjs'
+      - 'scripts/audit/run-eslint-clean-code.mjs'
       - '.github/workflows/pforge-claw.yml'
   pull_request:
     paths:
+      - '.gitignore'
+      - 'package.json'
+      - 'package-lock.json'
       - 'pforge-claw/**'
       - 'pforge.ps1'
       - 'pforge.sh'
+      - 'scripts/audit/eslint-clean-code.config.mjs'
+      - 'scripts/audit/run-eslint-clean-code.mjs'
       - '.github/workflows/pforge-claw.yml'
   workflow_dispatch:
 
@@ -43,6 +53,9 @@ jobs:
 
       - name: Install dependencies
         run: npm ci --no-audit --no-fund
+
+      - name: Run blocking clean-code checks
+        run: node node_modules/eslint/bin/eslint.js --config scripts/audit/eslint-clean-code.config.mjs pforge-claw
 
       - name: Run dependency boundary guards
         working-directory: pforge-claw

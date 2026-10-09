@@ -16,6 +16,8 @@ tags: [clean-code-review]
 
 Orchestrates the existing audit scripts in `scripts/audit/` plus the custom ESLint config (`scripts/audit/eslint-clean-code.config.mjs`) into a single pass. Produces a structured report covering all six Phase 42 finding categories, with an optional `--fix-suggestions` mode that emits concrete refactoring guidance for each violation.
 
+These are mechanical signals, not an entropy score or proof of maintainability. Preserve scanner evidence and limitations; `/code-review` evaluates knowledge ownership, coupling, contracts, and behavioral risk.
+
 ## Inputs
 
 | Flag | Required | Default | Description |
@@ -92,6 +94,8 @@ Parse `docs/plans/cleanup-findings/raw/duplication-report.json`. For each `dupli
 
 > **Why this matters**: The Phase 41 enums centralization existed because the same string literal had been copy-pasted across 50+ files. `jscpd` catches duplicated *code blocks* mechanically; the literal/symbol patterns documented in `clean-code.instructions.md` (DRY section) still require human eyes at review time.
 
+Treat matches as duplication candidates. A shared business rule needs one source of truth even when its implementations look different; similar syntax with independent reasons to change must not be forced into a shared helper. Preserve the scanner matches and hand semantic classification to `/code-review`.
+
 ### 6. (Optional) Run architecture scan
 
 ```bash
@@ -113,11 +117,17 @@ node scripts/audit/boyscout-delta.mjs --base HEAD~1 --include "pforge-mcp/**"
 ```
 
 Parse `docs/plans/cleanup-findings/raw/boyscout-delta-report.json`. For every file changed since the merge-base, report:
-- `boy-scout-violation` — file was edited but ESLint violation count did **not** decrease
-- `regression` — file was edited and violation count **increased** (treat as error)
-- `improved` — violation count decreased (Boy Scout pass; surface as positive signal in summary)
+- `boy-scout-violation` — existing violations remained at the same total (advisory signal, not an automatic rejection)
+- `regression` — violation count increased (report the scanner's error signal and validate the underlying change)
+- `improved` — violation count decreased (positive signal, not proof of improvement)
+- `clean` — zero tracked violations before and after
+- `new-file` — no baseline exists; assess the new file against current gates
 
-> **Why this matters**: The Boy Scout Rule in [architecture-principles.instructions.md](../../instructions/architecture-principles.instructions.md) says "every commit touching a file must leave it cleaner." Without a delta check the rule is aspirational. This step makes it enforceable — a PR that touches `orchestrator.mjs` for a feature fix must also clean up at least one existing warning in that file.
+Compare the same base, scope, linter configuration, and rule set; inspect per-rule deltas and severity, not just totals. A decrease can hide a new error, a suppression, or code moved outside the scan scope. Preserve raw classifications and counts rather than relabeling the report to fit a conclusion.
+
+An unchanged count is not an automatic rejection of a surgical fix: record the actual correctness or clarity improvement and keep unrelated cleanup out of scope. Existing blocking error thresholds and the prohibition on new violations still apply. Scanner errors are verification gaps, never zero-finding evidence.
+
+> **Why this matters**: The Boy Scout Rule in [architecture-principles.instructions.md](../../instructions/architecture-principles.instructions.md) requires a real improvement to touched code. Delta counts provide evidence; `/code-review` confirms whether the change reduced risk without spreading debt.
 
 ### 8. Dead-exports scan
 
@@ -201,8 +211,8 @@ When `--fix-suggestions` is present, append a concrete remediation for each find
 | Module >3,000 LOC | "Split by responsibility: extract `<cohesive-group>` into `<suggested-file>.mjs`" |
 | Magic number | "Extract `<value>` at line N to a named constant: `const <SUGGESTED_NAME> = <value>`" |
 | Dependency cycle | "Break cycle by extracting shared interface into a new module depended on by both sides" |
-| Duplicated block (jscpd) | "Extract the duplicated block at <file>:<line> into a shared helper in the nearest common module" |
-| Boy Scout violation | "You edited <file> without reducing violations. Either fix one existing warning in this file (preferred), or document why this PR explicitly avoids touching unrelated code" |
+| Duplicated block (jscpd) | "If the blocks at <file>:<line> encode the same knowledge, extract a shared helper. Otherwise record their independent responsibilities rather than coupling them" |
+| Boy Scout violation | "Inspect per-rule changes and the actual improvement in <file>. Fix change-related debt; do not demand unrelated cleanup solely to lower the count" |
 | Dead export | "Either delete the unused export at <file>:<name> (preferred — git preserves history), or document why it's a public API (e.g. plugin contract) and add a `// @public` comment" |
 | Test smell FOCUS-LEAK | "Remove `.only` from <file>:<line> — focused tests skip every other test in the file when committed" |
 | Test smell TIME-FLAKE | "Wrap the test in `vi.useFakeTimers()` + `vi.advanceTimersByTime()`, or add an explicit tolerance assertion like `expect(elapsed).toBeLessThan(target + 50)`" |
@@ -224,6 +234,7 @@ Fix suggestions are advisory — they do NOT modify code. The agent or user appl
 - **No false positives invented**: Every finding must come from a script output or ESLint result. Do not add findings from general knowledge.
 - **Scope-bound**: Only scan files matching `--scope`. Do not expand scope silently.
 - **Deterministic**: Running the skill twice on the same codebase must produce the same findings.
+- **Evidence, not a quota**: Zero findings is valid when applicable scans completed successfully. Report skipped or failed checks explicitly; do not invent replacements.
 
 ## Temper Guards
 
@@ -234,10 +245,11 @@ Fix suggestions are advisory — they do NOT modify code. The agent or user appl
 | "Report all console.log as individual findings" | There are hundreds; the grep-matrix intentionally bulk-triages them as one advisory. Individual reporting floods the report with noise |
 | "Generate fix suggestions without `--fix-suggestions` flag" | Unsolicited suggestions clutter the report and distract from triage. The user opts in when ready to remediate |
 | "Modify the source code to fix findings" | This is a review skill, not a fix skill. Modifying code without explicit user intent violates read-only safety |
+| "A lower total means the file improved" | Suppression, moved code, or swapping a warning for an error can lower totals without improving quality. Keep raw deltas and review per-rule severity |
 
 ## Warning Signs
 
-- Report shows zero findings in a codebase with known high-severity files — script likely errored silently; check raw JSON outputs
+- An expected in-scope finding is absent — verify scope, tool status, configuration, and raw output; report verification gaps instead of inventing findings
 - ESLint reports only warnings but no errors on `orchestrator.mjs` — config may not have loaded; verify `--no-eslintrc -c` path
 - `--fix-suggestions` output recommends splitting a file that is <500 LOC — threshold miscalibrated; review against G14 thresholds
 - Architecture scan shows no cycles but `scan-architecture.mjs` had madge errors — report the errors, don't suppress them
@@ -251,6 +263,7 @@ After completing this skill, confirm:
 - [ ] If `--fix-suggestions` was requested, each finding has a concrete remediation
 - [ ] If `--out` was specified, JSON report exists at the given path
 - [ ] No source files were modified during the review
+- [ ] Delta counts, baseline, per-rule changes, and scan failures are preserved; qualitative judgments are separate
 
 ## Relationship to Other Tools
 
@@ -261,7 +274,7 @@ After completing this skill, confirm:
 | `scripts/audit/*.mjs` | The actual audit implementations this skill orchestrates |
 | `scripts/audit/eslint-clean-code.config.mjs` | Custom ESLint config with aliased clean-code rules |
 | `scripts/audit/run-jscpd.mjs` | Duplication detection (jscpd) — wired into Step 5 |
-| `scripts/audit/boyscout-delta.mjs` | Boy Scout Rule enforcement — compares per-file violation counts at merge-base vs HEAD; wired into Step 7 |
+| `scripts/audit/boyscout-delta.mjs` | Boy Scout evidence — compares per-file and per-rule violation counts at merge-base vs HEAD; wired into Step 7, with qualitative interpretation by `/code-review` |
 | `scripts/audit/dead-exports.mjs` | Whole-codebase unused-export scan — wired into Step 8 |
 | `scripts/audit/test-smells.mjs` | Test-quality scan (focus leaks, time flakes, tautologies, console leaks) — wired into Step 9 |
 | `forge_sweep` | Lighter-weight marker scan (TODO/FIXME only); this skill is the comprehensive version |

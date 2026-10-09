@@ -92,13 +92,26 @@ Harden <YOUR-PLAN>.md by adding all 6 Mandatory Template Blocks from the runbook
 ```
 Do NOT use `- [ ]` checkbox format — the analyzer cannot score checkboxes as effectively.
 
+### Design Context and Approved Boundary Revisions
+
+Use the specification's **Domain Language** and **Decision Ledger** in the existing plan. Reuse IDs and approved sources; do not create a second registry or rewrite completed plans.
+
+- For each decision, record Ref/revision, choice and alternatives, rationale/evidence, owner, status/approval evidence, dependencies, and affected contracts/slices. Agent suggestions remain `proposed`; consequential product or compatibility choices require owner approval before acceptance. Non-blocking out-of-scope deferrals need an owner and revisit trigger.
+- If an upstream choice or assumption changes, **reopen dependent decisions**, including transitive dependents, preserve the old revision, and reassess affected contracts and gates. Resolve dependency cycles or missing approvals before handoff.
+- Add **`## Shared Contract`** for new or changed public interfaces, persisted formats, or shared worker boundaries, whether execution is sequential or parallel. Each entry pins a Ref/revision such as `C-001@r1`, owner/approval evidence, Decision Refs, inputs/outputs and null semantics, errors/side effects, invariants/lifecycle, compatibility, and conformance tests. Reference unchanged approved boundaries rather than designing every private helper.
+- State what complexity each changed boundary hides and how callers become simpler. Preserve single responsibility, legitimate thin adapters, and existing module-size gates; extra wrappers or fewer LOC do not establish a deeper module.
+- Each affected slice declares **Contract Refs**, **Decision Refs**, and **Language Ref**, including exact revisions and source locations. Put the read/verify instructions in its numbered tasks as well as Context Files so delegated workers receive them. Use `not applicable` with a reason where no consequential boundary changes.
+- Include these same references and approval evidence in the executor handoff. Missing or stale consequential approval blocks the agent handoff pending clarification; a bare `crucibleId`, passing gate, or `lockHash` is not design approval.
+
+These are agent-side checks, **not runtime enforcement**. Existing execution and lock-hash coverage are unchanged; do not claim automatic decision invalidation or contract-revision verification.
+
 For each Execution Slice:
 - Tag as [parallel-safe] (with Parallel Group) or [sequential]
 - Include relevant .github/instructions/*.instructions.md files in Context Files
 - List only instruction files whose domain matches the slice (not all 17 — each consumes context budget)
 - Add a Parallel Merge Checkpoint after each parallel group
 - **When parallel slices build one artifact** (their `[scope:]` paths share a root, such as `presets/php/**` or `src/Orders/**`), add both of these. Gate lint warns when either is missing ([#308](https://github.com/srnichols/plan-forge/issues/308)):
-  - **A `## Shared Contract` section** pinning every type, name, signature, route and convention more than one of those slices uses. Each slice references it instead of inventing its own. Slices that each pass their own gate can still define the same helper twice, or write signatures that don't fit together.
+  - **The approved `## Shared Contract` section** pinning every type, name, signature, route and convention more than one of those slices uses. Each slice references its exact revision instead of inventing its own. Slices that each pass their own gate can still define the same helper twice, or write signatures that don't fit together.
   - **A coherence slice** that depends on every slice in the group (`[depends: Slice 2, Slice 3]`), whose gate builds or tests the artifact as a whole, not file by file.
 - **Validation gates MUST be executable commands**, not prose descriptions:
   - **Good**: `**Validation Gate**:\n\`\`\`bash\ndotnet test\n\`\`\``
@@ -136,6 +149,7 @@ After all sections are drafted, run a **PLAN QUALITY SELF-CHECK** before outputt
 11. **Can every gate actually FAIL?** Prove it against the absent thing before trusting it. (See Gate Failability below.)
 12. Does everything the plan names actually **exist as a file** — gate scripts, cited helpers, fixtures? Check with `git ls-files`, not just the filesystem: a helper that is gitignored and untracked is absent from the very worktree the plan mandates.
 13. If the plan declares an isolated branch or worktree, does it carry **bootstrap steps** plus a confirm-before-Slice-1 check? With workspace package builds uncommitted, the first gate of the first slice fails on unresolvable imports and reads as a genuine stop condition rather than an unbuilt workspace. Treat any recorded baseline SHA as a hardening record, not a branch point.
+14. Do affected slices and the executor handoff carry current Contract Refs, Decision Refs, and Language Ref with approval evidence? Were dependent decisions reopened after upstream changes, without treating an agent proposal as approval?
 
 ### Gate Failability
 

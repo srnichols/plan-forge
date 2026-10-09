@@ -1,6 +1,6 @@
 ---
 name: code-review
-description: Run a comprehensive code review across architecture, security, testing, naming, and patterns. Invokes relevant reviewer agents in sequence. Use before merging features or at the end of a phase. With --quorum, dispatches multi-model analysis for higher confidence.
+description: Run a comprehensive code review across architecture, security, testing, naming, patterns, software entropy, knowledge-level DRY, changeability, contracts, and resource lifecycles. Invokes relevant reviewer agents in sequence. Use before merging features or at the end of a phase. With --quorum, dispatches multi-model analysis for higher confidence.
 argument-hint: "[optional: specific files or areas to focus on] [--quorum]"
 tools: [read_file, forge_analyze, forge_diagnose, forge_diff]
 ---
@@ -37,6 +37,12 @@ Run the architecture reviewer checklist:
 - No data access in service / domain layers
 - Dependencies flow inward only (Dependency Rule)
 - Proper use of dependency injection or composition root
+- Orthogonality / change locality: changing one policy should not require unrelated responsibilities to change. Check hidden shared state and side effects; cite the actual coupling, not a touched-file-count threshold.
+- Reversibility (external dependencies, persisted formats, defaults): verify replacement boundaries and migration or rollback provisions where needed. Do not demand speculative abstraction layers.
+- Contracts: identify meaningful preconditions, postconditions, and state invariants; verify they are enforced through types, guards, or assertions and tested.
+- Resource ownership / temporal coupling: make acquire/release ownership and required call ordering explicit. Check cleanup on failure or cancellation, concurrent access, and retry idempotency where applicable.
+- Deep modules / information hiding: identify the coherent complexity a changed boundary hides and how callers become simpler. Preserve single responsibility, legitimate thin adapters, and size gates; more wrappers or lower LOC alone are not improvement.
+- Contract Refs: compare affected boundaries with the plan's exact accepted contract/decision revisions and approval evidence. Report stale or missing consequential approval; unchanged boundaries may cite existing approved sources.
 
 ### 3. Security Review
 Run the security reviewer checklist:
@@ -55,6 +61,9 @@ Run the security reviewer checklist:
 - Mocks are for external dependencies (network, DB, file system at edge), NOT for internal classes
 - Edge cases AND error paths covered, not just the happy path
 - Time-sensitive tests use fake timers or explicit tolerance (no bare `setTimeout` / `Date.now()` racing)
+- For fixes, explain the failure mechanism and verify a regression test fails before the fix and passes after. Check incidental timing, ordering, and environment assumptions; report missing reproduction evidence as a verification gap.
+- For invariant-heavy transformations or state machines, consider property-based tests (round trips, pagination without omissions or duplicates, preserved state invariants). Use reproducible inputs and existing test tools; do not mandate a new framework.
+- Where lifecycle or ordering matters, cover invalid call order, cancellation, cleanup after failure, concurrent interleavings, and repeated operations as applicable.
 
 ### 5. Code Quality
 - Naming follows project conventions
@@ -62,6 +71,8 @@ Run the security reviewer checklist:
 - Error handling comprehensive (no empty catch blocks — `/clean-code-review` should have caught these mechanically)
 - No TODO/FIXME/HACK without a tracked issue
 - No dead code or unused imports
+- Software entropy / broken windows: identify new or spreading workarounds, unexplained convention exceptions, contradictory behavior, and weakened tests or gates. Fix deterioration introduced or worsened by the change; track unrelated debt without expanding scope.
+- Fail early at the appropriate boundary: stop an unsafe operation with an explicit error rather than manufacture success or silently replace unknown state with a default.
 
 ### 6. Patterns & Consistency
 - Follows existing patterns from `.github/instructions/`
@@ -69,6 +80,8 @@ Run the security reviewer checklist:
 - No reinvented patterns when existing ones apply
 - Configuration via DI/environment, not hardcoded
 - Project Principles (`docs/plans/PROJECT-PRINCIPLES.md` if it exists) respected — no forbidden patterns introduced
+- Knowledge-level DRY: identify the same business rule maintained across code, configuration, schemas, or documentation. Consolidate shared knowledge, not coincidentally similar syntax with independent reasons to change; keep test expectations independent of the implementation.
+- Domain Language: check bounded-context meanings, invariants, and approved aliases across specification, APIs, code, and tests. Do not infer new business meanings or globally rename unrelated contexts.
 
 ### 7. Report
 ```
@@ -88,11 +101,19 @@ Forge Analysis Score: N/100
 Scope Drift: N files outside scope
 ```
 
+Include coverage for the maintainability checks: **checked** (evidence), **not applicable** (reason), or **not verified** (gap). Keep unverified areas separate from findings; an incomplete review is not a clean review. Separate introduced or worsened issues from pre-existing in-scope debt.
+
+#### Design Concerns
+
+For observed design friction, report evidence, owner, disposition (`fix now`, `plan later`, or `accept risk`), existing issue/smelt or proposed follow-up, revisit trigger, and closure validation. Current blockers still block approval and cannot become accepted debt. Do not create issues, plans, or unrelated refactors in this read-only review; future work needs owner approval. Fewer warnings alone do not prove closure, and zero concerns is valid with coverage stated.
+
 ## Safety Rules
 - Review ONLY — do NOT modify files
-- Every finding must cite the specific rule or convention violated
+- Every finding must cite a code location, the specific rule or convention violated, and a concrete behavioral or maintenance risk
 - Acknowledge what's done well, not just problems
 - Flag anything that needs human judgment rather than prescribing a fix
+- Zero findings is valid after completed, evidence-backed checks. Never invent findings or require a minimum number.
+- Do not demand unrelated cleanup or judge quality from a lint total alone. Existing blocking gates still apply.
 
 ## Temper Guards
 
@@ -101,15 +122,16 @@ Scope Drift: N files outside scope
 | "Tests pass so the code is fine" | Passing tests prove the happy path works. They don't prove the code is maintainable, secure, or architecturally sound. |
 | "This change is too small to review" | Small changes accumulate. A "tiny" shortcut in one PR establishes a pattern that scales into a systemic problem. |
 | "I wrote it, I can review it" | Self-review has blind spots. The author's mental model fills gaps that a reviewer would catch. |
-| "No findings means the review is thorough" | A clean review with zero findings is suspicious — it usually means the review was superficial, not perfect. |
+| "The finding count proves review quality" | Zero findings can be legitimate; many findings can be noise. Require coverage and evidence, not a quota. |
+| "Fewer lint warnings prove less entropy" | Counts can fall through suppression or moving code, while new coupling or broken contracts remain. Review the actual changes and per-rule severity. |
 | "Skip `/clean-code-review` since this is a small change" | The mechanical pass takes <60s. Skipping it means complexity, duplication, and hygiene violations slip through and resurface as production bugs or review noise. |
 
 ## Warning Signs
 
 - Review skipped one or more sections — not all 6 review areas (architecture, security, testing, quality, patterns, consistency) evaluated
-- No findings reported at all — suspiciously clean review with zero suggestions
+- A clean conclusion without coverage evidence, or with unverified checks omitted
 - Findings lack specific rule citations — vague comments like "looks off" without referencing a convention
-- Review completed in under 2 minutes — insufficient time for meaningful review
+- Review conclusions lack evidence for the claimed coverage
 - `forge_analyze` score not included — consistency analysis was skipped
 - `/clean-code-review` was skipped — mechanical findings will surface as qualitative noise
 
@@ -122,6 +144,8 @@ After completing this skill, confirm:
 - [ ] `forge_analyze` score included (if plan exists)
 - [ ] `forge_diff` scope drift check completed (if plan exists)
 - [ ] Every finding cites a specific rule or convention
+- [ ] Maintainability checks have evidence or an explicit applicability / verification reason
+- [ ] Findings distinguish change-related risks from pre-existing debt; no finding quota was used
 
 ## Persistent Memory (if OpenBrain is configured)
 

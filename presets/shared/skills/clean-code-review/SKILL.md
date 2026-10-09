@@ -20,6 +20,8 @@ A stack-agnostic mechanical pass that complements the qualitative `/code-review`
 
 Run this skill **before** `/code-review`. The mechanical findings clear the noise so the qualitative review focuses on what actually requires judgment.
 
+These are mechanical signals, not an entropy score or proof of maintainability. Preserve scanner evidence and limitations; `/code-review` evaluates knowledge ownership, coupling, contracts, and behavioral risk.
+
 ## Inputs
 
 | Flag | Required | Default | Description |
@@ -122,6 +124,8 @@ Apply judgment — variadic `...rest`, generics, destructured arg objects, and i
 ### 5. Duplication detection (DRY)
 
 Three sub-scans, each independently optional. Run all three when possible — they catch **different** classes of duplication.
+
+Treat matches as duplication candidates. A shared business rule needs one source of truth even when its implementations look different; similar syntax with independent reasons to change must not be forced into a shared helper. Preserve the scanner matches and hand semantic classification to `/code-review`.
 
 #### 5.1 Block-level duplication (jscpd)
 
@@ -421,13 +425,19 @@ Report each unpaired script with its kind (`missing-sh` or `missing-ps1`), basen
 git diff --name-only origin/main...HEAD | head -50
 ```
 
-For every changed file under `--scope`, re-run Step 1 (linter) twice — once against `HEAD` and once against `git show origin/main:<file>` — and compare violation counts. Categorise:
+Resolve the merge-base used by that diff. For every changed file under `--scope`, re-run Step 1 (linter) twice — once against `HEAD` and once against the file at that merge-base — and compare violation counts. Categorise:
 
-- `improved` — violations decreased (positive Boy Scout signal)
-- `boy-scout-violation` — file was edited but violation count did **not** decrease (warn)
-- `regression` — file was edited and violation count **increased** (error)
+- `improved` — violation count decreased (positive signal, not proof of improvement)
+- `boy-scout-violation` — existing violations remained at the same total (advisory signal, not an automatic rejection)
+- `regression` — violation count increased (report the error signal and validate the underlying change)
+- `clean` — zero tracked violations before and after
+- `new-file` — no baseline exists; assess the new file against current gates
 
-> **Why this matters**: The Boy Scout Rule in `architecture-principles.instructions.md` ("leave the code cleaner than you found it") is only enforceable with a delta check. Without it, the rule is aspirational.
+Compare the same base, scope, linter configuration, and rule set; inspect per-rule deltas and severity, not just totals. A decrease can hide a new error, a suppression, or code moved outside the scan scope. Preserve raw classifications and counts rather than relabeling the report to fit a conclusion.
+
+An unchanged count is not an automatic rejection of a surgical fix: record the actual correctness or clarity improvement and keep unrelated cleanup out of scope. Existing blocking error thresholds and the prohibition on new violations still apply. Failed linter execution is a verification gap, never zero-finding evidence; reported lint violations remain findings.
+
+> **Why this matters**: The Boy Scout Rule in `architecture-principles.instructions.md` requires a real improvement to touched code. Delta counts provide evidence; `/code-review` confirms whether the change reduced risk without spreading debt.
 
 > **Conditional**: Skip this step if not on a feature branch, if the base branch can't be determined, or if `git` is not available.
 
@@ -482,9 +492,9 @@ Append a concrete remediation for each finding:
 | Commented-out code | "Delete lines N–M; the code is preserved in git history (`git log -p -- <file>`)" |
 | Module >3,000 LOC | "Split by responsibility: extract `<cohesive-group>` into `<suggested-file>`" |
 | Magic number | "Extract `<value>` at line N to a named constant: `const <SUGGESTED_NAME> = <value>`" |
-| Duplicated block (jscpd) | "Extract the duplicated block at <file>:<line> into a shared helper in the nearest common module" |
-| Duplicated literal (Step 5.2) | "Extract `<value>` to a named constant. If it's part of a stable small set (modes, tiers, hook names, error codes), centralize it in your project's enums/constants module — never re-type" |
-| Duplicated regex (Step 5.3) | "Extract the regex `<pattern>` into a single module export and import it from every call site. Regex drift is the worst kind — when the rule changes, every copy must update" |
+| Duplicated block (jscpd) | "If the blocks at <file>:<line> encode the same knowledge, extract a shared helper. Otherwise record their independent responsibilities rather than coupling them" |
+| Duplicated literal (Step 5.2) | "If `<value>` represents the same fact, extract a named constant. Values belonging to a canonical enum must use it; coincidentally equal values from independent policies should stay separate" |
+| Duplicated regex (Step 5.3) | "If `<pattern>` expresses the same validation or formatting rule, extract one shared definition. Otherwise retain separate rules with independent ownership" |
 | `empty-catch` | "At `<file>:<line>` — at minimum log the error: `catch (e) { logger.error('<context>', e); throw; }`. Empty catches hide root causes. If the swallow is intentional, add a comment explaining why and a typed guard on `e`" |
 | `exec-injection` | "Replace `` exec(`cmd ${arg}`) `` with `spawn('cmd', [arg])` (or `subprocess.run(['cmd', arg], shell=False)` in Python). Args-array form bypasses the shell entirely — no quoting, no injection" |
 | `disabled-test` | "At `<file>:<line>` — either re-enable the test (preferred) or delete it. A disabled test is a lie: CI is green while behavior is unverified. If the underlying bug is real, file it via `forge_bug_file` and reference the issue in a commit message explaining the removal" |
@@ -495,7 +505,7 @@ Append a concrete remediation for each finding:
 | `magic-timeout` | "Extract the literal at `<file>:<line>` to a named constant at module scope: `const <NAME>_TIMEOUT_MS = <value>`. Magic timeouts are the source of the gate-too-short class of bug — make them findable" |
 | `cross-pkg-import` | "Replace `from '../../sibling/src/internal'` with an import from the sibling's public entry point (`from 'sibling'`). If the public API doesn't expose what you need, add it deliberately — don't bypass the package boundary" |
 | `missing-sh` / `missing-ps1` | "Create the missing shell twin at the same path. Both shells must reach feature parity in the same commit — a one-shell PR halves the user base on the missing platform" |
-| Boy Scout violation | "You edited <file> without reducing violations. Either fix one existing warning in this file (preferred), or document why this PR explicitly avoids touching unrelated code" |
+| Boy Scout violation | "Inspect per-rule changes and the actual improvement in <file>. Fix change-related debt; do not demand unrelated cleanup solely to lower the count" |
 
 Fix suggestions are advisory — they do NOT modify code. The agent or user applies them in a follow-up step.
 
@@ -506,6 +516,7 @@ Fix suggestions are advisory — they do NOT modify code. The agent or user appl
 - **Scope-bound**: Only scan files matching `--scope`. Do not expand scope silently.
 - **No tooling install**: Do NOT install new linters or analyzers. If a step's tool is missing, skip and note the gap in the report.
 - **Deterministic**: Running the skill twice on the same codebase must produce the same findings.
+- **Evidence, not a quota**: Zero findings is valid when applicable scans completed successfully. Report skipped or failed checks explicitly; do not invent replacements.
 
 ## Temper Guards
 
@@ -517,10 +528,11 @@ Fix suggestions are advisory — they do NOT modify code. The agent or user appl
 | "Generate fix suggestions without `--fix-suggestions` flag" | Unsolicited suggestions clutter the report and distract from triage. The user opts in when ready to remediate |
 | "Modify the source code to fix findings" | This is a review skill, not a fix skill. Modifying code without explicit user intent violates read-only safety |
 | "Install jscpd/eslint/ruff for the user" | The skill must respect what the project already has. Suggest the tool in the report, do not install it |
+| "A lower total means the file improved" | Suppression, moved code, or swapping a warning for an error can lower totals without improving quality. Keep raw deltas and review per-rule severity |
 
 ## Warning Signs
 
-- Report shows zero findings in a codebase known to have large or complex files — the linter likely failed silently; check exit code and raw output
+- An expected in-scope finding is absent — verify scope, tool status, configuration, and raw output; report verification gaps instead of inventing findings
 - Module-size scan flags every file as >3,000 LOC — the line counter is not stripping comments; verify the regex
 - `--fix-suggestions` output recommends splitting a file that is <500 LOC — threshold miscalibrated; re-check against the thresholds table
 - Boy Scout delta shows "regression" on every changed file — linter config drifted between HEAD and base; report the drift instead of the false-positive deltas
@@ -535,13 +547,14 @@ After completing this skill, confirm:
 - [ ] If `--fix-suggestions` was requested, each finding has a concrete remediation
 - [ ] If `--out` was specified, JSON report exists at the given path
 - [ ] No source files were modified during the review
+- [ ] Delta counts, baseline, per-rule changes, and scan failures are preserved; qualitative judgments are separate
 
 ## Relationship to Other Tools
 
 | Tool / Instruction | Relationship |
 |-------------------|-------------|
 | [.github/instructions/clean-code.instructions.md](../../instructions/clean-code.instructions.md) | Defines the thresholds and review checklist this skill enforces mechanically |
-| [.github/instructions/architecture-principles.instructions.md](../../instructions/architecture-principles.instructions.md) | Provides the Boy Scout Rule that Step 8 enforces; the engineering hygiene scan in Step 6 enforces the no-empty-catch and dependency-rule guardrails |
+| [.github/instructions/architecture-principles.instructions.md](../../instructions/architecture-principles.instructions.md) | Provides the Boy Scout Rule that Step 8 measures; `/code-review` interprets its deltas. Step 6 checks engineering-hygiene guardrails |
 | [.github/instructions/security.instructions.md](../../instructions/security.instructions.md) | Provides the no-`exec`-with-interpolation rule, secret-handling rule, and SQL-injection rule that Step 6 enforces mechanically |
 | `/code-review` skill | **Run `/clean-code-review` FIRST, then `/code-review`.** This skill is the mechanical/quantitative pass; `/code-review` is the qualitative/judgment pass (architecture, security, patterns, tests). |
 | `forge_sweep` | Lighter-weight marker-only scan (TODO/FIXME). This skill is the comprehensive version that also covers size, complexity, params, duplication, and Boy Scout. |

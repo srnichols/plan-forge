@@ -195,6 +195,22 @@ Harden <YOUR-PLAN>.md by adding all 6 Mandatory Template Blocks from the runbook
 - Definition of Done (must include Reviewer Gate checkbox)
 - Stop Conditions
 
+For new or materially revised plans, preserve design context in this same plan:
+- Add a Domain Language reference with bounded context, meanings, allowed aliases and invariants.
+- Maintain a Decision Ledger with stable IDs/revisions, choices/options, rationale/evidence,
+  owner, status/approval evidence, dependencies and affected contracts/slices. Reopen
+  dependent decisions when upstream assumptions change; do not silently reuse stale answers.
+- Pin a "## Shared Contract" for new or changed public interfaces, persisted formats or
+  shared worker boundaries, including sequential work. Record its revision, owner/approval
+  evidence, inputs/outputs/null semantics, failures/side effects, invariants/lifecycle,
+  compatibility and conformance tests. Reuse approved sources for unchanged boundaries.
+- Each affected slice and handoff carries Contract Refs, Decision Refs and Language Ref
+  with exact revisions and locations. Include read/verify instructions in numbered tasks.
+- Explain what complexity a changed boundary hides and how callers become simpler;
+  retain single responsibility, legitimate thin adapters and module-size gates.
+These are agent-side checks, not runtime enforcement. A crucibleId, passed gate or
+lockHash is not design approval; existing runtime execution and lock-hash coverage are unchanged.
+
 For each Execution Slice:
 - Tag as [parallel-safe] (with Parallel Group) or [sequential]
 - Include relevant .github/instructions/*.instructions.md files in Context Files
@@ -308,6 +324,15 @@ Before starting Slice 1, run a PRE-EXECUTION TRACEABILITY CHECK:
 - Scan the spec's MUST acceptance criteria
 - Verify each MUST criterion maps to at least one slice's validation gate
 - If any MUST criterion has no corresponding validation gate, flag it and ask before proceeding
+
+For each affected slice or delegation, load Contract Refs, Decision Refs and Language Ref
+with exact revisions and approval evidence. Compare requested revisions with accepted
+records, carry them into numbered worker tasks, and check conformance on return and
+session resume. Missing, stale or merely agent-proposed consequential approval requires
+a pause and clarification. Do not silently substitute the latest revision.
+Changes to accepted decisions, contracts or domain meanings need an amendment and owner
+approval, even if the scope check passes; reopen affected dependent decisions.
+These are agent-side checks, not runtime enforcement; execution and lock-hash coverage are unchanged.
 
 Before each slice, load its Context Files (including .github/instructions/*.instructions.md guardrails).
 When scaffolding new entities/services/tests, use the matching prompt template from .github/prompts/.
@@ -423,6 +448,14 @@ Review checklist:
 8. SECURITY — Input validation? No secrets in code?
 9. PROJECT PRINCIPLES — Core Principles respected? Forbidden Patterns absent? (if Project Principles file exists)
 10. SHARED CONTRACT — If the plan has a "## Shared Contract" section: does the code use exactly what it pins? Two slices defining the same thing differently is 🔴 Critical, even if each slice's own gate passed.
+11. DESIGN CONTEXT — Compare Contract Refs, Decision Refs and Language Ref with exact accepted revisions and approval evidence; report missing or stale consequential approval.
+12. DOMAIN LANGUAGE — Check bounded contexts, meanings, invariants and approved aliases across specification, APIs, code and tests.
+13. DEEP MODULES — Verify hidden complexity and caller simplicity without treating file splits or lower LOC as proof; preserve legitimate thin adapters and existing size gates.
+
+These are agent-side checks, not runtime enforcement. Reuse existing approved sources
+for unchanged legacy boundaries rather than inventing records or approvals.
+Missing or stale consequential approval is a blocking verification gap: withhold PASS
+until resolved without inventing a technical defect to represent missing evidence.
 
 For each finding, assign: 🔴 Critical / 🟡 Warning / 🔵 Info
 
@@ -458,6 +491,15 @@ If no specification is referenced, skip Part C entirely.
 
 For Part C: Use the Requirements Register (if present) OR the external
 Specification Source (if referenced) as the source of truth.
+
+--- DESIGN CONCERNS (READ-ONLY FEEDBACK) ---
+
+Report observed design friction with evidence, owner, disposition (fix now / plan later /
+accept risk), existing issue/smelt or proposed follow-up, revisit trigger and closure
+validation. Current blockers still prevent PASS and cannot be reclassified as accepted debt.
+Do not create issues, plans or unrelated refactors in this review. Owner-approved future
+work stays outside current scope; closure requires relevant proof, not fewer warnings.
+Zero Design Concerns is valid with coverage stated.
 
 --- COMBINED SUMMARY ---
 

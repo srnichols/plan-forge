@@ -40,6 +40,13 @@ Review checklist:
 7. TESTING — New features covered by tests?
 8. SECURITY — Input validation? No secrets in code?
 9. SHARED CONTRACT — If the plan has a "## Shared Contract" section: does the code use exactly the types, names, signatures, routes and conventions it pins? Two slices defining the same thing differently is 🔴 Critical, even if each slice's own gate passed.
+10. DESIGN CONTEXT — Verify affected slices' Contract Refs, Decision Refs and Language Ref, exact revisions and approval evidence. Flag missing or stale consequential approval; neither an agent proposal nor a provenance tag counts as acceptance.
+11. DOMAIN LANGUAGE — Check the Domain Language meanings, bounded contexts, invariants and allowed aliases across specification, APIs, code and tests. Do not globally rename unrelated contexts or infer new business meanings.
+12. DEEP MODULES — Deep modules hide coherent complexity behind a usable interface. Check what callers no longer need to know; preserve legitimate thin adapters, single responsibility and module-size gates. More files, wrappers, or lower LOC alone are not design improvement.
+
+These are agent-side checks, **not runtime enforcement**. Current execution and lock-hash coverage are unchanged. For unchanged legacy boundaries, inspect existing approved sources rather than invent IDs or approvals.
+
+Missing or stale approval for a consequential change is a **blocking verification gap**: withhold PASS until resolved, without inventing a technical defect to represent missing evidence.
 
 For each finding, assign: 🔴 Critical / 🟡 Warning / 🔵 Info
 
@@ -59,6 +66,16 @@ Compare Scope Contract against actual changes:
 Output Part B:
 | File | Issue | Violated Section |
 |------|-------|------------------|
+
+### Design Concerns (read-only feedback)
+
+Report genuinely observed design friction, not a quota. Reuse existing issue/smelt references or propose a follow-up for owner approval; do not create issues, plans, or refactors during this read-only review.
+
+| Concern / evidence | Owner | Disposition | Issue / smelt or proposed follow-up | Revisit trigger | Closure validation |
+|--------------------|-------|-------------|------------------------------------|-----------------|--------------------|
+| (observed concern) | (owner or unassigned) | fix now / plan later / accept risk | (reference or proposal) | (specific change or event) | (behavioral or caller-simplicity proof) |
+
+Current blockers still prevent PASS and cannot be reclassified as accepted debt. Owner-approved deferrals need a revisit trigger; closure requires relevant validation, not just fewer warnings. Keep future design work outside the current scope. Zero concerns is valid with review coverage stated.
 
 --- COMBINED SUMMARY ---
 

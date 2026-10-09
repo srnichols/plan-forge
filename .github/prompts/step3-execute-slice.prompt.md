@@ -43,6 +43,18 @@ Before starting Slice 1, run a **Pre-Execution Traceability Check**:
 - Verify each MUST criterion maps to at least one slice's validation gate
 - If any MUST criterion has no corresponding validation gate, flag it and ask before proceeding
 
+### Design-Context Handoff Check
+
+For new or materially revised plans, before each affected slice or delegation:
+1. Load its **Contract Refs**, **Decision Refs**, and **Language Ref** from their declared source locations, with exact revisions and approval evidence. Unchanged boundaries may cite existing approved sources; use `not applicable` with a reason for work without consequential boundary changes.
+2. Compare the requested revisions with the plan's currently accepted records. Missing, stale, or agent-proposed consequential approval is a reason to pause and ask, not to guess or silently select the latest revision.
+3. Carry those references into the worker's numbered tasks and handoff, alongside scope, invariants, and conformance gates. The worker must read the referenced sections before coding.
+4. On return and on session resume, verify the result still conforms to the requested revisions and domain meanings. Record verification gaps explicitly.
+
+If implementation reveals a changed decision, contract, or domain meaning, propose an amendment with affected decisions/contracts/slices and wait for owner approval before proceeding, even if the scope check passes. Reopen dependent decisions for review; do not silently rewrite accepted records.
+
+These are agent-side checks, **not runtime enforcement**. A `crucibleId`, passed gate, or `lockHash` does not establish approval of a contract revision; runtime execution and lock-hash coverage are unchanged.
+
 Before each slice, load its Context Files (including .github/instructions/*.instructions.md guardrails).
 When scaffolding new entities/services/tests, use the matching prompt template from .github/prompts/.
 Follow the validation loop exactly. Commit after each passed slice.
@@ -104,6 +116,7 @@ SESSION RESUME CHECKLIST:
    (check for ## Amendments section — if new amendments exist, read them first)
 5. Identify the next unexecuted slice and load its Context Files
 6. State: "Resuming from Slice N. Prior slices 1–(N-1) are committed."
+7. Reconcile the next slice's Contract Refs, Decision Refs and Language Ref with their requested revisions and approval evidence; pause on stale consequential context.
 ```
 
 ---

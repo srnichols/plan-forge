@@ -251,6 +251,12 @@ committed source tree, including the project MCP client and its history/runtime
 helpers. A green dirty-worktree test alone is not proof that a fresh checkout
 contains those modules.
 
+For a fresh checkout, the existing `node pforge-mcp/server.mjs --validate`
+generates the intentionally ignored CLI schema before its first `--check`;
+normal MCP startup generates that artifact too. This is metadata generation,
+not compilation. Keep frozen inventory checks separate from changes to the
+public tool contract.
+
 Maintainers must validate the complete unit and offline end-to-end suites,
 unchanged source-quality rules, public tool inventory and documentation before
 preparing a release. Release/version synchronization and the consumer ship

@@ -56,10 +56,10 @@ with `origin: "untrusted"` and must remain data rather than instructions.
   [#335](https://github.com/srnichols/plan-forge/issues/335) remain acceptance
   references until the quiescent whole-suite and live evidence are recorded.
 - Dispatcher workspace, authenticated home routing and application-ACK wiring
-  are targeted-verified in the local and one-shot fixtures. The remaining
-  retry-consumer integration and global regression are not cleared by an
-  earlier smoke pass; [#332](https://github.com/srnichols/plan-forge/issues/332)
-  remains an acceptance reference.
+  and current-authority retry recovery pass the final integrated offline and
+  fresh-committed-source gates. This does not prove live provider or reference
+  topology behavior; [#332](https://github.com/srnichols/plan-forge/issues/332)
+  remains a live acceptance reference.
 - Callback traffic is not covered by the inbound message rate limiter; callback
   spam remains a residual denial-of-service vector.
 - The default inbound rate limit has no discoverable config key. The router
@@ -100,3 +100,23 @@ primary scan is a real repository-range scan but cannot scope to Claw; the
 supplementary scan includes the current package snapshot but has a synthetic
 baseline. Neither is reported as clean. `.forge/secret-scan-cache.json` is
 operational output and is not part of this change.
+
+### Review-remediation scan (2026-10-10)
+
+The unmodified scanner was rerun at its default threshold of `4.0` against the
+real frozen review base `ab0b17451f24ee882fc349ab120b3a9e9891bd9b`, with every
+validated new product source file visible in the staged diff before the local
+product commit. It examined 380 repository files and reported 3,114 masked
+indicators: 42 high-, 303 medium- and 2,769 low-confidence. Of those, 2,991 were
+in Claw. This is not a Claw-only or synthetic-baseline scan, and `clean` remains
+`false`.
+
+Context triage preserved all raw findings. The 42 high-confidence indicators
+covered 40 source lines; 68 additional context locations were reviewed after
+grouping prose, code/regex syntax, paths, reference names, protocol labels,
+hashes and explicit fixtures. One token-shaped negative-schema sample is a
+deterministic alphabet sequence, not an operator credential; its value is not
+included here. No literal credential exposure was confirmed. This is separate
+triage evidence, not a scanner-rule change or a claim that the tool returned
+clean. The exact committed-range recheck and masked evidence remain in the
+coordinator handoff.

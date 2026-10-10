@@ -11,6 +11,10 @@ const DEFAULTS = Object.freeze({
 });
 const transferKey = (identity) => `${identity.deltaId}\0${identity.sha256Total}`;
 
+function isHistoryArtifact(entry, event) {
+  return entry.kind === "job" && event.type === "artifact" && event.data.kind === L2_PACKET_KIND;
+}
+
 class WorkerRegistry {
   constructor(options) {
     const { onEvent: emitEvent = () => {}, ...settings } = options;
@@ -50,23 +54,31 @@ class WorkerRegistry {
     for (const listener of entry.listeners) {
       for (const wake of listener.waiters.splice(0)) wake({ value: undefined, done: true });
     }
-    const active = [...this.leases.values()].find((lease) => lease.entry === entry);
-    const completion = {
-      jobId: entry.jobId, projectId: entry.payload.projectId,
-      leaseId: active?.leaseId ?? entry.lastLeaseId, attempt: entry.attempt, event,
-      applicationAck: entry.application?.ack ?? null,
-      ok: event.data.status === "succeeded" && (!this.requireL2 || entry.application?.ack?.ok === true),
-    };
-    this.completions.set(entry.jobId, completion);
-    while (this.completions.size > this.maxReplay) this.completions.delete(this.completions.keys().next().value);
-    for (const resolve of this.completionWaiters.get(entry.jobId) ?? []) resolve(structuredClone(completion));
-    this.completionWaiters.delete(entry.jobId);
+    this.recordCompletion(entry, this.completionFor(entry, event));
     for (const lease of [...this.leases.values()]) if (lease.entry === entry) this.removeLease(lease);
     this.revokeScope(entry.jobId);
     const queue = this.queueFor(entry.laneId);
     const index = queue.indexOf(entry);
     if (index >= 0) queue.splice(index, 1);
     this.jobs.delete(entry.jobId);
+  }
+
+  completionFor(entry, event) {
+    const active = [...this.leases.values()].find((lease) => lease.entry === entry);
+    const applicationAck = entry.application?.ack ?? null;
+    return {
+      jobId: entry.jobId, projectId: entry.payload.projectId,
+      leaseId: active?.leaseId ?? entry.lastLeaseId, attempt: entry.attempt, event,
+      applicationAck,
+      ok: event.data.status === "succeeded" && (!this.requireL2 || applicationAck?.ok === true),
+    };
+  }
+
+  recordCompletion(entry, completion) {
+    this.completions.set(entry.jobId, completion);
+    while (this.completions.size > this.maxReplay) this.completions.delete(this.completions.keys().next().value);
+    for (const resolve of this.completionWaiters.get(entry.jobId) ?? []) resolve(structuredClone(completion));
+    this.completionWaiters.delete(entry.jobId);
   }
 
   fail(entry, data) {
@@ -317,10 +329,14 @@ class WorkerRegistry {
     this.send(worker, message(L2_APPLIED_MESSAGE, { ...ack, leaseId: lease.leaseId, attempt: lease.attempt }));
   }
 
+  needsApplicationAck(entry, event) {
+    return entry.kind === "job" && event.data.status === "succeeded"
+      && (this.requireL2 || Boolean(entry.application));
+  }
+
   checkedTerminal(entry, event) {
     if (entry.cancelled) return { ...event, data: { ...event.data, status: "cancelled", error: "JOB_CANCELLED" } };
-    if (entry.kind !== "job" || event.data.status !== "succeeded") return event;
-    if (!this.requireL2 && !entry.application) return event;
+    if (!this.needsApplicationAck(entry, event)) return event;
     const ack = entry.application?.ack;
     if (ack?.ok === true && matchesApplicationAck(entry.application.identity, event.data.l2)) return event;
     return { ...event, data: {
@@ -346,7 +362,7 @@ class WorkerRegistry {
       if (!this.onEventCallback(entry, gap)) return false;
     }
     entry.lastSeq = event.seq;
-    if (entry.kind === "job" && event.type === "artifact" && event.data.kind === L2_PACKET_KIND) {
+    if (isHistoryArtifact(entry, event)) {
       this.collectL2(lease, event);
     }
     if (event.type !== "finished") {

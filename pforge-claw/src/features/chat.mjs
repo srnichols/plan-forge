@@ -9,6 +9,23 @@ let channel;
 let service;
 let unbind = null;
 
+function reportPollerError(ctx, error) {
+  ctx.logger?.error?.("Telegram poller error", { code: error?.code ?? "TELEGRAM_ERROR" });
+}
+
+function createChatChannel(ctx) {
+  return createTelegramAdapter({
+    config: ctx.config,
+    secrets: ctx.secrets,
+    stateDir: path.join(ctx.home ?? resolveHome(), "state"),
+    store: ctx.store,
+    now: ctx.telegramTiming?.now ?? Date.now,
+    sleep: ctx.telegramTiming?.sleep,
+    onUpdate: (update) => ctx.onTelegramUpdate(update),
+    onError: (error) => reportPollerError(ctx, error),
+  });
+}
+
 function boundAskCommands(commands, askService) {
   return commands.map((command) => {
     if (command.name !== "ask" && command.name !== "new") return command;
@@ -36,16 +53,7 @@ export default {
         import("../router.mjs"),
         import("../commands/index.mjs"),
       ]);
-      channel = createTelegramAdapter({
-        config: ctx.config,
-        secrets: ctx.secrets,
-        stateDir: path.join(ctx.home ?? resolveHome(), "state"),
-        store: ctx.store,
-        now: ctx.telegramTiming?.now ?? Date.now,
-        sleep: ctx.telegramTiming?.sleep,
-        onUpdate: (update) => ctx.onTelegramUpdate(update),
-        onError: (error) => ctx.logger?.error?.("Telegram poller error", { code: error?.code ?? "TELEGRAM_ERROR" }),
-      });
+      channel = createChatChannel(ctx);
       ctx.channel = channel;
       ctx.onTelegramUpdate = (update) => router.route(update);
       const askContext = {
@@ -73,9 +81,7 @@ export default {
       unbind = bindProposalService(service);
       await router.syncMenus();
       if ((ctx.config?.channels?.telegram?.mode ?? "poll") === "poll") {
-        void Promise.resolve(channel.start()).catch((error) => {
-          ctx.logger?.error?.("Telegram poller error", { code: error?.code ?? "TELEGRAM_ERROR" });
-        });
+        void Promise.resolve(channel.start()).catch((error) => reportPollerError(ctx, error));
       }
     } catch (error) {
       unbind?.();

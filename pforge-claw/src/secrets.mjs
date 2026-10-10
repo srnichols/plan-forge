@@ -14,7 +14,7 @@ function trackName(name) {
   return typeof name === "string" ? name : name?.name;
 }
 
-export async function createSecrets({ env = process.env, file, trackNames = [] } = {}) {
+async function readSecretValues(file) {
   let fileValues = {};
   if (file) {
     try {
@@ -31,28 +31,64 @@ export async function createSecrets({ env = process.env, file, trackNames = [] }
   for (const [name, value] of Object.entries(fileValues)) {
     if (typeof value !== "string") throw new ClawError("SECRETS_INVALID_TYPE", { name });
   }
+  return fileValues;
+}
+
+export async function createSecrets({ env = process.env, file, trackNames = [] } = {}) {
+  let fileValues = await readSecretValues(file);
   const names = new Set([...Object.keys(fileValues), ...trackNames.map(trackName).filter(Boolean)]);
+  const listedNames = [...names];
+  const redactionValues = new Map();
+  let refreshing = Promise.resolve();
+  const track = (name) => {
+    if (typeof name === "string" && !names.has(name)) {
+      names.add(name);
+      listedNames.push(name);
+    }
+  };
   const values = () => [...names].flatMap((name) => {
     const value = Object.hasOwn(env, name) && env[name] !== undefined ? env[name] : fileValues[name];
     return typeof value === "string" && value.length > 0 ? [[name, value]] : [];
   });
+  const rememberValues = (entries) => {
+    for (const [name, value] of entries) if (typeof value === "string" && value) redactionValues.set(value, name);
+  };
+  rememberValues(Object.entries(fileValues));
   const get = (name) => {
+    track(name);
     const value = Object.hasOwn(env, name) && env[name] !== undefined ? env[name] : fileValues[name];
-    return typeof value === "string" && value.length > 0 ? value : null;
+    if (typeof value !== "string" || value.length === 0) return null;
+    redactionValues.set(value, name);
+    return value;
   };
   const redact = (text) => {
     let result = String(text);
-    const replacements = values().sort((left, right) => right[1].length - left[1].length);
+    rememberValues(values());
+    const replacements = [...redactionValues].map(([value, name]) => [name, value])
+      .sort((left, right) => right[1].length - left[1].length);
     for (const [name, value] of replacements) result = result.split(value).join(`«redacted:${name}»`);
     for (const [shape, pattern] of TOKEN_SHAPES) result = result.replace(pattern, `«redacted:${shape}»`);
     return result;
+  };
+  const refresh = () => {
+    const reload = async () => {
+      const validated = await readSecretValues(file);
+      rememberValues(Object.entries(fileValues));
+      rememberValues(Object.entries(validated));
+      fileValues = validated;
+      for (const name of Object.keys(validated)) track(name);
+    };
+    const pending = refreshing.then(reload, reload);
+    refreshing = pending;
+    return pending;
   };
   return {
     get,
     getSecret: get,
     has: (name) => get(name) !== null,
     redact,
-    names: [...names],
+    refresh,
+    names: listedNames,
   };
 }
 

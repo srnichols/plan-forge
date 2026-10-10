@@ -834,6 +834,7 @@ Execute a hardened plan — spawn CLI workers for each slice, validate at every 
 - `--model <name>` — Override model (e.g., `claude-sonnet-5.5`, `gpt-6-sol`)
 - `--resume-from <N>` — Skip completed slices, resume from slice N
 - `--dry-run` — Parse and validate plan without executing
+- `--foreground` — Wait for execution to finish and return the orchestrator's exit code in both shells. Forge-Claw uses this mode so a failed plan cannot be reported as a successful job.
 - `--quorum` — Multi-model consensus on all slices (3× cost)
 - `--quorum=auto` — Consensus only for complex slices (threshold-based)
 - `--quorum=power` — Flagship preset: Claude Opus 4.6 + GPT-5.3-Codex + Grok 4.20 Reasoning (threshold 5, 5min timeout)

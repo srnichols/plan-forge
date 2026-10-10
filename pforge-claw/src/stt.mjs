@@ -14,34 +14,38 @@ function transcriptFrom(value) {
   return typeof phrase === "string" ? phrase : "";
 }
 
+function resolveTranscriptionTarget({ voice, config, provider, key }) {
+  const endpoint = voice.endpoint ?? config?.runtimes?.byok?.[provider]?.endpoint;
+  if (typeof endpoint !== "string" || endpoint.trim().length === 0) {
+    return { ok: false, error: "STT_ENDPOINT_MISSING", provider };
+  }
+  return { ok: true, provider, key, endpoint };
+}
+
+function transcriptionRequest({ voice, config, secrets }) {
+  if (voice?.enabled !== true) return { ok: false, error: "STT_DISABLED" };
+  const provider = voice.provider;
+  if (!STT_PROVIDERS.includes(provider)) {
+    return { ok: false, error: "STT_UNSUPPORTED_PROVIDER", provider };
+  }
+  const key = secrets?.get?.(voice.keySecret ?? DEFAULT_KEY_SECRETS[provider]);
+  if (typeof key !== "string" || key.length === 0) {
+    return { ok: false, error: "BYOK_KEY_MISSING", provider };
+  }
+  return resolveTranscriptionTarget({ voice, config, provider, key });
+}
+
 export function createStt({ config, secrets, fetch = globalThis.fetch, fs = fsPromises, logger } = {}) {
   async function transcribe({ audioPath, mimeType = "audio/ogg", signal } = {}) {
     let result;
     const voice = config?.capture?.voice;
     try {
-      if (voice?.enabled !== true) {
-        result = { ok: false, error: "STT_DISABLED" };
+      const request = transcriptionRequest({ voice, config, secrets });
+      if (!request.ok) {
+        result = request;
         return result;
       }
-
-      const provider = voice.provider;
-      if (!STT_PROVIDERS.includes(provider)) {
-        result = { ok: false, error: "STT_UNSUPPORTED_PROVIDER", provider };
-        return result;
-      }
-
-      const key = secrets?.get?.(voice.keySecret ?? DEFAULT_KEY_SECRETS[provider]);
-      if (typeof key !== "string" || key.length === 0) {
-        result = { ok: false, error: "BYOK_KEY_MISSING", provider };
-        return result;
-      }
-
-      const endpoint = voice.endpoint ?? config?.runtimes?.byok?.[provider]?.endpoint;
-      if (typeof endpoint !== "string" || endpoint.trim().length === 0) {
-        result = { ok: false, error: "STT_ENDPOINT_MISSING", provider };
-        return result;
-      }
-
+      const { provider, key, endpoint } = request;
       const audio = new Blob([await fs.readFile(audioPath)], { type: mimeType });
       const form = new FormData();
       if (provider === "openai") {
@@ -80,7 +84,7 @@ export function createStt({ config, secrets, fetch = globalThis.fetch, fs = fsPr
         } catch (error) {
           if (error?.code !== "ENOENT") {
             logger?.error?.("STT_AUDIO_CLEANUP_FAILED", { code: "STT_AUDIO_CLEANUP_FAILED" });
-            result = { ...result, cleanupFailed: true };
+            result.cleanupFailed = true;
           }
         }
       }

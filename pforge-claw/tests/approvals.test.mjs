@@ -1,9 +1,9 @@
 import { mkdtempSync, readFileSync, rmSync } from "node:fs";
-import os from "node:os";
 import path from "node:path";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { fileURLToPath } from "node:url";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import approvalCallback from "../src/callbacks/a.mjs";
-import { bindApprovalService, buildApprovalCard, createApprovalService, issueApproval, parseApprovalPayload } from "../src/approvals.mjs";
+import { bindApprovalService, buildApprovalCard, createApprovalService, getApprovalService, issueApproval, parseApprovalPayload } from "../src/approvals.mjs";
 import approvalsFeature from "../src/features/approvals.mjs";
 import { createJob, currentJobs, JOBS_STREAM, transition } from "../src/jobs/model.mjs";
 import { createRegistry } from "../src/registry.mjs";
@@ -14,6 +14,7 @@ import { bindPlacementService, createPlacementService } from "../src/placement.m
 const directories = [];
 const unbinders = [];
 const NOW = 1_000_000;
+const TEST_DIRECTORY = path.dirname(fileURLToPath(import.meta.url));
 const project = {
   id: "project-1",
   name: "Project One",
@@ -23,7 +24,7 @@ const project = {
 };
 
 function makeStore() {
-  const directory = mkdtempSync(path.join(os.tmpdir(), "claw-approvals-"));
+  const directory = mkdtempSync(path.join(TEST_DIRECTORY, ".approval-fixture-"));
   directories.push(directory);
   return createStore(directory);
 }
@@ -63,6 +64,7 @@ function makeService(store, options = {}) {
     ttlMs: options.ttlMs,
     channel: options.channel,
     bus: options.bus,
+    config: options.config,
     mcp: options.mcp ?? { call: async () => makeEstimate() },
     logger: { error: vi.fn() },
   });
@@ -103,6 +105,11 @@ function makeIssue(service, job, messageRef = { chatId: job.chatId, messageId: "
 function records(store, stream) {
   return [...store.read(stream)].map(({ record }) => record);
 }
+
+beforeEach(() => {
+  vi.useFakeTimers();
+  vi.setSystemTime(NOW);
+});
 
 afterEach(async () => {
   await approvalsFeature.stop();
@@ -212,6 +219,391 @@ describe("approval callback flow", () => {
     expect(service.sweep()).toHaveLength(1);
     expect(currentJobs(store)[job.id].state).toBe("expired");
     expect(service.sweep()).toEqual([]);
+  });
+
+  it("FP01 refuses an approval at its exact expiry without consuming a proof", async () => {
+    const store = makeStore();
+    const job = createAwaitingJob(store);
+    let now = NOW;
+    const service = makeService(store, { now: () => now, ttlMs: 100 });
+    const approval = makeIssue(service, job);
+    const before = records(store, "approvals");
+    now += 100;
+
+    expect(await service.decide({
+      payload: approval.approve.slice(2),
+      caller: { userId: "approver-1", role: "owner" },
+      chatId: job.chatId,
+      threadId: job.threadId,
+    })).toMatchObject({ ok: false, reason: "expired" });
+    expect(records(store, "approvals")).toEqual(before);
+    expect(currentJobs(store)[job.id].state).toBe("awaiting-approval");
+  });
+
+  it("FP01 expires and sweeps a pending approval once at its exact deadline", () => {
+    const store = makeStore();
+    const job = createAwaitingJob(store);
+    let now = NOW;
+    const service = makeService(store, { now: () => now, ttlMs: 100 });
+    const approval = makeIssue(service, job);
+    now += 100;
+
+    expect(service.sweep()).toHaveLength(1);
+    expect(currentJobs(store)[job.id].state).toBe("expired");
+    expect(records(store, "approvals").at(-1)).toMatchObject({
+      kind: "approval.expired", nonceHash: approval.record.nonceHash,
+    });
+    expect(service.sweep()).toEqual([]);
+    expect(records(store, "approvals").filter(({ kind }) => kind === "approval.consumed")).toEqual([]);
+  });
+
+  it("FP01 permits a valid approval immediately before the deadline", async () => {
+    const store = makeStore();
+    const job = createAwaitingJob(store);
+    let now = NOW;
+    const service = makeService(store, { now: () => now, ttlMs: 100 });
+    const approval = makeIssue(service, job);
+    now += 99;
+
+    expect(await service.decide({
+      payload: approval.approve.slice(2),
+      caller: { userId: "approver-1", role: "owner" },
+      chatId: job.chatId,
+      threadId: job.threadId,
+    })).toMatchObject({ ok: true, decision: "approve" });
+    expect(currentJobs(store)[job.id].state).toBe("approved");
+  });
+
+  it.each(["approve", "reject"])(
+    "FP01 refuses %s when the clock reaches expiry before proof consumption",
+    async (decision) => {
+      const store = makeStore();
+      const job = createAwaitingJob(store);
+      let now = NOW;
+      const service = makeService(store, { now: () => now++, ttlMs: 100 });
+      const approval = makeIssue(service, job);
+      const before = records(store, "approvals");
+      now = approval.record.expiresAt - 1;
+
+      expect(await service.decide({
+        payload: approval[decision].slice(2),
+        caller: { userId: "approver-1", role: "owner" },
+        chatId: job.chatId,
+        threadId: job.threadId,
+      })).toMatchObject({ ok: false, reason: "expired" });
+      expect(records(store, "approvals")).toEqual(before);
+      expect(currentJobs(store)[job.id].state).toBe("awaiting-approval");
+    },
+  );
+
+  it.each(["task", "plan", "skill"])(
+    "FP01 permits the legitimate requesting owner to approve their own %s once",
+    async (type) => {
+      const store = makeStore();
+      const job = createAwaitingJob(store, { type, callerId: "owner-1" });
+      const config = { allowlist: [{ channel: "telegram", userId: "owner-1", role: "owner" }] };
+      const service = makeService(store, { config });
+      const approval = makeIssue(service, job);
+      const input = {
+        payload: approval.approve.slice(2),
+        caller: { userId: "owner-1", role: "owner" },
+        chatId: job.chatId,
+        threadId: job.threadId,
+      };
+
+      expect(await service.decide(input)).toMatchObject({
+        ok: true, jobId: job.id, decision: "approve",
+      });
+      expect(currentJobs(store)[job.id].state).toBe("approved");
+      expect(records(store, "approvals").filter(({ kind }) => kind === "approval.consumed"))
+        .toEqual([expect.objectContaining({
+          jobId: job.id,
+          requesterId: "owner-1",
+          approverId: "owner-1",
+          chatId: job.chatId,
+          threadId: job.threadId,
+          nonceHash: approval.record.nonceHash,
+          usedAt: NOW,
+          decision: "approve",
+        })]);
+      expect(await createApprovalService({ store, now: () => NOW }).decide(input))
+        .toMatchObject({ ok: false, reason: "replay" });
+    },
+  );
+
+  it("FP01 lets the single allowlisted requesting owner approve through the router", async () => {
+    const store = makeStore();
+    const channel = makeChannel();
+    const job = createAwaitingJob(store, { callerId: "owner-1" });
+    const service = makeService(store, { channel });
+    const approval = makeIssue(service, job);
+    const config = {
+      allowlist: [{ channel: "telegram", userId: "owner-1", role: "owner" }],
+      projects: [project],
+      channels: { telegram: {} },
+    };
+    const router = createRouter({ config, channel, store });
+    const update = {
+      kind: "callback", adapter: "telegram", updateId: "owner-approval-1",
+      chatId: job.chatId, threadId: job.threadId, userId: "owner-1",
+      callbackId: "owner-callback-1", data: approval.approve,
+    };
+
+    await router.route(update);
+    expect(currentJobs(store)[job.id].state).toBe("approved");
+    expect(records(store, "audit")).toContainEqual(expect.objectContaining({
+      kind: "approval-decision", jobId: job.id, userId: "owner-1", decision: "approve",
+    }));
+    await router.route({ ...update, updateId: "owner-approval-2", callbackId: "owner-callback-2" });
+    expect(records(store, "approvals").filter(({ kind }) => kind === "approval.consumed"))
+      .toHaveLength(1);
+    expect(records(store, "audit")).toContainEqual(expect.objectContaining({
+      kind: "approval-refused", reason: "replay",
+    }));
+  });
+
+  it("FP01 still drops an unknown Telegram identity without a reply or acknowledgement", async () => {
+    const store = makeStore();
+    const channel = makeChannel();
+    const job = createAwaitingJob(store, { callerId: "owner-1" });
+    const service = makeService(store, { channel });
+    const approval = makeIssue(service, job);
+    const router = createRouter({
+      store,
+      channel,
+      config: {
+        allowlist: [{ channel: "telegram", userId: "owner-1", role: "owner" }],
+        projects: [project],
+        channels: { telegram: {} },
+      },
+    });
+
+    await router.route({
+      kind: "callback", adapter: "telegram", updateId: "unknown-approval-1",
+      chatId: job.chatId, threadId: job.threadId, userId: "unknown-1",
+      callbackId: "unknown-callback-1", data: approval.approve,
+    });
+
+    expect(channel.calls).toEqual([]);
+    expect(currentJobs(store)[job.id].state).toBe("awaiting-approval");
+    expect(records(store, "approvals")).toHaveLength(1);
+    expect(records(store, "audit")).toContainEqual(expect.objectContaining({
+      kind: "drop", reason: "unknown-user",
+    }));
+  });
+
+  it("FP01 refuses a requesting owner demoted to viewer after the card was issued", async () => {
+    const store = makeStore();
+    const channel = makeChannel();
+    const caller = { channel: "telegram", userId: "owner-1", role: "owner" };
+    const config = { allowlist: [caller], projects: [project], channels: { telegram: {} } };
+    const router = createRouter({ config, channel, store });
+    const job = createAwaitingJob(store, { callerId: caller.userId, callerRole: caller.role });
+    const service = makeService(store, { channel });
+    const approval = makeIssue(service, job);
+    caller.role = "viewer";
+
+    await router.route({
+      kind: "callback", adapter: "telegram", updateId: "demoted-approval-1",
+      chatId: job.chatId, threadId: job.threadId, userId: caller.userId,
+      callbackId: "demoted-callback-1", data: approval.approve,
+    });
+
+    expect(channel.calls.filter(({ method }) => method === "answerCallback")).toHaveLength(1);
+    expect(channel.calls.filter(({ method }) => method === "edit")).toEqual([]);
+    expect(currentJobs(store)[job.id].state).toBe("awaiting-approval");
+    expect(records(store, "approvals")).toHaveLength(1);
+    expect(records(store, "audit")).toContainEqual(expect.objectContaining({
+      kind: "callback-ignored", reason: "role",
+    }));
+  });
+
+  it.each(["demoted", "removed", "forged"])(
+    "FP01 refuses a %s configured identity despite an owner-role caller snapshot",
+    async (change) => {
+      const store = makeStore();
+      const job = createAwaitingJob(store, { callerId: "owner-1" });
+      const identity = {
+        channel: "telegram", userId: "owner-1", role: change === "forged" ? "viewer" : "owner",
+      };
+      const config = { allowlist: [identity] };
+      const service = makeService(store, { config });
+      const approval = makeIssue(service, job);
+      const caller = { userId: identity.userId, role: "owner" };
+      if (change === "removed") config.allowlist = [];
+      else if (change === "demoted") config.allowlist = [{ ...identity, role: "viewer" }];
+
+      expect(await service.decide({
+        payload: approval.approve.slice(2), caller,
+        chatId: job.chatId, threadId: job.threadId,
+      })).toMatchObject({ ok: false, reason: "wrong-user" });
+      expect(currentJobs(store)[job.id].state).toBe("awaiting-approval");
+      expect(records(store, "approvals")).toHaveLength(1);
+    },
+  );
+
+  it("FP01 passes feature configuration through to stale-role approval decisions", async () => {
+    const store = makeStore();
+    const channel = makeChannel();
+    const job = createAwaitingJob(store, { callerId: "owner-1" });
+    const config = {
+      projects: [project],
+      allowlist: [{ channel: "telegram", userId: "owner-1", role: "owner" }],
+    };
+    await approvalsFeature.start({ store, channel, config, now: () => NOW });
+    const service = getApprovalService();
+    const sent = channel.calls.find(({ method }) => method === "send");
+    const payload = sent.replyMarkup.inline_keyboard[0][0].callback_data.slice(2);
+    config.allowlist = [{ channel: "telegram", userId: "owner-1", role: "viewer" }];
+
+    await approvalCallback.handle({}, {
+      payload, caller: { userId: "owner-1", role: "owner" },
+      chatId: job.chatId, threadId: job.threadId, messageId: "message-1",
+    });
+
+    expect(service).not.toBeNull();
+    expect(currentJobs(store)[job.id].state).toBe("awaiting-approval");
+    expect(records(store, "approvals")).toHaveLength(1);
+    expect(records(store, "audit")).toContainEqual(expect.objectContaining({
+      kind: "approval-refused", reason: "wrong-user",
+    }));
+    expect(channel.calls.filter(({ method }) => method === "edit")).toEqual([]);
+  });
+
+  it.each([
+    { name: "viewer", caller: { userId: "owner-1", role: "viewer" }, chatId: "chat-1", threadId: "topic-1", reason: "wrong-user" },
+    { name: "missing identity", caller: { role: "owner" }, chatId: "chat-1", threadId: "topic-1", reason: "wrong-user" },
+    { name: "wrong chat", caller: { userId: "owner-1", role: "owner" }, chatId: "other-chat", threadId: "topic-1", reason: "wrong-chat" },
+    { name: "wrong topic", caller: { userId: "owner-1", role: "owner" }, chatId: "chat-1", threadId: "other-topic", reason: "mismatch" },
+  ])("FP01 refuses $name on a self-approval without creating a consumed proof", async ({
+    caller, chatId, threadId, reason,
+  }) => {
+    const store = makeStore();
+    const job = createAwaitingJob(store, { callerId: "owner-1" });
+    const service = makeService(store);
+    const approval = makeIssue(service, job);
+
+    expect(await service.decide({
+      payload: approval.approve.slice(2), caller, chatId, threadId,
+    })).toMatchObject({ ok: false, reason });
+    expect(currentJobs(store)[job.id].state).toBe("awaiting-approval");
+    expect(records(store, "approvals")).toHaveLength(1);
+  });
+
+  it("FP01 never approves when consumed-proof persistence fails", async () => {
+    const store = makeStore();
+    const job = createAwaitingJob(store);
+    const service = makeService(store);
+    const approval = makeIssue(service, job);
+    const release = store.lock();
+    rmSync(path.join(directories.at(-1), "dispatcher.lock"));
+
+    try {
+      expect(await service.decide({
+        payload: approval.approve.slice(2),
+        caller: { userId: "approver-1", role: "owner" },
+        chatId: job.chatId,
+        threadId: job.threadId,
+      })).toMatchObject({ ok: false, reason: "STATE_LOCKED" });
+      expect(currentJobs(store)[job.id].state).toBe("awaiting-approval");
+      expect(records(store, "approvals")).toHaveLength(1);
+    } finally {
+      release();
+    }
+  });
+
+  it("FP01 retains the committed approval when editing its card fails", async () => {
+    const store = makeStore();
+    const channel = makeChannel();
+    channel.edit = async () => { throw new Error("fixture edit failure"); };
+    const job = createAwaitingJob(store);
+    const service = makeService(store, { channel });
+    const approval = makeIssue(service, job);
+
+    await expect(approvalCallback.handle({}, {
+      payload: approval.approve.slice(2),
+      caller: { userId: "approver-1", role: "owner" },
+      chatId: job.chatId, threadId: job.threadId, messageId: "message-1",
+    })).resolves.toBeUndefined();
+    expect(currentJobs(store)[job.id].state).toBe("approved");
+    expect(records(store, "approvals").filter(({ kind }) => kind === "approval.consumed"))
+      .toHaveLength(1);
+    expect(records(store, "audit")).toContainEqual(expect.objectContaining({
+      kind: "approval-decision", jobId: job.id,
+    }));
+  });
+
+  it("FP01 keeps an expired callback refusal non-throwing when delivery fails", async () => {
+    const store = makeStore();
+    const channel = makeChannel();
+    channel.send = async () => { throw new Error("fixture send failure"); };
+    const job = createAwaitingJob(store);
+    let now = NOW;
+    const service = makeService(store, { channel, now: () => now, ttlMs: 100 });
+    const approval = makeIssue(service, job);
+    now += 101;
+
+    await expect(approvalCallback.handle({}, {
+      payload: approval.approve.slice(2),
+      caller: { userId: "approver-1", role: "owner" },
+      chatId: job.chatId, threadId: job.threadId,
+    })).resolves.toBeUndefined();
+    expect(currentJobs(store)[job.id].state).toBe("awaiting-approval");
+    expect(records(store, "approvals")).toHaveLength(1);
+    expect(records(store, "audit")).toContainEqual(expect.objectContaining({
+      kind: "approval-refused", reason: "expired",
+    }));
+  });
+
+  it.each(["missing-chat", "estimate-unavailable", "send-failure"])(
+    "FP01 preserves feature refusal handling for %s",
+    async (failure) => {
+      vi.useFakeTimers();
+      const store = makeStore();
+      const channel = makeChannel();
+      if (failure === "send-failure") {
+        channel.send = async () => { throw new Error("fixture send failure"); };
+      }
+      createAwaitingJob(store, {
+        type: failure === "estimate-unavailable" ? "plan" : "task",
+        chatId: failure === "missing-chat" ? null : "chat-1",
+      });
+      await approvalsFeature.start({
+        store, channel, config: { projects: [project] }, now: () => NOW,
+        mcp: { call: async () => ({ ok: false }) },
+        logger: { error: vi.fn() },
+      });
+
+      expect(records(store, "approvals")).toEqual([]);
+      expect(records(store, "audit")).toContainEqual(expect.objectContaining({
+        kind: failure === "send-failure" ? "approval-card-failed" : "approval-card-skipped",
+        reason: failure === "send-failure" ? "CHANNEL_SEND_FAILED" : failure,
+      }));
+      await approvalsFeature.stop();
+      expect(vi.getTimerCount()).toBe(0);
+    },
+  );
+
+  it("FP01 preserves expiry after feature card-edit failure and clears its timer", async () => {
+    vi.useFakeTimers();
+    const store = makeStore();
+    const channel = makeChannel();
+    channel.edit = async () => { throw new Error("fixture edit failure"); };
+    const job = createAwaitingJob(store);
+    let now = NOW;
+    await approvalsFeature.start({
+      store, channel, config: { projects: [project] }, now: () => now,
+      approvalTtlMs: 100, logger: { error: vi.fn() },
+    });
+    now += 101;
+
+    await approvalsFeature.tick();
+    expect(currentJobs(store)[job.id].state).toBe("expired");
+    expect(records(store, "audit")).toContainEqual(expect.objectContaining({
+      kind: "approval-card-edit-failed", reason: "CHANNEL_EDIT_FAILED", jobId: job.id,
+    }));
+    await approvalsFeature.stop();
+    expect(vi.getTimerCount()).toBe(0);
   });
 
   it("rejects the wrong user at the service boundary", async () => {
@@ -487,6 +879,75 @@ describe("approval callback flow", () => {
     expect(readFileSync(path.join(directories.at(-1), "audit.jsonl"), "utf8")).not.toContain(nonce);
     expect(channel.calls.filter(({ method }) => method === "answerCallback")).toHaveLength(0);
   });
+
+  it("FP01 leaves a declared fanout child's approval to its pending parent", () => {
+    const store = makeStore();
+    const childId = "cabcde0123456789abcdef01";
+    const parent = createAwaitingJob(store, {
+      id: "fabcde0123456789abcdef01",
+      type: "fanout",
+      targets: [{ childId, projectId: project.id, branch: `claw/${childId}` }],
+    });
+    createAwaitingJob(store, { id: childId, parentId: parent.id });
+    const service = makeService(store);
+
+    expect(service.pendingWithoutCard().map(({ id }) => id)).toEqual([parent.id]);
+    expect(records(store, "approvals")).toEqual([]);
+  });
+
+  it("FP01 never issues a per-child card during approved fanout recovery", async () => {
+    const store = makeStore();
+    const channel = makeChannel();
+    const childId = "cabcde0123456789abcdef01";
+    const parent = createAwaitingJob(store, {
+      id: "fabcde0123456789abcdef01",
+      type: "fanout",
+      callerId: "owner-1",
+      targets: [{ childId, projectId: project.id, branch: `claw/${childId}` }],
+    });
+    const child = createAwaitingJob(store, { id: childId, parentId: parent.id, callerId: "owner-1" });
+    const config = {
+      projects: [project],
+      allowlist: [{ channel: "telegram", userId: "owner-1", role: "owner" }],
+    };
+    const service = makeService(store, { config });
+    const approval = makeIssue(service, parent);
+    expect(await service.decide({
+      payload: approval.approve.slice(2), caller: { userId: "owner-1", role: "owner" },
+      chatId: parent.chatId, threadId: parent.threadId,
+    })).toMatchObject({ ok: true, jobId: parent.id, decision: "approve" });
+
+    await approvalsFeature.start({ store, channel, config, now: () => NOW });
+
+    expect(channel.calls.length).toBe(0);
+    expect(records(store, "approvals").map(({ jobId }) => jobId)).toEqual([parent.id, parent.id]);
+    expect(currentJobs(store)[child.id].state).toBe("awaiting-approval");
+  });
+
+  it.each(["undeclared child", "wrong project", "non-fanout parent", "missing parent"])(
+    "FP01 does not suppress an approval with a forged %s relationship",
+    (relationship) => {
+      const store = makeStore();
+      const childId = "cabcde0123456789abcdef01";
+      const parent = createAwaitingJob(store, {
+        id: "fabcde0123456789abcdef01",
+        type: relationship === "non-fanout parent" ? "task" : "fanout",
+        targets: [{
+          childId: relationship === "undeclared child" ? "0abcde0123456789abcdef01" : childId,
+          projectId: relationship === "wrong project" ? "project-2" : project.id,
+          branch: `claw/${childId}`,
+        }],
+      });
+      const child = createAwaitingJob(store, {
+        id: childId,
+        parentId: relationship === "missing parent" ? "0abcde0123456789abcdef01" : parent.id,
+      });
+      const service = makeService(store);
+
+      expect(service.pendingWithoutCard().map(({ id }) => id)).toContain(child.id);
+      expect(records(store, "approvals")).toEqual([]);
+    },
+  );
 
   it("starts without a channel and clears its interval on stop", async () => {
     vi.useFakeTimers();

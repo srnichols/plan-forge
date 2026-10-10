@@ -1,6 +1,5 @@
 import { execFile } from "node:child_process";
-import { mkdtemp, readFile, rm } from "node:fs/promises";
-import os from "node:os";
+import { readFile, rm } from "node:fs/promises";
 import path from "node:path";
 import { promisify } from "node:util";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -12,15 +11,10 @@ import { startFakeTelegram } from "./helpers/fake-telegram.mjs";
 import { createFixtureRepos } from "./helpers/fixture-repos.mjs";
 import { createScriptedCopilot } from "./helpers/scripted-copilot.mjs";
 import { createApp as createRealApp } from "../src/app.mjs";
+import { g1Directory } from "./g1-runner-fixture.mjs";
 
 const execFileAsync = promisify(execFile);
 const temporaryRoots = [];
-const originalEnv = new Map();
-const ENV_KEYS = [
-  "PFORGE_CLAW_TELEGRAM_TOKEN",
-  "PFORGE_CLAW_FIXTURE_ROOT",
-  "PFORGE_CLAW_GH_LOG",
-];
 
 async function git(repoPath, ...args) {
   const { stdout } = await execFileAsync("git", ["-C", repoPath, ...args], { windowsHide: true });
@@ -31,23 +25,7 @@ function parseJsonLines(text) {
   return text.trim().split(/\r?\n/).filter(Boolean).map((line) => JSON.parse(line));
 }
 
-function setFixtureEnvironment(values) {
-  for (const key of ENV_KEYS) {
-    if (!originalEnv.has(key)) originalEnv.set(key, process.env[key]);
-    process.env[key] = values[key];
-  }
-}
-
-function restoreFixtureEnvironment() {
-  for (const [key, value] of originalEnv) {
-    if (value === undefined) delete process.env[key];
-    else process.env[key] = value;
-  }
-  originalEnv.clear();
-}
-
 afterEach(async () => {
-  restoreFixtureEnvironment();
   await Promise.all(temporaryRoots.splice(0).map((root) => rm(root, {
     recursive: true, force: true, maxRetries: 5, retryDelay: 25,
   })));
@@ -55,18 +33,19 @@ afterEach(async () => {
 
 describe("single-host Forge-Claw smoke", () => {
   it("runs ask, plan approval, worktree execution, and publishing through the real dispatcher", async () => {
-    const root = await mkdtemp(path.join(os.tmpdir(), "claw dispatcher smoke-"));
+    const root = await g1Directory("g1-single-host-git-");
     temporaryRoots.push(root);
     const fixtureRoot = path.join(root, "fixture repos");
     const repos = await createFixtureRepos(1, { directory: fixtureRoot, ghShim: true });
     const projectRepo = repos.projects[0];
     const telegram = await startFakeTelegram();
     const ghLog = path.join(fixtureRoot, "fake-gh-calls.jsonl");
-    setFixtureEnvironment({
+    const fixtureEnv = {
+      ...process.env,
       PFORGE_CLAW_TELEGRAM_TOKEN: "fixture-telegram-token",
       PFORGE_CLAW_FIXTURE_ROOT: root,
       PFORGE_CLAW_GH_LOG: ghLog,
-    });
+    };
 
     const projectId = "fixture-1";
     const home = path.join(root, "claw-home");
@@ -101,11 +80,12 @@ describe("single-host Forge-Claw smoke", () => {
         channel: { adapter: "telegram", chatId: "42", topicId: "101" },
         homeLane: "local",
         placement: { prefer: ["local"], requires: [] },
+        models: { work: "configured-work-model" },
       }],
       http: { bind: "127.0.0.1", port: 0 },
     };
     const secrets = await createSecrets({
-      env: process.env,
+      env: fixtureEnv,
       trackNames: ["PFORGE_CLAW_TELEGRAM_TOKEN"],
     });
     const store = createStore(path.join(home, "state"), { redact: secrets.redact });
@@ -119,7 +99,7 @@ describe("single-host Forge-Claw smoke", () => {
     try {
       handles = await bootDispatcher({
         home,
-        env: process.env,
+        env: fixtureEnv,
         loadedConfig: { ok: true, config },
         validateConfig: async () => ({ ok: true }),
         secrets,
@@ -187,7 +167,29 @@ describe("single-host Forge-Claw smoke", () => {
       ], { windowsHide: true });
       expect(pushedRef.trim()).toBeTruthy();
       expect(await git(projectRepo.repoPath, "rev-parse", "HEAD")).toBe(initialHead);
-      expect(await git(projectRepo.repoPath, "status", "--porcelain")).toBe("");
+      expect(await git(projectRepo.repoPath, "diff", "--name-only")).toBe("");
+      expect(await git(projectRepo.repoPath, "diff", "--cached", "--name-only")).toBe("");
+      // This minimal fixture does not ignore .forge; canonical history is the sole expected untracked output.
+      expect(await git(projectRepo.repoPath, "status", "--porcelain")).toBe("?? .forge/");
+      const canonicalEvents = parseJsonLines(await readFile(path.join(
+        projectRepo.repoPath, ".forge", "runs", "fixture-run-1", "events.jsonl",
+      ), "utf8"));
+      expect(canonicalEvents.map(({ type }) => type)).toEqual([
+        "run-started", "slice-started", "slice-completed", "run-completed",
+      ]);
+      const started = canonicalEvents[0].data;
+      expect(started).toMatchObject({
+        plan: expect.stringContaining(path.join(job.id, "docs", "plans", "Phase-1-DEMO-PLAN.md")),
+        traceId: expect.stringMatching(/^[0-9a-f]{32}$/),
+        sliceCount: 1, executionOrder: ["1"],
+      });
+      expect(path.isAbsolute(started.plan)).toBe(true);
+      expect(Number.isFinite(Date.parse(started.startTime))).toBe(true);
+      expect(canonicalEvents[2].data).toEqual({ sliceId: "1", status: "passed" });
+      expect(canonicalEvents[3].data).toMatchObject({
+        plan: started.plan, startTime: started.startTime, sliceCount: 1, status: "passed",
+        results: { passed: 1, failed: 0, skipped: 0, total: 1 },
+      });
 
       await expect(handles.stop()).resolves.toBeUndefined();
       expect(handles.stopped).toBe(true);

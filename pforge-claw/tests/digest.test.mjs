@@ -1,7 +1,6 @@
 import { mkdtemp, rm } from "node:fs/promises";
-import os from "node:os";
 import path from "node:path";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   collectDigest,
   DIGEST_PROPOSAL_TTL_MS,
@@ -9,12 +8,13 @@ import {
   sendDigest,
   SOURCE_TIMEOUT_MS,
 } from "../src/digest.mjs";
+import { createScheduler } from "../src/scheduler.mjs";
 import { createStore } from "../src/state/store.mjs";
 
 const directories = [];
 
 async function makeStore(now = Date.now()) {
-  const directory = await mkdtemp(path.join(os.tmpdir(), "claw-digest-"));
+  const directory = await mkdtemp(path.resolve("claw-c7-digest-fixture-"));
   directories.push(directory);
   let timestamp = now;
   const store = createStore(directory, { now: () => new Date(timestamp) });
@@ -22,7 +22,12 @@ async function makeStore(now = Date.now()) {
   return store;
 }
 
+beforeEach(() => {
+  vi.useFakeTimers();
+  vi.setSystemTime(new Date("2026-10-07T08:00:00.000Z"));
+});
 afterEach(async () => {
+  vi.useRealTimers();
   await Promise.all(directories.splice(0).map((directory) => rm(directory, { recursive: true, force: true })));
 });
 
@@ -53,6 +58,47 @@ function sourceClient({ failingProject } = {}) {
 }
 
 describe("morning digest", () => {
+  it("delivers seven daily digests once per persisted slot across restart", async () => {
+    const store = await makeStore();
+    const mcp = sourceClient();
+    const channel = { send: vi.fn() };
+    const config = {
+      timezone: "Etc/UTC",
+      channels: { telegram: { generalChat: { chatId: "general", topicId: "morning" } } },
+      projects: [project("p1"), project("p2")],
+    };
+    const options = {
+      store,
+      schedules: [{ id: "morning", kind: "digest", at: "daily 08:00" }],
+      timeZone: config.timezone,
+      now: Date.now,
+      run: async () => {
+        const data = await collectDigest({ store, config, mcp, now: Date.now });
+        await sendDigest({ store, config, channel, data, now: Date.now });
+      },
+    };
+    for (let day = 0; day < 7; day += 1) {
+      const timestamp = Date.parse("2026-10-07T08:00:00.000Z") + day * 86_400_000;
+      vi.setSystemTime(timestamp);
+      store.setTime(timestamp);
+      await createScheduler(options).tick();
+      vi.setSystemTime(timestamp + 30_000);
+      await createScheduler(options).tick();
+      expect(store.readJson("schedules.json").schedules.morning).toMatchObject({
+        lastKey: new Date(timestamp).toISOString().slice(0, 10),
+        status: "done",
+      });
+    }
+    expect(channel.send).toHaveBeenCalledTimes(7);
+    for (const [message] of channel.send.mock.calls) {
+      expect(message).toMatchObject({ chatId: "general", threadId: "morning" });
+      expect(message.text).toContain("Project p1");
+      expect(message.text).toContain("Project p2");
+    }
+    expect(mcp.call.mock.calls.every((args) => args.length === 3)).toBe(true);
+    expect([...store.read("audit")].filter(({ record }) => record.kind === "schedule.fired")).toHaveLength(7);
+  });
+
   it("renders all project lines and keeps unreported spend distinct from zero", async () => {
     const now = Date.parse("2026-10-07T08:00:00.000Z");
     const store = await makeStore(now);
@@ -173,6 +219,38 @@ describe("morning digest", () => {
     const { text } = renderDigest(data, { secrets: { redact: String } });
     expect(text.length).toBeLessThanOrEqual(4096);
     expect(text.split("\n").filter((line) => line.startsWith("• "))).toHaveLength(60);
+  });
+
+  it.each([
+    [150, "• projec 10/2", "\n\nLook first"],
+    [300, "• pro 10/2", "\nLook first\nAudit unavailable (MCP_SOURCE_FAILED)"],
+  ])("preserves every project in the %s-line minimal rendering", (count, projectLine, suffix) => {
+    const data = {
+      projects: Array.from({ length: count }, (_value, index) => ({
+        id: `project-${index}`,
+        name: "Project with a long display name",
+        sources: {},
+        jobs: { succeeded: 10, failed: 2 },
+        costUSD: null,
+      })),
+      lookAtFirst: { unavailable: "MCP_SOURCE_FAILED" },
+    };
+    const { text } = renderDigest(data);
+    expect(text.length).toBeLessThanOrEqual(4096);
+    expect(text.split("\n").filter((line) => line.startsWith("• "))).toHaveLength(count);
+    expect(text).toContain(projectLine);
+    expect(text.endsWith(suffix)).toBe(true);
+  });
+
+  it("refuses an oversized digest instead of silently dropping project lines", () => {
+    expect(() => renderDigest({
+      projects: Array.from({ length: 1000 }, () => ({
+        id: "project",
+        name: "Project",
+        sources: {},
+        jobs: { succeeded: 10, failed: 2 },
+      })),
+    })).toThrowError(expect.objectContaining({ code: "DIGEST_TOO_LARGE" }));
   });
 
   it("adds validated P0 proposals and sends one topic-bound message", async () => {

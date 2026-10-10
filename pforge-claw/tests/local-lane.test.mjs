@@ -217,7 +217,7 @@ describe("local lane cancellation and failure handling", () => {
     await running.promise;
     const waiting = lane.submit(job("permit-waiter", "project-b", { heavy: true }));
     expect(lane.health()).toMatchObject({ queued: 1, heavyInUse: 1 });
-    expect(await lane.cancel("permit-waiter")).toMatchObject({ ok: true, state: "cancelling" });
+    expect(await lane.cancel("permit-waiter")).toMatchObject({ ok: true, state: "cancelled" });
     const waitingEvents = await readEvents(waiting);
     expect(waitingEvents.at(-1).data.status).toBe("cancelled");
     release.resolve();
@@ -244,7 +244,7 @@ describe("local lane cancellation and failure handling", () => {
     const first = lane.submit(job("cancellable", "project-a"));
     await running.promise;
     const second = lane.submit(job("after-cancel", "project-a"));
-    expect(await lane.cancel("cancellable")).toEqual({ ok: true, state: "cancelling" });
+    expect(await lane.cancel("cancellable")).toEqual({ ok: true, state: "cancelled" });
     await nextStarted.promise;
     const [firstEvents, secondEvents] = await Promise.all([readEvents(first), readEvents(second)]);
     expect(firstEvents.at(-1).data.status).toBe("cancelled");

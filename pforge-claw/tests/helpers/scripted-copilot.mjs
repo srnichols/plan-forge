@@ -53,15 +53,34 @@ export async function createSession(options) {
   return createSessionFactory().createSession(options);
 }
 
+async function waitForBarrier(barrier, signal) {
+  if (!barrier || signal?.aborted) return;
+  await new Promise((resolve) => {
+    const finish = () => {
+      signal?.removeEventListener("abort", finish);
+      resolve();
+    };
+    signal?.addEventListener("abort", finish, { once: true });
+    barrier.promise.then(finish);
+    if (signal?.aborted) finish();
+  });
+}
+
 /**
  * Create an agent-runtime-contract fixture that emits scripted lane events.
- * @param {{events?:Array<object>,result?:object,scriptsByJobType?:Record<string,Array<object>>}} options
+ * @param {{events?:Array<object>,result?:object,scriptsByJobType?:Record<string,Array<object>>,
+ * beforeRun?:Function,onRun?:Function}} options
  */
 export function createScriptedCopilot({
   events = [],
   result = {},
   scriptsByJobType = {},
+  beforeRun,
+  onRun,
 } = {}) {
+  for (const hook of [beforeRun, onRun]) {
+    if (hook !== undefined && typeof hook !== "function") throw new TypeError("scripted runtime hooks must be functions");
+  }
   const permissionRequests = [];
   const heldJobs = new Map();
   const activeJobs = new Set();
@@ -85,7 +104,9 @@ export function createScriptedCopilot({
         });
       }
       try {
-        if (barrier) await barrier.promise;
+        await beforeRun?.(turn);
+        await waitForBarrier(barrier, turn.signal);
+        if (!turn.signal?.aborted) await onRun?.(turn);
         const scriptedEvents = scriptsByJobType[turn.jobType] ?? events;
         for (const event of scriptedEvents) {
           turn.emit?.(event.type, event.data ?? {});
@@ -135,6 +156,9 @@ export function createScriptedCopilot({
       if (!barrier) throw new Error(`Job ${jobId} has no execution barrier`);
       heldJobs.delete(jobId);
       barrier.release();
+    },
+    releaseAll() {
+      for (const jobId of [...heldJobs.keys()]) this.release(jobId);
     },
     activeJobs,
     runWindows,

@@ -1,10 +1,44 @@
 import { randomBytes } from "node:crypto";
 import { ClawError } from "./errors.mjs";
+import { authorizeJobRequest, currentCaller } from "./handlers/c2-command-context.mjs";
 import { createJob, currentJobs, JOBS_STREAM, TERMINAL, transition } from "./jobs/model.mjs";
+import {
+  APPROVER_ROLES,
+  FANOUT_ATTRIBUTION_FIELDS,
+  FANOUT_MAX_TARGETS,
+  approvalRoleFor as currentRole,
+  declaredFanoutChildren as declaredChildren,
+  fanoutDeclarationDigest as declarationDigest,
+  fanoutProofFor,
+  isDeclaredFanoutChild,
+  isGeneralProjectVisible,
+  isValidFanoutDeclaration as validDeclaration,
+  storedFanoutParentFor as matchingParent,
+} from "./jobs/approval-proof.mjs";
+import {
+  findRequestJob,
+  normalizeRequestFields,
+  requestIdentity,
+  withRequestIdentity,
+} from "./jobs/request-identity.mjs";
 import { isCrossProjectReadable } from "./memory/memory-client.mjs";
 
-export const FANOUT_MAX_TARGETS = 20;
+/**
+ * @typedef {import("./jobs/approval-proof.mjs").FanoutParent} FanoutParent
+ * @typedef {ReturnType<typeof import("./state/store.mjs").createStore>} ClawStore
+ */
+
+export {
+  FANOUT_MAX_TARGETS,
+  approvedChoicesFor,
+  consumedApprovalFor,
+  fanoutProofFor,
+  isDeclaredFanoutChild,
+} from "./jobs/approval-proof.mjs";
+
 export const FANOUT_DELIM = "--";
+const FANOUT_ID_BYTES = 12;
+const FANOUT_APPROVAL_REQUIRED = "FANOUT_APPROVAL_REQUIRED";
 export const ACTIVE_STATES = Object.freeze([
   "awaiting-approval",
   "approved",
@@ -22,7 +56,7 @@ function projectsFor({ config, registry } = {}) {
 
 export function visibleProjects({ config, registry, scope, projectId } = {}) {
   const projects = projectsFor({ config, registry });
-  if (scope === "general") return projects.filter((project) => project.visibility !== "restricted");
+  if (scope === "general") return projects.filter(isGeneralProjectVisible);
   if (scope === "project") {
     const project = projects.find((candidate) => String(candidate.id) === String(projectId));
     return project ? [project] : [];
@@ -159,65 +193,54 @@ function appendTransition({ store, bus, logger }, job, to, reason) {
   return updated.job;
 }
 
-function auditChildApproval(approvals, parentId, jobId, approverId) {
+function auditChildApproval({ approvals, parentId, jobId, approverId }) {
   approvals?.audit?.({
     kind: "fanout.child-approved",
     parentId,
     jobId,
-    approverId: approverId ?? null,
+    approverId,
   });
 }
 
-function approverFor(approvals, parentId) {
-  const records = approvals?.fold?.()?.byHash;
-  if (!records) return null;
-  return [...records.values()].find((record) => (
-    record.kind === "approval.consumed" && record.jobId === parentId && record.decision === "approve"
-  ))?.approverId ?? null;
+function refuseParent(deps, parent, code = FANOUT_APPROVAL_REQUIRED) {
+  deps.approvals?.audit?.({ kind: "fanout.authorization-refused", parentId: parent.id, code });
+  deps.logger?.error?.("Fan-out authorization refused", { parentId: parent.id, code });
+}
+
+function inheritBudgetOverride({ deps, parent, child, approverId, budgetRecords, currentDay }) {
+  const override = budgetRecords.find((record) => (
+    record.kind === "override" && record.jobId === parent.id && record.day === currentDay
+  ));
+  if (!override || currentDay === undefined) return;
+  if (currentRole(deps.config, override.approverId, parent.adapter) !== APPROVER_ROLES[0]) return;
+  if (budgetRecords.some((record) => (
+    record.kind === "override" && record.jobId === child.id && record.day === currentDay
+  ))) return;
+  deps.store.append("budget", {
+    v: 1, kind: "override", jobId: child.id, day: currentDay, approverId: override.approverId,
+  });
+  deps.approvals?.audit?.({
+    kind: "fanout.budget-override-inherited", parentId: parent.id, jobId: child.id, approverId,
+  });
 }
 
 function approveQueuedChildren(deps, parent, approverId) {
-  const budgetRecords = [...(deps.store.read?.("budget") ?? [])].map(({ record }) => record);
+  const budgetRecords = [...deps.store.read("budget")].map(({ record }) => record);
   const currentDay = deps.budget?.today?.().day;
-  const inheritedOverride = budgetRecords
-    .find((record) => record.kind === "override" && record.jobId === parent.id);
-  for (const target of parent.targets ?? []) {
+  for (const target of parent.targets) {
     let child = currentJobs(deps.store)[target.childId];
-    if (child?.state !== "queued") continue;
-    const activeOverride = inheritedOverride
-      && (currentDay === undefined || inheritedOverride.day === currentDay);
-    const alreadyInherited = activeOverride && budgetRecords.some((record) => (
-      record.kind === "override" && record.jobId === child.id && record.day === inheritedOverride.day
-    ));
-    if (activeOverride && !alreadyInherited) {
-      deps.store.append("budget", {
-        v: 1,
-        kind: "override",
-        jobId: child.id,
-        day: inheritedOverride.day,
-        approverId: inheritedOverride.approverId,
-      });
-      deps.approvals?.audit?.({
-        kind: "fanout.budget-override-inherited",
-        parentId: parent.id,
-        jobId: child.id,
-        approverId: inheritedOverride.approverId ?? approverId ?? null,
-      });
-    }
-    child = appendTransition(deps, child, "awaiting-approval", `fanout:${parent.id}`);
-    child = appendTransition(deps, child, "approved", `fanout:${parent.id}`);
-    auditChildApproval(deps.approvals, parent.id, child.id, approverId);
+    if (!["queued", "awaiting-approval"].includes(child.state)) continue;
+    inheritBudgetOverride({ deps, parent, child, approverId, budgetRecords, currentDay });
+    if (child.state === "queued") child = appendTransition(deps, child, "awaiting-approval", `fanout:${parent.id}`);
+    appendTransition(deps, child, "approved", `fanout:${parent.id}`);
+    auditChildApproval({ approvals: deps.approvals, parentId: parent.id, jobId: child.id, approverId });
   }
 }
 
-export function prepareFanout(deps = {}, { argsText = "" } = {}) {
-  const { store, config = {}, registry, caller, chatId, threadId } = deps;
-  if (!store || typeof store.append !== "function") throw new ClawError("SERVICE_UNAVAILABLE");
+function selectFanoutTargets({ config, registry }, argsText) {
   const parsed = parseFanoutArgs(argsText);
   const visible = visibleProjects({ config, registry, scope: "general" });
-  if (parsed.projectIds?.length > FANOUT_MAX_TARGETS || visible.length > FANOUT_MAX_TARGETS) {
-    throw new ClawError("FANOUT_TOO_MANY");
-  }
+  if (parsed.projectIds?.length > FANOUT_MAX_TARGETS) throw new ClawError("FANOUT_TOO_MANY");
   let targets;
   if (parsed.projectIds) {
     const allowed = new Map(visible.map((project) => [String(project.id), project]));
@@ -231,82 +254,183 @@ export function prepareFanout(deps = {}, { argsText = "" } = {}) {
   }
   if (targets.length > FANOUT_MAX_TARGETS) throw new ClawError("FANOUT_TOO_MANY");
   if (targets.length === 0) throw new ClawError("FANOUT_NO_TARGETS");
+  return { task: parsed.task, targets };
+}
 
-  const parentId = randomBytes(12).toString("hex");
-  const parentCreated = createJob({
-    id: parentId,
+function parentRequest(deps, input) {
+  const authority = currentCaller(deps.config, deps.caller);
+  if (!authority) throw new ClawError("CALLER_NOT_ALLOWED");
+  const adapter = input.adapter ?? deps.adapter ?? authority.channel;
+  if (adapter !== authority.channel) throw new ClawError("CALLER_NOT_ALLOWED");
+  return normalizeRequestFields({
     type: "fanout",
     projectId: "general",
     parentId: null,
+    callerId: authority.userId,
+    adapter,
+    updateId: input.updateId ?? deps.updateId ?? null,
+    chatId: deps.chatId ?? null,
+    threadId: deps.threadId ?? null,
   });
-  const children = targets.map((project) => {
-    const created = createJob({
-      id: randomBytes(12).toString("hex"),
-      type: "task",
-      projectId: project.id,
-      parentId,
+}
+
+function authorizeTargets(deps, projects, caller) {
+  let authority = null;
+  for (const project of projects) {
+    const verdict = authorizeJobRequest({
+      config: deps.config, project, caller, store: deps.store, secrets: deps.secrets, lanes: deps.lanes,
     });
-    return {
-      ...created.job,
-      description: parsed.task,
-      callerId: String(caller?.userId ?? ""),
-      createdAt: new Date().toISOString(),
-      chatId: chatId ?? null,
-      threadId: threadId ?? null,
-      fanoutParentId: parentId,
-      targetBranch: `claw/${created.job.id}`,
-    };
+    if (!verdict.ok) throw new ClawError(verdict.code);
+    authority = verdict.caller;
+  }
+  return authority;
+}
+
+function declaredProjects(deps, parent) {
+  const visible = new Map(visibleProjects({
+    config: deps.config, registry: deps.registry, scope: "general",
+  }).map((project) => [String(project.id), project]));
+  return parent.targets.map((target) => {
+    const project = visible.get(target.projectId);
+    if (!project) throw new ClawError("FANOUT_UNKNOWN_PROJECT");
+    return project;
   });
-  const targetsList = children.map((child) => (
-    `${child.projectId} → job ${child.id}, branch claw/${child.id}`
+}
+
+function authorizeParent(deps, parent) {
+  return authorizeTargets(deps, declaredProjects(deps, parent), {
+    userId: parent.callerId, channel: parent.adapter,
+  });
+}
+
+function createFanoutParent({ request, task, targets, callerRole, now }) {
+  const parentId = randomBytes(FANOUT_ID_BYTES).toString("hex");
+  const declarations = targets.map((project) => {
+    const childId = randomBytes(FANOUT_ID_BYTES).toString("hex");
+    return { projectId: String(project.id), childId, branch: `claw/${childId}` };
+  });
+  const targetsList = declarations.map((target) => (
+    `${target.projectId} → job ${target.childId}, branch ${target.branch}`
   ));
   const parent = {
-    ...parentCreated.job,
-    description: `${parsed.task}\n\nTargets (${children.length}):\n${targetsList.join("\n")}`,
-    callerId: String(caller?.userId ?? ""),
-    createdAt: new Date().toISOString(),
-    chatId: chatId ?? null,
-    threadId: threadId ?? null,
-    targets: children.map((child) => ({
-      projectId: child.projectId,
-      childId: child.id,
-      branch: `claw/${child.id}`,
-    })),
+    ...createJob({ id: parentId, type: "fanout", projectId: "general", parentId: null }).job,
+    ...request,
+    description: `${task}\n\nTargets (${declarations.length}):\n${targetsList.join("\n")}`,
+    task,
+    callerRole,
+    createdAt: new Date(now()).toISOString(),
+    targets: declarations,
     targetBranch: "per-target (see list)",
     lane: "per-target",
   };
-  store.append(JOBS_STREAM, { kind: "job.created", job: parent });
-  for (const child of children) {
-    store.append(JOBS_STREAM, { kind: "job.created", job: child });
+  parent.approvalDigest = declarationDigest(parent);
+  return parent;
+}
+
+function childFor(parent, target) {
+  return {
+    ...createJob({ id: target.childId, type: "task", projectId: target.projectId, parentId: parent.id }).job,
+    ...Object.fromEntries(FANOUT_ATTRIBUTION_FIELDS.map((field) => [field, parent[field]])),
+    description: parent.task,
+    createdAt: parent.createdAt,
+    fanoutParentId: parent.id,
+    targetBranch: target.branch,
+  };
+}
+
+function recoverFanoutFamily(store, parent) {
+  if (!matchingParent(store, parent)) throw new ClawError("FANOUT_REQUEST_MISMATCH");
+  for (const target of parent.targets) {
+    const child = currentJobs(store)[target.childId];
+    if (!child) store.append(JOBS_STREAM, { kind: "job.created", job: childFor(parent, target) });
+    else if (!isDeclaredFanoutChild({ parent, child })) throw new ClawError("FANOUT_REQUEST_MISMATCH");
   }
+  if (parent.state !== "queued") return parent;
   const awaiting = transition(parent, "awaiting-approval");
   store.append(JOBS_STREAM, awaiting.event);
-  return { text: `Fan-out ${parent.id} awaiting approval for ${children.length} projects.` };
+  return awaiting.job;
+}
+
+function fanoutReceipt(parent) {
+  const state = parent.state === "awaiting-approval" ? "awaiting approval" : parent.state;
+  return {
+    text: `Fan-out ${parent.id} ${state} for ${parent.targets.length} projects.`,
+    jobId: parent.id,
+    state: parent.state,
+  };
+}
+
+/**
+ * Creates or recovers one durable family; only G1 may lease its parent or children.
+ * @returns {Promise<{text:string,jobId:string,state:string}>}
+ */
+export async function prepareFanout(deps = {}, input = {}) {
+  const { store, now = Date.now } = deps;
+  if (!store || typeof store.append !== "function") throw new ClawError("SERVICE_UNAVAILABLE");
+  const selection = selectFanoutTargets(deps, input.argsText ?? "");
+  const request = parentRequest(deps, input);
+  const identity = requestIdentity(request);
+  return withRequestIdentity({ identity }, () => {
+    let parent = findRequestJob(store, request);
+    const authority = authorizeTargets(deps, parent ? declaredProjects(deps, parent) : selection.targets, deps.caller);
+    if (!parent) {
+      parent = createFanoutParent({ request, ...selection, callerRole: authority.role, now });
+      store.append(JOBS_STREAM, { kind: "job.created", job: parent });
+    }
+    return fanoutReceipt(recoverFanoutFamily(store, parent));
+  });
+}
+
+function requestParentStart(deps, parent) {
+  deps.budget.gate(parent.id);
+  if (currentJobs(deps.store)[parent.id].state === "approved") deps.bus?.emit("fanout.ready", { parentId: parent.id });
+}
+
+function hasParentServices(deps, parent) {
+  if (typeof deps.budget?.gate !== "function") {
+    refuseParent(deps, parent, "FANOUT_BUDGET_UNAVAILABLE");
+    return false;
+  }
+  try {
+    authorizeParent(deps, parent);
+    return true;
+  } catch (error) {
+    refuseParent(deps, parent, error instanceof ClawError ? error.code : "FANOUT_FAILED");
+    return false;
+  }
 }
 
 export function onParentApproved(deps = {}, event = {}) {
-  let parent = currentJobs(deps.store)[event.jobId];
-  if (parent?.type !== "fanout" || parent.state !== "approved") return;
-  const approverId = approverFor(deps.approvals, parent.id);
-  parent = appendTransition(deps, parent, "leased", "fanout:coordinator");
-  parent = appendTransition(deps, parent, "running", "fanout:coordinator");
-  approveQueuedChildren(deps, parent, approverId);
+  const parent = currentJobs(deps.store)[event.jobId];
+  if (parent?.type !== "fanout" || !["approved", "leased", "running"].includes(parent.state)) return;
+  const proof = fanoutProofFor({ store: deps.store, config: deps.config, parent });
+  if (!proof) {
+    refuseParent(deps, parent);
+    return;
+  }
+  if (parent.state === "leased") return;
+  if (!hasParentServices(deps, parent)) return;
+  if (parent.state === "approved") {
+    requestParentStart(deps, parent);
+    return;
+  }
+  approveQueuedChildren(deps, parent, proof.approverId);
+  for (const target of parent.targets) deps.budget.gate(target.childId);
 }
 
 export function onParentClosed(deps = {}, event = {}) {
   const parent = currentJobs(deps.store)[event.jobId];
   if (parent?.type !== "fanout" || !["rejected", "expired"].includes(parent.state)) return;
-  for (const target of parent.targets ?? []) {
-    let child = currentJobs(deps.store)[target.childId];
-    if (child?.state !== "queued") continue;
-    child = appendTransition(deps, child, "awaiting-approval", `fanout:${parent.id}:${parent.state}`);
-    appendTransition(deps, child, parent.state, `fanout:${parent.id}:${parent.state}`);
+  const children = declaredChildren(deps.store, parent);
+  if (!children) {
+    refuseParent(deps, parent, "FANOUT_REQUEST_MISMATCH");
+    return;
   }
-}
-
-function parentChildren(store, parent) {
-  const jobs = currentJobs(store);
-  return (parent.targets ?? []).map((target) => jobs[target.childId]).filter(Boolean);
+  for (let child of children) {
+    const reason = `fanout:${parent.id}:${parent.state}`;
+    if (child.state === "queued") child = appendTransition(deps, child, "awaiting-approval", reason);
+    if (child.state === "awaiting-approval") appendTransition(deps, child, parent.state, reason);
+  }
 }
 
 async function sendCombinedReport(deps, parent, children) {
@@ -325,8 +449,9 @@ async function sendCombinedReport(deps, parent, children) {
     await deps.channel.send({
       chatId: String(parent.chatId),
       threadId: parent.threadId ?? null,
-      text: [`Fan-out ${parent.id} complete`, ...lines].join("\n"),
+      text: [`Fan-out ${parent.id} complete (${parent.state})`, ...lines].join("\n"),
     });
+    deps.store.append("audit", { kind: "fanout.report-sent", parentId: parent.id });
   } catch (error) {
     deps.approvals?.audit?.({
       kind: "fanout.report-failed",
@@ -339,49 +464,93 @@ async function sendCombinedReport(deps, parent, children) {
   }
 }
 
+function terminalChildFamily(store, event) {
+  if (!TERMINAL.includes(event.to)) return null;
+  const jobs = currentJobs(store);
+  const child = jobs[event.jobId];
+  if (!child?.parentId || child.state !== event.to) return null;
+  const parent = jobs[child.parentId];
+  if (parent?.type !== "fanout" || !["running", "succeeded", "failed", "cancelled"].includes(parent.state)) return null;
+  return { parent, child };
+}
+
 export async function onChildTerminal(deps = {}, event = {}) {
-  if (!TERMINAL.includes(event.to)) return;
-  const child = currentJobs(deps.store)[event.jobId];
-  if (!child?.parentId) return;
-  const parent = currentJobs(deps.store)[child.parentId];
-  if (parent?.type !== "fanout" || parent.state !== "running") return;
-  const children = parentChildren(deps.store, parent);
-  if (children.length !== parent.targets?.length
-    || !children.length
-    || children.some((entry) => !TERMINAL.includes(entry.state))) return;
-  const result = children.every((entry) => entry.state === "succeeded") ? "succeeded" : "failed";
-  const finished = appendTransition(deps, parent, result, "fanout:complete");
-  await sendCombinedReport(deps, finished, children);
+  const family = terminalChildFamily(deps.store, event);
+  if (!family) return;
+  const { parent, child } = family;
+  if (!fanoutProofFor({ store: deps.store, config: deps.config, parent, child })) {
+    refuseParent(deps, parent);
+    return;
+  }
+  if (parent.state !== "running") {
+    await onParentTerminal(deps, { jobId: parent.id, to: parent.state });
+    return;
+  }
+  const completion = fanoutCompletionFor({ store: deps.store, parent });
+  if (completion) deps.bus?.emit("fanout.settle", { parentId: parent.id, ...completion });
+}
+
+/**
+ * G1 owns the transition; this only determines the combined terminal intent.
+ * @param {{store?:ClawStore,parent?:FanoutParent}} options
+ * @returns {{to:"succeeded"|"failed",reason:string}|null}
+ */
+export function fanoutCompletionFor({ store, parent } = {}) {
+  const children = declaredChildren(store, parent);
+  if (!children || children.some((child) => !TERMINAL.includes(child.state))) return null;
+  return {
+    to: children.every((child) => child.state === "succeeded") ? "succeeded" : "failed",
+    reason: "fanout:complete",
+  };
+}
+
+const reportFlights = new WeakMap();
+
+async function reportTerminalParent(deps, parent) {
+  const sent = [...deps.store.read("audit")].some(({ record }) => (
+    record.kind === "fanout.report-sent" && record.parentId === parent.id
+  ));
+  if (sent) return;
+  const children = declaredChildren(deps.store, parent);
+  if (!children || !fanoutCompletionFor({ store: deps.store, parent })) return;
+  await sendCombinedReport(deps, parent, children);
+}
+
+export async function onParentTerminal(deps = {}, event = {}) {
+  const parent = currentJobs(deps.store)[event.jobId];
+  if (parent?.type !== "fanout" || !["succeeded", "failed", "cancelled"].includes(parent.state)) return;
+  if (!fanoutProofFor({ store: deps.store, config: deps.config, parent })) {
+    refuseParent(deps, parent);
+    return;
+  }
+  const flights = reportFlights.get(deps.store) ?? new Map();
+  reportFlights.set(deps.store, flights);
+  if (flights.has(parent.id)) return flights.get(parent.id);
+  const pending = Promise.resolve().then(() => reportTerminalParent(deps, parent))
+    .finally(() => flights.delete(parent.id));
+  flights.set(parent.id, pending);
+  return pending;
 }
 
 export async function reconcile(deps = {}) {
-  const jobs = currentJobs(deps.store);
-  for (const parent of Object.values(jobs).filter((job) => job.type === "fanout")) {
-    if (["rejected", "expired"].includes(parent.state)) {
-      onParentClosed(deps, { jobId: parent.id, to: parent.state });
-      continue;
-    }
-    if (parent.state === "approved") {
-      deps.budget?.gate?.(parent.id);
-      onParentApproved(deps, { jobId: parent.id, to: "approved" });
-      continue;
-    }
-    let coordinatedParent = parent;
-    if (parent.state === "leased") {
-      coordinatedParent = appendTransition(deps, parent, "running", "fanout:coordinator");
-    }
-    if (coordinatedParent.state === "running") {
-      approveQueuedChildren(deps, coordinatedParent, approverFor(deps.approvals, parent.id));
-      for (const target of coordinatedParent.targets ?? []) {
-        const child = currentJobs(deps.store)[target.childId];
-        if (child?.state === "approved") deps.budget?.gate?.(child.id);
-      }
-      const children = parentChildren(deps.store, coordinatedParent);
-      const terminalChild = children.find((child) => TERMINAL.includes(child.state));
-      if (terminalChild) {
-        await onChildTerminal(deps, { jobId: terminalChild.id, to: terminalChild.state });
+  const parents = Object.values(currentJobs(deps.store)).filter((job) => job.type === "fanout");
+  for (const parent of parents) {
+    if (validDeclaration(parent)) {
+      try {
+        authorizeParent(deps, parent);
+        recoverFanoutFamily(deps.store, parent);
+      } catch (error) {
+        refuseParent(deps, parent, error instanceof ClawError ? error.code : "FANOUT_FAILED");
+        continue;
       }
     }
+    const event = { jobId: parent.id, to: parent.state };
+    if (["rejected", "expired"].includes(parent.state)) onParentClosed(deps, event);
+    onParentApproved(deps, event);
+    const children = declaredChildren(deps.store, parent);
+    const terminalChild = children?.find((child) => TERMINAL.includes(child.state));
+    if (terminalChild) await onChildTerminal(deps, { jobId: terminalChild.id, to: terminalChild.state });
+    await onParentTerminal(deps, event);
   }
 }
 

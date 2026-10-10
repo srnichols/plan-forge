@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { ClawError } from "../src/errors.mjs";
 import {
   COPILOT_TOKEN_SECRET,
@@ -12,6 +12,16 @@ import {
   NULL_USAGE,
   toSessionMcpServers,
 } from "../src/runtime/copilot-session.mjs";
+
+const sdkEdge = vi.hoisted(() => ({ client: null, clientOptions: null }));
+vi.mock("@github/copilot-sdk", () => ({
+  CopilotClient: class {
+    constructor(options) {
+      sdkEdge.clientOptions = options;
+      return sdkEdge.client;
+    }
+  },
+}));
 
 const TEST_DIRECTORY = path.dirname(fileURLToPath(import.meta.url));
 const SESSION_SOURCE = readFileSync(
@@ -106,6 +116,10 @@ describe("SDK event mapping", () => {
     }).data).toEqual({ tokensIn: 7, tokensOut: 5, model: null });
   });
 
+  it.each(["toString", "constructor", "__proto__"])("drops unrelated object-prototype event %s", (type) => {
+    expect(mapSdkEvent({ type })).toBeNull();
+  });
+
   it("accumulates reported usage without converting missing values to zero", () => {
     const usage = createUsageAccumulator();
     expect(usage.result()).toEqual(NULL_USAGE);
@@ -187,6 +201,16 @@ describe("Copilot session runtime", () => {
     expect(calls.sessionConfig.onPermissionRequest).toBe(policy);
   });
 
+  it("forwards a detached execution environment to the SDK client without publishing its values", async () => {
+    const calls = makeSessionFactory();
+    const env = { JOB_BOOTSTRAP_KEY: "bootstrap-canary" };
+    const runtime = createCopilotRuntime({ createSession: calls.createSession });
+    const result = await runtime.run(validTurn({ env }));
+    expect(calls.clientOptions.env).toEqual(env);
+    expect(calls.clientOptions.env).not.toBe(env);
+    expect(JSON.stringify(result)).not.toContain("bootstrap-canary");
+  });
+
   it("fails early for missing model or MCP config", async () => {
     let calls = 0;
     const runtime = createCopilotRuntime({
@@ -246,6 +270,116 @@ describe("Copilot session runtime", () => {
       usage: NULL_USAGE,
     });
     expect((await runtime.run(validTurn())).usage).toEqual(NULL_USAGE);
+  });
+
+  it("bounds graceful cleanup before falling back to force-stop", async () => {
+    vi.useFakeTimers();
+    try {
+      const forceStop = vi.fn(async () => {});
+      const runtime = createCopilotRuntime({
+        createSession: async () => ({
+          client: { stop: async () => new Promise(() => {}), forceStop },
+          session: { sendAndWait: async () => {}, disconnect: async () => {} },
+        }),
+      });
+      const pending = runtime.run(validTurn());
+      await vi.runAllTimersAsync();
+      const result = await pending;
+      expect(forceStop).toHaveBeenCalledTimes(1);
+      expect(result).toMatchObject({ status: "succeeded", cleanupErrors: ["SDK_STOP_FAILED"] });
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("does not report successful completion when both stop and force-stop fail", async () => {
+    const runtime = createCopilotRuntime({
+      createSession: async () => ({
+        client: {
+          stop: async () => { throw new Error("private-stop-canary"); },
+          forceStop: async () => { throw new Error("private-force-canary"); },
+        },
+        session: { sendAndWait: async () => {}, disconnect: async () => {} },
+      }),
+    });
+    expect(await runtime.run(validTurn())).toMatchObject({
+      ok: false, status: "failed", error: "SDK_CLEANUP_FAILED",
+      cleanupErrors: ["SDK_STOP_FAILED", "SDK_FORCE_STOP_FAILED"],
+    });
+  });
+});
+
+describe("default SDK factory resource ownership", () => {
+  function failingClient({ stopError, stopErrors, forceError } = {}) {
+    sdkEdge.client = {
+      createSession: vi.fn(async () => { throw new ClawError("SESSION_CONSTRUCTION_FAILED"); }),
+      stop: vi.fn(async () => {
+        if (stopError) throw stopError;
+        return stopErrors ?? [];
+      }),
+      forceStop: vi.fn(async () => {
+        if (forceError) throw forceError;
+      }),
+    };
+    return sdkEdge.client;
+  }
+
+  it("stops the SDK-owned client when session construction fails before handing it to the caller", async () => {
+    const client = failingClient();
+    const result = await createCopilotRuntime().run(validTurn());
+    expect(result).toMatchObject({ ok: false, status: "failed", error: "SESSION_CONSTRUCTION_FAILED" });
+    expect(client.stop).toHaveBeenCalledTimes(1);
+    expect(client.forceStop).not.toHaveBeenCalled();
+  });
+
+  it("force-stops after graceful cleanup throws without replacing the construction error", async () => {
+    const client = failingClient({ stopError: new Error("private-cleanup-canary") });
+    const result = await createCopilotRuntime().run(validTurn());
+    expect(client.stop).toHaveBeenCalledTimes(1);
+    expect(client.forceStop).toHaveBeenCalledTimes(1);
+    expect(result.error).toBe("SESSION_CONSTRUCTION_FAILED");
+    expect(JSON.stringify(result)).not.toContain("private-cleanup-canary");
+  });
+
+  it("handles the real SDK stop contract's returned error array", async () => {
+    const client = failingClient({ stopErrors: [new Error("private-stop-array-canary")] });
+    const result = await createCopilotRuntime().run(validTurn());
+    expect(client.forceStop).toHaveBeenCalledTimes(1);
+    expect(result.error).toBe("SESSION_CONSTRUCTION_FAILED");
+    expect(JSON.stringify(result)).not.toContain("private-stop-array-canary");
+  });
+
+  it("surfaces incomplete cleanup as structured codes while retaining the original runtime failure", async () => {
+    const events = [];
+    const client = failingClient({
+      stopError: new Error("private-stop-canary"),
+      forceError: new Error("private-force-canary"),
+    });
+    const result = await createCopilotRuntime().run(validTurn({ emit: (...event) => events.push(event) }));
+    expect(client.forceStop).toHaveBeenCalledTimes(1);
+    expect(result).toMatchObject({
+      error: "SESSION_CONSTRUCTION_FAILED",
+      cleanupErrors: ["SDK_STOP_FAILED", "SDK_FORCE_STOP_FAILED"],
+    });
+    expect(events).toEqual([
+      ["log", { level: "error", code: "SDK_STOP_FAILED" }],
+      ["log", { level: "error", code: "SDK_FORCE_STOP_FAILED" }],
+    ]);
+    expect(JSON.stringify({ result, events })).not.toMatch(/private-(?:stop|force)-canary/);
+  });
+
+  it("still force-stops and preserves the construction failure if the cleanup event sink throws", async () => {
+    const client = failingClient({
+      stopError: new Error("private-stop-canary"),
+      forceError: new Error("private-force-canary"),
+    });
+    const result = await createCopilotRuntime().run(validTurn({
+      emit: () => { throw new Error("private-sink-canary"); },
+    }));
+    expect(client.forceStop).toHaveBeenCalledTimes(1);
+    expect(result.error).toBe("SESSION_CONSTRUCTION_FAILED");
+    expect(result.cleanupErrors).toContain("SDK_FORCE_STOP_FAILED");
+    expect(JSON.stringify(result)).not.toContain("private-sink-canary");
   });
 });
 

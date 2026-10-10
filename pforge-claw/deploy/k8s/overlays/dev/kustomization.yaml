@@ -3,12 +3,12 @@ kind: Kustomization
 resources:
   - ../../base
   - egress-probe-job.yaml
+  - egress-control-job.yaml
+  - egress-target.yaml
 images:
   - name: pforge-claw-dispatcher
-    newName: pforge-claw-dev/local/pforge-claw-dispatcher
     newTag: dev
   - name: pforge-claw-worker-node
-    newName: pforge-claw-dev/local/pforge-claw-worker-node
     newTag: dev
 patches:
   - path: patch-deployment.yaml

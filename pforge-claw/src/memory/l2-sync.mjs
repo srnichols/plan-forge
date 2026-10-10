@@ -4,7 +4,7 @@ import {
 } from "node:fs/promises";
 import path from "node:path";
 import { ClawError } from "../errors.mjs";
-import { assertInside } from "../jobs/worktree.mjs";
+import { assertInside } from "../path-safety.mjs";
 
 export const L2_COPY_DIRS = Object.freeze(["runs", "trajectories", "hallmarks", "bugs", "skills-auto"]);
 export const L2_JSONL_STREAMS = Object.freeze([
@@ -55,21 +55,23 @@ function laneIds(config) {
  * @param {{project: object, config?: object}} options
  * @returns {{laneId: string, path: string}}
  */
+function configuredForgeHome({ project, config, configured }) {
+  if (typeof configured !== "string" || !configured) throwL2(L2_ERROR_CODES.MALFORMED);
+  const isAbsolute = path.win32.isAbsolute(configured) || path.posix.isAbsolute(configured);
+  const colon = isAbsolute ? -1 : configured.indexOf(":");
+  if (colon >= 0) {
+    const laneId = configured.slice(0, colon);
+    const homePath = configured.slice(colon + 1);
+    if (!laneIds(config).includes(laneId) || !homePath) throwL2(L2_ERROR_CODES.PATH_REJECTED);
+    return { laneId, path: homePath };
+  }
+  if (typeof project?.homeLane !== "string" || !project.homeLane) throwL2(L2_ERROR_CODES.MALFORMED);
+  return { laneId: project.homeLane, path: configured };
+}
+
 export function resolveForgeHome({ project, config = {} } = {}) {
   const repo = project?.repo ?? {};
-  const configured = repo.forgeHome;
-  if (configured !== undefined) {
-    if (typeof configured !== "string" || !configured) throwL2(L2_ERROR_CODES.MALFORMED);
-    const colon = configured.indexOf(":");
-    const candidateLane = colon < 0 ? "" : configured.slice(0, colon);
-    if (candidateLane && laneIds(config).includes(candidateLane)) {
-      const homePath = configured.slice(colon + 1);
-      if (!homePath) throwL2(L2_ERROR_CODES.PATH_REJECTED);
-      return { laneId: candidateLane, path: homePath };
-    }
-    if (typeof project?.homeLane !== "string" || !project.homeLane) throwL2(L2_ERROR_CODES.MALFORMED);
-    return { laneId: project.homeLane, path: configured };
-  }
+  if (repo.forgeHome !== undefined) return configuredForgeHome({ project, config, configured: repo.forgeHome });
   if (typeof project?.homeLane !== "string" || !project.homeLane
     || typeof repo.path !== "string" || !repo.path) throwL2(L2_ERROR_CODES.MALFORMED);
   return { laneId: project.homeLane, path: path.join(repo.path, ".forge") };
@@ -219,67 +221,68 @@ export async function computeDelta({ forgeDir, snapshot, maxBytes = L2_MAX_DELTA
   if (typeof forgeDir !== "string" || !snapshot || !Number.isFinite(maxBytes) || maxBytes <= 0) {
     throwL2(L2_ERROR_CODES.MALFORMED);
   }
-  const files = [];
-  const jsonl = {};
-  const maps = {};
+  const delta = { files: [], jsonl: {}, maps: {} };
   const oldMaps = mapSnapshots.get(snapshot) ?? {};
   for (const rel of await listAllowedFiles(forgeDir)) {
-    const contents = await readFile(path.join(forgeDir, ...rel.split("/"))).catch((error) => {
-      if (error.code === "ENOENT") return null;
-      throw error;
-    });
-    if (!contents) continue;
-    const hash = sha256(contents);
-    if (L2_COPY_DIRS.includes(rel.split("/")[0]) && !knownMaps.has(rel) && !knownJsonl.has(rel)) {
-      if (snapshot.files[rel]?.sha256 !== hash) {
-        files.push({ rel, dataB64: contents.toString("base64"), sha256: hash });
-      }
-    } else if (knownJsonl.has(rel)) {
-      const prior = snapshot.lines?.[rel] ?? new Set();
-      const identities = new Set(prior);
-      const additions = jsonlRawLines(contents)
-        .filter((line) => {
-          const identity = recordIdentity(line);
-          if (identities.has(identity)) return false;
-          identities.add(identity);
-          return true;
-        });
-      if (additions.length) jsonl[rel] = additions;
-    } else if (knownMaps.has(rel)) {
-      const entries = mapEntries(rel, JSON.parse(contents.toString("utf8")));
-      const before = new Map(oldMaps[rel] ?? []);
-      const changed = Object.fromEntries(entries.filter(([id, value]) => (
-        !before.has(id) || !sameJson(before.get(id), value)
-      )));
-      if (Object.keys(changed).length) maps[rel] = changed;
-    }
+    await collectFileDelta({ forgeDir, snapshot, oldMaps, delta, rel });
   }
-  const delta = { files, jsonl, maps };
-  if (!files.length && !Object.keys(jsonl).length && !Object.keys(maps).length) return null;
+  if (!delta.files.length && !Object.keys(delta.jsonl).length && !Object.keys(delta.maps).length) return null;
   if (countDeltaBytes(delta) > maxBytes) throwL2(L2_ERROR_CODES.DELTA_TOO_LARGE);
   return delta;
 }
 
-function validateDeltaPaths(delta) {
-  if (!delta || !Array.isArray(delta.files) || !delta.jsonl || !delta.maps
-    || typeof delta.jsonl !== "object" || Array.isArray(delta.jsonl)
-    || typeof delta.maps !== "object" || Array.isArray(delta.maps)) throwL2(L2_ERROR_CODES.MALFORMED);
-  for (const file of delta.files) {
-    if (typeof file?.dataB64 !== "string" || !/^[0-9a-f]{64}$/.test(file.sha256)
-      || Buffer.from(file.dataB64, "base64").toString("base64") !== file.dataB64) {
-      throwL2(L2_ERROR_CODES.MALFORMED);
-    }
-    if (sha256(Buffer.from(file.dataB64, "base64")) !== file.sha256) {
-      throwL2(L2_ERROR_CODES.CHECKSUM_MISMATCH);
-    }
+function unseenLines(contents, prior) {
+  const identities = new Set(prior);
+  return jsonlRawLines(contents).filter((line) => {
+    const identity = recordIdentity(line);
+    if (identities.has(identity)) return false;
+    identities.add(identity);
+    return true;
+  });
+}
+
+async function collectFileDelta({ forgeDir, snapshot, oldMaps, delta, rel }) {
+  const contents = await readFile(path.join(forgeDir, ...rel.split("/"))).catch((error) => {
+    if (error.code === "ENOENT") return null;
+    throw error;
+  });
+  if (!contents) return;
+  if (knownJsonl.has(rel)) {
+    const additions = unseenLines(contents, snapshot.lines?.[rel] ?? []);
+    if (additions.length) delta.jsonl[rel] = additions;
+  } else if (knownMaps.has(rel)) {
+    const entries = mapEntries(rel, JSON.parse(contents.toString("utf8")));
+    const before = new Map(oldMaps[rel] ?? []);
+    const changed = Object.fromEntries(entries.filter(([id, value]) => !before.has(id) || !sameJson(before.get(id), value)));
+    if (Object.keys(changed).length) delta.maps[rel] = changed;
+  } else {
+    const hash = sha256(contents);
+    if (snapshot.files[rel]?.sha256 !== hash) delta.files.push({ rel, dataB64: contents.toString("base64"), sha256: hash });
   }
+}
+
+function recordObject(value) {
+  return value && typeof value === "object" && !Array.isArray(value);
+}
+
+function validateFileData(file) {
+  if (typeof file?.dataB64 !== "string" || !/^[0-9a-f]{64}$/.test(file.sha256)
+    || Buffer.from(file.dataB64, "base64").toString("base64") !== file.dataB64) throwL2(L2_ERROR_CODES.MALFORMED);
+  if (sha256(Buffer.from(file.dataB64, "base64")) !== file.sha256) throwL2(L2_ERROR_CODES.CHECKSUM_MISMATCH);
+}
+
+function validateDeltaPaths(delta) {
+  if (!delta || !Array.isArray(delta.files) || !recordObject(delta.jsonl) || !recordObject(delta.maps)) {
+    throwL2(L2_ERROR_CODES.MALFORMED);
+  }
+  for (const file of delta.files) validateFileData(file);
   for (const records of Object.values(delta.jsonl)) {
     if (!Array.isArray(records) || records.some((line) => typeof line !== "string")) {
       throwL2(L2_ERROR_CODES.MALFORMED);
     }
   }
   for (const entries of Object.values(delta.maps)) {
-    if (!entries || typeof entries !== "object" || Array.isArray(entries)) {
+    if (!recordObject(entries)) {
       throwL2(L2_ERROR_CODES.MALFORMED);
     }
   }
@@ -483,16 +486,9 @@ export function assembleDeltaChunks({ chunks } = {}) {
     || typeof first.deltaId !== "string") throwL2(L2_ERROR_CODES.MALFORMED);
   const indexed = new Map();
   for (const chunk of chunks) {
-    if (!chunk || chunk.kind !== "l2-delta" || chunk.deltaId !== first.deltaId
-      || chunk.total !== first.total || !Number.isInteger(chunk.index)
-      || chunk.index < 0 || chunk.index >= chunk.total || typeof chunk.data !== "string") {
-      throwL2(L2_ERROR_CODES.MALFORMED);
-    }
+    validateDeltaChunk({ chunk, first });
     if (indexed.has(chunk.index)) throwL2(L2_ERROR_CODES.CHUNK_DUP);
-    const bytes = Buffer.from(chunk.data, "base64");
-    if (sha256(bytes) !== chunk.sha256Chunk) throwL2(L2_ERROR_CODES.CHECKSUM_MISMATCH);
-    if (bytes.byteLength > CHUNK_RAW_BYTES) throwL2(L2_ERROR_CODES.DELTA_TOO_LARGE);
-    indexed.set(chunk.index, bytes);
+    indexed.set(chunk.index, decodeDeltaChunk(chunk));
   }
   if (indexed.size !== first.total) throwL2(L2_ERROR_CODES.CHUNK_MISSING);
   if ([...indexed.values()].reduce((sum, chunk) => sum + chunk.byteLength, 0) > L2_MAX_DELTA_BYTES) {
@@ -507,6 +503,19 @@ export function assembleDeltaChunks({ chunks } = {}) {
   } catch {
     throwL2(L2_ERROR_CODES.MALFORMED);
   }
+}
+
+function validateDeltaChunk({ chunk, first }) {
+  if (!chunk || chunk.kind !== "l2-delta" || chunk.deltaId !== first.deltaId
+    || chunk.total !== first.total || !Number.isInteger(chunk.index)
+    || chunk.index < 0 || chunk.index >= chunk.total || typeof chunk.data !== "string") throwL2(L2_ERROR_CODES.MALFORMED);
+}
+
+function decodeDeltaChunk(chunk) {
+  const bytes = Buffer.from(chunk.data, "base64");
+  if (sha256(bytes) !== chunk.sha256Chunk) throwL2(L2_ERROR_CODES.CHECKSUM_MISMATCH);
+  if (bytes.byteLength > CHUNK_RAW_BYTES) throwL2(L2_ERROR_CODES.DELTA_TOO_LARGE);
+  return bytes;
 }
 
 /**
@@ -533,8 +542,8 @@ export async function verifyHallmark({ forgeHome, id } = {}) {
 
 /**
  * Apply a delta on the canonical lane, forwarding rather than mutating other lanes.
- * Receipt acknowledgements mean the sequence was received; application-level
- * confirmation depends on the dispatcher's later l2.apply integration.
+ * This routing helper does not promote transport receipts to application proof;
+ * the registered receiver verifies the returned ApplicationAck identity.
  * @param {object} options
  */
 export async function forwardDelta({

@@ -1,12 +1,13 @@
 import { mkdtemp, rm } from "node:fs/promises";
-import os from "node:os";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createCaptureService } from "../src/handlers/capture-commands.mjs";
 import memoryCallback from "../src/callbacks/m.mjs";
 import { createStore } from "../src/state/store.mjs";
 
 const directories = [];
+const TEST_DIRECTORY = path.dirname(fileURLToPath(import.meta.url));
 const project = {
   id: "project-1",
   displayName: "Project One",
@@ -16,7 +17,7 @@ const project = {
 const caller = { userId: "user-secret-id", role: "owner" };
 
 async function makeStore() {
-  const directory = await mkdtemp(path.join(os.tmpdir(), "claw-capture-"));
+  const directory = await mkdtemp(path.join(TEST_DIRECTORY, ".capture-commands-"));
   directories.push(directory);
   return createStore(directory);
 }
@@ -26,7 +27,7 @@ function makeContext(store, { outcome, mcpCall, projectConfig = project } = {}) 
   const channel = { send: vi.fn(async () => []) };
   const config = {
     instanceId: "instance/one",
-    allowlist: [{ userId: caller.userId, alias: "operator" }],
+    allowlist: [{ userId: caller.userId, role: "owner", alias: "operator" }],
     projects: [projectConfig],
   };
   const mcp = {
@@ -115,6 +116,7 @@ describe("memory and idea capture service", () => {
       visibility,
       source: "pforge-claw/instance-one/home-lane/remember",
       created_by: "pforge-claw:operator",
+      tags: ["pforge-claw"],
     });
     expect(mcp.call.mock.calls[0][2]).not.toHaveProperty("userId");
     expect(JSON.stringify(mcp.call.mock.calls[0][2])).not.toContain(caller.userId);
@@ -271,6 +273,39 @@ describe("memory and idea capture service", () => {
     expect(first[0].text).toContain("smelt-9");
     expect(first[0].text).toContain("Which users?");
     expect(replay).toEqual(first);
+  });
+
+  it.each(["idea", "bug"])("shares one concurrent %s write and replays its exact receipt", async (method) => {
+    const store = await makeStore();
+    let enter;
+    const entered = new Promise((resolve) => { enter = resolve; });
+    const waiting = [];
+    let released = false;
+    const outcome = { structuredContent: { id: "smelt-concurrent", bugId: "BUG-CONCURRENT" } };
+    const mcpCall = vi.fn(async () => {
+      enter();
+      if (!released) await new Promise((resolve) => waiting.push(resolve));
+      return outcome;
+    });
+    const { service } = makeContext(store, { mcpCall });
+    const request = input("One scoped capture");
+    const operations = [service[method](request), service[method](request)];
+    const release = () => {
+      released = true;
+      for (const resolve of waiting) resolve();
+    };
+    try {
+      await entered;
+      expect(mcpCall).toHaveBeenCalledOnce();
+      release();
+      const [first, second] = await Promise.all(operations);
+      expect(second).toEqual(first);
+      expect(await service[method](request)).toEqual(first);
+      expect(mcpCall).toHaveBeenCalledOnce();
+    } finally {
+      release();
+      await Promise.allSettled(operations);
+    }
   });
 
   it("registers bugs with legal evidence, handles duplicate and infra outcomes", async () => {

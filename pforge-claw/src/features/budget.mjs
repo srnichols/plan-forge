@@ -1,38 +1,16 @@
-import { bindBudgetService, createBudgetService } from "../budget.mjs";
+import { bindBudgetService, BUDGET_UNITS, createBudgetService, USAGE_SOURCES } from "../budget.mjs";
 import { currentJobs } from "../jobs/model.mjs";
+import { normalizePlanActuals, PLAN_ACTUALS_UNCONFIRMED } from "../jobs/runner-lifecycle.mjs";
 
+const PLAN_ACTUAL_SOURCE = USAGE_SOURCES[2];
 let service = null;
 let unbind = null;
 let context = null;
 let listeners = [];
-const inFlight = new Set();
 
 function eventTime(event, now) {
   const parsed = Date.parse(event?.ts ?? "");
   return Number.isFinite(parsed) ? parsed : now();
-}
-
-function runSpecificReport(result, jobId) {
-  if (!result || result.isError || result.ok === false) return null;
-  let report = result;
-  if (Array.isArray(result.content)) {
-    const text = result.content.find((entry) => entry?.type === "text")?.text;
-    if (typeof text !== "string") return null;
-    try {
-      report = JSON.parse(text);
-    } catch {
-      return null;
-    }
-  }
-  const runs = Array.isArray(report.runs) ? report.runs : [];
-  const run = runs.find((entry) => [entry.runId, entry.jobId, entry.id]
-    .some((id) => String(id ?? "") === String(jobId)));
-  if (!run) return null;
-  const usage = run.usage ?? run;
-  return {
-    costUSD: usage.costUSD ?? usage.costUsd ?? usage.usd ?? usage.cost ?? usage.total_cost_usd ?? null,
-    premiumRequests: usage.premiumRequests ?? usage.premium_requests ?? null,
-  };
 }
 
 function attach(ctx, eventName, handler) {
@@ -56,40 +34,42 @@ function recordSessionUsage(activeService, event, ctx) {
   }
 }
 
+function matchingPlanJob(ctx, event) {
+  const job = currentJobs(ctx.store)[event.jobId];
+  return job?.projectId === event.projectId ? job : null;
+}
+
+function warnUnconfirmed(ctx, actuals) {
+  if (actuals && BUDGET_UNITS.some((unit) => actuals.usage[unit] !== null)) return;
+  ctx.logger?.warn?.("Plan actuals are unconfirmed; recording unknown usage", { code: PLAN_ACTUALS_UNCONFIRMED });
+}
+
+function recordPlanActual(activeService, event, ctx) {
+  if (activeService.hasUsage({
+    source: PLAN_ACTUAL_SOURCE, projectId: event.projectId, jobId: event.jobId,
+  })) return;
+  const actuals = normalizePlanActuals({ job: matchingPlanJob(ctx, event), actuals: event.planActuals });
+  activeService.recordUsage({
+    source: PLAN_ACTUAL_SOURCE,
+    projectId: event.projectId,
+    jobId: event.jobId,
+    planActuals: actuals,
+    at: eventTime(event, ctx.now ?? Date.now),
+  });
+  warnUnconfirmed(ctx, actuals);
+}
+
 function beginPlanActual(event) {
   const activeService = service;
   const ctx = context;
   if (!activeService || !ctx || typeof event?.jobId !== "string") return;
-  const record = async () => {
-    try {
-      const client = typeof ctx.mcp === "function"
-        ? await ctx.mcp({ projectId: event.projectId })
-        : ctx.mcp;
-      const report = await client.call("forge_cost_report", { runId: event.jobId });
-      const usage = runSpecificReport(report, event.jobId);
-      activeService.recordUsage({
-        source: "cost-report",
-        projectId: event.projectId,
-        jobId: event.jobId,
-        usage: usage ?? {},
-        at: eventTime(event, ctx.now ?? Date.now),
-      });
-      if (!usage) ctx.logger?.warn?.("Plan cost report lacked a run-specific row", { code: "COST_REPORT_RUN_MISSING" });
-    } catch (error) {
-      activeService.recordUsage({
-        source: "cost-report",
-        projectId: event.projectId,
-        jobId: event.jobId,
-        usage: {},
-        at: eventTime(event, ctx.now ?? Date.now),
-      });
-      ctx.logger?.error?.("Plan cost report could not be recorded", {
-        code: error?.code ?? "COST_REPORT_FAILED",
-      });
-    }
-  };
-  const promise = record().finally(() => inFlight.delete(promise));
-  inFlight.add(promise);
+  try {
+    recordPlanActual(activeService, event, ctx);
+  } catch (error) {
+    ctx.logger?.error?.("Plan usage could not be recorded", {
+      code: error?.code ?? "BUDGET_USAGE_WRITE_FAILED",
+    });
+  }
 }
 
 export default {
@@ -102,7 +82,6 @@ export default {
       store: ctx.store,
       bus: ctx.bus,
       config: ctx.config,
-      mcp: ctx.mcp,
       channel: ctx.channel,
       logger: ctx.logger,
       now: ctx.now ?? Date.now,
@@ -128,7 +107,6 @@ export default {
     unbind = null;
     service = null;
     context = null;
-    await Promise.allSettled([...inFlight]);
   },
   snapshot(ctx = {}) {
     if (!ctx.store) return { day: null, tz: "Etc/UTC", spendToday: null, caps: {}, unknown: 0, held: 0 };

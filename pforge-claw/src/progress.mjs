@@ -1,7 +1,11 @@
-import { randomBytes } from "node:crypto";
 import { APPROVER_ROLES } from "./approvals.mjs";
 import { button, keyboard } from "./channels/telegram/format.mjs";
-import { JOBS_STREAM, currentJobs, createJob, transition } from "./jobs/model.mjs";
+import { authorizeJobRequest, currentCaller, readCurrentConfig } from "./handlers/c2-command-context.mjs";
+import { approvedChoicesFor, consumedApprovalFor } from "./jobs/approval-proof.mjs";
+import { JOBS_STREAM, currentJobs } from "./jobs/model.mjs";
+import {
+  ensureRequestJob, findRequestJob, normalizeRequestFields, requestIdentity, requestKey, withRequestIdentity,
+} from "./jobs/request-identity.mjs";
 import { ClawError } from "./errors.mjs";
 
 const MAX_REASON_LENGTH = 1500;
@@ -9,6 +13,17 @@ const MAX_FAILURE_CONTEXT = 2000;
 const PROGRESS_STREAM = "progress";
 const MISSING = "n/a";
 const MAX_CALLBACK_BYTES = 64;
+const SECONDS_PER_MINUTE = 60;
+const ID_PREFIX_LENGTH = 8;
+const RECOVERY_MODES = Object.freeze(["retry", "resume", "suggestion"]);
+const RECOVERY_FIELDS = Object.freeze([
+  "description", "plan", "planPath", "skill", "args", "model", "models", "resumeFrom", "readOnly", "origin",
+]);
+const RECOVERY_SCOPE_FIELDS = Object.freeze(["projectId", "callerId", "chatId", "threadId"]);
+const MAX_SUGGESTIONS = 5;
+const MAX_SUGGESTION_LABEL_LENGTH = 80;
+const MAX_SUGGESTION_DESCRIPTION_LENGTH = 1000;
+const EXPLANATION_UNAVAILABLE = "MCP_TOOL_ERROR: couldn't explain right now.";
 
 function redact(secrets, value) {
   return (secrets?.redact ?? String)(String(value));
@@ -29,7 +44,7 @@ function truncate(value, maxLength = MAX_REASON_LENGTH) {
 function formatDuration(milliseconds) {
   if (!Number.isFinite(milliseconds) || milliseconds < 0) return MISSING;
   const seconds = Math.floor(milliseconds / 1000);
-  return `${Math.floor(seconds / 60)}m ${seconds % 60}s`;
+  return `${Math.floor(seconds / SECONDS_PER_MINUTE)}m ${seconds % SECONDS_PER_MINUTE}s`;
 }
 
 function formatSpend(value) {
@@ -92,7 +107,7 @@ export function renderRunSummary(state, result) {
 }
 
 export function failureKeyboard(job, { canResume = false } = {}) {
-  const short = String(job?.id ?? "").slice(0, 8);
+  const short = String(job?.id ?? "").slice(0, ID_PREFIX_LENGTH);
   const entries = [
     button("🔁 Retry", `f:r:${short}`),
     ...(canResume && job?.type === "plan" ? [button("⏭ Resume-from-next", `f:n:${short}`)] : []),
@@ -152,32 +167,469 @@ function errorCode(error, fallback = "INTERNAL") {
   return typeof error?.code === "string" ? error.code : fallback;
 }
 
-export function createProgressService({
-  store,
-  bus,
-  channel,
-  mcp,
-  secrets,
-  lanes,
-  now = Date.now,
-  setTimer = setTimeout,
-  clearTimer = clearTimeout,
-  logger,
-  minEditMs = 3000,
-} = {}) {
+function captureArtifact(state, data) {
+  const artifact = data.name ?? data.path ?? data.url ?? data.kind;
+  if (artifact !== undefined && artifact !== null) state.artifacts.push(String(artifact));
+  if (data.kind === "pr" && typeof data.url === "string") state.prUrl = data.url;
+}
+
+function updateLaneState(state, job, event) {
+  const data = event.data ?? {};
+  if (event.type === "started") {
+    state.lane = data.lane ?? data.laneId ?? job.lane ?? null;
+    return renderProgress(state);
+  }
+  if (event.type === "progress") {
+    const percent = percentValue(data);
+    if (percent !== null) state.percent = Math.max(state.percent ?? 0, percent);
+    return renderProgress(state);
+  }
+  if (event.type === "slice") {
+    state.slice = sliceValues(data);
+    return renderSliceComplete(state, state.slice);
+  }
+  if (event.type === "cost") {
+    const amount = costValue(data);
+    if (amount !== null) state.spend = (state.spend ?? 0) + amount;
+    return renderProgress(state);
+  }
+  if (event.type === "artifact") {
+    captureArtifact(state, data);
+    return renderProgress(state);
+  }
+  if (event.type === "needs-input") {
+    state.state = "needs-input";
+    return renderProgress(state);
+  }
+  return null;
+}
+
+function resolveProgressJob(store, ref, { projectId, chatId, threadId, callerId, states = [] } = {}) {
+  let jobs;
+  try {
+    jobs = Object.values(currentJobs(store));
+  } catch {
+    throw new ClawError("JOBS_UNAVAILABLE");
+  }
+  const positions = new Map(jobs.map((job, index) => [job.id, index]));
+  const requesterId = normalizeRequestFields({ callerId }).callerId;
+  const candidates = jobs.filter((job) => job.projectId === projectId
+    && sameChatAndTopic(job, chatId, threadId)
+    && (!states.length || states.includes(job.state))
+    && (requesterId === null || normalizeRequestFields({ callerId: job.callerId }).callerId === requesterId));
+  if (String(ref ?? "").toLowerCase() === "latest") {
+    candidates.sort((left, right) => jobTime(right) - jobTime(left)
+      || positions.get(right.id) - positions.get(left.id));
+    if (candidates[0]) return candidates[0];
+    throw new ClawError("JOB_NOT_FOUND");
+  }
+  const prefix = String(ref ?? "");
+  if (!/^[0-9a-f]{8,24}$/i.test(prefix)) throw new ClawError("JOB_NOT_FOUND");
+  const normalizedPrefix = prefix.toLowerCase();
+  const matches = candidates.filter((job) => job.id.toLowerCase().startsWith(normalizedPrefix));
+  if (matches.length > 1) throw new ClawError("AMBIGUOUS_JOB");
+  if (matches.length === 0) throw new ClawError("JOB_NOT_FOUND");
+  return matches[0];
+}
+
+function recoveryFailure(code, text = "Recovery job was not created.") {
+  return { ok: false, error: code, text: `${code}: ${text}` };
+}
+
+function recoveryCallerFields(context, options) {
+  const caller = options.caller ?? {};
+  return {
+    adapter: options.adapter ?? caller.channel ?? context.channel?.id,
+    callerId: caller.userId ?? caller.callerId,
+  };
+}
+
+function recoveryDeliveryIdentity({ request, mode, messageId, callback, suggestionIndex }) {
+  if (requestIdentity(request) === null) return null;
+  return requestIdentity({
+    ...request,
+    updateId: JSON.stringify([mode, callback ? "callback" : "delivery",
+      callback ? messageId : request.updateId, suggestionIndex]),
+  });
+}
+
+function recoveryRequest({ context, parent, options, mode }) {
+  const request = normalizeRequestFields({
+    ...recoveryCallerFields(context, options),
+    updateId: options.updateId,
+    type: mode === "suggestion" ? "task" : parent.type,
+    projectId: options.project?.id ?? options.projectId ?? parent.projectId,
+    chatId: options.chatId,
+    threadId: options.threadId,
+    parentId: parent.id,
+  });
+  const delivery = requestIdentity(request);
+  const messageId = normalizeRequestFields({ updateId: options.messageId }).updateId;
+  const suggestionIndex = normalizeRequestFields({ updateId: options.suggestionIndex }).updateId;
+  const callback = options.fromCallback === true && !!messageId && delivery !== null;
+  const identity = recoveryDeliveryIdentity({ request, mode, messageId, callback, suggestionIndex });
+  return { request, identity, messageId, callback };
+}
+
+function validateRecoveryScope({ parent, request, project }) {
+  const scope = normalizeRequestFields(parent);
+  if (!RECOVERY_SCOPE_FIELDS.every((field) => scope[field] === request[field])) {
+    throw new ClawError("JOB_NOT_FOUND");
+  }
+  if (scope.adapter !== null && scope.adapter !== request.adapter) throw new ClawError("JOB_NOT_FOUND");
+  const route = project.channel;
+  if (route?.adapter !== request.adapter
+    || !sameChatAndTopic({ chatId: route?.chatId, threadId: route?.topicId }, request.chatId, request.threadId)) {
+    throw new ClawError("JOB_NOT_FOUND");
+  }
+}
+
+function admitRecovery(context, delivery, options) {
+  const source = options.services ?? context.authoritySource;
+  const config = readCurrentConfig(source);
+  const { request } = delivery;
+  const caller = currentCaller(config, { callerId: request.callerId, channel: request.adapter });
+  const admitted = authorizeJobRequest({
+    config, project: { id: request.projectId }, caller,
+    secrets: source?.secrets ?? context.secrets, store: context.store,
+    lanes: source?.lanes ?? context.lanes,
+  });
+  if (!admitted.ok) throw new ClawError(admitted.code);
+  const parent = currentJobs(context.store)[request.parentId];
+  if (!parent || parent.state !== "failed") throw new ClawError("NOT_RETRYABLE");
+  validateRecoveryScope({ parent, request, project: admitted.project });
+  return { ...admitted, config, parent };
+}
+
+function validateRecoveryChild(job, delivery, mode) {
+  const stored = requestIdentity(job);
+  const expected = requestIdentity({ ...delivery.request, updateId: job.updateId });
+  if (!stored || requestKey(stored) !== requestKey(expected)
+    || job.recoveryMode !== mode || requestKey(job.recoveryRequest) !== requestKey(delivery.identity)) {
+    throw new ClawError("RECOVERY_REQUEST_CONFLICT");
+  }
+}
+
+function findRecoveryJob(store, delivery, mode) {
+  let job = findRequestJob(store, delivery.request);
+  if (!job && delivery.callback) {
+    const matches = Object.values(currentJobs(store)).filter((candidate) => candidate.recoveryMode === mode
+      && requestKey(candidate.recoveryRequest) === requestKey(delivery.identity));
+    if (matches.length > 1) throw new ClawError("REQUEST_DUPLICATE");
+    job = matches.length ? findRequestJob(store, matches[0]) : null;
+  }
+  if (job) validateRecoveryChild(job, delivery, mode);
+  return job;
+}
+
+function nextRecoverySlice(context, parent) {
+  if (parent.type !== "plan") throw new ClawError("NOT_RESUMABLE");
+  const slice = context.ensureState(parent)?.slice ?? {};
+  if (!Number.isFinite(slice.n) || !Number.isFinite(slice.m) || slice.n >= slice.m) {
+    throw new ClawError("NOT_RESUMABLE");
+  }
+  return slice.n + 1;
+}
+
+function buildRecoveryFields({ context, admitted, mode, description, delivery }) {
+  const { parent, config, caller, constraint } = admitted;
+  const copied = Object.fromEntries(RECOVERY_FIELDS
+    .filter((field) => parent[field] !== undefined)
+    .map((field) => [field, parent[field]]));
+  const approval = consumedApprovalFor({ store: context.store, config, job: parent });
+  const choices = approvedChoicesFor({ job: parent, approval });
+  if (choices.quorum !== null) copied.quorum = choices.quorum;
+  else if (parent.quorum !== undefined) copied.quorum = parent.quorum;
+  if (parent.type === "plan") copied.planPath = parent.plan ?? parent.planPath;
+  if (mode === "resume") copied.resumeFrom = nextRecoverySlice(context, parent);
+  if (mode === "suggestion") {
+    copied.description = String(description ?? "").trim();
+    copied.readOnly = false;
+    if (!copied.description) throw new ClawError("SUGGESTION_EXPIRED");
+  }
+  return {
+    ...copied, callerRole: caller.role, ...(constraint ? { constraint } : {}),
+    messageId: delivery.messageId, recoveryMode: mode, recoveryRequest: delivery.identity,
+  };
+}
+
+function recoveryStore(store, mode, events) {
+  return {
+    fold: (...args) => store.fold(...args),
+    read: (...args) => store.read(...args),
+    append(stream, record) {
+      const event = record.kind === "job.transition" ? { ...record, reason: `progress:${mode}` } : record;
+      const stored = store.append(stream, event);
+      events.push(stored);
+      return stored;
+    },
+  };
+}
+
+function recoveryReply(job, recovered) {
+  const state = job.state === "awaiting-approval" ? "awaiting approval" : job.state;
+  return {
+    ok: true, jobId: job.id, ...(recovered ? { existing: true } : { job }),
+    text: `Recovery job ${job.id} is ${recovered ? "already " : ""}${state}.`,
+  };
+}
+
+function persistRecoveryJob(context, { admitted, delivery, mode, fields, existing }) {
+  const { store, bus, audit, now } = context;
+  const events = [];
+  const request = existing ? normalizeRequestFields(existing) : delivery.request;
+  try {
+    const { job, recovered } = ensureRequestJob({ store: recoveryStore(store, mode, events), request, fields, now });
+    for (const event of events) {
+      if (event.kind === "job.transition") bus?.emit?.("job.transition", event);
+    }
+    const receipt = {
+      kind: "progress.recovered", jobId: admitted.parent.id, childId: job.id, mode,
+      request: requestIdentity(job), recoveryRequest: delivery.identity,
+    };
+    if (!context.records().some((record) => record.kind === receipt.kind
+      && record.jobId === receipt.jobId && record.childId === receipt.childId
+      && record.mode === mode && requestKey(record.recoveryRequest) === requestKey(delivery.identity))) {
+      store.append(PROGRESS_STREAM, receipt);
+    }
+    audit({
+      kind: "progress-recovery-created", jobId: admitted.parent.id, childId: job.id, mode,
+      userId: admitted.caller.userId, chatId: request.chatId, threadId: request.threadId,
+      updateId: delivery.request.updateId, adapter: delivery.request.adapter, existing: recovered,
+    });
+    return recoveryReply(job, recovered);
+  } catch (error) {
+    const code = errorCode(error, "RECOVERY_FAILED");
+    audit({ kind: "progress-recovery-failed", jobId: admitted.parent.id, mode, reason: code });
+    return recoveryFailure(code, existing || events.length
+      ? "Recovery job could not be confirmed. Retry this action."
+      : "Recovery job was not created.");
+  }
+}
+
+async function recoverProgressJob(context, failedJob, options = {}) {
+  const mode = options.mode ?? "retry";
+  try {
+    if (!RECOVERY_MODES.includes(mode)) throw new ClawError("RECOVERY_MODE_INVALID");
+    if (Object.hasOwn(options, "runtime") || Object.hasOwn(options, "provider")) {
+      throw new ClawError("RUNTIME_POLICY_DENIED");
+    }
+    const parent = currentJobs(context.store)[failedJob?.id];
+    if (!parent || parent.state !== "failed") {
+      return recoveryFailure("NOT_RETRYABLE", "only failed jobs can be recovered.");
+    }
+    const delivery = recoveryRequest({ context, parent, options, mode });
+    admitRecovery(context, delivery, options);
+    return await withRequestIdentity({ identity: delivery.identity }, () => {
+      const admitted = admitRecovery(context, delivery, options);
+      const existing = findRecoveryJob(context.store, delivery, mode);
+      const fields = existing ? {} : buildRecoveryFields({
+        context, admitted, mode, description: options.description, delivery,
+      });
+      return persistRecoveryJob(context, { admitted, delivery, mode, fields, existing });
+    });
+  } catch (error) {
+    const code = errorCode(error, "RECOVERY_FAILED");
+    context.audit({ kind: "progress-recovery-failed", jobId: failedJob?.id, mode, reason: code });
+    return recoveryFailure(code);
+  }
+}
+
+function progressLane(lanes, laneId) {
+  return typeof lanes === "function"
+    ? lanes(laneId)
+    : typeof lanes?.get === "function"
+      ? lanes.get(laneId)
+      : lanes?.[laneId];
+}
+
+async function abortProgressJob(context, job, caller) {
+  const { lanes, audit, ensureState, channel, scheduleEdit } = context;
+  if (!job) return { ok: false, error: "JOB_NOT_FOUND", text: "JOB_NOT_FOUND: job not found." };
+  if (["leased", "running", "needs-input"].includes(job.state)) {
+    const lane = progressLane(lanes, job.lane);
+    if (!lane || typeof lane.cancel !== "function") {
+      audit({ kind: "progress-abort-failed", jobId: job.id, userId: caller?.userId, reason: "LANE_UNAVAILABLE" });
+      return { ok: false, error: "LANE_UNAVAILABLE", text: "LANE_UNAVAILABLE: cancellation not delivered." };
+    }
+    try {
+      const result = await lane.cancel(job.id);
+      if (result?.ok === false) {
+        const code = typeof result.error === "string" ? result.error : "LANE_CANCEL_FAILED";
+        audit({ kind: "progress-abort-failed", jobId: job.id, userId: caller?.userId, reason: code });
+        return { ok: false, error: code, text: `${code}: cancellation was not delivered.` };
+      }
+      audit({ kind: "progress-abort-requested", jobId: job.id, userId: caller?.userId });
+      return { ok: true, text: "Cancellation requested." };
+    } catch (error) {
+      const code = errorCode(error, "LANE_CANCEL_FAILED");
+      audit({ kind: "progress-abort-failed", jobId: job.id, userId: caller?.userId, reason: code });
+      return { ok: false, error: code, text: `${code}: cancellation was not delivered.` };
+    }
+  }
+  if (job.state !== "failed") {
+    return { ok: false, error: "NOT_ABORTABLE", text: "NOT_ABORTABLE: only leased, running, needs-input, or failed jobs can be aborted." };
+  }
+  audit({ kind: "progress.discarded", jobId: job.id, userId: caller?.userId });
+  const state = ensureState(job);
+  if (state?.messageId && channel?.edit) {
+    scheduleEdit(state, renderFailure(state, "Job discarded."), { inline_keyboard: [] });
+  }
+  return { ok: true, text: "Failed job dismissed." };
+}
+
+function failureExplanationRequest({ job, state, caller, threadId, channel, secrets }) {
+  const failureSummary = truncate(redact(secrets, renderFailure(state, job?.reason ?? "failed")), MAX_FAILURE_CONTEXT);
+  return {
+    message: `Why did job ${job.id} fail? Suggest fixes.`,
+    caller: {
+      role: caller?.role,
+      channel: "chat",
+      surface: channel?.id ?? "telegram",
+      project: job.projectId,
+      topic: threadId,
+    },
+    responseFormat: { style: "brief", maxChars: 3500 },
+    proposeActions: true,
+    contextBlocks: [{ title: "Failure summary", text: failureSummary }],
+  };
+}
+
+function failureExplanationError(result) {
+  if (result?.error === "pforge-master not installed") {
+    return { error: "MCP_NOT_INSTALLED", text: "Forge-Master isn't installed for this project. Run `pforge claw doctor`." };
+  }
+  if (result?.error || result?.isError || result?.ok === false) {
+    return { error: "MCP_TOOL_ERROR", text: EXPLANATION_UNAVAILABLE };
+  }
+  return null;
+}
+
+function failureSuggestions(result, secrets) {
+  return (Array.isArray(result?.proposedActions) ? result.proposedActions : [])
+    .filter((action) => action
+      && typeof (action.label ?? action.summary) === "string"
+      && String(action.label ?? action.summary).trim())
+    .slice(0, MAX_SUGGESTIONS)
+    .map((action) => ({
+      label: truncate(redact(secrets, action.label ?? action.summary), MAX_SUGGESTION_LABEL_LENGTH),
+      description: truncate(redact(secrets, action.summary ?? action.label), MAX_SUGGESTION_DESCRIPTION_LENGTH),
+    }));
+}
+
+function failureReplyMarkup(job, state, items) {
+  const buttons = items.map((item, index) => button(item.label, `f:s:${job.id.slice(0, ID_PREFIX_LENGTH)}:${index}`));
+  return buttons.length
+    ? keyboard([
+      ...(failureKeyboard(job, {
+        canResume: job.type === "plan" && state.slice.n < state.slice.m,
+      }).inline_keyboard),
+      ...buttons.map((item) => [item]),
+    ])
+    : failureKeyboard(job, { canResume: job.type === "plan" && state.slice.n < state.slice.m });
+}
+
+function failureAnswer(result, state, job) {
+  return typeof (result.reply ?? result.text ?? result.answer) === "string"
+    ? truncate(result.reply ?? result.text ?? result.answer)
+    : renderFailure(state, job.reason ?? "failed");
+}
+
+async function sendProgressReply(context, { chatId, threadId, text, replyMarkup }) {
+  const { channel, format, logger } = context;
+  if (!channel?.send || chatId === undefined || chatId === null) return;
+  try {
+    await channel.send({
+      chatId,
+      threadId,
+      text: format(text),
+      ...(replyMarkup ? { replyMarkup } : {}),
+    });
+  } catch (error) {
+    logger?.error?.("Progress reply could not be sent", { code: errorCode(error, "CHANNEL_SEND_FAILED") });
+  }
+}
+
+async function explainProgressFailure(context, job, { caller, chatId, threadId } = {}) {
+  const { ensureState, channel, secrets, mcp, suggestions, store, logger, scheduleEdit, format } = context;
+  const state = ensureState(job);
+  const args = failureExplanationRequest({ job, state, caller, threadId, channel, secrets });
+  let result;
+  try {
+    if (!mcp || typeof mcp.call !== "function") throw new ClawError("MCP_TOOL_ERROR");
+    result = await mcp.call(job.projectId, "forge_master_ask", args);
+  } catch {
+    await sendProgressReply(context, { chatId, threadId, text: EXPLANATION_UNAVAILABLE });
+    return { ok: false, error: "MCP_TOOL_ERROR" };
+  }
+  const explanationError = failureExplanationError(result);
+  if (explanationError) {
+    await sendProgressReply(context, { chatId, threadId, text: explanationError.text });
+    return { ok: false, error: explanationError.error };
+  }
+  const items = failureSuggestions(result, secrets);
+  suggestions.set(job.id, items);
+  try {
+    store?.append?.(PROGRESS_STREAM, { kind: "progress.suggestions", jobId: job.id, items });
+  } catch (error) {
+    logger?.error?.("Progress suggestions could not be saved", {
+      code: errorCode(error, "PROGRESS_SUGGESTIONS_WRITE_FAILED"),
+    });
+    await sendProgressReply(context, { chatId, threadId, text: EXPLANATION_UNAVAILABLE });
+    return { ok: false, error: "PROGRESS_SUGGESTIONS_WRITE_FAILED" };
+  }
+  const replyMarkup = failureReplyMarkup(job, state, items);
+  const answer = failureAnswer(result, state, job);
+  if (state.messageId && channel?.edit) {
+    scheduleEdit(state, format(answer), replyMarkup);
+  } else {
+    await sendProgressReply(context, { chatId, threadId, text: answer, replyMarkup });
+  }
+  return { ok: true, items };
+}
+
+async function applyProgressSuggestion({ context, job, index, options }) {
+  const { suggestions, records } = context;
+  const items = suggestions.get(job.id) ?? records().findLast((record) => (
+    record.kind === "progress.suggestions" && record.jobId === job.id
+  ))?.items ?? [];
+  const item = items[index];
+  if (!item) {
+    return { ok: false, error: "SUGGESTION_EXPIRED", text: "suggestion expired" };
+  }
+  return recoverProgressJob(context, job, {
+    ...options,
+    mode: "suggestion",
+    suggestionIndex: index,
+    description: item.description || item.label,
+  });
+}
+
+function createProgressActions(context) {
+  return {
+    resolveJob: (ref, options = {}) => resolveProgressJob(context.store, ref, options),
+    createRecoveryJob: (job, options = {}) => recoverProgressJob(context, job, options),
+    abortJob: (job, caller) => abortProgressJob(context, job, caller),
+    explainFailure: (job, options = {}) => explainProgressFailure(context, job, options),
+    applySuggestion: (job, index, options) => applyProgressSuggestion({ context, job, index, options }),
+    sendReply: (options) => sendProgressReply(context, options),
+  };
+}
+
+export function createProgressService(options = {}) {
+  const {
+    store, bus, channel, mcp, secrets, lanes, now = Date.now,
+    setTimer = setTimeout, clearTimer = clearTimeout, logger, minEditMs = 3000,
+  } = options;
   const tracked = new Map();
-  const recoveryChains = new Map();
   const suggestions = new Map();
   const inFlight = new Set();
   const refs = new Map();
-  const recovered = new Map();
   let stopped = false;
 
   for (const record of streamRecords(store, PROGRESS_STREAM)) {
     if (record.kind === "progress.message" && typeof record.jobId === "string") {
       refs.set(record.jobId, String(record.messageId));
-    } else if (record.kind === "progress.recovered" && typeof record.jobId === "string") {
-      recovered.set(`${record.jobId}:${record.mode}`, record.childId);
     } else if (record.kind === "progress.suggestions" && typeof record.jobId === "string") {
       suggestions.set(record.jobId, record.items ?? []);
     }
@@ -367,30 +819,8 @@ export function createProgressService({
     const state = ensureState(job);
     if (!state || state.terminal || !Number.isFinite(event?.seq) || event.seq <= state.lastSeq) return;
     state.lastSeq = event.seq;
-    const data = event.data ?? {};
-    if (event.type === "started") {
-      state.lane = data.lane ?? data.laneId ?? job.lane ?? null;
-      scheduleEdit(state, renderProgress(state));
-    } else if (event.type === "progress") {
-      const percent = percentValue(data);
-      if (percent !== null) state.percent = Math.max(state.percent ?? 0, percent);
-      scheduleEdit(state, renderProgress(state));
-    } else if (event.type === "slice") {
-      state.slice = sliceValues(data);
-      scheduleEdit(state, renderSliceComplete(state, state.slice));
-    } else if (event.type === "cost") {
-      const amount = costValue(data);
-      if (amount !== null) state.spend = (state.spend ?? 0) + amount;
-      scheduleEdit(state, renderProgress(state));
-    } else if (event.type === "artifact") {
-      const artifact = data.name ?? data.path ?? data.url ?? data.kind;
-      if (artifact !== undefined && artifact !== null) state.artifacts.push(String(artifact));
-      if (data.kind === "pr" && typeof data.url === "string") state.prUrl = data.url;
-      scheduleEdit(state, renderProgress(state));
-    } else if (event.type === "needs-input") {
-      state.state = "needs-input";
-      scheduleEdit(state, renderProgress(state));
-    }
+    const text = updateLaneState(state, job, event);
+    if (text !== null) scheduleEdit(state, text);
   }
 
   async function onJobTransition(event) {
@@ -428,266 +858,23 @@ export function createProgressService({
     trackPromise(promise);
   }
 
-  function resolveJob(ref, { projectId, chatId, threadId, states = [] } = {}) {
-    let jobs;
-    try {
-      jobs = Object.values(currentJobs(store));
-    } catch {
-      throw new ClawError("JOBS_UNAVAILABLE");
-    }
-    const positions = new Map(jobs.map((job, index) => [job.id, index]));
-    const candidates = jobs.filter((job) => job.projectId === projectId
-      && sameChatAndTopic(job, chatId, threadId)
-      && (!states.length || states.includes(job.state)));
-    if (String(ref ?? "").toLowerCase() === "latest") {
-      candidates.sort((left, right) => jobTime(right) - jobTime(left)
-        || positions.get(right.id) - positions.get(left.id));
-      if (candidates[0]) return candidates[0];
-      throw new ClawError("JOB_NOT_FOUND");
-    }
-    const prefix = String(ref ?? "");
-    if (!/^[0-9a-f]{8,24}$/i.test(prefix)) throw new ClawError("JOB_NOT_FOUND");
-    const normalizedPrefix = prefix.toLowerCase();
-    const matches = candidates.filter((job) => job.id.toLowerCase().startsWith(normalizedPrefix));
-    if (matches.length > 1) throw new ClawError("AMBIGUOUS_JOB");
-    if (matches.length === 0) throw new ClawError("JOB_NOT_FOUND");
-    return matches[0];
-  }
-
-  function serializeRecovery(jobId, operation) {
-    const previous = recoveryChains.get(jobId) ?? Promise.resolve();
-    const current = previous.catch(() => {}).then(operation);
-    recoveryChains.set(jobId, current);
-    return current.finally(() => {
-      if (recoveryChains.get(jobId) === current) recoveryChains.delete(jobId);
-    });
-  }
-
-  async function createRecoveryJob(failedJob, {
-    mode = "retry",
-    caller,
-    chatId,
-    threadId,
-    description,
-  } = {}) {
-    if (!failedJob || failedJob.state !== "failed") {
-      return { ok: false, error: "NOT_RETRYABLE", text: "NOT_RETRYABLE: only failed jobs can be recovered." };
-    }
-    if (!["retry", "resume", "suggestion"].includes(mode)) {
-      return { ok: false, error: "RECOVERY_MODE_INVALID", text: "RECOVERY_MODE_INVALID: recovery was not created." };
-    }
-    return serializeRecovery(failedJob.id, async () => {
-      const key = `${failedJob.id}:${mode}`;
-      const existing = recovered.get(key) ?? records()
-        .findLast((record) => record.kind === "progress.recovered"
-          && record.jobId === failedJob.id && record.mode === mode)?.childId;
-      if (existing) return { ok: true, jobId: existing, existing: true, text: `Recovery job ${existing} is already awaiting approval.` };
-      if (mode === "resume" && failedJob.type !== "plan") {
-        return { ok: false, error: "NOT_RESUMABLE", text: "NOT_RESUMABLE: only plan jobs can resume." };
-      }
-      const state = ensureState(failedJob);
-      if (mode === "resume" && (!Number.isFinite(state?.slice?.n)
-        || !Number.isFinite(state?.slice?.m) || state.slice.n >= state.slice.m)) {
-        return { ok: false, error: "NOT_RESUMABLE", text: "NOT_RESUMABLE: no next plan slice is known." };
-      }
-      const source = mode === "suggestion"
-        ? { ...failedJob, type: "task", description: String(description ?? "").trim() }
-        : failedJob;
-      if (mode === "suggestion" && !source.description) {
-        return { ok: false, error: "SUGGESTION_EXPIRED", text: "suggestion expired" };
-      }
-      const id = randomBytes(12).toString("hex");
-      try {
-        const created = createJob({
-          id,
-          type: source.type,
-          projectId: failedJob.projectId,
-          parentId: failedJob.id,
-        });
-        const allowlisted = ["description", "plan", "skill", "args", "chatId", "threadId"];
-        const copied = Object.fromEntries(allowlisted
-          .filter((field) => source[field] !== undefined)
-          .map((field) => [field, source[field]]));
-        if (source.type === "plan") {
-          const planPath = source.plan ?? source.planPath;
-          if (typeof planPath === "string") copied.planPath = planPath;
-        }
-        const job = {
-          ...created.job,
-          ...copied,
-          ...(mode === "suggestion" ? { description: source.description } : {}),
-          ...(chatId !== undefined ? { chatId } : {}),
-          ...(threadId !== undefined ? { threadId } : {}),
-          callerId: String(caller?.userId ?? ""),
-          createdAt: new Date(now()).toISOString(),
-          ...(mode === "resume" ? { resumeFrom: state?.slice?.n + 1 } : {}),
-        };
-        store.append(JOBS_STREAM, { kind: "job.created", job });
-        const awaiting = transition(job, "awaiting-approval", { reason: `progress:${mode}` });
-        store.append(JOBS_STREAM, awaiting.event);
-        bus?.emit?.("job.transition", awaiting.event);
-        store.append(PROGRESS_STREAM, {
-          kind: "progress.recovered",
-          jobId: failedJob.id,
-          childId: job.id,
-          mode,
-        });
-        recovered.set(key, job.id);
-        audit({
-          kind: "progress-recovery-created",
-          jobId: failedJob.id,
-          childId: job.id,
-          mode,
-          userId: caller?.userId,
-          chatId,
-          threadId,
-        });
-        return { ok: true, jobId: job.id, job: awaiting.job, text: `Recovery job ${job.id} is awaiting approval.` };
-      } catch (error) {
-        const code = errorCode(error, "RECOVERY_FAILED");
-        audit({ kind: "progress-recovery-failed", jobId: failedJob.id, mode, reason: code });
-        return { ok: false, error: code, text: `${code}: Recovery job was not created.` };
-      }
-    });
-  }
-
-  async function abortJob(job, caller) {
-    if (!job) return { ok: false, error: "JOB_NOT_FOUND", text: "JOB_NOT_FOUND: job not found." };
-    if (["leased", "running", "needs-input"].includes(job.state)) {
-      const lane = typeof lanes === "function"
-        ? lanes(job.lane)
-        : typeof lanes?.get === "function"
-          ? lanes.get(job.lane)
-          : lanes?.[job.lane];
-      if (!lane || typeof lane.cancel !== "function") {
-        audit({ kind: "progress-abort-failed", jobId: job.id, userId: caller?.userId, reason: "LANE_UNAVAILABLE" });
-        return { ok: false, error: "LANE_UNAVAILABLE", text: "LANE_UNAVAILABLE: cancellation not delivered." };
-      }
-      try {
-        const result = await lane.cancel(job.id);
-        if (result?.ok === false) {
-          const code = typeof result.error === "string" ? result.error : "LANE_CANCEL_FAILED";
-          audit({ kind: "progress-abort-failed", jobId: job.id, userId: caller?.userId, reason: code });
-          return { ok: false, error: code, text: `${code}: cancellation was not delivered.` };
-        }
-        audit({ kind: "progress-abort-requested", jobId: job.id, userId: caller?.userId });
-        return { ok: true, text: "Cancellation requested." };
-      } catch (error) {
-        const code = errorCode(error, "LANE_CANCEL_FAILED");
-        audit({ kind: "progress-abort-failed", jobId: job.id, userId: caller?.userId, reason: code });
-        return { ok: false, error: code, text: `${code}: cancellation was not delivered.` };
-      }
-    }
-    if (job.state !== "failed") {
-      return { ok: false, error: "NOT_ABORTABLE", text: "NOT_ABORTABLE: only leased, running, needs-input, or failed jobs can be aborted." };
-    }
-    audit({ kind: "progress.discarded", jobId: job.id, userId: caller?.userId });
-    const state = ensureState(job);
-    if (state?.messageId && channel?.edit) {
-      scheduleEdit(state, renderFailure(state, "Job discarded."), { inline_keyboard: [] });
-    }
-    return { ok: true, text: "Failed job dismissed." };
-  }
-
-  async function sendReply({ chatId, threadId, text, replyMarkup }) {
-    if (!channel?.send || chatId === undefined || chatId === null) return;
-    try {
-      await channel.send({
-        chatId,
-        threadId,
-        text: format(text),
-        ...(replyMarkup ? { replyMarkup } : {}),
-      });
-    } catch (error) {
-      logger?.error?.("Progress reply could not be sent", { code: errorCode(error, "CHANNEL_SEND_FAILED") });
-    }
-  }
-
-  async function explainFailure(job, { caller, chatId, threadId } = {}) {
-    const state = ensureState(job);
-    const failureSummary = truncate(redact(secrets, renderFailure(state, job?.reason ?? "failed")), MAX_FAILURE_CONTEXT);
-    const args = {
-      message: `Why did job ${job.id} fail? Suggest fixes.`,
-      caller: {
-        role: caller?.role,
-        channel: "chat",
-        surface: channel?.id ?? "telegram",
-        project: job.projectId,
-        topic: threadId,
-      },
-      responseFormat: { style: "brief", maxChars: 3500 },
-      proposeActions: true,
-      contextBlocks: [{ title: "Failure summary", text: failureSummary }],
-    };
-    let result;
-    try {
-      if (!mcp || typeof mcp.call !== "function") throw new ClawError("MCP_TOOL_ERROR");
-      result = await mcp.call(job.projectId, "forge_master_ask", args);
-    } catch {
-      await sendReply({ chatId, threadId, text: "MCP_TOOL_ERROR: couldn't explain right now." });
-      return { ok: false, error: "MCP_TOOL_ERROR" };
-    }
-    if (result?.error === "pforge-master not installed") {
-      await sendReply({ chatId, threadId, text: "Forge-Master isn't installed for this project. Run `pforge claw doctor`." });
-      return { ok: false, error: "MCP_NOT_INSTALLED" };
-    }
-    if (result?.error || result?.isError || result?.ok === false) {
-      await sendReply({ chatId, threadId, text: "MCP_TOOL_ERROR: couldn't explain right now." });
-      return { ok: false, error: "MCP_TOOL_ERROR" };
-    }
-    const items = (Array.isArray(result?.proposedActions) ? result.proposedActions : [])
-      .filter((action) => action
-        && typeof (action.label ?? action.summary) === "string"
-        && String(action.label ?? action.summary).trim())
-      .slice(0, 5)
-      .map((action) => ({
-        label: truncate(redact(secrets, action.label ?? action.summary), 80),
-        description: truncate(redact(secrets, action.summary ?? action.label), 1000),
-      }));
-    suggestions.set(job.id, items);
-    try {
-      store?.append?.(PROGRESS_STREAM, { kind: "progress.suggestions", jobId: job.id, items });
-    } catch (error) {
-      logger?.error?.("Progress suggestions could not be saved", {
-        code: errorCode(error, "PROGRESS_SUGGESTIONS_WRITE_FAILED"),
-      });
-      await sendReply({ chatId, threadId, text: "MCP_TOOL_ERROR: couldn't explain right now." });
-      return { ok: false, error: "PROGRESS_SUGGESTIONS_WRITE_FAILED" };
-    }
-    const buttons = items.map((item, index) => button(item.label, `f:s:${job.id.slice(0, 8)}:${index}`));
-    const replyMarkup = buttons.length
-      ? keyboard([
-        ...(failureKeyboard(job, {
-          canResume: job.type === "plan" && state.slice.n < state.slice.m,
-        }).inline_keyboard),
-        ...buttons.map((item) => [item]),
-      ])
-      : failureKeyboard(job, { canResume: job.type === "plan" && state.slice.n < state.slice.m });
-    const answer = typeof (result.reply ?? result.text ?? result.answer) === "string"
-      ? truncate(result.reply ?? result.text ?? result.answer)
-      : renderFailure(state, job.reason ?? "failed");
-    if (state.messageId && channel?.edit) {
-      scheduleEdit(state, format(answer), replyMarkup);
-    } else {
-      await sendReply({ chatId, threadId, text: answer, replyMarkup });
-    }
-    return { ok: true, items };
-  }
-
-  async function applySuggestion(job, index, options) {
-    const items = suggestions.get(job.id) ?? records().findLast((record) => (
-      record.kind === "progress.suggestions" && record.jobId === job.id
-    ))?.items ?? [];
-    const item = items[index];
-    if (!item) {
-      return { ok: false, error: "SUGGESTION_EXPIRED", text: "suggestion expired" };
-    }
-    return createRecoveryJob(job, {
-      ...options,
-      mode: "suggestion",
-      description: item.description || item.label,
-    });
-  }
+  const { resolveJob, createRecoveryJob, abortJob, explainFailure, applySuggestion, sendReply } = createProgressActions({
+    store,
+    bus,
+    channel,
+    mcp,
+    secrets,
+    lanes,
+    now,
+    logger,
+    authoritySource: options,
+    suggestions,
+    records,
+    ensureState,
+    scheduleEdit,
+    format,
+    audit,
+  });
 
   async function stop() {
     stopped = true;
@@ -701,6 +888,7 @@ export function createProgressService({
   return {
     store,
     channel,
+    getConfig: () => readCurrentConfig(options),
     onJobTransition,
     onLaneEvent,
     onJobFinished,

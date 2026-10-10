@@ -11,6 +11,10 @@ import {
 import path from "node:path";
 import { ClawError } from "../errors.mjs";
 import { TERMINAL } from "./model.mjs";
+import { applicationIdentity, matchesApplicationAck } from "../protocol/l2-ack.mjs";
+import { assertInside, isInside, realpathNearest } from "../path-safety.mjs";
+
+export { assertInside, isInside, realpathNearest };
 
 const MAX_OUTPUT = 64 * 1024;
 const IDENTIFIER = /^[A-Za-z0-9][A-Za-z0-9._-]{0,80}$/;
@@ -37,8 +41,9 @@ function isBareCommand(cmd, platform) {
 }
 
 function windowsCandidates(cmd, env, exists) {
-  const directories = String(env.PATH ?? "").split(";").filter(Boolean);
-  const configured = String(env.PATHEXT ?? ".COM;.EXE;.BAT;.CMD")
+  const environment = (name) => Object.entries(env).find(([key]) => key.toUpperCase() === name)?.[1];
+  const directories = String(environment("PATH") ?? "").split(";").filter(Boolean);
+  const configured = String(environment("PATHEXT") ?? ".COM;.EXE;.BAT;.CMD")
     .split(";").filter(Boolean).map((extension) => extension.startsWith(".") ? extension : `.${extension}`);
   const safeExtensions = [".EXE", ".COM"];
   const shimExtensions = [".CMD", ".BAT"];
@@ -118,6 +123,7 @@ export function run(cmd, args = [], options = {}) {
     let stderr = "";
     let settled = false;
     let timer;
+    let failure;
     const finish = (result) => {
       if (settled) return;
       settled = true;
@@ -125,13 +131,19 @@ export function run(cmd, args = [], options = {}) {
       signal?.removeEventListener("abort", onAbort);
       resolve(result);
     };
-    const onAbort = () => child?.kill();
+    const onAbort = () => {
+      failure ??= new ClawError("JOB_CANCELLED");
+      child?.kill();
+    };
     try {
+      if (signal?.aborted) {
+        finish({ code: -1, stdout, stderr, error: new ClawError("JOB_CANCELLED") });
+        return;
+      }
       const [executable, ...prefix] = resolveCommand(cmd, options);
       child = spawn(executable, [...prefix, ...args], {
         cwd,
         env,
-        signal,
         shell: false,
         windowsHide: true,
       });
@@ -141,68 +153,44 @@ export function run(cmd, args = [], options = {}) {
       child.stderr?.on("data", (chunk) => {
         stderr = appendBounded(stderr, chunk, maxOutput - Buffer.byteLength(stdout) - Buffer.byteLength(stderr));
       });
-      child.once("error", (error) => finish({ code: -1, stdout, stderr, error }));
-      child.once("close", (code) => finish({ code: code ?? -1, stdout, stderr }));
+      child.once("error", (error) => {
+        failure ??= error;
+        if (!child.pid) finish({ code: -1, stdout, stderr, error: failure });
+      });
+      child.once("close", (code) => finish({
+        code: failure ? -1 : code ?? -1, stdout, stderr, ...(failure ? { error: failure } : {}),
+      }));
       if (Number.isFinite(timeoutMs) && timeoutMs > 0) {
         timer = setTimeout(() => {
+          failure = new ClawError("COMMAND_TIMEOUT");
           child.kill();
-          finish({ code: -1, stdout, stderr, error: new ClawError("COMMAND_TIMEOUT") });
         }, timeoutMs);
         timer.unref?.();
       }
       signal?.addEventListener("abort", onAbort, { once: true });
+      if (signal?.aborted) onAbort();
     } catch (error) {
       finish({ code: -1, stdout, stderr, error });
     }
   });
 }
 
-export async function realpathNearest(inputPath) {
-  let candidate = path.resolve(inputPath);
-  const missing = [];
-  while (true) {
-    try {
-      const resolved = await realpath(candidate);
-      return path.join(resolved, ...missing.reverse());
-    } catch (error) {
-      if (error.code !== "ENOENT" && error.code !== "ENOTDIR") throw error;
-      const parent = path.dirname(candidate);
-      if (parent === candidate) throw error;
-      missing.push(path.basename(candidate));
-      candidate = parent;
-    }
-  }
-}
-
-export async function isInside(root, target) {
-  const pathApi = process.platform === "win32" ? path.win32 : path;
-  const resolvedRoot = await realpathNearest(root);
-  const resolvedTarget = await realpathNearest(target);
-  const relative = pathApi.relative(resolvedRoot, resolvedTarget);
-  const normalized = process.platform === "win32" ? relative.toLowerCase() : relative;
-  return normalized === "" || (!normalized.startsWith(`..${pathApi.sep}`)
-    && normalized !== ".." && !pathApi.isAbsolute(relative));
-}
-
-export async function assertInside(root, target, code = "PATH_OUTSIDE_ROOT") {
-  if (!(await isInside(root, target))) throw new ClawError(code);
-  return target;
-}
-
-async function gitTopLevel(repoPath, runner) {
-  const result = await runner("git", ["-C", repoPath, "rev-parse", "--show-toplevel"]);
+async function gitTopLevel({ repoPath, runner, env, signal }) {
+  signal?.throwIfAborted();
+  const result = await runner("git", ["-C", repoPath, "rev-parse", "--show-toplevel"], { env, signal });
+  signal?.throwIfAborted();
   if (result.code !== 0) throw new ClawError("GIT_REPO_INVALID");
   return realpath(result.stdout.trim());
 }
 
-export async function addWorktree({ home, project, job, runner = run } = {}) {
+export async function addWorktree({ home, project, job, runner = run, env, signal } = {}) {
   if (!IDENTIFIER.test(project?.id ?? "") || !IDENTIFIER.test(job?.id ?? "")) {
     throw new ClawError("WORKTREE_BAD_IDENTIFIER");
   }
   const root = path.join(home, "worktrees", project.id);
   const target = path.join(root, job.id);
   await assertInside(root, target);
-  const operatorRoot = await gitTopLevel(project.repo.path, runner);
+  const operatorRoot = await gitTopLevel({ repoPath: project.repo.path, runner, env, signal });
   const canonicalTarget = await realpathNearest(target);
   if (await isInside(operatorRoot, canonicalTarget)) throw new ClawError("WORKTREE_IN_OPERATOR_TREE");
   await mkdir(root, { recursive: true });
@@ -215,13 +203,16 @@ export async function addWorktree({ home, project, job, runner = run } = {}) {
   }
   const branch = `claw/${job.id}`;
   for (const ref of [`refs/heads/${branch}`, `refs/remotes/origin/${branch}`]) {
-    const branchExists = await runner("git", ["-C", project.repo.path, "show-ref", "--verify", "--quiet", ref]);
+    signal?.throwIfAborted();
+    const branchExists = await runner("git", ["-C", project.repo.path, "show-ref", "--verify", "--quiet", ref], { env, signal });
+    signal?.throwIfAborted();
     if (branchExists.code === 0) throw new ClawError("WORKTREE_EXISTS");
   }
   const result = await runner("git", [
     "-C", project.repo.path, "worktree", "add", "-b", branch, target,
     project.repo.baseBranch ?? "main",
-  ]);
+  ], { env, signal });
+  signal?.throwIfAborted();
   if (result.code !== 0) throw new ClawError("WORKTREE_ADD_FAILED");
   await writeFile(path.join(target, ".claw-job.json"), JSON.stringify({
     jobId: job.id,
@@ -231,9 +222,10 @@ export async function addWorktree({ home, project, job, runner = run } = {}) {
   return { path: target, branch };
 }
 
-export async function removeWorktree({ repoPath, path: worktreePath, runner = run } = {}) {
+export async function removeWorktree({ repoPath, path: worktreePath, runner = run, env, signal } = {}) {
   try {
-    const result = await runner("git", ["-C", repoPath, "worktree", "remove", "--force", worktreePath]);
+    signal?.throwIfAborted();
+    const result = await runner("git", ["-C", repoPath, "worktree", "remove", "--force", worktreePath], { env, signal });
     return result.code === 0
       ? { ok: true }
       : { ok: false, code: "WORKTREE_REMOVE_FAILED" };
@@ -269,20 +261,52 @@ export async function sweepWorktrees({ home, store, now = Date.now, keepHours = 
     for (const jobEntry of await readdir(projectRoot, { withFileTypes: true })) {
       if (!jobEntry.isDirectory()) continue;
       const candidate = path.join(projectRoot, jobEntry.name);
-      let marker;
-      try {
-        marker = JSON.parse(await readFile(path.join(candidate, ".claw-job.json"), "utf8"));
-      } catch (error) {
-        if (error.code === "ENOENT" || error instanceof SyntaxError) continue;
-        throw error;
-      }
-      const job = jobs[marker.jobId];
-      if (!job || !["failed", "cancelled"].includes(job.state) || !TERMINAL.includes(job.state)) continue;
-      const finishedAt = Date.parse(job.finishedAt ?? "");
-      if (!Number.isFinite(finishedAt) || now() - finishedAt < keepHours * 60 * 60 * 1000) continue;
+      const marker = await readWorktreeMarker(candidate);
+      if (!(await canSweepWorktree({
+        candidate, projectId: projectEntry.name, marker, job: jobs[marker?.jobId], store, now, keepHours,
+      }))) continue;
       const removedResult = await removeWorktree({ repoPath: candidate, path: candidate, runner });
       if (removedResult.ok) removed.push(candidate);
     }
   }
   return removed;
+}
+
+async function readWorktreeMarker(candidate) {
+  try {
+    return JSON.parse(await readFile(path.join(candidate, ".claw-job.json"), "utf8"));
+  } catch (error) {
+    if (error.code === "ENOENT" || error instanceof SyntaxError) return null;
+    throw error;
+  }
+}
+
+async function containsHistory(candidate) {
+  try {
+    await lstat(path.join(candidate, ".forge"));
+    return true;
+  } catch (error) {
+    if (error.code === "ENOENT") return false;
+    throw error;
+  }
+}
+
+function hasAppliedHistory({ marker, job, store }) {
+  try {
+    const identity = applicationIdentity(marker.applicationAck);
+    if (identity.jobId !== job.id || identity.projectId !== job.projectId
+      || marker.applicationAck.ok !== true) return false;
+    return [...store.read("audit")].some(({ record }) => record.kind === "job.history-applied"
+      && record.applicationAck?.ok === true && matchesApplicationAck(identity, record.applicationAck));
+  } catch {
+    return false;
+  }
+}
+
+async function canSweepWorktree({ candidate, projectId, marker, job, store, now, keepHours }) {
+  if (!marker || marker.projectId !== projectId || marker.jobId !== path.basename(candidate)
+    || !job || !["failed", "cancelled"].includes(job.state) || marker.l2Pending === true) return false;
+  const finishedAt = Date.parse(job.finishedAt ?? "");
+  if (!Number.isFinite(finishedAt) || now() - finishedAt < keepHours * 60 * 60 * 1000) return false;
+  return !(await containsHistory(candidate)) || hasAppliedHistory({ marker, job, store });
 }

@@ -1,5 +1,6 @@
 import { ROLES } from "../enums.mjs";
 import { currentJobs } from "../jobs/model.mjs";
+import { getCrossprojectDependencies, visibleProjects } from "../crossproject.mjs";
 
 const MAX_JOBS = 20;
 
@@ -18,14 +19,33 @@ function visibleToCaller(job, caller) {
     || job.callerId === String(caller?.userId ?? "");
 }
 
-export function currentJobsText(store, { args = [], caller, project } = {}) {
+function jobsForScope(jobs, { filters, caller, project, config, registry }) {
+  if (project && filters.project && String(filters.project) !== String(project.id)) {
+    return { text: "JOBS_SCOPE_MISMATCH: Project filters cannot change this topic's scope." };
+  }
+  if (!Array.isArray(config?.projects) && typeof registry?.all !== "function") {
+    return { text: "SERVICE_UNAVAILABLE: Project visibility unavailable." };
+  }
+  const projectIds = new Set(visibleProjects({
+    config, registry, scope: project ? "project" : "general", projectId: project?.id,
+  }).map(({ id }) => String(id)));
+  const projectFilter = project?.id ?? filters.project;
+  return { jobs: jobs.filter((job) =>
+    projectIds.has(String(job.projectId))
+    && visibleToCaller(job, caller)
+    && (!filters.state || job.state === filters.state)
+    && (!projectFilter || String(job.projectId) === String(projectFilter))) };
+}
+
+export function currentJobsText(store, { args = [], caller, project, config, registry } = {}) {
   if (!store) return { text: "SERVICE_UNAVAILABLE: jobs" };
   try {
     const filters = parseFilters(args);
-    let jobs = Object.values(currentJobs(store)).filter((job) => visibleToCaller(job, caller));
-    if (filters.state) jobs = jobs.filter((job) => job.state === filters.state);
-    const projectFilter = filters.project ?? project?.id;
-    if (projectFilter) jobs = jobs.filter((job) => job.projectId === projectFilter);
+    const scoped = jobsForScope(Object.values(currentJobs(store)), {
+      filters, caller, project, config, registry,
+    });
+    if (scoped.text) return { text: scoped.text };
+    const jobs = scoped.jobs;
     jobs.sort((left, right) => String(right.createdAt ?? "").localeCompare(String(left.createdAt ?? "")));
     const total = jobs.length;
     const shown = jobs.slice(0, MAX_JOBS);
@@ -45,10 +65,13 @@ export default Object.freeze({
   roles: [ROLES[0], ROLES[1]], scope: "both", mutating: false,
   available: true, sinceSlice: 9, group: "Status & budget",
   async handle(context, input = {}) {
-    return currentJobsText(context?.services?.store, {
+    const services = { ...(getCrossprojectDependencies() ?? {}), ...(context?.services ?? {}) };
+    return currentJobsText(services.store, {
       ...input,
       caller: input.caller,
       project: context?.project,
+      config: services.config,
+      registry: services.registry,
     });
   },
 });

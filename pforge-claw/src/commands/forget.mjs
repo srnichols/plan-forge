@@ -5,27 +5,25 @@ import { MEMORY_STREAMS, sanitizeRecord } from "../memory/memory-client.mjs";
 import { button, keyboard } from "../channels/telegram/format.mjs";
 
 const OWNER_ROLE = ROLES[0];
-const CONFIRM_TTL_MS = 15 * 60 * 1000;
+const CONFIRM_TTL_MS = 900_000;
+const CONFIRM_ID_BYTES = 8;
 
 export function forgetAvailability(capabilities) {
   return capabilities?.canDelete === true;
 }
 
-async function handleForget(_context, input = {}) {
-  const { client: memoryClient, context, direct } = getMemoryRuntime();
-  const fail = (code) => ({ text: `${code}: The memory was not removed.` });
-  const capability = await direct?.capabilities?.();
-  if (!forgetAvailability(capability)) return fail("NOT_SUPPORTED");
-  if (input.caller?.role !== OWNER_ROLE) return fail("FORBIDDEN");
+function memoryIdFor(input) {
   const id = Array.isArray(input.args) && input.args.length === 1
     ? String(input.args[0])
     : String(input.argsText ?? "").trim();
   if (!id || /\s/.test(id) || id.toLowerCase() === "latest" || !/^[A-Za-z0-9._-]{1,128}$/.test(id)) {
-    return fail("NOT_FOUND");
+    return null;
   }
-  if (!context?.store || !memoryClient) return fail("NOT_SUPPORTED");
+  return id;
+}
 
-  const confirmId = randomBytes(8).toString("hex");
+function confirmForget(context, input, id) {
+  const confirmId = randomBytes(CONFIRM_ID_BYTES).toString("hex");
   const now = context.now ?? Date.now;
   const content = sanitizeRecord({ config: context.config, secrets: context.secrets, text: "" });
   context.store.append(MEMORY_STREAMS.confirm, {
@@ -51,6 +49,18 @@ async function handleForget(_context, input = {}) {
       button("Cancel", cancelData),
     ]]),
   };
+}
+
+async function handleForget(_context, input = {}) {
+  const { client: memoryClient, context, direct } = getMemoryRuntime();
+  const fail = (code) => ({ text: `${code}: The memory was not removed.` });
+  const capability = await direct?.capabilities?.();
+  if (!forgetAvailability(capability)) return fail("NOT_SUPPORTED");
+  if (input.caller?.role !== OWNER_ROLE) return fail("FORBIDDEN");
+  const id = memoryIdFor(input);
+  if (!id) return fail("NOT_FOUND");
+  if (!context?.store || !memoryClient) return fail("NOT_SUPPORTED");
+  return confirmForget(context, input, id);
 }
 
 const command = {

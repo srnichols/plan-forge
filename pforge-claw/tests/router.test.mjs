@@ -27,6 +27,10 @@ function makeConfig() {
       { channel: "telegram", userId: "viewer-id", role: "viewer" },
     ],
     policy: { ghcpRoles: ["owner"], nonOwnerRuntime: "byok-only" },
+    runtimes: {
+      default: "byok:openai",
+      byok: { openai: { keySecret: "FIXTURE_MODEL_KEY", endpoint: "https://example.com/v1" } },
+    },
     projects: [project("alpha", "project-chat", "project-topic"), project("beta", "other-chat", "project-topic")],
   };
 }
@@ -48,7 +52,7 @@ function makeRig({ config = makeConfig(), commandRegistry, storeOverride, client
     registry: createRegistry(config),
     logger: { error: vi.fn() },
     clients,
-    services,
+    services: { secrets: { get: () => "fixture-key" }, ...services },
     ...(commandRegistry ? { commandRegistry } : {}),
   });
   return { config, store, calls, channel, router };
@@ -317,7 +321,7 @@ describe("identity and topic router", () => {
     // A real handler with no wired services takes the same friendly path.
     const realRig = makeRig();
     await realRig.router.route(update({ text: "/run plan" }));
-    if (findAvailable("run")) expect(realRig.calls[0].text).toBe('No plan found matching "plan".');
+    if (findAvailable("run")) expect(realRig.calls[0].text).toBe(friendly);
   });
 });
 

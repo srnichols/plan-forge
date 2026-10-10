@@ -1,9 +1,9 @@
 import { spawn } from "node:child_process";
-import { mkdtemp, mkdir, rm, writeFile } from "node:fs/promises";
-import os from "node:os";
+import { mkdir, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { createFakeGh } from "./fake-pforge.mjs";
+import { createExecutionHome } from "./execution-evidence.mjs";
 
 const HELPER_DIR = path.dirname(fileURLToPath(import.meta.url));
 const FAKE_MCP = path.join(HELPER_DIR, "fake-project-mcp.mjs");
@@ -35,6 +35,18 @@ function runGit(args, { cwd } = {}) {
   });
 }
 
+export async function cloneFixtureRepo({ project, directory }) {
+  if (!project?.originPath || !project.id || !directory) {
+    throw new TypeError("an isolated fixture project and clone directory are required");
+  }
+  await mkdir(directory, { recursive: true });
+  const repoPath = path.join(directory, project.id);
+  await runGit(["clone", project.originPath, repoPath]);
+  await runGit(["config", "user.name", "Execution Fixture"], { cwd: repoPath });
+  await runGit(["config", "user.email", "execution-fixture@example.test"], { cwd: repoPath });
+  return { ...project, repoPath };
+}
+
 /**
  * Create isolated bare origins and main-branch clones for smoke fixtures.
  * @param {number} count
@@ -48,7 +60,7 @@ export async function createFixtureRepos(count = 3, {
   visibility,
 } = {}) {
   if (!Number.isInteger(count) || count < 1 || count > 10) throw new Error("fixture count must be 1..10");
-  const root = directory ?? await mkdtemp(path.join(os.tmpdir(), "claw-fixtures-"));
+  const root = directory ?? await createExecutionHome("fixture-repos");
   await mkdir(root, { recursive: true });
   const projects = [];
   const ownedPaths = [];
@@ -68,7 +80,7 @@ export async function createFixtureRepos(count = 3, {
       await mkdir(path.join(repoPath, "docs", "plans"), { recursive: true });
       await mkdir(path.join(repoPath, ".vscode"), { recursive: true });
       await writeFile(path.join(repoPath, "docs", "plans", "Phase-1-DEMO-PLAN.md"),
-        `# Fixture plan ${index}\n\nA deterministic smoke-test plan.\n`);
+        `# Fixture plan ${index}\n\n## Slices\n\n### Slice 1 - Fixture source\n\nWrite the deterministic project source.\n`);
       await writeFile(path.join(repoPath, ".vscode", "mcp.json"), JSON.stringify({
         servers: {
           "plan-forge": {
@@ -79,6 +91,7 @@ export async function createFixtureRepos(count = 3, {
       }, null, 2));
       if (withForge) {
         await mkdir(path.join(repoPath, ".forge"), { recursive: true });
+        await writeFile(path.join(repoPath, ".gitignore"), ".forge/*\n!.forge/fm-prefs.json\n");
         await writeFile(path.join(repoPath, ".forge.json"), JSON.stringify({ v: 1 }, null, 2));
         await writeFile(path.join(repoPath, ".forge", "fm-prefs.json"), JSON.stringify({ v: 1 }, null, 2));
         await writeFile(path.join(repoPath, "docs", "plans", "Phase-2-FIXTURE-PLAN.md"),
@@ -86,7 +99,7 @@ export async function createFixtureRepos(count = 3, {
       }
       await runGit(["add", "docs/plans/Phase-1-DEMO-PLAN.md", ".vscode/mcp.json"], { cwd: repoPath });
       if (withForge) {
-        await runGit(["add", ".forge.json", ".forge/fm-prefs.json", "docs/plans/Phase-2-FIXTURE-PLAN.md"], { cwd: repoPath });
+        await runGit(["add", ".gitignore", ".forge.json", ".forge/fm-prefs.json", "docs/plans/Phase-2-FIXTURE-PLAN.md"], { cwd: repoPath });
       }
       await runGit(["commit", "-m", `fixture ${index}`], { cwd: repoPath });
       await runGit(["push", "-u", "origin", "main"], { cwd: repoPath });

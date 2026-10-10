@@ -1,9 +1,10 @@
 import { COMMANDS, parseText, suggest, visibleCommands } from "./commands/index.mjs";
 import { callbackFor, parseCallback } from "./callbacks/index.mjs";
-import { ClawError } from "./errors.mjs";
 import { createRegistry } from "./registry.mjs";
 import { classifyMessage, getTriageService } from "./capture.mjs";
 import { getBudgetService } from "./budget.mjs";
+import { authorizeCommand, createCommandContext, currentCaller } from "./handlers/c2-command-context.mjs";
+import { commandErrorText, sendCommandResult } from "./handlers/c2-command-result.mjs";
 
 const NEUTRAL_TOPIC_REPLY = "This topic isn't configured.";
 const AUDIT_UNAVAILABLE_REPLY = "Audit unavailable; command not run.";
@@ -57,6 +58,7 @@ function metadataFor(update) {
     threadId: update.threadId ?? null,
     userId: update.userId ?? null,
     updateId: update.updateId ?? null,
+    messageId: update.messageId ?? null,
   };
 }
 
@@ -70,10 +72,10 @@ async function safeAudit(store, logger, record) {
   }
 }
 
-async function checkIdentity(update, indexes, store, logger) {
+async function checkIdentity(update, { indexes, config, store, logger }) {
   const userId = update.userId === undefined || update.userId === null ? null : String(update.userId);
   const chatId = update.chatId === undefined || update.chatId === null ? null : String(update.chatId);
-  const caller = userId === null ? null : indexes.identities.get(userId);
+  const caller = userId === null ? null : currentCaller(config, { userId, channel: update.adapter ?? GROUP_CHANNEL });
   let reason = null;
   if (userId === null) reason = "missing-user";
   else if (chatId === null) reason = "missing-chat";
@@ -82,45 +84,6 @@ async function checkIdentity(update, indexes, store, logger) {
   if (!reason) return { caller, userId, chatId };
   await safeAudit(store, logger, { kind: "drop", reason, ...metadataFor(update) });
   return null;
-}
-
-function resolveContext(config, registry, chatId, threadId, { services, clients } = {}) {
-  const project = registry.byChat(chatId, threadId);
-  if (project?.channel?.adapter === GROUP_CHANNEL) {
-    // Project-bound MCP client: exposed on the context and in services so every command reaches it the same way.
-    const mcp = clients ? { call: (tool, args) => clients.call(project.id, tool, args) } : undefined;
-    return {
-      scope: "project",
-      project,
-      services: mcp ? { ...services, mcp } : services,
-      ...(mcp ? { mcp } : {}),
-    };
-  }
-  const general = config.channels?.telegram?.generalChat;
-  if (general && String(general.chatId) === chatId
-    && String(general.topicId ?? "") === String(threadId ?? "")) {
-    return { scope: "general", services };
-  }
-  return null;
-}
-
-function refusalFor({ caller, command, context, config }) {
-  if (!command.available) return { ok: false, reason: "unavailable", text: `/${command.name} isn't available yet.` };
-  if (command.scope !== "both" && command.scope !== context.scope) {
-    const location = command.scope === "project" ? "project topics" : "#general";
-    return { ok: false, reason: "wrong-scope", text: `/${command.name} works in ${location}.` };
-  }
-  if (!command.roles.includes(caller.role)) {
-    return { ok: false, reason: "role", text: `Your role can't run /${command.name}.` };
-  }
-  const ghcpRoles = config.policy?.ghcpRoles ?? ["owner"];
-  if (command.mutating && !ghcpRoles.includes(caller.role)) {
-    if ((config.policy?.nonOwnerRuntime ?? config.runtimes?.nonOwnerRuntime) === "byok-only") {
-      return { ok: true, constraint: "byok-only" };
-    }
-    return { ok: false, reason: "runtime-policy", text: `/${command.name} requires an approved runtime.` };
-  }
-  return { ok: true };
 }
 
 function escapeToken(token) {
@@ -132,7 +95,7 @@ async function sendText(channel, update, text) {
 }
 
 async function replyRefusal({ channel, update, caller, command, context, config, store, logger }) {
-  const decision = refusalFor({ caller, command, context, config });
+  const decision = authorizeCommand({ caller, command, context, config });
   if (decision.ok) return decision;
   await safeAudit(store, logger, {
     kind: "refused", reason: decision.reason, name: command.name, userId: caller.userId,
@@ -142,7 +105,7 @@ async function replyRefusal({ channel, update, caller, command, context, config,
   return decision;
 }
 
-async function dispatchCallback({ update, caller, context, channel, store, logger }) {
+async function dispatchCallback({ update, caller, context, channel, store, logger, commandRegistry }) {
   await channel.answerCallback({ callbackId: update.callbackId });
   const parsed = parseCallback(update.data);
   const callback = parsed && callbackFor(parsed.prefix);
@@ -157,35 +120,22 @@ async function dispatchCallback({ update, caller, context, channel, store, logge
     await safeAudit(store, logger, { kind: "callback-ignored", reason: "role", ...metadataFor(update) });
     return;
   }
-  await callback.handle(context, { payload: parsed.payload, caller, ...metadataFor(update) });
+  if (!context) {
+    await safeAudit(store, logger, { kind: "callback-ignored", reason: "wrong-scope", ...metadataFor(update) });
+    return;
+  }
+  const result = await callback.handle(context, {
+    payload: parsed.payload, caller, commands: commandRegistry, ...metadataFor(update),
+  });
+  await sendCommandResult({
+    channel, chatId: update.chatId, threadId: update.threadId, result, commandName: callback.prefix,
+    secrets: context.services.secrets,
+  });
 }
 
 function unknownCommandReply(token, caller, scope, commands) {
   const suggestion = suggest(token, visibleCommands({ role: caller.role, scope, commands }));
   return `Unknown command \`${escapeToken(token)}\` — try /help${suggestion ? `\nDid you mean /${suggestion}?` : ""}`;
-}
-
-const ERROR_CODE_PATTERN = /^[A-Z][A-Z0-9_]{0,63}$/;
-// Handlers that predate ClawError return bare "SERVICE_UNAVAILABLE: <service>" text.
-const RAW_SERVICE_UNAVAILABLE_TEXT = /^SERVICE_UNAVAILABLE(?::\s*[\w .-]{0,64})?$/;
-
-function friendlyErrorReply(commandName, error) {
-  const code = error instanceof ClawError && ERROR_CODE_PATTERN.test(String(error.code)) ? error.code : "INTERNAL";
-  if (code === "SERVICE_UNAVAILABLE") {
-    return `/${commandName} can't run right now: a required service isn't running. Try again later or check \`pforge claw doctor\`.`;
-  }
-  return `/${commandName} couldn't be completed (${code}). Try again later or check \`pforge claw doctor\`.`;
-}
-
-async function sendHandlerResult(channel, update, result, commandName) {
-  const messages = Array.isArray(result) ? result : [result];
-  for (const message of messages) {
-    if (!message || typeof message.text !== "string") continue;
-    const text = RAW_SERVICE_UNAVAILABLE_TEXT.test(message.text.trim())
-      ? friendlyErrorReply(commandName, new ClawError("SERVICE_UNAVAILABLE"))
-      : message.text;
-    await sendText(channel, update, text);
-  }
 }
 
 async function dispatchCommand({
@@ -206,21 +156,26 @@ async function dispatchCommand({
     const result = await command.handle(context, {
       args: argsText.trim() ? argsText.trim().split(/\s+/) : [],
       argsText,
-      caller,
+      caller: authorization.caller,
       project: context.project,
       scope: context.scope,
       chatId: update.chatId,
       threadId: update.threadId,
       updateId: update.updateId,
+      adapter: update.adapter,
+      messageId: update.messageId,
       constraint: authorization.constraint,
       commands: commandRegistry,
       helpCommand: command.name === "help" && argsText
         ? commandByName(commandRegistry, argsText.split(/\s+/)[0])
         : null,
     });
-    await sendHandlerResult(channel, update, result, command.name);
+    await sendCommandResult({
+      channel, chatId: update.chatId, threadId: update.threadId, result, commandName: command.name,
+      secrets: context.services.secrets,
+    });
   } catch (error) {
-    await sendText(channel, update, friendlyErrorReply(command.name, error));
+    await sendText(channel, update, commandErrorText(command.name, error));
   }
 }
 
@@ -237,11 +192,11 @@ async function throttleGate({ update, userId, limiter, store, logger }) {
   return { dropped: true, throttled: true };
 }
 
-async function routeForward({
+async function routeCapture({
   update, caller, config, registry, chatId, store, logger, contextOptions,
 }) {
-  if (classifyMessage(update)?.kind !== "forward") return null;
-  const context = resolveContext(config, registry, chatId, update.threadId, contextOptions);
+  if (!classifyMessage(update)) return null;
+  const context = createCommandContext({ config, registry, chatId, threadId: update.threadId, ...contextOptions });
   const service = getTriageService();
   if (context?.scope !== "project" || !service) {
     await safeAudit(store, logger, {
@@ -321,18 +276,25 @@ export function createRouter({
     registry,
     pending,
     now,
+    commands: commandRegistry,
+    getConfig: () => currentConfig,
+    getRegistry: () => currentRegistry,
     get budget() { return getBudgetService(); },
   };
   const contextOptions = { services: contextServices, clients };
+  const contextFor = ({ chatId, threadId, projectId } = {}) => createCommandContext({
+    config: currentConfig, registry: currentRegistry, chatId, threadId, projectId, ...contextOptions,
+  });
+  contextServices.contextFor = contextFor;
 
   async function route(update) {
-    const identity = await checkIdentity(update, indexes, store, logger);
+    const identity = await checkIdentity(update, { indexes, config: currentConfig, store, logger });
     if (!identity) return { dropped: true };
     const { caller, chatId } = identity;
     if (update.kind === "callback") {
       await dispatchCallback({
-        update, caller, context: resolveContext(currentConfig, currentRegistry, chatId, update.threadId, contextOptions),
-        channel, store, logger,
+        update, caller, context: contextFor({ chatId, threadId: update.threadId }),
+        channel, store, logger, commandRegistry,
       });
       return { handled: true };
     }
@@ -340,14 +302,14 @@ export function createRouter({
       update, userId: identity.userId, limiter, store, logger,
     });
     if (throttled) return throttled;
-    const forwarded = await routeForward({
+    const captured = await routeCapture({
       update, caller, config: currentConfig, registry: currentRegistry, chatId, store, logger,
       contextOptions,
     });
-    if (forwarded) return forwarded;
+    if (captured) return captured;
     const parsed = parseText(update.text, { botUsername: currentConfig.channels?.telegram?.botUsername });
     if (parsed.kind === "other-bot" || parsed.kind === "empty") return { handled: false };
-    const context = resolveContext(currentConfig, currentRegistry, chatId, update.threadId, contextOptions);
+    const context = contextFor({ chatId, threadId: update.threadId });
     if (!context) {
       if (parsed.kind === "command" || parsed.kind === "unknown" || parsed.kind === "help-text") {
         await sendText(channel, update, NEUTRAL_TOPIC_REPLY);
@@ -406,5 +368,8 @@ export function createRouter({
     return syncMenus();
   }
 
-  return { route, reload, buildMenus, syncMenus };
+  return {
+    route, reload, buildMenus, syncMenus, contextFor,
+    getConfig: () => currentConfig, getRegistry: () => currentRegistry,
+  };
 }

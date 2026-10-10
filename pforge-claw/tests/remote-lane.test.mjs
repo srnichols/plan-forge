@@ -1,8 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { mkdtemp, rm } from "node:fs/promises";
-import { readFileSync } from "node:fs";
-import os from "node:os";
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { WebSocket } from "ws";
 import { assertLane } from "../src/lanes/lane.mjs";
 import { createLocalLane } from "../src/lanes/local-lane.mjs";
@@ -11,18 +10,22 @@ import { createHttpServer } from "../src/http.mjs";
 import { createEnrollment } from "../src/protocol/enrollment.mjs";
 import { createWorkerAgent, enrollWorker } from "../src/protocol/worker-agent.mjs";
 import { createWorkerRegistry } from "../src/protocol/worker-registry.mjs";
+import { createL2Receiver } from "../src/protocol/l2-receiver.mjs";
+import { computeDelta, snapshotForge } from "../src/memory/l2-sync.mjs";
 import { createWorkerServer } from "../src/protocol/ws-server.mjs";
+import { createSecrets } from "../src/secrets.mjs";
 import workersFeature from "../src/features/workers.mjs";
 import { buildLanes, createLaneDirectory } from "../src/lanes/directory.mjs";
 
 const directories = [];
 const cleanups = [];
+const TEST_DIRECTORY = path.dirname(fileURLToPath(import.meta.url));
 const workerCapabilities = {
   os: "linux", arch: "x64", macos: false, toolchains: ["node"], projects: ["p1"],
 };
 
 async function tempDirectory() {
-  const directory = await mkdtemp(path.join(os.tmpdir(), "claw-remote-lane-"));
+  const directory = await mkdtemp(path.join(TEST_DIRECTORY, ".claw-remote-lane-"));
   directories.push(directory);
   return directory;
 }
@@ -42,7 +45,7 @@ async function eventually(assertion, timeoutMs = 5000) {
 async function connectedSystem({
   runtime, readHandler = async () => ({ ok: true }), WebSocketImpl = WebSocket,
   logger = { warn: () => {}, error: () => {} },
-  heartbeatMs = 100,
+  heartbeatMs = 100, l2, afterJob, applyL2, requireL2 = false,
 } = {}) {
   const directory = await tempDirectory();
   const secret = "fixture-worker-secret";
@@ -54,7 +57,7 @@ async function connectedSystem({
   };
   const enrollment = createEnrollment({ store, secretFile: secretsFile });
   await enrollment.register({ workerId: "w_remote", laneId: "remote", secret });
-  const registry = createWorkerRegistry();
+  const registry = createWorkerRegistry({ applyL2, requireL2 });
   const http = createHttpServer({ bind: "127.0.0.1", port: 0 });
   const server = createWorkerServer({
     registry,
@@ -83,6 +86,7 @@ async function connectedSystem({
     capabilities: workerCapabilities,
     localLane,
     readHandler,
+    l2, afterJob,
     heartbeatMs: 100,
     WebSocketImpl,
     logger,
@@ -105,9 +109,140 @@ async function connectedSystem({
 afterEach(async () => {
   await Promise.all(cleanups.splice(0).map((close) => close()));
   await Promise.all(directories.splice(0).map((directory) => rm(directory, { recursive: true, force: true })));
+  vi.useRealTimers();
 });
 
 describe("remote lane contract and transport", () => {
+  it("refuses an already-aborted remote read without enqueueing or serializing its signal", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(0);
+    const registry = createWorkerRegistry();
+    cleanups.push(() => registry.close());
+    const lane = createRemoteLane({ id: "remote", registry });
+    const controller = new AbortController();
+    controller.abort();
+    const rejected = expect(lane.read({ projectId: "p1", tool: "forge_status", args: {} }, { signal: controller.signal }))
+      .rejects.toMatchObject({ code: "READ_CANCELLED" });
+    await vi.advanceTimersByTimeAsync(30_000);
+    await rejected;
+    expect(registry.snapshot().byLane).toEqual({});
+  });
+
+  it("cancels a pending authenticated remote read and releases its registry lease", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(0);
+    const sent = [];
+    const registry = createWorkerRegistry();
+    cleanups.push(() => registry.close());
+    registry.connect("w1", {
+      laneId: "remote", capabilities: workerCapabilities, send: (packet) => sent.push(packet),
+    });
+    const lane = createRemoteLane({ id: "remote", registry });
+    const controller = new AbortController();
+    const reading = lane.read({ projectId: "p1", tool: "forge_status", args: {} }, { signal: controller.signal });
+    const rejected = expect(reading).rejects.toMatchObject({ code: "READ_CANCELLED" });
+    const lease = sent.find((packet) => packet.t === "lease");
+    expect(lease.request).toMatchObject({ projectId: "p1", tool: "forge_status" });
+    expect(lease.request).not.toHaveProperty("signal");
+    controller.abort();
+    await vi.advanceTimersByTimeAsync(30_000);
+    await rejected;
+    expect(sent).toContainEqual(expect.objectContaining({ t: "cancel", leaseId: lease.leaseId }));
+    expect(registry.snapshot().byLane.remote).toMatchObject({ pending: 0, active: 0 });
+  });
+
+  it("applies a verified in-flight checkpoint and a later final delta without replaying stale application ACKs", async () => {
+    const root = await tempDirectory();
+    const source = path.join(root, "source", ".forge");
+    const checkout = path.join(root, "canonical");
+    await mkdir(source, { recursive: true });
+    await mkdir(checkout);
+    const initial = await snapshotForge({ forgeDir: source });
+    const receiver = createL2Receiver({
+      config: {
+        projects: [{ id: "p1", homeLane: "local", repo: { path: checkout } }],
+        lanes: [{ id: "local", kind: "local" }, { id: "remote", kind: "remote" }],
+      }, currentLaneId: "local",
+    });
+    let agent;
+    let checkpointAck;
+    const system = await connectedSystem({
+      requireL2: true, applyL2: receiver.receive, l2: { forgeDirFor: () => source },
+      runtime: { async run() {
+        await mkdir(path.join(source, "runs", "checkpoint-job"), { recursive: true });
+        await writeFile(path.join(source, "runs", "checkpoint-job", "checkpoint.json"), '{"checkpoint":true}');
+        checkpointAck = await agent.syncHistory({
+          jobId: "checkpoint-job", delta: await computeDelta({ forgeDir: source, snapshot: initial }),
+        });
+        await writeFile(path.join(source, "runs", "checkpoint-job", "final.json"), '{"final":true}');
+        return { status: "succeeded" };
+      } },
+    });
+    agent = system.agent;
+    const delivered = [];
+    for await (const event of system.lane.submit({
+      id: "checkpoint-job", projectId: "p1", type: "task", prompt: "checkpoint",
+    })) delivered.push(event);
+    await agent.drain();
+    expect(checkpointAck).toMatchObject({ jobId: "checkpoint-job", projectId: "p1", ok: true });
+    expect(delivered.at(-1).data.status).toBe("succeeded");
+    const identities = delivered.filter((event) => event.data.kind === "l2-delta").map((event) => event.data.sha256Total);
+    expect(new Set(identities).size).toBe(2);
+    expect(delivered.at(-1).data.l2.sha256Total).not.toBe(checkpointAck.sha256Total);
+    expect(await readFile(path.join(checkout, ".forge", "runs", "checkpoint-job", "checkpoint.json"), "utf8"))
+      .toBe('{"checkpoint":true}');
+    expect(await readFile(path.join(checkout, ".forge", "runs", "checkpoint-job", "final.json"), "utf8"))
+      .toBe('{"final":true}');
+  });
+
+  it.each(["local", "remote"])("applies canonical history on the %s home before terminal success and cleanup", async (homeLane) => {
+    const root = await tempDirectory();
+    const source = path.join(root, "source", ".forge");
+    const checkout = path.join(root, "canonical");
+    await mkdir(source, { recursive: true });
+    await mkdir(checkout);
+    const config = {
+      projects: [{ id: "p1", homeLane, repo: { path: checkout } }],
+      lanes: [{ id: "local", kind: "local" }, { id: "remote", kind: "remote" }],
+    };
+    const directory = new Map();
+    const receiver = createL2Receiver({ config, currentLaneId: "local", directory });
+    const home = createL2Receiver({ config, currentLaneId: homeLane });
+    const observedCleanup = [];
+    const system = await connectedSystem({
+      requireL2: true, applyL2: receiver.receive, readHandler: home.read,
+      l2: { forgeDirFor: () => source },
+      runtime: { async run({ emit }) {
+        await mkdir(path.join(source, "runs", "history-job"), { recursive: true });
+        await writeFile(path.join(source, "runs", "history-job", "run.json"), '{"original":"canonical-canary"}\r\n');
+        emit("artifact", { kind: "pr", url: "https://fixture.test/history" });
+        return { status: "succeeded" };
+      } },
+      afterJob: async ({ event, applicationAck }) => {
+        observedCleanup.push({
+          event, applicationAck,
+          bytes: await readFile(path.join(checkout, ".forge", "runs", "history-job", "run.json"), "utf8"),
+        });
+      },
+    });
+    directory.set("remote", system.lane);
+    const delivered = [];
+    for await (const event of system.lane.submit({
+      id: "history-job", projectId: "p1", type: "task", prompt: "history",
+    })) delivered.push(event);
+    await system.agent.drain();
+    const terminal = delivered.at(-1);
+    expect(terminal.data).toMatchObject({
+      status: "succeeded", l2: { jobId: "history-job", projectId: "p1", deltaId: "history-job", ok: true },
+    });
+    expect(system.registry.completion("history-job")).toMatchObject({
+      ok: true, applicationAck: terminal.data.l2,
+    });
+    expect(observedCleanup).toHaveLength(1);
+    expect(observedCleanup[0].bytes).toBe('{"original":"canonical-canary"}\r\n');
+    expect(observedCleanup[0].applicationAck).toMatchObject(terminal.data.l2);
+  });
+
   it("satisfies the lane contract and carries local job events in order", async () => {
     const { lane } = await connectedSystem();
     expect(assertLane(lane)).toBe(lane);
@@ -191,10 +326,11 @@ describe("remote lane contract and transport", () => {
       warn: (...values) => logOutput.push(JSON.stringify(values)),
       error: (...values) => logOutput.push(JSON.stringify(values)),
     };
+    const secrets = await createSecrets({ env: {}, file: secretFile });
     const server = createWorkerServer({
       registry,
       enrollment,
-      secrets: { get: (name) => JSON.parse(readFileSync(secretFile, "utf8"))[name] ?? null },
+      secrets,
       allowedLanes: ["remote"],
       logger,
     });
@@ -215,6 +351,8 @@ describe("remote lane contract and transport", () => {
       const joined = await enrollWorker({
         url: `ws://127.0.0.1:${port}/claw/workers`, code, laneId: "remote",
       });
+      expect(secrets.get(`PFORGE_CLAW_WORKER_SECRET__${joined.workerId}`)).toBe(joined.secret);
+      expect(secrets.redact(joined.secret)).not.toContain(joined.secret);
       agent = createWorkerAgent({
         url: `ws://127.0.0.1:${port}/claw/workers`,
         workerId: joined.workerId,
@@ -345,6 +483,43 @@ describe("remote lane contract and transport", () => {
 });
 
 describe("lease recovery and fencing", () => {
+  it.each([false, true])("fails closed without dropping prior artifacts when an unread event buffer fills (subscribed: %s)", async (subscribed) => {
+    const sent = [];
+    const registry = createWorkerRegistry({ maxReplay: 2 });
+    registry.connect("w1", { laneId: "remote", capabilities: workerCapabilities, send: (packet) => sent.push(packet) });
+    const { iterator } = registry.enqueue("remote", {
+      kind: "job", job: { id: "buffer-job", projectId: "p1" },
+    });
+    const source = subscribed ? iterator[Symbol.asyncIterator]() : null;
+    const lease = sent[0];
+    for (let sequence = 1; sequence <= 3; sequence += 1) registry.onEvent({
+      leaseId: lease.leaseId, attempt: lease.attempt, workerId: "w1",
+      event: {
+        v: 1, jobId: "buffer-job", seq: sequence, ts: new Date(0).toISOString(),
+        type: "artifact", data: { kind: "pr", index: sequence },
+      },
+    });
+    registry.onEvent({
+      leaseId: lease.leaseId, attempt: lease.attempt, workerId: "w1",
+      event: { v: 1, jobId: "buffer-job", seq: 4, ts: new Date(0).toISOString(), type: "finished", data: { status: "succeeded" } },
+    });
+    const delivered = [];
+    const events = source ?? iterator[Symbol.asyncIterator]();
+    while (true) {
+      const next = await events.next();
+      if (next.done) break;
+      delivered.push(next.value);
+    }
+    expect(delivered.slice(0, 2).map((event) => event.data.index)).toEqual([1, 2]);
+    expect(delivered.at(-1).data).toMatchObject({
+      status: "failed", reason: "l2-sync-incomplete", l2: { ok: false, code: "L2_EVENT_BUFFER_FULL" },
+    });
+    expect(delivered).toHaveLength(3);
+    expect(registry.completion("buffer-job").ok).toBe(false);
+    expect(sent.some((packet) => packet.t === "cancel")).toBe(true);
+    registry.close();
+  });
+
   function fakeTimers() {
     let now = 0;
     let id = 0;
@@ -438,7 +613,7 @@ describe("workers feature lifecycle", () => {
     const directory = await tempDirectory();
     let secret = "fixture-first-lane-key";
     const config = {
-      lanes: [{ id: "pods", kind: "k8s", k8s: { laneSecret: "FIXTURE_KEY" } }],
+      lanes: [{ id: "pods", kind: "k8s", k8s: { namespace: "fixture-workers", laneSecret: "FIXTURE_KEY" } }],
       http: { bind: "127.0.0.1", port: 0 },
       worker: { dispatcherUrl: "wss://fixture.example/claw/workers" },
     };

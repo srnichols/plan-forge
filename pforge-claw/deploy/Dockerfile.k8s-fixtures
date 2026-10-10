@@ -1,0 +1,46 @@
+# Test-only targets. Build with the repository root as the context, never a user's project.
+ARG NODE_IMAGE=node:24-slim
+FROM ${NODE_IMAGE} AS dependencies
+WORKDIR /bundle
+COPY package.json package-lock.json ./
+COPY pforge-claw/package.json ./pforge-claw/
+COPY pforge-mcp/package.json ./pforge-mcp/
+COPY pforge-master/package.json ./pforge-master/
+COPY pforge-sdk/package.json ./pforge-sdk/
+RUN npm ci --workspace=pforge-claw --include-workspace-root=false --omit=dev --ignore-scripts --no-audit --no-fund
+
+FROM ${NODE_IMAGE} AS fixture-base
+LABEL com.azure.containerizationassist.createdby="containerization-assist"
+LABEL io.pforge.claw.fixture="disposable-k8s-only; external-runtime-git-pr-edges; not-production"
+WORKDIR /app
+COPY --from=dependencies /bundle/node_modules ./node_modules/
+COPY pforge-claw/package.json pforge-claw/cli.mjs pforge-claw/config.schema.json ./
+COPY pforge-claw/src/ ./src/
+COPY pforge-claw/examples/ ./examples/
+COPY pforge-claw/deploy/k8s/ ./deploy/k8s/
+COPY pforge-claw/scripts/k8s-e2e-overlay.mjs ./scripts/
+COPY pforge-claw/tests/helpers/k8s-*.mjs ./tests/helpers/
+COPY pforge-claw/tests/helpers/fake-telegram.mjs pforge-claw/tests/helpers/fake-project-mcp.mjs ./tests/helpers/
+RUN groupadd --gid 10001 claw \
+    && useradd --uid 10001 --gid 10001 --no-create-home claw \
+    && mkdir -p /data /work \
+    && chown 10001:10001 /data /work \
+    && printf '%s\n' '#!/bin/sh' 'exec node /app/tests/helpers/k8s-worker.mjs "$@"' > /usr/local/bin/pforge \
+    && chmod 0755 /usr/local/bin/pforge
+ENV NODE_ENV=production
+
+FROM fixture-base AS dispatcher
+ENV PFORGE_CLAW_HOME=/data
+EXPOSE 3190
+HEALTHCHECK --interval=30s --timeout=5s CMD ["node","-e","fetch('http://127.0.0.1:3191/healthz').then(r=>process.exit(r.ok?0:1),()=>process.exit(1))"]
+USER 10001:10001
+ENTRYPOINT ["node","/app/tests/helpers/k8s-dispatcher.mjs"]
+
+FROM fixture-base AS worker
+ENV PFORGE_CLAW_HOME=/work/claw HOME=/work/home
+WORKDIR /work
+# One-shot health is its actual exit plus the authenticated terminal/application ACK.
+HEALTHCHECK NONE
+USER 10001:10001
+ENTRYPOINT ["pforge"]
+CMD ["claw","worker","--one-shot"]

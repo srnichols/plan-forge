@@ -5,9 +5,24 @@ export const PROTOCOL_VERSION = 1;
 export const MAX_FRAME_BYTES = 1_048_576;
 export const MESSAGE_TYPES = Object.freeze([
   "hello", "challenge", "auth", "enroll-auth", "ready", "lease", "ack", "event",
-  "cancel", "heartbeat", "bye",
+  "cancel", "heartbeat", "bye", "l2-applied",
 ]);
 export const LEASE_KINDS = Object.freeze(["job", "read"]);
+export const L2_PACKET_KIND = "l2-delta";
+export const L2_APPLIED_MESSAGE = "l2-applied";
+export const L2_ACK_ERRORS = Object.freeze({
+  UNCONFIRMED: "L2_APPLY_UNCONFIRMED",
+  TIMEOUT: "L2_APPLY_TIMEOUT",
+  HOME_UNAVAILABLE: "L2_HOME_UNAVAILABLE",
+  SCOPE: "L2_SCOPE_REJECTED",
+  CANCELLED: "L2_APPLY_CANCELLED",
+  BUFFER_FULL: "L2_EVENT_BUFFER_FULL",
+});
+export const READ_ERRORS = Object.freeze({
+  FAILED: "READ_FAILED",
+  TIMEOUT: "READ_TIMEOUT",
+  CANCELLED: "READ_CANCELLED",
+});
 export const CLOSE_CODES = Object.freeze({
   BAD_MESSAGE: 4400,
   UNAUTHORIZED: 4401,
@@ -18,8 +33,8 @@ export const CLOSE_CODES = Object.freeze({
 
 const isObject = (value) => value !== null && typeof value === "object" && !Array.isArray(value);
 const isString = (value) => typeof value === "string" && value.length > 0;
-const isNonNegativeInt = (value) => Number.isInteger(value) && value >= 0;
-const isPositiveInt = (value) => Number.isInteger(value) && value > 0;
+const isNonNegativeInt = (value) => Number.isSafeInteger(value) && value >= 0;
+const isPositiveInt = (value) => Number.isSafeInteger(value) && value > 0;
 const isHex64 = (value) => typeof value === "string" && /^[0-9a-f]{64}$/.test(value);
 const exact = (object, required, optional = []) => isObject(object)
   && required.every((key) => Object.hasOwn(object, key))
@@ -40,6 +55,29 @@ function validateEvent(value) {
     && LANE_EVENT_TYPES.includes(value.type) && isObject(value.data);
 }
 
+function validateLeaseResume(lease) {
+  if (lease.seqBase !== undefined && !isNonNegativeInt(lease.seqBase)) return false;
+  if (lease.lastSeq !== undefined && !isNonNegativeInt(lease.lastSeq)) return false;
+  if (lease.resume !== undefined && typeof lease.resume !== "boolean") return false;
+  return lease.seqBase === undefined || lease.lastSeq === undefined || lease.seqBase <= lease.lastSeq;
+}
+
+function validateLeasePayload(lease) {
+  if (lease.kind === LEASE_KINDS[0]) {
+    return Object.hasOwn(lease, "job") && !Object.hasOwn(lease, "request") && isObject(lease.job)
+      && (lease.grant === undefined || isObject(lease.grant));
+  }
+  return Object.hasOwn(lease, "request") && !Object.hasOwn(lease, "job") && isObject(lease.request)
+    && !Object.hasOwn(lease, "grant") && isString(lease.request.tool) && isObject(lease.request.args);
+}
+
+function validateLease(lease) {
+  return exact(lease, ["v", "t", "leaseId", "attempt", "kind", "expiresAt"],
+    ["job", "request", "grant", "seqBase", "resume", "lastSeq"])
+    && isString(lease.leaseId) && isPositiveInt(lease.attempt) && LEASE_KINDS.includes(lease.kind)
+    && Number.isFinite(lease.expiresAt) && validateLeaseResume(lease) && validateLeasePayload(lease);
+}
+
 const validators = {
   hello: (m) => (exact(m, ["v", "t", "mode", "workerId", "laneId", "capabilities"])
     && m.mode === "auth" && isString(m.workerId) && isString(m.laneId) && validateCapabilities(m.capabilities))
@@ -55,18 +93,10 @@ const validators = {
     && isPositiveInt(m.leaseMs) && isPositiveInt(m.heartbeatMs))
     || (exact(m, ["v", "t", "workerId", "pub", "mac"])
       && isString(m.workerId) && isString(m.pub) && isHex64(m.mac)),
-  lease: (m) => {
-    if (!exact(m, ["v", "t", "leaseId", "attempt", "kind", "expiresAt"], ["job", "request", "grant"])
-      || !isString(m.leaseId) || !isPositiveInt(m.attempt) || !LEASE_KINDS.includes(m.kind)
-      || !Number.isFinite(m.expiresAt)) return false;
-    return m.kind === "job"
-      ? Object.hasOwn(m, "job") && !Object.hasOwn(m, "request") && isObject(m.job)
-        && (m.grant === undefined || isObject(m.grant))
-      : Object.hasOwn(m, "request") && !Object.hasOwn(m, "job") && isObject(m.request)
-        && !Object.hasOwn(m, "grant") && isString(m.request.tool) && isObject(m.request.args);
-  },
-  ack: (m) => exact(m, ["v", "t", "leaseId", "attempt"])
-    && isString(m.leaseId) && isPositiveInt(m.attempt),
+  lease: validateLease,
+  ack: (m) => exact(m, ["v", "t", "leaseId", "attempt"], ["seqBase"])
+    && isString(m.leaseId) && isPositiveInt(m.attempt)
+    && (m.seqBase === undefined || isNonNegativeInt(m.seqBase)),
   event: (m) => exact(m, ["v", "t", "leaseId", "attempt", "event"])
     && isString(m.leaseId) && isPositiveInt(m.attempt) && validateEvent(m.event),
   cancel: (m) => (exact(m, ["v", "t", "jobId"]) && isString(m.jobId))
@@ -76,6 +106,12 @@ const validators = {
       && m.leases.every((lease) => exact(lease, ["leaseId", "attempt", "lastSeq"])
         && isString(lease.leaseId) && isPositiveInt(lease.attempt) && isNonNegativeInt(lease.lastSeq)))),
   bye: (m) => exact(m, ["v", "t", "reason"]) && /^[A-Z0-9_]{1,64}$/.test(m.reason),
+  [L2_APPLIED_MESSAGE]: (m) => exact(m,
+    ["v", "t", "leaseId", "attempt", "jobId", "projectId", "deltaId", "sha256Total", "ok"], ["code"])
+    && isString(m.leaseId) && isPositiveInt(m.attempt) && isIdentifier(m.jobId)
+    && isIdentifier(m.projectId) && isString(m.deltaId) && isHex64(m.sha256Total)
+    && typeof m.ok === "boolean" && (m.ok
+      ? m.code === undefined : typeof m.code === "string" && /^[A-Z0-9_]{1,64}$/.test(m.code)),
 };
 
 function fail(field, type) {

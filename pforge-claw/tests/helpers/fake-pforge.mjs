@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import { appendFile, mkdir, mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { spawn } from "node:child_process";
+import { randomBytes } from "node:crypto";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -64,7 +65,24 @@ async function runPlan(args) {
   const runPath = path.join(cwd, ".forge", "runs", runId);
   await mkdir(runPath, { recursive: true });
   const events = path.join(runPath, "events.jsonl");
-  await writeFile(events, `${JSON.stringify({ type: "started", plan: args[0] ?? null })}\n`);
+  const plan = path.resolve(cwd, args[0] ?? "");
+  const relative = path.relative(cwd, plan);
+  if (!relative || relative.startsWith(`..${path.sep}`) || path.isAbsolute(relative)) {
+    throw new Error("FAKE_PFORGE_PLAN_OUTSIDE_FIXTURE");
+  }
+  const planSource = await readFile(plan, "utf8");
+  const executionOrder = [...planSource.matchAll(/^### Slice ([0-9]+) - /gm)].map((match) => match[1]);
+  if (executionOrder.length !== 1) throw new Error("FAKE_PFORGE_PLAN_CONTRACT_INVALID");
+  const traceId = randomBytes(16).toString("hex");
+  const startTime = new Date().toISOString();
+  const watchEvents = path.join(runPath, "events.log");
+  await Promise.all([writeFile(events, ""), writeFile(watchEvents, "")]);
+  const record = async (type, data) => {
+    const line = `${JSON.stringify({ ts: new Date().toISOString(), type, data })}\n`;
+    await Promise.all([appendFile(events, line), appendFile(watchEvents, line)]);
+  };
+  await record("run-started", { plan, traceId, startTime, sliceCount: executionOrder.length, executionOrder });
+  await record("slice-started", { sliceId: executionOrder[0], title: "Fixture source" });
   process.stdout.write(`${JSON.stringify({ type: "progress", progress: 0.25 })}\n`);
   const controlDirectory = path.join(fixtureRoot, ".e2e-control");
   const jobId = path.basename(cwd);
@@ -84,10 +102,16 @@ async function runPlan(args) {
   if (options.has("--delay")) await new Promise((resolve) => {
     setTimeout(resolve, Math.max(0, Number(options.get("--delay")) || 0));
   });
-  await appendFile(events, `${JSON.stringify({ type: "progress", progress: 1 })}\n`);
-  await appendFile(events, `${JSON.stringify({ type: "completed" })}\n`);
-  await run("git", ["add", ".forge/runs"], { cwd });
+  const artifact = "fixture-plan-result.mjs";
+  await writeFile(path.join(cwd, artifact),
+    `export const fixturePlan = ${JSON.stringify({ runId, plan: args[0] ?? null })};\n`);
+  await run("git", ["add", artifact], { cwd });
   await run("git", ["commit", "-m", "fixture plan run"], { cwd });
+  await record("slice-completed", { sliceId: executionOrder[0], status: "passed" });
+  await record("run-completed", {
+    plan, startTime, endTime: new Date().toISOString(), sliceCount: executionOrder.length,
+    status: "passed", results: { passed: 1, failed: 0, skipped: 0, total: executionOrder.length },
+  });
   process.stdout.write(`${JSON.stringify({ type: "completed", runId })}\n`);
   return 0;
 }

@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import retryCommand from "../../src/commands/retry.mjs";
 import { bindProgressService, createProgressService } from "../../src/progress.mjs";
 import { currentJobs, createJob, JOBS_STREAM, transition } from "../../src/jobs/model.mjs";
@@ -38,7 +38,8 @@ function addJob(store, {
   let job = {
     ...base,
     description: "Fix a regression",
-    callerId: "user-1",
+    callerId: "owner-1",
+    adapter: "telegram",
     chatId,
     threadId,
     createdAt: new Date().toISOString(),
@@ -58,6 +59,16 @@ function setup(store, { lanes } = {}) {
   const service = createProgressService({
     store,
     lanes,
+    config: {
+      allowlist: [{ channel: "telegram", userId: "owner-1", role: "owner" }],
+      projects: [{
+        id: PROJECT_ID, homeLane: "fixture-lane",
+        channel: { adapter: "telegram", chatId: CHAT_ID, topicId: THREAD_ID },
+      }],
+      lanes: [{ id: "fixture-lane", kind: "local", enabled: true }],
+      runtimes: { default: "copilot-sdk" },
+      policy: { ghcpRoles: ["owner"], nonOwnerRuntime: "byok-only" },
+    },
     channel: { send: async () => ({ messageId: "message-1" }), edit: async () => {} },
     logger: { error() {} },
   });
@@ -67,11 +78,20 @@ function setup(store, { lanes } = {}) {
 
 const invoke = (argsText, project = { id: PROJECT_ID }) => retryCommand.handle(
   { project },
-  { argsText, caller: { userId: "owner-1" }, chatId: CHAT_ID, threadId: THREAD_ID },
+  {
+    argsText, caller: { channel: "telegram", userId: "owner-1", role: "owner" },
+    adapter: "telegram", chatId: CHAT_ID, threadId: THREAD_ID,
+  },
 );
+
+beforeEach(() => {
+  vi.useFakeTimers();
+  vi.setSystemTime(new Date("2026-10-10T17:00:00.000Z"));
+});
 
 afterEach(async () => {
   for (const unbind of unbinders.splice(0).reverse()) unbind();
+  vi.useRealTimers();
 });
 
 describe("/retry", () => {

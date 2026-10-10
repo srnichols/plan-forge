@@ -1,6 +1,5 @@
 import { EventEmitter } from "node:events";
 import { mkdtempSync, readFileSync, rmSync, existsSync } from "node:fs";
-import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { createStore } from "../src/state/store.mjs";
@@ -13,7 +12,7 @@ const directories = [];
 const servers = [];
 
 function makeDirectory() {
-  const directory = mkdtempSync(join(tmpdir(), "claw-telegram-"));
+  const directory = mkdtempSync(join(process.cwd(), ".claw-telegram-"));
   directories.push(directory);
   return directory;
 }
@@ -71,7 +70,7 @@ describe("Telegram update normalization", () => {
       text: "photo",
       callbackId: null,
       data: null,
-      files: ["document-id", "large"],
+      files: [{ kind: "file", fileId: "document-id" }, { kind: "photo", fileId: "large" }],
     });
     expect(normalize({
       update_id: 4,
@@ -127,6 +126,97 @@ describe("Telegram update normalization", () => {
         userId: "43", forwarded: true, forwardOrigin: { type: "legacy" },
       });
       expect(JSON.stringify(legacy)).not.toMatch(/900|Original|Hidden Sender/);
+  });
+
+  it.each(["voice", "audio"])("normalizes actual %s metadata into the frozen voice envelope", (kind) => {
+    const envelope = normalize({
+      update_id: 0,
+      message: {
+        message_id: 0, chat: { id: 0 }, from: { id: 0 },
+        [kind]: { file_id: "voice-id", mime_type: "audio/ogg", file_size: 5, duration: 2, title: "not-retained" },
+      },
+    });
+    expect(envelope).toMatchObject({
+      updateId: "0", messageId: "0", chatId: "0", userId: "0", threadId: null,
+      files: [{ kind: "voice", fileId: "voice-id", mimeType: "audio/ogg" }],
+    });
+    expect(envelope.files[0]).toEqual({ kind: "voice", fileId: "voice-id", mimeType: "audio/ogg" });
+  });
+
+  it("retains only bounded media metadata and leaves absent MIME types absent", () => {
+    const envelope = normalize({
+      update_id: 1,
+      message: {
+        voice: { file_id: "voice-id" },
+        audio: { file_id: "x".repeat(257), mime_type: "audio/mpeg" },
+        document: { file_id: "document-id", mime_type: "x".repeat(129), file_name: "not-retained" },
+        photo: [{ file_id: "older", width: 1 }, { file_id: "latest", width: 4 }],
+      },
+    });
+    expect(envelope.files).toEqual([
+      { kind: "voice", fileId: "voice-id" },
+      { kind: "file", fileId: "document-id" },
+      { kind: "photo", fileId: "latest" },
+    ]);
+    expect(JSON.stringify(envelope)).not.toMatch(/file_name|width|not-retained/);
+  });
+
+  it("normalizes only necessary URL and text_link entities, including caption entities", () => {
+    const text = "https://example.test source";
+    const url = { type: "url", offset: 0, length: 20 };
+    const link = { type: "text_link", offset: 21, length: 6, url: "https://example.test/article" };
+    const entities = [
+      { ...url, extra: "discard" },
+      { ...link, user: { id: 900, username: "original-sender" } },
+      { type: "text_mention", offset: 21, length: 6, user: { id: 901 } },
+      { type: "bold", offset: 21, length: 6 },
+    ];
+    expect(normalize({ update_id: 1, message: { text, entities } }).entities).toEqual([url, link]);
+    const captioned = normalize({ update_id: 2, message: { caption: text, caption_entities: entities } });
+    expect(captioned.text).toBe(text);
+    expect(captioned.entities).toEqual([url, link]);
+    expect(JSON.stringify(captioned)).not.toMatch(/original-sender|discard|900|901|text_mention/);
+  });
+
+  it("bounds link entities and discards malformed metadata instead of raw objects", () => {
+    const valid = { type: "text_link", offset: 0, length: 1, url: "https://example.test" };
+    const entities = [
+      { ...valid, offset: -1 },
+      { ...valid, length: 0 },
+      { ...valid, offset: 10 },
+      { ...valid, offset: "0" },
+      { ...valid, url: "javascript:untrusted()" },
+      { ...valid, url: `https://example.test/${"x".repeat(2048)}` },
+      ...Array.from({ length: 101 }, () => valid),
+    ];
+    const envelope = normalize({ update_id: 1, message: { text: "x", entities } });
+    expect(envelope.entities).toHaveLength(100);
+    expect(envelope.entities.every((entity) => JSON.stringify(entity) === JSON.stringify(valid))).toBe(true);
+    expect(normalize({ update_id: 2, message: { text: "x", entities: [{}] } })).not.toHaveProperty("entities");
+  });
+
+  it("keeps missing and explicit-null identifiers null for messages and callbacks", () => {
+    expect(normalize({
+      message: { message_id: null, message_thread_id: null, chat: { id: null }, from: { id: null } },
+    })).toMatchObject({ updateId: null, chatId: null, threadId: null, userId: null, messageId: null });
+    expect(normalize({
+      callback_query: { id: null, from: { id: null }, message: { message_id: null, chat: { id: null } } },
+    })).toMatchObject({
+      updateId: null, kind: "callback", chatId: null, threadId: null, userId: null, messageId: null, callbackId: null,
+    });
+  });
+
+  it("preserves only recognized forward types and the true forward flag", () => {
+    const malformed = normalize({
+      update_id: 1,
+      message: { text: "forward", forward_origin: { type: { sender: "hidden" }, sender_user: { id: 99 } } },
+    });
+    expect(malformed).toMatchObject({ forwarded: true, forwardOrigin: { type: "legacy" } });
+    expect(JSON.stringify(malformed)).not.toMatch(/hidden|sender_user|99/);
+    expect(normalize({ update_id: 2, message: { text: "ordinary", is_automatic_forward: false } }))
+      .not.toHaveProperty("forwarded");
+    expect(normalize({ update_id: 3, message: { text: "automatic", is_automatic_forward: true } }))
+      .toMatchObject({ forwarded: true, forwardOrigin: { type: "legacy" } });
   });
 });
 

@@ -1,6 +1,5 @@
 import { createServer } from "node:http";
-import { mkdir, mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises";
-import os from "node:os";
+import { mkdir, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { bootDispatcher } from "../../src/cli/start.mjs";
@@ -11,6 +10,7 @@ import { createStore } from "../../src/state/store.mjs";
 import { startFakeTelegram } from "./fake-telegram.mjs";
 import { createFixtureRepos } from "./fixture-repos.mjs";
 import { createScriptedCopilot } from "./scripted-copilot.mjs";
+import { createExecutionHome } from "./execution-evidence.mjs";
 
 const HELPER_DIR = path.dirname(fileURLToPath(import.meta.url));
 const FAKE_PFORGE_PATH = path.join(HELPER_DIR, "fake-pforge.mjs");
@@ -19,6 +19,8 @@ const FAKE_TELEGRAM_TOKEN = "123456:fixture-telegram-token";
 const OWNER_ID = "701";
 const APPROVER_ID = "702";
 const VIEWER_ID = "703";
+const FIXTURE_WORK_MODEL = "fixture-execution-model";
+const JOB_DIAGNOSTIC_LIMIT = 5;
 
 function escapeMarkdownV2(value) {
   return String(value).replace(/([_*\[\]()~`>#+\-=|{}.!\\])/g, "\\$1");
@@ -92,6 +94,7 @@ function buildConfig({
         channel: { adapter: "telegram", chatId: "42", topicId: String(101 + index) },
         placement: { prefer: ["local"], requires: [] },
         homeLane: "local",
+        models: { work: FIXTURE_WORK_MODEL },
         keepAlive: false,
         ...(restricted ? { visibility: "restricted" } : {}),
         ...(projectOverrides[project.id] ?? {}),
@@ -151,8 +154,9 @@ export async function createE2ERig({
   workers,
   k8sApiFactory,
   projectOverrides,
+  telegramTiming,
 } = {}) {
-  const home = requestedHome ?? await mkdtemp(path.join(os.tmpdir(), "pforge claw e2e-"));
+  const home = requestedHome ?? await createExecutionHome("rig");
   await mkdir(home, { recursive: true });
   const fixtureRoot = path.join(home, "fixture repos with spaces");
   const repos = await createFixtureRepos(3, {
@@ -171,6 +175,11 @@ export async function createE2ERig({
   const logs = [];
   let handles = null;
   let disposed = false;
+  let transportTime = 0;
+  const timing = telegramTiming ?? {
+    now: () => transportTime,
+    sleep: async (milliseconds) => { transportTime += milliseconds; },
+  };
 
   async function boot() {
     await mkdir(home, { recursive: true });
@@ -197,6 +206,7 @@ export async function createE2ERig({
       createSession: createSession ?? copilot.createSession,
       runtimeFactory: runtimeFactory ?? (async ({ id }) => ({ ...copilot.runtime, id })),
       logger,
+      telegramTiming: timing,
       // Only scenarios that pass a clock run on fake time; the rest keep real time (progress throttles, TTLs).
       ...(injectedClock ? { now: () => injectedClock.now().getTime() } : {}),
       workers,
@@ -220,15 +230,17 @@ export async function createE2ERig({
     }
     async function waitForJob(idOrPredicate, status, { timeoutMs = 5000 } = {}) {
       const deadline = Date.now() + timeoutMs;
+      let matches = [];
       while (Date.now() <= deadline) {
         const allJobs = Object.values(currentJobs(active.store));
-        const job = typeof idOrPredicate === "function"
-          ? allJobs.find(idOrPredicate)
-          : allJobs.find((entry) => entry.id === idOrPredicate && (!status || entry.state === status));
+        matches = allJobs.filter(typeof idOrPredicate === "function"
+          ? idOrPredicate : (entry) => entry.id === idOrPredicate);
+        const job = matches.find((entry) => !status || entry.state === status);
         if (job) return job;
         await new Promise((resolve) => setTimeout(resolve, 10));
       }
-      throw new Error(`Timed out waiting for a matching job${status ? ` in state ${status}` : ""}`);
+      const observed = matches.slice(0, JOB_DIAGNOSTIC_LIMIT).map(({ id, state }) => `${id}:${state}`).join(", ") || "none";
+      throw new Error(`Timed out waiting for a matching job${status ? ` in state ${status}` : ""}; observed ${observed}`);
     }
     async function grepStateFor(value) {
       const candidates = await listFiles(home);

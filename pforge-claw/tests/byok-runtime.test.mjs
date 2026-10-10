@@ -1,6 +1,6 @@
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
-import os from "node:os";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { afterEach, describe, expect, it } from "vitest";
 import { createSecrets } from "../src/secrets.mjs";
 import { buildByokProvider } from "../src/runtime/byok.mjs";
@@ -11,9 +11,10 @@ import {
 } from "../src/runtime/agent-runtime.mjs";
 
 const temporaryDirectories = [];
+const TEST_DIRECTORY = path.dirname(fileURLToPath(import.meta.url));
 
 async function createSecretFixture(value) {
-  const directory = await mkdtemp(path.join(os.tmpdir(), "claw-byok-"));
+  const directory = await mkdtemp(path.join(TEST_DIRECTORY, ".claw-byok-"));
   temporaryDirectories.push(directory);
   const file = path.join(directory, "secrets.json");
   await writeFile(file, JSON.stringify({ OPENAI_API_KEY: value }), "utf8");
@@ -126,12 +127,51 @@ describe("runtime selection and construction", () => {
       id: "openai",
       config: { runtimes: { byok: { openai: { endpoint: "https://byok.example" } } } },
       secrets,
-      createCopilotRuntime: (options) => {
-        suppliedProvider = options.provider;
-        return { id: options.provider.type, run: async () => ({ ok: true }) };
+      createSession: async ({ sessionConfig }) => {
+        suppliedProvider = sessionConfig.provider;
+        return {
+          client: { stop: async () => [] },
+          session: { sendAndWait: async () => {}, disconnect: async () => {} },
+        };
       },
+    });
+    expect(suppliedProvider).toBeUndefined();
+    const result = await runtime.run({
+      model: "configured-model", prompt: "Inspect", cwd: TEST_DIRECTORY,
+      mcpServers: { "plan-forge": { command: process.execPath, args: [] } },
     });
     expect(suppliedProvider.apiKey).toBe("canary-key-xyz");
     expect(JSON.stringify(runtime)).not.toContain("canary-key-xyz");
+    expect(JSON.stringify(result)).not.toContain("canary-key-xyz");
+  });
+
+  it("resolves secret names at each execution rather than caching a resolved key in the runtime", async () => {
+    const env = { DISPATCH_OPENAI_KEY: "first-execution-canary" };
+    const secrets = await createSecrets({ env });
+    const providers = [];
+    const runtime = await createAgentRuntime({
+      id: "openai",
+      config: {
+        runtimes: { byok: { openai: { endpoint: "https://approved.example", keySecret: "DISPATCH_OPENAI_KEY" } } },
+      },
+      secrets,
+      createSession: async ({ sessionConfig }) => {
+        providers.push(sessionConfig.provider);
+        return {
+          client: { stop: async () => [] },
+          session: { sendAndWait: async () => {}, disconnect: async () => {} },
+        };
+      },
+    });
+    const turn = {
+      model: "approved-work-model", prompt: "Inspect", cwd: TEST_DIRECTORY,
+      mcpServers: { "plan-forge": { command: process.execPath, args: [] } },
+    };
+    await runtime.run(turn);
+    env.DISPATCH_OPENAI_KEY = "second-execution-canary";
+    await runtime.run(turn);
+    expect(providers.map((provider) => provider.apiKey))
+      .toEqual(["first-execution-canary", "second-execution-canary"]);
+    expect(JSON.stringify(runtime)).not.toContain("execution-canary");
   });
 });

@@ -3,6 +3,8 @@ import { mkdir, readFile, rename, unlink, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { ClawError } from "../errors.mjs";
 
+const fileUpdates = new Map();
+
 async function updateSecretFile({ file, name, value, remove = false }) {
   let contents = {};
   try {
@@ -33,12 +35,27 @@ export function writeSecret({ file, name, value }) {
   if (typeof name !== "string" || !name || typeof value !== "string" || !value) {
     return Promise.reject(new ClawError("SECRET_WRITE_FAILED", { name }));
   }
-  return updateSecretFile({ file, name, value });
+  return queueSecretUpdate({ file, name, value });
 }
 
 export function deleteSecret({ file, name }) {
   if (typeof name !== "string" || !name) {
     return Promise.reject(new ClawError("SECRET_WRITE_FAILED", { name }));
   }
-  return updateSecretFile({ file, name, remove: true });
+  return queueSecretUpdate({ file, name, remove: true });
+}
+
+async function queueSecretUpdate(options) {
+  if (typeof options.file !== "string" || !options.file) throw new ClawError("SECRET_WRITE_FAILED", { name: options.name });
+  const resolved = path.resolve(options.file);
+  const key = process.platform === "win32" ? resolved.toLowerCase() : resolved;
+  const previous = fileUpdates.get(key) ?? Promise.resolve();
+  const update = () => updateSecretFile({ ...options, file: resolved });
+  const pending = previous.then(update, update);
+  fileUpdates.set(key, pending);
+  try {
+    return await pending;
+  } finally {
+    if (fileUpdates.get(key) === pending) fileUpdates.delete(key);
+  }
 }

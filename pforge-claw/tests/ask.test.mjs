@@ -39,7 +39,13 @@ function makeContext(store, {
     }) },
     store,
     channel,
-    config: { projects: [{ id: "project-1", displayName: "Test Project" }] },
+    config: {
+      projects: [{
+        id: "project-1", displayName: "Test Project",
+        channel: { adapter: "telegram", chatId: "chat-1", topicId: "topic-1" },
+      }],
+      allowlist: [{ channel: "telegram", userId: "user-1", role: "owner" }],
+    },
     logger: { error: vi.fn(), warn: vi.fn() },
     secrets: { redact: (value) => String(value).replaceAll("sensitive-canary", "[redacted]") },
     features,
@@ -119,7 +125,7 @@ describe("Forge-Master ask service", () => {
         role: "owner",
         channel: "chat",
         surface: "telegram",
-        project: "project-1",
+        projectId: "project-1",
         topic: "topic-1",
       },
       responseFormat: { style: "brief", maxChars: 3500 },
@@ -231,11 +237,11 @@ describe("Forge-Master ask service", () => {
     const store = await makeStore();
     const ctx = makeContext(store);
     const service = createAskService(ctx);
-    await expect(service.runProposal({ id: "missing", chatId: "chat-1", threadId: "topic-1" })).resolves.toEqual([]);
+    await expect(service.runProposal({ id: "missing", caller: askInput().caller, chatId: "chat-1", threadId: "topic-1" })).resolves.toEqual([]);
     await recordProposal(store, { id: "expired", expiresAt: Date.now() - 1 });
-    await service.runProposal({ id: "expired", chatId: "chat-1", threadId: "topic-1" });
+    await service.runProposal({ id: "expired", caller: askInput().caller, chatId: "chat-1", threadId: "topic-1" });
     await recordProposal(store, { id: "other-topic", topicId: "topic-2" });
-    await service.runProposal({ id: "other-topic", chatId: "chat-1", threadId: "topic-1" });
+    await service.runProposal({ id: "other-topic", caller: askInput().caller, chatId: "chat-1", threadId: "topic-1" });
     const messages = ctx.channel.send.mock.calls.map(([message]) => message.text);
     expect(messages).toContain("This proposed action was not found.");
     expect(messages).toContain("This proposed action has expired.");
@@ -250,7 +256,7 @@ describe("Forge-Master ask service", () => {
     await recordProposal(store, { id: "unavailable" });
     await service.runProposal({
       id: "unavailable",
-      caller: { role: "owner" },
+      caller: askInput().caller,
       chatId: "chat-1",
       threadId: "topic-1",
       commands: [{ name: "task", available: false, roles: ["owner"], scope: "project", handle: unavailable }],
@@ -261,7 +267,7 @@ describe("Forge-Master ask service", () => {
     const handle = vi.fn(async () => ({ text: "Queued for approval." }));
     const input = {
       id: "once",
-      caller: { role: "owner" },
+      caller: askInput().caller,
       chatId: "chat-1",
       threadId: "topic-1",
       commands: [{ name: "task", available: true, roles: ["owner"], scope: "project", handle }],

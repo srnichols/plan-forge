@@ -13,6 +13,19 @@ export const DIGEST_PROPOSAL_TTL_MS = 12 * 60 * 60_000;
 export const SOURCE_TIMEOUT_MS = 15_000;
 
 const MESSAGE_LIMIT = 4096;
+const DAY_MS = 86_400_000;
+const RISK_LIMIT = 3;
+const PROPOSAL_ID_BYTES = 6;
+const PROPOSAL_LIMIT = 100;
+const CALLBACK_LIMIT_BYTES = 64;
+const BUTTON_DETAIL_LIMIT = 32;
+const PROJECT_NAME_LIMIT = 40;
+const COMPACT_NAME_LIMIT = 18;
+const PLAN_STATUS_LIMIT = 16;
+const DRIFT_SUMMARY_LIMIT = 24;
+const COMPACT_ID_LIMIT = 8;
+const SHORT_ID_LIMIT = 6;
+const MINIMAL_ID_LIMIT = 3;
 const TERMINAL_STATES = new Set(["succeeded", "failed", "cancelled", "expired", "rejected"]);
 const FAILED_STATES = new Set(["failed", "cancelled", "expired", "rejected"]);
 const PROPOSAL_REQUIRED_ARGS = Object.freeze({
@@ -78,7 +91,7 @@ function sourceCount(value) {
 function jobCounts(records, now) {
   const projectByJob = new Map();
   const counts = new Map();
-  const cutoff = now - 86_400_000;
+  const cutoff = now - DAY_MS;
   for (const record of records) {
     if (record?.kind === "job.created" && record.job?.id) {
       projectByJob.set(record.job.id, record.job.projectId);
@@ -130,7 +143,7 @@ function auditSummary(result, project, secrets) {
   const value = result.value ?? {};
   const allRisks = Array.isArray(value.risks) ? value.risks : [];
   const risks = project?.visibility === "restricted" ? [] : allRisks
-    .slice(0, 3)
+    .slice(0, RISK_LIMIT)
     .map((risk) => ({
       title: String(risk.title ?? risk.summary ?? risk.description ?? "Risk"),
       ...(risk.priority ? { priority: risk.priority } : {}),
@@ -141,7 +154,7 @@ function auditSummary(result, project, secrets) {
     .map((action) => ({
       ...action,
       projectId: project.id,
-      proposalId: randomBytes(6).toString("base64url"),
+      proposalId: randomBytes(PROPOSAL_ID_BYTES).toString("base64url"),
     }));
   return {
     projectId: project?.id ?? null,
@@ -207,7 +220,7 @@ export async function collectDigest({ store, config = {}, mcp, now = Date.now(),
     spend = foldLedger({
       records: readRecords(store, "budget"),
       timeZone: timezone,
-      day: dayKey({ epochMs: timestamp - 86_400_000, timeZone: timezone }),
+      day: dayKey({ epochMs: timestamp - DAY_MS, timeZone: timezone }),
     });
   } catch {
     spend = { projects: {} };
@@ -230,63 +243,94 @@ export async function collectDigest({ store, config = {}, mcp, now = Date.now(),
   return { generatedAt: new Date(timestamp).toISOString(), projects: projectData, lookAtFirst: audit };
 }
 
+function planStatus(project) {
+  if (!project.sources?.plan?.ok) return "unavailable";
+  const value = project.sources.plan.value;
+  return String(value?.status ?? value?.plan?.status ?? "?").slice(0, PLAN_STATUS_LIMIT);
+}
+
+function driftSummary(project) {
+  if (project.restricted || !project.sources?.drift?.ok) return "?";
+  const value = project.sources.drift.value;
+  return String(value?.summary ?? value?.status ?? "?").slice(0, DRIFT_SUMMARY_LIMIT);
+}
+
 function compactProjectLine(project, compact = false) {
-  const name = (compact ? project.id : project.name).slice(0, compact ? 18 : 40);
-  const plan = project.sources?.plan?.ok
-    ? String(project.sources.plan.value?.status ?? project.sources.plan.value?.plan?.status ?? "?").slice(0, 16)
-    : "unavailable";
+  const name = (compact ? project.id : project.name)
+    .slice(0, compact ? COMPACT_NAME_LIMIT : PROJECT_NAME_LIMIT);
   const bugs = sourceCount(project.sources?.bugs);
-  const drift = project.restricted
-    ? "?"
-    : project.sources?.drift?.ok
-      ? String(project.sources.drift.value?.summary ?? project.sources.drift.value?.status ?? "?").slice(0, 24)
-      : "?";
   const spend = typeof project.costUSD === "number" && Number.isFinite(project.costUSD)
     ? `$${project.costUSD.toFixed(2)}`
     : "?";
-  return `• ${name} — plan ${plan} · jobs ✅${project.jobs?.succeeded ?? 0} ❌${project.jobs?.failed ?? 0} · ${spend} · bugs ${bugs ?? "?"} · drift ${drift}`;
+  return `• ${name} — plan ${planStatus(project)} · jobs ✅${project.jobs?.succeeded ?? 0} ❌${project.jobs?.failed ?? 0} · ${spend} · bugs ${bugs ?? "?"} · drift ${driftSummary(project)}`;
 }
 
-export function renderDigest(data, { secrets } = {}) {
-  const redact = secrets?.redact ?? String;
-  const projectLines = (data?.projects ?? []).map((project) => compactProjectLine(project));
-  const audit = data?.lookAtFirst ?? { risks: [], actions: [] };
-  const risks = (audit.risks ?? []).slice(0, 3);
+function unavailableAuditLines(audit) {
+  return audit.unavailable ? [`Audit unavailable (${audit.unavailable})`] : [];
+}
+
+function lookAtFirstLines(audit) {
+  const risks = (audit.risks ?? []).slice(0, RISK_LIMIT);
   const riskLines = risks.map((risk) => `• ${risk.title ?? risk.summary ?? "Risk"}`);
-  const lookAtFirst = [
+  return [
     "Look at first",
-    ...(audit.unavailable ? [`Audit unavailable (${audit.unavailable})`] : []),
+    ...unavailableAuditLines(audit),
     ...(audit.restricted ? [`${audit.riskCount ?? 0} risks (restricted)`] : []),
     ...riskLines,
     ...(audit.actions?.length ? [`P0 actions: ${audit.actions.length}`] : []),
   ];
-  const sections = ["Plan Forge morning digest", ...projectLines, "", ...lookAtFirst];
-  let text = redact(sections.join("\n"));
-  if (text.length > MESSAGE_LIMIT) {
-  text = redact(["Plan Forge morning digest", ...(data?.projects ?? []).map((project) => (
-    `• ${String(project.id).slice(0, 8)} P${project.sources?.plan?.ok ? "✓" : "?"} J${project.jobs?.succeeded ?? 0}/${project.jobs?.failed ?? 0} ${typeof project.costUSD === "number" ? `$${project.costUSD.toFixed(2)}` : "?"} B${sourceCount(project.sources?.bugs) ?? "?"} D?`
-  ))]
-    .concat(["", "Look at first", ...(audit.unavailable ? [`Audit unavailable (${audit.unavailable})`] : [])])
-    .join("\n"));
-  }
-  if (text.length > MESSAGE_LIMIT) {
-  text = redact(["Plan Forge digest", ...(data?.projects ?? []).map((project) => (
-    `• ${String(project.id).slice(0, 6)} ${project.jobs?.succeeded ?? 0}/${project.jobs?.failed ?? 0}`
-  )), "", "Look first"].join("\n"));
-  }
-  if (text.length > MESSAGE_LIMIT) {
-  const optional = audit.unavailable ? `\nAudit unavailable (${audit.unavailable})` : "";
-  text = redact(`Plan Forge digest\n${(data?.projects ?? []).map((project) => (
-    `• ${String(project.id).slice(0, 3)} ${project.jobs?.succeeded ?? 0}/${project.jobs?.failed ?? 0}`
-  )).join("\n")}\nLook first${optional}`);
-  }
-  if (text.length > MESSAGE_LIMIT) throw new ClawError("DIGEST_TOO_LARGE");
-  const buttons = (audit.actions ?? []).filter((action) => action.proposalId).map((action) => button(
-    secrets?.redact
-      ? secrets.redact(`${action.kind}: ${String(action.args?.description ?? action.args?.name ?? action.args?.plan ?? action.args?.text ?? action.kind).slice(0, 32)}`)
-      : `${action.kind}: ${String(action.args?.description ?? action.args?.name ?? action.args?.plan ?? action.args?.text ?? action.kind).slice(0, 32)}`,
-    `p:${action.proposalId}`,
+}
+
+function fullDigestText({ projects, audit }) {
+  return ["Plan Forge morning digest", ...projects.map((project) => compactProjectLine(project)),
+    "", ...lookAtFirstLines(audit)].join("\n");
+}
+
+function compactDigestText({ projects, audit }) {
+  const lines = projects.map((project) => (
+    `• ${String(project.id).slice(0, COMPACT_ID_LIMIT)} P${project.sources?.plan?.ok ? "✓" : "?"} J${project.jobs?.succeeded ?? 0}/${project.jobs?.failed ?? 0} ${typeof project.costUSD === "number" ? `$${project.costUSD.toFixed(2)}` : "?"} B${sourceCount(project.sources?.bugs) ?? "?"} D?`
   ));
+  return ["Plan Forge morning digest", ...lines, "", "Look at first", ...unavailableAuditLines(audit)].join("\n");
+}
+
+function minimalDigestText({ projects, audit, idLimit, includeUnavailable = false }) {
+  const lines = projects.map((project) => (
+    `• ${String(project.id).slice(0, idLimit)} ${project.jobs?.succeeded ?? 0}/${project.jobs?.failed ?? 0}`
+  ));
+  return ["Plan Forge digest", ...lines, ...(includeUnavailable ? [] : [""]), "Look first",
+    ...(includeUnavailable ? unavailableAuditLines(audit) : [])].join("\n");
+}
+
+function boundedDigestText({ projects, audit, redact }) {
+  const builders = [
+    () => fullDigestText({ projects, audit }),
+    () => compactDigestText({ projects, audit }),
+    () => minimalDigestText({ projects, audit, idLimit: SHORT_ID_LIMIT }),
+    () => minimalDigestText({ projects, audit, idLimit: MINIMAL_ID_LIMIT, includeUnavailable: true }),
+  ];
+  for (const build of builders) {
+    const text = redact(build());
+    if (text.length <= MESSAGE_LIMIT) return text;
+  }
+  throw new ClawError("DIGEST_TOO_LARGE");
+}
+
+function proposalButton(action, secrets) {
+  const detail = action.args?.description ?? action.args?.name
+    ?? action.args?.plan ?? action.args?.text ?? action.kind;
+  const label = `${action.kind}: ${String(detail).slice(0, BUTTON_DETAIL_LIMIT)}`;
+  return button(secrets?.redact ? secrets.redact(label) : label, `p:${action.proposalId}`);
+}
+
+export function renderDigest(data, { secrets } = {}) {
+  const audit = data?.lookAtFirst ?? { risks: [], actions: [] };
+  const text = boundedDigestText({
+    projects: data?.projects ?? [],
+    audit,
+    redact: secrets?.redact ?? String,
+  });
+  const buttons = (audit.actions ?? []).filter((action) => action.proposalId)
+    .map((action) => proposalButton(action, secrets));
   return { text, replyMarkup: buttons.length ? keyboard(buttons.map((item) => [item])) : null };
 }
 
@@ -295,55 +339,63 @@ function auditSkip(store, reason) {
   return { sent: false, reason };
 }
 
-export async function sendDigest({
-  store, channel, config = {}, data, secrets, now = Date.now, rendered,
-} = {}) {
+function actionProjectId(action, data) {
+  return String(action.projectId ?? data?.lookAtFirst?.projectId ?? "");
+}
+
+function redactProposalAction(action, secrets) {
+  return {
+    kind: action.kind,
+    args: Object.fromEntries(Object.entries(action.args ?? {}).map(([key, value]) => [
+      key,
+      secrets?.redact ? secrets.redact(String(value)) : String(value),
+    ])),
+  };
+}
+
+function persistProposal({ store, action, projectId, generalChat, secrets, timestamp }) {
+  const id = action.proposalId ?? randomBytes(PROPOSAL_ID_BYTES).toString("base64url");
+  const proposalAction = redactProposalAction(action, secrets);
+  const callbackData = `p:${id}`;
+  if (Buffer.byteLength(callbackData, "utf8") > CALLBACK_LIMIT_BYTES) throw new ClawError("CALLBACK_DATA_TOO_LONG");
+  store.append("proposals", {
+    v: 1,
+    id,
+    project: projectId,
+    chatId: String(generalChat.chatId),
+    topicId: generalChat.topicId ?? null,
+    action: proposalAction,
+    untrusted: true,
+    expiresAt: timestamp + DIGEST_PROPOSAL_TTL_MS,
+    used: false,
+  });
+  return proposalButton({ ...proposalAction, proposalId: id }, secrets);
+}
+
+function digestTarget(config, channel) {
   const generalChat = config.channels?.telegram?.generalChat;
   if (generalChat?.chatId === undefined || generalChat?.chatId === null
     || String(generalChat.chatId).trim() === "") {
-    return auditSkip(store, "no-general-chat");
+    return { reason: "no-general-chat" };
   }
-  if (!channel || typeof channel.send !== "function") return auditSkip(store, "no-channel");
+  if (!channel || typeof channel.send !== "function") return { reason: "no-channel" };
+  return { generalChat };
+}
+
+export async function sendDigest({
+  store, channel, config = {}, data, secrets, now = Date.now, rendered,
+} = {}) {
+  const { generalChat, reason } = digestTarget(config, channel);
+  if (reason) return auditSkip(store, reason);
 
   const timestamp = typeof now === "function" ? now() : now;
   const projectById = new Map((config.projects ?? []).map((project) => [String(project.id), project]));
   const actions = (data?.lookAtFirst?.actions ?? [])
-    .filter((action) => projectById.has(String(action.projectId ?? data.lookAtFirst.projectId ?? "")))
-    .slice(0, 100);
-  const callbacks = [];
-  for (const action of actions) {
-    const projectId = String(action.projectId ?? data.lookAtFirst.projectId ?? "");
-    if (!projectById.has(projectId)) continue;
-    const id = action.proposalId ?? randomBytes(6).toString("base64url");
-    const chatId = String(generalChat.chatId);
-    const topicId = generalChat.topicId ?? null;
-    const proposalAction = {
-      kind: action.kind,
-      args: Object.fromEntries(Object.entries(action.args ?? {}).map(([key, value]) => [
-        key,
-        secrets?.redact ? secrets.redact(String(value)) : String(value),
-      ])),
-    };
-    const callbackData = `p:${id}`;
-    if (Buffer.byteLength(callbackData, "utf8") > 64) throw new ClawError("CALLBACK_DATA_TOO_LONG");
-    store.append("proposals", {
-      v: 1,
-      id,
-      project: projectId,
-      chatId,
-      topicId,
-      action: proposalAction,
-      untrusted: true,
-      expiresAt: timestamp + DIGEST_PROPOSAL_TTL_MS,
-      used: false,
-    });
-    const detail = proposalAction.args.description ?? proposalAction.args.name
-      ?? proposalAction.args.plan ?? proposalAction.args.text ?? proposalAction.kind;
-    callbacks.push(button(
-      secrets?.redact ? secrets.redact(`${proposalAction.kind}: ${String(detail).slice(0, 32)}`) : `${proposalAction.kind}: ${String(detail).slice(0, 32)}`,
-      callbackData,
-    ));
-  }
+    .filter((action) => projectById.has(actionProjectId(action, data)))
+    .slice(0, PROPOSAL_LIMIT);
+  const callbacks = actions.map((action) => persistProposal({
+    store, action, projectId: actionProjectId(action, data), generalChat, secrets, timestamp,
+  }));
   const renderData = {
     ...data,
     lookAtFirst: { ...data?.lookAtFirst, actions },

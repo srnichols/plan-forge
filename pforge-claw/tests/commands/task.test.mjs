@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import taskCommand, { prepareTask } from "../../src/commands/task.mjs";
 import { currentJobs } from "../../src/jobs/model.mjs";
 import { createStore } from "../../src/state/store.mjs";
+import { c2Authority } from "../c2-fixtures.mjs";
 
 const directories = [];
 async function store() {
@@ -20,7 +21,8 @@ afterEach(async () => {
 describe("/task", () => {
   it("retains full argsText and creates only an approval-pending task", async () => {
     const jobsStore = await store();
-    const result = await prepareTask({ store: jobsStore, project: { id: "p1" }, caller: { userId: "u1" } }, {
+    const project = { id: "p1" };
+    const result = await prepareTask({ store: jobsStore, project, ...c2Authority(project) }, {
       argsText: "Keep  internal spacing and Mixed Case",
     });
     expect(result.text).toContain("awaiting approval");
@@ -42,7 +44,8 @@ describe("/task", () => {
 
   it("binds a chat-issued task to the requesting chat, topic and caller so an approval card can be sent", async () => {
     const jobsStore = await store();
-    const result = await taskCommand.handle({ services: { store: jobsStore }, project: { id: "p1" } }, {
+    const project = { id: "p1" };
+    const result = await taskCommand.handle({ services: { store: jobsStore, ...c2Authority(project) }, project }, {
       argsText: "inspect fixture one", caller: { userId: "u1", role: "owner" }, chatId: "42", threadId: "101",
     });
     expect(result.text).toContain("awaiting approval");

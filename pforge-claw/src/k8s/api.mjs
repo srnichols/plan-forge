@@ -14,6 +14,7 @@ const STATUS_REASONS = Object.freeze({
 });
 const MAX_WATCH_LINE_BYTES = 1024 * 1024;
 const MAX_WATCH_FAILURES = 3;
+const RESOURCE_VERSION_GONE = 410;
 
 function validateSegment(value, label) {
   if (typeof value !== "string" || !DNS_1123.test(value)) {
@@ -22,18 +23,11 @@ function validateSegment(value, label) {
   return encodeURIComponent(value);
 }
 
-function apiError(status, op, body) {
-  let statusReason;
-  try {
-    const parsed = JSON.parse(body);
-    statusReason = typeof parsed?.reason === "string" ? parsed.reason : undefined;
-  } catch {
-    statusReason = undefined;
-  }
+function apiError(status, op) {
   throw new ClawError("K8S_API", {
     status,
     op,
-    reason: statusReason ?? STATUS_REASONS[status] ?? "api-error",
+    reason: STATUS_REASONS[status] ?? "api-error",
   });
 }
 
@@ -90,7 +84,7 @@ function requestOnce({
           const text = Buffer.concat(chunks).toString("utf8");
           if (res.statusCode >= 300) {
             try {
-              apiError(res.statusCode, op, text);
+              apiError(res.statusCode, op);
             } catch (error) {
               finish(error);
             }
@@ -148,6 +142,16 @@ async function delay(ms, signal) {
     timer.unref?.();
     signal?.addEventListener("abort", finish, { once: true });
   });
+}
+
+function isExpiredWatchEvent(event) {
+  return event?.type === "ERROR"
+    && (event.object?.code === RESOURCE_VERSION_GONE || event.object?.reason === "Expired");
+}
+
+function isExpiredWatchError(error) {
+  return error instanceof ClawError && error.code === "K8S_API"
+    && (error.details.status === RESOURCE_VERSION_GONE || error.details.reason === "gone");
 }
 
 export function createK8sClient({
@@ -277,53 +281,53 @@ export function createK8sClient({
     }
   }
 
+  async function watchSnapshot({ namespace, name, state }) {
+    const object = await getJob(namespace, name);
+    state.version = object?.metadata?.resourceVersion ?? state.version;
+    return { type: "MODIFIED", object };
+  }
+
+  async function* watchUpdates({ namespace, name, state, signal }) {
+    let eventCount = 0;
+    for await (const event of watchConnection(namespace, name, { signal, resourceVersion: state.version })) {
+      if (signal?.aborted) return;
+      eventCount += 1;
+      const nextVersion = event?.object?.metadata?.resourceVersion;
+      if (nextVersion) state.version = nextVersion;
+      if (isExpiredWatchEvent(event)) {
+        yield await watchSnapshot({ namespace, name, state });
+      } else {
+        yield { type: event.type, object: event.object };
+      }
+    }
+    if (signal?.aborted) return;
+    state.failures = eventCount === 0 ? state.failures + 1 : 0;
+    state.polling = state.failures >= MAX_WATCH_FAILURES;
+    await delay(pollIntervalMs, signal);
+  }
+
   async function* watchJob(namespace, name, { signal, resourceVersion } = {}) {
     validateSegment(namespace, "namespace");
     validateSegment(name, "name");
-    let version = resourceVersion;
-    let failures = 0;
-    let polling = false;
-
+    const state = { version: resourceVersion, failures: 0, polling: false };
     while (!signal?.aborted) {
-      if (polling) {
+      if (state.polling) {
         await delay(pollIntervalMs, signal);
         if (signal?.aborted) return;
-        const object = await getJob(namespace, name);
-        if (object?.metadata?.resourceVersion) version = object.metadata.resourceVersion;
-        yield { type: "MODIFIED", object };
+        yield await watchSnapshot({ namespace, name, state });
         continue;
       }
       try {
-        let eventCount = 0;
-        for await (const event of watchConnection(namespace, name, { signal, resourceVersion: version })) {
-          if (signal?.aborted) return;
-          eventCount += 1;
-          const nextVersion = event?.object?.metadata?.resourceVersion;
-          if (nextVersion) version = nextVersion;
-          if (event?.type === "ERROR" && (event.object?.code === 410 || event.object?.reason === "Expired")) {
-            const object = await getJob(namespace, name);
-            version = object?.metadata?.resourceVersion ?? version;
-            yield { type: "MODIFIED", object };
-            continue;
-          }
-          yield { type: event.type, object: event.object };
-        }
-        if (signal?.aborted) return;
-        failures = eventCount === 0 ? failures + 1 : 0;
-        if (failures >= MAX_WATCH_FAILURES) polling = true;
-        await delay(pollIntervalMs, signal);
+        yield* watchUpdates({ namespace, name, state, signal });
       } catch (error) {
         if (signal?.aborted) return;
-        if (error instanceof ClawError && error.code === "K8S_API"
-          && (error.details.status === 410 || error.details.reason === "gone")) {
-          const object = await getJob(namespace, name);
-          version = object?.metadata?.resourceVersion ?? version;
-          yield { type: "MODIFIED", object };
+        if (isExpiredWatchError(error)) {
+          yield await watchSnapshot({ namespace, name, state });
           continue;
         }
-        failures += 1;
-        if (failures >= MAX_WATCH_FAILURES) polling = true;
-        else await delay(pollIntervalMs, signal);
+        state.failures += 1;
+        state.polling = state.failures >= MAX_WATCH_FAILURES;
+        if (!state.polling) await delay(pollIntervalMs, signal);
       }
     }
   }

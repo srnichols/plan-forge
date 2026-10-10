@@ -7,6 +7,8 @@ export const STATE_FILE = "schedules.json";
 const INVALID_AUDIT_KIND = ["schedule", "invalid"].join(".");
 const SCHEDULE_RE = /^(?:daily (\d\d):(\d\d)|weekly (Mon|Tue|Wed|Thu|Fri|Sat|Sun) (\d\d):(\d\d)|monthly ([1-9]|1\d|2[0-8]) (\d\d):(\d\d)|every (\d+)m)$/;
 const FORMATTERS = new Map();
+const MINUTE_MS = 60_000;
+const CATCH_UP_MINUTES = CATCH_UP_MS / MINUTE_MS;
 let tickQueue = Promise.resolve();
 
 function invalidSchedule(at, hint = 'use daily HH:MM | weekly Mon HH:MM | monthly D HH:MM | every Nm') {
@@ -80,7 +82,7 @@ export function dueKey(spec, date, timeZone) {
     case "monthly":
       return parts.day === spec.dom && hm === spec.hm ? day : null;
     case "every": {
-      const minute = Math.floor(epochMs / 60_000);
+      const minute = Math.floor(epochMs / MINUTE_MS);
       return minute % spec.n === 0 ? String(minute) : null;
     }
     default:
@@ -89,10 +91,10 @@ export function dueKey(spec, date, timeZone) {
 }
 
 export function lastDueSlot(spec, nowMs, timeZone, windowMs = CATCH_UP_MS) {
-  const latestMinute = Math.floor(nowMs / 60_000) * 60_000;
+  const latestMinute = Math.floor(nowMs / MINUTE_MS) * MINUTE_MS;
   const earliestMinute = nowMs - windowMs;
-  for (let offset = 0; offset <= 60; offset += 1) {
-    const at = latestMinute - offset * 60_000;
+  for (let offset = 0; offset <= CATCH_UP_MINUTES; offset += 1) {
+    const at = latestMinute - offset * MINUTE_MS;
     if (at < earliestMinute) break;
     const key = dueKey(spec, new Date(at), timeZone);
     if (key !== null) return { key, at };
@@ -127,26 +129,7 @@ function validState(value) {
     && !Array.isArray(value.schedules);
 }
 
-/**
- * Claimed slots are persisted before execution, so a crash after claiming drops
- * that run instead of retrying it; this deliberately provides at-most-once runs.
- */
-export function createScheduler({
-  store,
-  schedules = [],
-  timeZone,
-  run,
-  logger,
-  audit,
-  now = Date.now,
-  tickMs = TICK_MS,
-} = {}) {
-  if (!store || typeof store.readJson !== "function" || typeof store.writeJsonAtomic !== "function") {
-    throw new ClawError("SERVICE_UNAVAILABLE", { service: "store" });
-  }
-  if (typeof run !== "function") throw new ClawError("SERVICE_UNAVAILABLE", { service: "scheduler-runner" });
-  formatterFor(timeZone);
-  const appendAudit = makeAudit(store, logger, audit);
+function parseConfiguredSchedules({ schedules, logger, appendAudit }) {
   const parsedSchedules = [];
   const ids = new Set();
   for (const schedule of schedules) {
@@ -169,6 +152,30 @@ export function createScheduler({
       appendAudit({ v: 1, kind: INVALID_AUDIT_KIND, scheduleId: schedule.id, code: errorCode(error) });
     }
   }
+  return parsedSchedules;
+}
+
+/**
+ * Claimed slots are persisted before execution, so a crash after claiming drops
+ * that run instead of retrying it; this deliberately provides at-most-once runs.
+ */
+export function createScheduler({
+  store,
+  schedules = [],
+  timeZone,
+  run,
+  logger,
+  audit,
+  now = Date.now,
+  tickMs = TICK_MS,
+} = {}) {
+  if (!store || typeof store.readJson !== "function" || typeof store.writeJsonAtomic !== "function") {
+    throw new ClawError("SERVICE_UNAVAILABLE", { service: "store" });
+  }
+  if (typeof run !== "function") throw new ClawError("SERVICE_UNAVAILABLE", { service: "scheduler-runner" });
+  formatterFor(timeZone);
+  const appendAudit = makeAudit(store, logger, audit);
+  const parsedSchedules = parseConfiguredSchedules({ schedules, logger, appendAudit });
 
   let state;
   let interval = null;

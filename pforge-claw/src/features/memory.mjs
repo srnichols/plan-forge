@@ -241,6 +241,35 @@ function snapshot(ctx = {}) {
   return { pending, local, directQueue: queue.pending, deadLetters: queue.deadLetters };
 }
 
+async function projectMemoryCheck(activeClient, project) {
+  try {
+    const result = await activeClient?.search(project.id, "memory health check", { limit: 1 });
+    return {
+      name: `memory:${project.id}`,
+      status: result?.ok ? "ok" : "warn",
+      detail: result?.ok ? "Project memory search is reachable." : result?.code ?? "MEMORY_UNAVAILABLE",
+    };
+  } catch (error) {
+    return { name: `memory:${project.id}`, status: "warn", detail: safeCode(error, "MEMORY_UNAVAILABLE") };
+  }
+}
+
+async function directMemoryCheck() {
+  let health = { enabled: false, reachable: false, canDelete: false };
+  try {
+    health = await direct?.health?.() ?? health;
+  } catch {
+    health = { ...health, enabled: Boolean(direct?.enabled) };
+  }
+  return {
+    name: "memory:openbrain-direct",
+    status: !health.enabled || health.reachable ? "ok" : "warn",
+    detail: !health.enabled ? "Direct OpenBrain is not configured."
+      : health.reachable ? "Direct OpenBrain is reachable."
+        : "OPENBRAIN_UNREACHABLE",
+  };
+}
+
 async function doctorChecks(ctx = {}) {
   if (!ctx.live && !client) {
     return [{
@@ -253,35 +282,8 @@ async function doctorChecks(ctx = {}) {
   const activeClient = client;
   const activeContext = context ?? ctx;
   const projects = activeContext.registry?.all?.() ?? activeContext.config?.projects ?? [];
-  for (const project of projects) {
-    try {
-      const result = await activeClient?.search(project.id, "memory health check", { limit: 1 });
-      checks.push({
-        name: `memory:${project.id}`,
-        status: result?.ok ? "ok" : "warn",
-        detail: result?.ok ? "Project memory search is reachable." : result?.code ?? "MEMORY_UNAVAILABLE",
-      });
-    } catch (error) {
-      checks.push({
-        name: `memory:${project.id}`,
-        status: "warn",
-        detail: safeCode(error, "MEMORY_UNAVAILABLE"),
-      });
-    }
-  }
-  let health = { enabled: false, reachable: false, canDelete: false };
-  try {
-    health = await direct?.health?.() ?? health;
-  } catch {
-    health = { ...health, enabled: Boolean(direct?.enabled) };
-  }
-  checks.push({
-    name: "memory:openbrain-direct",
-    status: !health.enabled || health.reachable ? "ok" : "warn",
-    detail: !health.enabled ? "Direct OpenBrain is not configured."
-      : health.reachable ? "Direct OpenBrain is reachable."
-        : "OPENBRAIN_UNREACHABLE",
-  });
+  for (const project of projects) checks.push(await projectMemoryCheck(activeClient, project));
+  checks.push(await directMemoryCheck());
   return checks;
 }
 

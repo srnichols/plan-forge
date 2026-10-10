@@ -1,8 +1,8 @@
 import { EventEmitter } from "node:events";
 import { afterEach, describe, expect, it } from "vitest";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
-import os from "node:os";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { createServer } from "node:http";
 import { WebSocket } from "ws";
 import { ClawError } from "../src/errors.mjs";
@@ -13,8 +13,10 @@ import { createWorkerRegistry } from "../src/protocol/worker-registry.mjs";
 import { createWorkerServer } from "../src/protocol/ws-server.mjs";
 import { createHttpServer } from "../src/http.mjs";
 import { buildLeaseGrant, signGrant, verifyGrant } from "../src/protocol/lease-grant.mjs";
+import { createSecrets } from "../src/secrets.mjs";
 
 const temps = [];
+const TEST_DIRECTORY = path.dirname(fileURLToPath(import.meta.url));
 const insecureLanUrl = "ws://" + "10." + "0.0.5";
 
 afterEach(async () => {
@@ -22,7 +24,7 @@ afterEach(async () => {
 });
 
 async function tempDirectory() {
-  const directory = await mkdtemp(path.join(os.tmpdir(), "claw-protocol-"));
+  const directory = await mkdtemp(path.join(TEST_DIRECTORY, ".worker-protocol-"));
   temps.push(directory);
   return directory;
 }
@@ -97,6 +99,21 @@ describe("worker protocol codecs", () => {
     expect(() => decode(Buffer.alloc(MAX_FRAME_BYTES + 1))).toThrowError(ClawError);
     expect(() => decode('{"v":2,"t":"bye","reason":"SHUTDOWN"}'))
       .toThrowError(expect.objectContaining({ code: "PROTO_VERSION_MISMATCH" }));
+  });
+
+  it("rejects unsafe sequence counters and inconsistent resume bounds before accepting lease frames", () => {
+    const lease = {
+      leaseId: "l1", attempt: 1, kind: "job", expiresAt: 1, job: { id: "j1" },
+      seqBase: 5, lastSeq: 5, resume: false,
+    };
+    expect(() => message("lease", lease)).not.toThrow();
+    for (const changed of [
+      { seqBase: Number.MAX_SAFE_INTEGER + 1 }, { lastSeq: Number.MAX_SAFE_INTEGER + 1 },
+      { attempt: Number.MAX_SAFE_INTEGER + 1 }, { seqBase: 6, lastSeq: 5 },
+    ]) {
+      expect(() => message("lease", { ...lease, ...changed }))
+        .toThrowError(expect.objectContaining({ code: "PROTO_BAD_MESSAGE" }));
+    }
   });
 });
 
@@ -175,6 +192,42 @@ describe("worker transport authentication", () => {
 });
 
 describe("worker enrollment", () => {
+  it("refreshes the same credential resolver after registration and revocation before notifying removal", async () => {
+    const store = memoryStore();
+    const secretFile = path.join(await tempDirectory(), "secrets.json");
+    const secrets = await createSecrets({ env: {}, file: secretFile });
+    const getter = secrets.get;
+    const removed = [];
+    const enrollment = createEnrollment({
+      store, secretFile, secrets,
+      onRevoke: (workerId) => removed.push({ workerId, remaining: getter(`PFORGE_CLAW_WORKER_SECRET__${workerId}`) }),
+    });
+    await enrollment.register({ workerId: "w_refresh", laneId: "remote", secret: "refresh-worker-canary" });
+    expect(getter("PFORGE_CLAW_WORKER_SECRET__w_refresh")).toBe("refresh-worker-canary");
+    expect(secrets.redact("refresh-worker-canary")).not.toContain("refresh-worker-canary");
+    await enrollment.revoke("w_refresh");
+    expect(getter("PFORGE_CLAW_WORKER_SECRET__w_refresh")).toBeNull();
+    expect(removed).toEqual([{ workerId: "w_refresh", remaining: null }]);
+    expect(secrets.redact("refresh-worker-canary")).not.toContain("refresh-worker-canary");
+  });
+
+  it("preserves both concurrent worker registrations in the refreshed secret store", async () => {
+    const store = memoryStore();
+    const secretFile = path.join(await tempDirectory(), "secrets.json");
+    const secrets = await createSecrets({ env: {}, file: secretFile });
+    const enrollment = createEnrollment({ store, secretFile, secrets });
+    await Promise.all([
+      enrollment.register({ workerId: "w_first", laneId: "remote", secret: "first-worker-canary" }),
+      enrollment.register({ workerId: "w_second", laneId: "remote", secret: "second-worker-canary" }),
+    ]);
+    expect(secrets.get("PFORGE_CLAW_WORKER_SECRET__w_first")).toBe("first-worker-canary");
+    expect(secrets.get("PFORGE_CLAW_WORKER_SECRET__w_second")).toBe("second-worker-canary");
+    const stored = JSON.parse(await readFile(secretFile, "utf8"));
+    expect(Object.keys(stored).sort()).toEqual([
+      "PFORGE_CLAW_WORKER_SECRET__w_first", "PFORGE_CLAW_WORKER_SECRET__w_second",
+    ]);
+  });
+
   it("enforces single-use expiry and proof without recording the raw code", async () => {
     const store = memoryStore();
     const directory = await tempDirectory();

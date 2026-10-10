@@ -6,13 +6,28 @@ import { LANE_KINDS, ROLES, VISIBILITY } from "./enums.mjs";
 import { ClawError } from "./errors.mjs";
 
 export const CHANNEL_MODES = Object.freeze(["poll", "webhook"]);
-export const INSTALL_MODES = Object.freeze(["link", "npm-ci"]);
+export const INSTALL_MODES = Object.freeze(["link", "ci", "npm-ci", "none"]);
 const SCHEMA_PATH = fileURLToPath(new URL("../config.schema.json", import.meta.url));
 const SCHEMA_KEYWORDS = new Set([
   "$schema", "$id", "$defs", "$ref", "type", "properties", "required", "additionalProperties",
   "items", "enum", "const", "pattern", "minimum", "maximum", "minItems", "minLength",
   "oneOf", "default", "description", "x-known",
 ]);
+
+function collectRuntimeSecretNames(config, add) {
+  const runtimeConfig = config.runtimes ?? {};
+  const runtimes = [
+    runtimeConfig.default,
+    runtimeConfig.nonOwnerRuntime ?? config.policy?.nonOwnerRuntime,
+    ...(config.lanes ?? []).map((lane) => lane.runtime),
+    ...(config.projects ?? []).map((project) => project.runtime),
+  ];
+  for (const runtime of runtimes) {
+    if (typeof runtime !== "string" || !runtimeConfig.byok) continue;
+    const entry = runtimeConfig.byok[runtime.replace(/^byok:/, "")];
+    if (entry?.keySecret) add(entry.keySecret, `${runtime} runtime`);
+  }
+}
 
 function addIssue({ target, path: pathName, code, message, hint = "" }) {
   target.push({ path: pathName, code, message, hint });
@@ -50,13 +65,7 @@ function checkUnsupportedKeywords(schema) {
   }
 }
 
-function validateNode({ value, schema, rootSchema, path: pathName, errors, warnings }) {
-  if (schema.$ref) {
-    const target = resolveReference(rootSchema, schema.$ref);
-    if (!target) throw new ClawError("SCHEMA_UNSUPPORTED_KEYWORD");
-    validateNode({ value, schema: target, rootSchema, path: pathName, errors, warnings });
-    return;
-  }
+function validateChoices({ value, schema, rootSchema, path: pathName, errors }) {
   if (schema.oneOf) {
     const matches = schema.oneOf.filter((candidate) => {
       const candidateErrors = [];
@@ -71,10 +80,9 @@ function validateNode({ value, schema, rootSchema, path: pathName, errors, warni
   if (schema.enum && !schema.enum.includes(value)) {
     addIssue({ target: errors, path: pathName, code: "SCHEMA_ENUM", message: "Value is not one of the permitted values." });
   }
-  if (schema.type && !typeMatches(value, schema.type)) {
-    addIssue({ target: errors, path: pathName, code: "SCHEMA_TYPE", message: `Expected ${Array.isArray(schema.type) ? schema.type.join(" or ") : schema.type}.` });
-    return;
-  }
+}
+
+function validateScalar({ value, schema, path: pathName, errors }) {
   if (typeof value === "string") {
     if (schema.pattern && !new RegExp(schema.pattern).test(value)) {
       addIssue({ target: errors, path: pathName, code: "SCHEMA_PATTERN", message: "Value does not match the required format." });
@@ -89,6 +97,21 @@ function validateNode({ value, schema, rootSchema, path: pathName, errors, warni
   if (typeof value === "number" && schema.maximum !== undefined && value > schema.maximum) {
     addIssue({ target: errors, path: pathName, code: "SCHEMA_MAXIMUM", message: "Value exceeds the permitted maximum." });
   }
+}
+
+function validateNode({ value, schema, rootSchema, path: pathName, errors, warnings }) {
+  if (schema.$ref) {
+    const target = resolveReference(rootSchema, schema.$ref);
+    if (!target) throw new ClawError("SCHEMA_UNSUPPORTED_KEYWORD");
+    validateNode({ value, schema: target, rootSchema, path: pathName, errors, warnings });
+    return;
+  }
+  validateChoices({ value, schema, rootSchema, path: pathName, errors });
+  if (schema.type && !typeMatches(value, schema.type)) {
+    addIssue({ target: errors, path: pathName, code: "SCHEMA_TYPE", message: `Expected ${Array.isArray(schema.type) ? schema.type.join(" or ") : schema.type}.` });
+    return;
+  }
+  validateScalar({ value, schema, path: pathName, errors });
   if (Array.isArray(value)) {
     if (schema.minItems !== undefined && value.length < schema.minItems) {
       addIssue({ target: errors, path: pathName, code: "SCHEMA_MIN_ITEMS", message: "Array has fewer than the required number of items." });
@@ -141,19 +164,7 @@ function findRequiredPlaceholders({ value, nodeSchema, rootSchema, path: pathNam
   }
 }
 
-function semanticChecks({ config, mode, errors, schema }) {
-  if (typeof config.timezone === "string" && !(mode === "template" && /^<[^>]+>$/.test(config.timezone))) {
-    try {
-      new Intl.DateTimeFormat("en-US", { timeZone: config.timezone });
-    } catch {
-      addIssue({ target: errors, path: "$.timezone", code: "TIMEZONE_INVALID", message: "Timezone is not a valid IANA time zone." });
-    }
-  }
-  const laneIds = new Set();
-  for (const [index, lane] of (config.lanes ?? []).entries()) {
-    if (laneIds.has(lane.id)) addIssue({ target: errors, path: `$.lanes[${index}].id`, code: "DUPLICATE_LANE_ID", message: "Lane id is duplicated." });
-    laneIds.add(lane.id);
-  }
+function validateProjects({ config, laneIds, errors }) {
   const projectIds = new Set();
   const channelRoutes = new Set();
   for (const [index, project] of (config.projects ?? []).entries()) {
@@ -174,6 +185,27 @@ function semanticChecks({ config, mode, errors, schema }) {
       channelRoutes.add(route);
     }
   }
+  return projectIds;
+}
+
+function validateTimezone({ config, mode, errors }) {
+  if (typeof config.timezone === "string" && !(mode === "template" && /^<[^>]+>$/.test(config.timezone))) {
+    try {
+      new Intl.DateTimeFormat("en-US", { timeZone: config.timezone });
+    } catch {
+      addIssue({ target: errors, path: "$.timezone", code: "TIMEZONE_INVALID", message: "Timezone is not a valid IANA time zone." });
+    }
+  }
+}
+
+function semanticChecks({ config, mode, errors, schema }) {
+  validateTimezone({ config, mode, errors });
+  const laneIds = new Set();
+  for (const [index, lane] of (config.lanes ?? []).entries()) {
+    if (laneIds.has(lane.id)) addIssue({ target: errors, path: `$.lanes[${index}].id`, code: "DUPLICATE_LANE_ID", message: "Lane id is duplicated." });
+    laneIds.add(lane.id);
+  }
+  const projectIds = validateProjects({ config, laneIds, errors });
   for (const [index, schedule] of (config.schedules ?? []).entries()) {
     if (schedule.project && !projectIds.has(schedule.project)) {
       addIssue({ target: errors, path: `$.schedules[${index}].project`, code: "UNKNOWN_SCHEDULE_PROJECT", message: "Schedule project does not exist." });
@@ -196,13 +228,7 @@ function flattenRequiredSecrets(config) {
     if (telegram.mode === "webhook") add(telegram.webhook?.secretTokenSecret, "Telegram webhook secret");
   }
   if (config.worker) add(config.worker.secretName, "Worker authentication");
-  const addRuntimeKey = (runtime) => {
-    if (typeof runtime !== "string" || !config.runtimes?.byok) return;
-    const entry = config.runtimes.byok[runtime.replace(/^byok:/, "")];
-    if (entry?.keySecret) add(entry.keySecret, `${runtime} runtime`);
-  };
-  addRuntimeKey(config.runtimes?.default);
-  addRuntimeKey(config.runtimes?.nonOwnerRuntime ?? config.policy?.nonOwnerRuntime);
+  collectRuntimeSecretNames(config, add);
   if (config.memory?.openbrain?.endpoint) add(config.memory.openbrain.tokenSecret, "OpenBrain access");
   if (config.capture?.voice?.enabled) add(config.capture.voice.keySecret, "Voice capture");
   return required;

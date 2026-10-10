@@ -49,18 +49,17 @@ with `origin: "untrusted"` and must remain data rather than instructions.
 
 ## Residual risks
 
-- Telegram `normalize()` drops `forward_origin`, `forward_from`,
-  `forward_date`, and `forward_sender_name`; a raw forwarded message can
-  therefore look directly typed before it reaches the router. Tracked by
-  [#333](https://github.com/srnichols/plan-forge/issues/333). The router guard
-  currently covers an update that already has `forwarded: true`.
-- Claw sends `untrustedContext` as a string while companion
-  `pforge-master/src/turn-input.mjs` expects an array of typed items. Tracked by
-  [#335](https://github.com/srnichols/plan-forge/issues/335). Claw-side tests
-  assert that captured text stays under this field; companion recall fencing
-  is independently covered by `pforge-master/tests/recall-fencing.test.mjs`.
-- Dispatcher service wiring remains incomplete in some routes; the smoke path
-  is blocked by open [#332](https://github.com/srnichols/plan-forge/issues/332).
+- Forward normalization and typed untrusted-context repairs are
+  targeted-verified offline: source type is retained without original sender
+  identity, and captured bytes are not placed in trusted instructions.
+  [#333](https://github.com/srnichols/plan-forge/issues/333) and
+  [#335](https://github.com/srnichols/plan-forge/issues/335) remain acceptance
+  references until the quiescent whole-suite and live evidence are recorded.
+- Dispatcher workspace, authenticated home routing and application-ACK wiring
+  are targeted-verified in the local and one-shot fixtures. The remaining
+  retry-consumer integration and global regression are not cleared by an
+  earlier smoke pass; [#332](https://github.com/srnichols/plan-forge/issues/332)
+  remains an acceptance reference.
 - Callback traffic is not covered by the inbound message rate limiter; callback
   spam remains a residual denial-of-service vector.
 - The default inbound rate limit has no discoverable config key. The router

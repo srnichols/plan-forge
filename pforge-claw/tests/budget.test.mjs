@@ -1,9 +1,9 @@
 import { EventEmitter } from "node:events";
 import { mkdtempSync, readFileSync, rmSync } from "node:fs";
-import os from "node:os";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { bindBudgetService, createBudgetService, dayKey, foldLedger } from "../src/budget.mjs";
+import { bindBudgetService, createBudgetService, dayKey, foldLedger, getBudgetService } from "../src/budget.mjs";
 import { createApprovalService, issueApproval } from "../src/approvals.mjs";
 import budgetCallback from "../src/callbacks/b.mjs";
 import budgetFeature from "../src/features/budget.mjs";
@@ -12,15 +12,21 @@ import { createRunners } from "../src/jobs/runners.mjs";
 import { createStore } from "../src/state/store.mjs";
 
 const directories = [];
+const storeDirectories = new WeakMap();
+const FIXTURE_PREFIX = path.join(path.dirname(fileURLToPath(import.meta.url)), ".budget-fixture-");
 const projectId = "project-1";
 const chatId = "chat-1";
 const threadId = "topic-1";
 const NOW = Date.parse("2026-10-07T12:00:00.000Z");
+const PLAN_LABEL = "Native-Budget-Plan.md";
+const PLAN_PATH = path.join("docs", "plans", PLAN_LABEL);
 
 function makeStore() {
-  const directory = mkdtempSync(path.join(os.tmpdir(), "claw-budget-"));
+  const directory = mkdtempSync(FIXTURE_PREFIX);
   directories.push(directory);
-  return createStore(directory);
+  const store = createStore(directory, { now: () => new Date(NOW) });
+  storeDirectories.set(store, directory);
+  return store;
 }
 
 function addJob(store, {
@@ -29,10 +35,12 @@ function addJob(store, {
   state = "approved",
   project = projectId,
   mutating,
+  planPath,
 } = {}) {
   const created = createJob({ id, type, projectId: project });
   const job = {
     ...created.job,
+    ...(planPath === undefined ? {} : { planPath }),
     ...(mutating === undefined ? {} : { mutating }),
     chatId,
     threadId,
@@ -82,6 +90,46 @@ function budgetService(store, overrides = {}) {
     config: { timezone: "Etc/UTC", projects: [{ id: projectId }], ...overrides.config },
     ...overrides,
   });
+}
+
+function addPlanJob(store, { id = "native-budget-job", project = projectId, planPath = PLAN_LABEL } = {}) {
+  return addJob(store, { id, project, planPath, type: "plan", state: "queued" });
+}
+
+function nativeActuals(job, overrides = {}) {
+  return {
+    jobId: job.id,
+    projectId: job.projectId,
+    runId: `native-${job.id}`,
+    plan: PLAN_LABEL,
+    endedAt: new Date(NOW).toISOString(),
+    usage: { costUSD: 0.42, premiumRequests: null },
+    ...overrides,
+  };
+}
+
+function nativeHomeReport() {
+  return {
+    runs: 2,
+    total_cost_usd: 999,
+    total_tokens_in: 10,
+    total_tokens_out: 5,
+    by_model: {},
+    monthly: {},
+    latest: {
+      date: new Date(NOW).toISOString(),
+      plan: "Another-Plan.md",
+      status: "completed",
+      sliceCount: 1,
+      total_cost_usd: 998,
+      by_model: {},
+    },
+    forge_model_stats: {},
+  };
+}
+
+function nativeManager() {
+  return { get: vi.fn(), call: vi.fn(async () => nativeHomeReport()) };
 }
 
 async function makeHeldJob({ id = "heldjob000000000000000001", now = () => NOW } = {}) {
@@ -244,6 +292,22 @@ describe("budget ledger", () => {
     expect(service.today().global.costUSD).toBe(4);
   });
 
+  it("CP10: replaces only the same project's session when job IDs match across projects", () => {
+    const store = makeStore();
+    const service = budgetService(store);
+    service.recordUsage({ source: "session", projectId: "project-1", jobId: "shared-plan", usage: { costUSD: 8 } });
+    service.recordUsage({ source: "session", projectId: "project-2", jobId: "shared-plan", usage: { costUSD: 5 } });
+    service.recordUsage({ source: "cost-report", projectId: "project-1", jobId: "shared-plan", usage: { costUSD: 2 } });
+
+    expect(service.today()).toMatchObject({
+      global: { costUSD: 7, premiumRequests: null, unknownUsageJobs: 0 },
+      projects: {
+        "project-1": { costUSD: 2, premiumRequests: null, unknownUsageJobs: 0 },
+        "project-2": { costUSD: 5, premiumRequests: null, unknownUsageJobs: 0 },
+      },
+    });
+  });
+
   it("replaces session usage with run actuals even when the final report lands on a later day", () => {
     const store = makeStore();
     const previousDay = Date.parse("2026-10-06T23:30:00Z");
@@ -282,7 +346,8 @@ describe("budget ledger", () => {
     expect(currentJobs(store)[job.id].state).toBe("held-budget");
     const runners = createRunners({ store });
     // D28: only the dispatcher leases; runners refuse anything not leased (held-budget included).
-    await expect(runners.runJob(job, {})).rejects.toMatchObject({ code: "JOB_NOT_LEASED" });
+    await expect(Promise.resolve().then(() => runners.runJob(job, {})))
+      .rejects.toMatchObject({ code: "JOB_NOT_LEASED" });
   });
 
   it("does not hold read jobs and pins the synchronous gate boundary with a source guard", () => {
@@ -367,6 +432,18 @@ describe("budget ledger", () => {
     })).toMatchObject({ ok: false, reason: "stale" });
   });
 
+  it("CP12: refuses an override at its exact expiry without releasing the hold", async () => {
+    let now = NOW;
+    const fixture = await makeHeldJob({ now: () => now });
+    now = records(fixture.store).find((record) => record.kind === "override.issued").expiresAt;
+
+    expect(fixture.service.override({
+      payload: fixture.payload, caller: { role: "owner", userId: "owner-1" }, chatId, threadId,
+    })).toMatchObject({ ok: false, reason: "expired" });
+    expect(currentJobs(fixture.store)[fixture.job.id].state).toBe("held-budget");
+    expect(records(fixture.store).filter((record) => record.kind === "override.consumed")).toEqual([]);
+  });
+
   it("edits successful hold cards and sends a neutral response for refused callbacks", async () => {
     const fixture = await makeHeldJob({ id: "callbackjob0000000000000001" });
     const unbind = bindBudgetService(fixture.service);
@@ -405,41 +482,437 @@ describe("budget ledger", () => {
     }
   });
 
-  it("collects one plan-specific actual report and records failures as unknown", async () => {
+  it.each(["succeeded", "failed", "cancelled"])(
+    "CP10 native: consumes verified %s job actuals despite a different concurrent home report",
+    async (state) => {
+      const store = makeStore();
+      const bus = new EventEmitter();
+      const manager = nativeManager();
+      const job = addPlanJob(store);
+      const actuals = nativeActuals(job);
+      await budgetFeature.start({
+        store, bus, mcp: manager, now: () => NOW, config: { projects: [{ id: projectId }] },
+      });
+      bus.emit("job.finished", { type: "plan", jobId: job.id, projectId, state, planActuals: actuals });
+      await budgetFeature.stop();
+
+      expect(manager.call).not.toHaveBeenCalled();
+      expect(manager.get).not.toHaveBeenCalled();
+      expect(actuals.runId).not.toBe(job.id);
+      expect(records(store).filter((record) => record.kind === "usage")).toEqual([
+        expect.objectContaining({
+          source: "cost-report", project: projectId, jobId: job.id,
+          runId: actuals.runId, plan: PLAN_LABEL, endedAt: actuals.endedAt,
+          costUSD: 0.42, premiumRequests: null,
+        }),
+      ]);
+      expect(budgetService(store).today().global).toEqual({
+        costUSD: 0.42, premiumRequests: null, unknownUsageJobs: 0,
+      });
+    },
+  );
+
+  it("CP10 native: scopes two project actuals and persists one per job across duplicate delivery and restart", async () => {
     const store = makeStore();
     const bus = new EventEmitter();
-    const mcpCall = vi.fn(async (name, args) => {
-      expect(name).toBe("forge_cost_report");
-      expect(args).toMatchObject({ runId: "plan-1" });
-      return { content: [{ type: "text", text: JSON.stringify({
-        total_cost_usd: 999,
-        runs: [{ runId: "plan-1", total_cost_usd: 0.42, premiumRequests: 2 }],
-      }) }] };
+    const manager = nativeManager();
+    const jobs = [
+      addPlanJob(store, { id: "plan-a", project: "project-1" }),
+      addPlanJob(store, { id: "plan-b", project: "project-2" }),
+    ];
+    const usage = [{ costUSD: 0.25, premiumRequests: 3 }, { costUSD: 0, premiumRequests: null }];
+    const events = jobs.map((job, index) => ({
+      type: "plan", jobId: job.id, projectId: job.projectId,
+      planActuals: nativeActuals(job, { usage: usage[index] }),
+    }));
+    const ctx = {
+      store, bus, mcp: manager, now: () => NOW,
+      config: { projects: [{ id: "project-1" }, { id: "project-2" }] },
+    };
+    await budgetFeature.start(ctx);
+    for (const event of events) {
+      bus.emit("job.finished", event);
+      bus.emit("job.finished", event);
+    }
+    await budgetFeature.stop();
+
+    expect(manager.call).not.toHaveBeenCalled();
+    expect(manager.get).not.toHaveBeenCalled();
+    expect(records(store).filter((record) => record.kind === "usage")).toEqual([
+      expect.objectContaining({
+        project: "project-1", jobId: "plan-a", runId: "native-plan-a", costUSD: 0.25, premiumRequests: 3,
+      }),
+      expect.objectContaining({
+        project: "project-2", jobId: "plan-b", runId: "native-plan-b", costUSD: 0, premiumRequests: null,
+      }),
+    ]);
+    expect(budgetService(store).today().global).toEqual({
+      costUSD: 0.25, premiumRequests: 3, unknownUsageJobs: 0,
     });
+    for (const name of ["job.transition", "lane.event", "job.finished"]) expect(bus.listenerCount(name)).toBe(0);
+    bus.emit("job.finished", events[0]);
+
+    const restartedStore = createStore(storeDirectories.get(store), { now: () => new Date(NOW) });
+    await budgetFeature.start({ ...ctx, store: restartedStore });
+    for (const event of events) bus.emit("job.finished", event);
+    await budgetFeature.stop();
+    expect(manager.call).not.toHaveBeenCalled();
+    expect(records(restartedStore).filter((record) => record.kind === "usage")).toHaveLength(2);
+  });
+
+  it("CP10 native: never invokes function-bound home clients and preserves independent partial usage", async () => {
+    const store = makeStore();
+    const bus = new EventEmitter();
+    const clients = {
+      "project-1": { call: vi.fn(async () => nativeHomeReport()) },
+      "project-2": { call: vi.fn(async () => nativeHomeReport()) },
+    };
+    const factory = vi.fn(async ({ projectId: selected }) => clients[selected]);
+    const first = addPlanJob(store, { id: "partial-a", project: "project-1" });
+    const second = addPlanJob(store, { id: "partial-b", project: "project-2" });
+    await budgetFeature.start({
+      store, bus, mcp: factory, now: () => NOW,
+      config: { projects: [{ id: "project-1" }, { id: "project-2" }] },
+    });
+    for (const [job, usage] of [
+      [first, { costUSD: null, premiumRequests: 2 }],
+      [second, { costUSD: 0, premiumRequests: null }],
+    ]) {
+      bus.emit("job.finished", {
+        type: "plan", jobId: job.id, projectId: job.projectId, planActuals: nativeActuals(job, { usage }),
+      });
+    }
+    await budgetFeature.stop();
+
+    expect(factory).not.toHaveBeenCalled();
+    expect(clients["project-1"].call).not.toHaveBeenCalled();
+    expect(clients["project-2"].call).not.toHaveBeenCalled();
+    expect(budgetService(store).today()).toMatchObject({
+      global: { costUSD: 0, premiumRequests: 2, unknownUsageJobs: 0 },
+      projects: {
+        "project-1": { costUSD: null, premiumRequests: 2, unknownUsageJobs: 0 },
+        "project-2": { costUSD: 0, premiumRequests: null, unknownUsageJobs: 0 },
+      },
+    });
+  });
+
+  it("CP10 native: explicit ledger actuals override unrelated usage and wrong-plan evidence becomes unknown", () => {
+    const store = makeStore();
+    const job = addPlanJob(store);
+    const service = budgetService(store);
+    const actuals = nativeActuals(job);
+    expect(service.recordUsage({
+      source: "cost-report", projectId, jobId: job.id,
+      usage: { costUSD: 999, premiumRequests: 999 }, planActuals: actuals,
+    })).toMatchObject({
+      costUSD: 0.42, premiumRequests: null, runId: actuals.runId, plan: PLAN_LABEL, endedAt: actuals.endedAt,
+    });
+
+    const wrongPlan = addPlanJob(store, { id: "wrong-plan" });
+    const unknown = service.recordUsage({
+      source: "cost-report", projectId, jobId: wrongPlan.id,
+      usage: { costUSD: 999, premiumRequests: 999 },
+      planActuals: nativeActuals(wrongPlan, { plan: "Different-Plan.md" }),
+    });
+    expect(unknown).toMatchObject({ costUSD: null, premiumRequests: null });
+    expect(unknown.runId).toBeUndefined();
+  });
+
+  it("CP10 native: keeps the native run ID distinct from scoped Claw job identity", async () => {
+    const store = makeStore();
+    const bus = new EventEmitter();
+    const manager = nativeManager();
+    await budgetFeature.start({
+      store, bus, mcp: manager, now: () => NOW,
+      config: { projects: [{ id: "project-1" }, { id: "project-2" }] },
+    });
+    for (const [project, id, costUSD] of [["project-1", "shared-a", 2], ["project-2", "shared-b", 5]]) {
+      const job = addPlanJob(store, { id, project });
+      bus.emit("job.finished", {
+        type: "plan", jobId: id, projectId: project,
+        planActuals: nativeActuals(job, {
+          runId: "native-shared-run", usage: { costUSD, premiumRequests: null },
+        }),
+      });
+    }
+    await budgetFeature.stop();
+    expect(manager.call).not.toHaveBeenCalled();
+    expect(budgetService(store).today()).toMatchObject({
+      global: { costUSD: 7, premiumRequests: null, unknownUsageJobs: 0 },
+      projects: {
+        "project-1": { costUSD: 2, premiumRequests: null, unknownUsageJobs: 0 },
+        "project-2": { costUSD: 5, premiumRequests: null, unknownUsageJobs: 0 },
+      },
+    });
+    expect(records(store).filter((record) => record.kind === "usage").map((record) => ({
+      project: record.project, jobId: record.jobId, runId: record.runId,
+    }))).toEqual([
+      { project: "project-1", jobId: "shared-a", runId: "native-shared-run" },
+      { project: "project-2", jobId: "shared-b", runId: "native-shared-run" },
+    ]);
+  });
+
+  it("CP10 native: persists one unknown without a home query or new backfill policy after restart", async () => {
+    const store = makeStore();
+    const bus = new EventEmitter();
+    const manager = nativeManager();
+    const logger = { error: vi.fn(), warn: vi.fn() };
+    const job = addPlanJob(store);
+    const ctx = { store, bus, mcp: manager, now: () => NOW, logger, config: { projects: [{ id: projectId }] } };
+    const event = { type: "plan", jobId: job.id, projectId, planActuals: null, planActualsError: "PLAN_ACTUALS_UNCONFIRMED" };
+    await budgetFeature.start(ctx);
+    bus.emit("job.finished", event);
+    bus.emit("job.finished", event);
+    await budgetFeature.stop();
+    expect(manager.call).not.toHaveBeenCalled();
+    expect(records(store).filter((record) => record.kind === "usage")).toEqual([
+      expect.objectContaining({
+        source: "cost-report", project: projectId, jobId: job.id, costUSD: null, premiumRequests: null,
+      }),
+    ]);
+    expect(logger.warn).toHaveBeenCalledWith(expect.any(String), { code: "PLAN_ACTUALS_UNCONFIRMED" });
+
+    const restartedStore = createStore(storeDirectories.get(store), { now: () => new Date(NOW) });
+    await budgetFeature.start({ ...ctx, store: restartedStore });
+    bus.emit("job.finished", { ...event, planActuals: nativeActuals(job) });
+    await budgetFeature.stop();
+    expect(manager.call).not.toHaveBeenCalled();
+    expect(records(restartedStore).filter((record) => record.kind === "usage")).toHaveLength(1);
+    expect(budgetService(restartedStore).today().global).toEqual({
+      costUSD: null, premiumRequests: null, unknownUsageJobs: 1,
+    });
+  });
+
+  it.each([
+    ["absent actuals", () => undefined],
+    ["explicit unknown", () => null],
+    ["scalar actuals", () => 0],
+    ["encoded actuals", (job) => JSON.stringify(nativeActuals(job))],
+    ["array actuals", (job) => [nativeActuals(job)]],
+    ["wrong job", (job) => nativeActuals(job, { jobId: "another-job" })],
+    ["wrong project", (job) => nativeActuals(job, { projectId: "another-project" })],
+    ["missing native run", (job) => nativeActuals(job, { runId: null })],
+    ["unsafe native run", (job) => nativeActuals(job, { runId: "../another-run" })],
+    ["wrong plan", (job) => nativeActuals(job, { plan: "Another-Plan.md" })],
+    ["private plan path", (job) => nativeActuals(job, { plan: "C:\\private\\workspace\\Native-Budget-Plan.md" })],
+    ["missing native end time", (job) => nativeActuals(job, { endedAt: undefined })],
+    ["invalid native end time", (job) => nativeActuals(job, { endedAt: "not-a-date" })],
+    ["missing usage", (job) => nativeActuals(job, { usage: null })],
+    ["negative USD", (job) => nativeActuals(job, { usage: { costUSD: -1, premiumRequests: null } })],
+    ["nonfinite USD", (job) => nativeActuals(job, { usage: { costUSD: NaN, premiumRequests: null } })],
+    ["invalid premium type", (job) => nativeActuals(job, { usage: { costUSD: 0.42, premiumRequests: "5" } })],
+    ["native aggregate-only report", () => nativeHomeReport()],
+    ["native latest without run/job identity", () => ({ ...nativeHomeReport().latest })],
+    ["legacy invented run rows", (job) => ({ runs: [{ runId: job.id, costUSD: 999 }] })],
+  ])("CP10 native: records %s as explicit unknown, never aggregates or guessed run rows", async (_name, supplied) => {
+    const store = makeStore();
+    const bus = new EventEmitter();
+    const manager = nativeManager();
+    const job = addPlanJob(store);
     const logger = { error: vi.fn(), warn: vi.fn() };
     await budgetFeature.start({
-      store, bus, config: { projects: [{ id: projectId }] },
-      mcp: async () => ({ call: mcpCall }), now: () => NOW, logger,
+      store, bus, mcp: manager, now: () => NOW, logger,
+      config: { budget: { maxUnknownPerDay: 0 }, projects: [{ id: projectId }] },
     });
-    bus.emit("job.finished", { type: "plan", jobId: "plan-1", projectId });
+    bus.emit("job.finished", {
+      type: "plan", jobId: job.id, projectId, runId: "native-top-level-is-not-proof",
+      planActuals: supplied(job),
+    });
     await budgetFeature.stop();
-    expect(mcpCall).toHaveBeenCalledTimes(1);
-    expect(records(store)).toContainEqual(expect.objectContaining({
-      kind: "usage", source: "cost-report", jobId: "plan-1", costUSD: 0.42, premiumRequests: 2,
-    }));
+    expect(manager.call).not.toHaveBeenCalled();
+    expect(records(store).filter((record) => record.kind === "usage")).toEqual([
+      expect.objectContaining({
+        source: "cost-report", project: projectId, jobId: job.id, costUSD: null, premiumRequests: null,
+      }),
+    ]);
+    expect(records(store).find((record) => record.kind === "usage").runId).toBeUndefined();
+    const service = budgetService(store, {
+      config: { budget: { maxUnknownPerDay: 0 }, projects: [{ id: projectId }] },
+    });
+    expect(service.today().global).toEqual({ costUSD: null, premiumRequests: null, unknownUsageJobs: 1 });
+    expect(service.check({ mutating: true, projectId, type: "task" })).toMatchObject({
+      ok: false, reason: "unknown-limit", spent: 1, cap: 0,
+    });
+  });
 
-    const failureStore = makeStore();
-    const failureBus = new EventEmitter();
-    await budgetFeature.start({
-      store: failureStore, bus: failureBus, config: { projects: [{ id: projectId }] },
-      mcp: async () => ({ call: async () => { throw Object.assign(new Error("no"), { code: "MCP_FAIL" }); } }),
-      now: () => NOW, logger,
+  it("CP10 native: missing premium preserves reported zero rather than making the entire job unknown", async () => {
+    const store = makeStore();
+    const bus = new EventEmitter();
+    const job = addPlanJob(store);
+    const manager = nativeManager();
+    await budgetFeature.start({ store, bus, mcp: manager, now: () => NOW });
+    bus.emit("job.finished", {
+      type: "plan", jobId: job.id, projectId,
+      planActuals: nativeActuals(job, { usage: { costUSD: 0 } }),
     });
-    failureBus.emit("job.finished", { type: "plan", jobId: "plan-2", projectId });
     await budgetFeature.stop();
-    expect(records(failureStore)).toContainEqual(expect.objectContaining({
-      kind: "usage", source: "cost-report", jobId: "plan-2", costUSD: null, premiumRequests: null,
-    }));
+    expect(manager.call).not.toHaveBeenCalled();
+    expect(budgetService(store).today().global).toEqual({
+      costUSD: 0, premiumRequests: null, unknownUsageJobs: 0,
+    });
+  });
+
+  it("CP10 native: raw lane terminal data and task/SDK facts do not bypass dispatcher-owned completion", async () => {
+    const store = makeStore();
+    const bus = new EventEmitter();
+    const manager = nativeManager();
+    const job = addPlanJob(store);
+    const task = addJob(store, { id: "plain-task", state: "queued" });
+    const actuals = nativeActuals(job);
+    await budgetFeature.start({ store, bus, mcp: manager, now: () => NOW });
+    bus.emit("lane.event", { type: "finished", jobId: job.id, data: { status: "succeeded", planActuals: actuals } });
+    bus.emit("job.finished", { type: "task", jobId: task.id, projectId, planActuals: nativeActuals(task) });
+    expect(records(store).filter((record) => record.kind === "usage")).toEqual([]);
+
+    bus.emit("job.finished", { type: "plan", jobId: job.id, projectId, planActuals: actuals });
+    await budgetFeature.stop();
+    expect(manager.call).not.toHaveBeenCalled();
+    expect(records(store).filter((record) => record.kind === "usage")).toHaveLength(1);
+    expect(budgetService(store).today().global.costUSD).toBe(0.42);
+  });
+
+  it.each(["result", "data"])("CP10 native: does not promote misplaced %s.planActuals as final proof", async (field) => {
+    const store = makeStore();
+    const bus = new EventEmitter();
+    const job = addPlanJob(store);
+    const manager = nativeManager();
+    await budgetFeature.start({ store, bus, mcp: manager, now: () => NOW });
+    bus.emit("job.finished", {
+      type: "plan", jobId: job.id, projectId, [field]: { planActuals: nativeActuals(job) },
+    });
+    await budgetFeature.stop();
+    expect(manager.call).not.toHaveBeenCalled();
+    expect(budgetService(store).today().global).toEqual({
+      costUSD: null, premiumRequests: null, unknownUsageJobs: 1,
+    });
+  });
+
+  it("CP10 native: stop removes listeners/service without starting or waiting for an unrelated home call", async () => {
+    const store = makeStore();
+    const bus = new EventEmitter();
+    const job = addPlanJob(store);
+    let resolveReport;
+    const pendingReport = new Promise((resolve) => { resolveReport = resolve; });
+    const manager = { get: vi.fn(), call: vi.fn(() => pendingReport) };
+    await budgetFeature.start({ store, bus, mcp: manager, now: () => NOW });
+    const event = {
+      type: "plan", jobId: job.id, projectId,
+      planActuals: nativeActuals(job, { usage: { costUSD: 0.5, premiumRequests: null } }),
+    };
+    bus.emit("job.finished", event);
+    bus.emit("job.finished", event);
+    const stopping = budgetFeature.stop();
+    for (const name of ["job.transition", "lane.event", "job.finished"]) expect(bus.listenerCount(name)).toBe(0);
+    expect(getBudgetService()).toBeNull();
+    bus.emit("job.finished", { ...event, jobId: "after-stop" });
+    resolveReport(nativeHomeReport());
+    await stopping;
+    expect(manager.call).not.toHaveBeenCalled();
+    expect(records(store).filter((record) => record.kind === "usage")).toHaveLength(1);
+    expect(records(store).find((record) => record.kind === "usage")).toMatchObject({
+      jobId: job.id, costUSD: 0.5, premiumRequests: null,
+    });
+    expect(bus.eventNames()).toEqual([]);
+  });
+
+  it("CP10 native: snapshots nested actuals before a later event mutation", async () => {
+    const store = makeStore();
+    const bus = new EventEmitter();
+    const job = addPlanJob(store);
+    const manager = nativeManager();
+    const actuals = nativeActuals(job, { usage: { costUSD: 0, premiumRequests: 2 } });
+    const event = { type: "plan", jobId: job.id, projectId, planActuals: actuals };
+    await budgetFeature.start({ store, bus, mcp: manager, now: () => NOW });
+    bus.emit("job.finished", event);
+    event.jobId = "different-job";
+    event.projectId = "different-project";
+    actuals.runId = "different-run";
+    actuals.plan = "C:\\private\\changed-plan.md";
+    actuals.usage.costUSD = 999;
+    actuals.usage.premiumRequests = 999;
+    await budgetFeature.stop();
+    expect(manager.call).not.toHaveBeenCalled();
+    expect(records(store).find((record) => record.kind === "usage")).toMatchObject({
+      project: projectId, jobId: job.id, runId: `native-${job.id}`, plan: PLAN_LABEL,
+      costUSD: 0, premiumRequests: 2,
+    });
+  });
+
+  it("CP10 native: records the observed run end time rather than a late delivery date", async () => {
+    const store = makeStore();
+    const bus = new EventEmitter();
+    const job = addPlanJob(store);
+    const manager = nativeManager();
+    const deliveredAt = NOW + 86_400_000;
+    await budgetFeature.start({ store, bus, mcp: manager, now: () => deliveredAt });
+    bus.emit("job.finished", {
+      type: "plan", jobId: job.id, projectId, ts: new Date(deliveredAt).toISOString(),
+      planActuals: nativeActuals(job),
+    });
+    await budgetFeature.stop();
+    expect(manager.call).not.toHaveBeenCalled();
+    expect(records(store).find((record) => record.kind === "usage")).toMatchObject({
+      at: NOW, endedAt: new Date(NOW).toISOString(), costUSD: 0.42, premiumRequests: null,
+    });
+    expect(foldLedger({ records: records(store), day: "2026-10-07", timeZone: "Etc/UTC" }).global.costUSD).toBe(0.42);
+    expect(foldLedger({ records: records(store), day: "2026-10-08", timeZone: "Etc/UTC" }).global.costUSD).toBeNull();
+  });
+
+  it("CP10 native: validates a directory-qualified stored plan but persists only the safe basename", async () => {
+    const store = makeStore();
+    const bus = new EventEmitter();
+    const manager = nativeManager();
+    const job = addPlanJob(store, { id: "qualified-plan", planPath: PLAN_PATH });
+    const unsafe = addPlanJob(store, { id: "unsafe-plan-label", planPath: PLAN_PATH });
+    await budgetFeature.start({ store, bus, mcp: manager, now: () => NOW });
+    bus.emit("job.finished", { type: "plan", jobId: job.id, projectId, planActuals: nativeActuals(job) });
+    bus.emit("job.finished", {
+      type: "plan", jobId: unsafe.id, projectId, planActuals: nativeActuals(unsafe, { plan: PLAN_PATH }),
+    });
+    await budgetFeature.stop();
+    expect(manager.call).not.toHaveBeenCalled();
+    const usage = records(store).filter((record) => record.kind === "usage");
+    expect(usage).toHaveLength(2);
+    expect(usage[0]).toMatchObject({ jobId: job.id, plan: PLAN_LABEL, costUSD: 0.42 });
+    expect(usage[1]).toMatchObject({ jobId: unsafe.id, costUSD: null, premiumRequests: null });
+    expect(usage[1].plan).toBeUndefined();
+    expect(JSON.stringify(usage)).not.toContain(PLAN_PATH.replaceAll("\\", "\\\\"));
+  });
+
+  it("CP10 native: discards private/credential fields without logging or serializing them", async () => {
+    const store = makeStore();
+    const bus = new EventEmitter();
+    const job = addPlanJob(store);
+    const manager = nativeManager();
+    const logger = { error: vi.fn(), warn: vi.fn() };
+    await budgetFeature.start({ store, bus, mcp: manager, logger, now: () => NOW });
+    bus.emit("job.finished", {
+      type: "plan", jobId: job.id, projectId,
+      planActuals: nativeActuals(job, {
+        workspacePath: "C:\\private\\workspace",
+        apiKey: "discarded-provider-value",
+        usage: { costUSD: 0.42, premiumRequests: null, providerKey: "discarded-provider-value" },
+      }),
+    });
+    await budgetFeature.stop();
+    expect(manager.call).not.toHaveBeenCalled();
+    expect(budgetService(store).today().global.costUSD).toBe(0.42);
+    const persisted = JSON.stringify(records(store));
+    expect(persisted).not.toContain("workspacePath");
+    expect(persisted).not.toContain("apiKey");
+    expect(persisted).not.toContain("discarded-provider-value");
+    expect(JSON.stringify([...logger.error.mock.calls, ...logger.warn.mock.calls])).not.toContain("discarded-provider-value");
+  });
+
+  describe("Guard: native plan actuals acquisition stays with the producer", () => {
+    it("budget consumes typed completion only while the producer retains the cost-report query", () => {
+      const consumer = readFileSync(new URL("../src/features/budget.mjs", import.meta.url), "utf8");
+      const producer = readFileSync(new URL("../src/jobs/plan-process.mjs", import.meta.url), "utf8");
+      expect(consumer).not.toContain("forge_cost_report");
+      expect(consumer).not.toContain("runSpecificReport");
+      expect(producer).toContain("forge_cost_report");
+      expect(producer).toContain("collectPlanActuals");
+    });
   });
 
   it("records session costs and removes listeners cleanly across restarts", async () => {

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildLeaseGrant, canonical, deriveJobKey, signGrant, verifyGrant } from "../src/protocol/lease-grant.mjs";
+import { buildLeaseGrant, canonical, deriveJobKey, renewGrant, signGrant, verifyGrant } from "../src/protocol/lease-grant.mjs";
 
 const key = "fixture-grant-key";
 const job = { id: "j1", projectId: "p1", type: "task", mutating: true, runtime: "copilot-sdk", prompt: "work" };
@@ -35,6 +35,25 @@ describe("lease grants", () => {
   });
   it("rejects an expired grant at the exact boundary", () => {
     expect(() => verify(signed(), { now: 300_000 })).toThrowError(expect.objectContaining({ details: { reason: "EXPIRED" } }));
+  });
+  it("rejects future-issued grants or an invalid verification clock without trusting the MAC alone", () => {
+    expect(() => verify(signed({ now: 100 }), { now: 99 }))
+      .toThrowError(expect.objectContaining({ details: { reason: "NOT_YET_VALID" } }));
+    for (const now of [NaN, Infinity, -Infinity]) {
+      expect(() => verify(signed(), { now }))
+        .toThrowError(expect.objectContaining({ details: { reason: "CLOCK" } }));
+    }
+  });
+  it("caps renewed grants at the job deadline without mutating approved digests or proofs", () => {
+    const original = signed();
+    const renewed = renewGrant({ grant: original, now: 310_000, deadlineMs: 315_000 });
+    expect(renewed).toMatchObject({
+      issuedAt: 310_000, exp: 315_000, jobDigest: original.jobDigest, approval: original.approval,
+    });
+    expect(original).toMatchObject({ issuedAt: 0, exp: 300_000, subject: "job:j1" });
+    expect(verify(signGrant({ grant: renewed, subject: "job:j1", key }), { now: 310_000 })).toBe(true);
+    expect(() => renewGrant({ grant: original, now: 315_000, deadlineMs: 315_000 }))
+      .toThrowError(expect.objectContaining({ details: { reason: "EXPIRED" } }));
   });
   it("rejects a mutating job without approval proof", () => {
     expect(() => verify(signed({ proof: { kind: "read-only", ref: null, decidedAt: null } })))

@@ -1,5 +1,4 @@
-import { mkdtempSync, rmSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { rmSync } from "node:fs";
 import path from "node:path";
 import { EventEmitter } from "node:events";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -9,12 +8,22 @@ import { createDispatcher } from "../src/dispatcher.mjs";
 import { createJob, currentJobs, JOBS_STREAM, transition } from "../src/jobs/model.mjs";
 import { createLaneDirectory } from "../src/lanes/directory.mjs";
 import { createStore } from "../src/state/store.mjs";
+import { createLocalLane } from "../src/lanes/local-lane.mjs";
+import { createRunners } from "../src/jobs/runners.mjs";
+import { createWorkerRegistry } from "../src/protocol/worker-registry.mjs";
+import { createRemoteLane } from "../src/lanes/remote-lane.mjs";
+import { createLeasePreparer, wrapPreparedLane } from "../src/jobs/lease-payload.mjs";
+import { signGrant, verifyGrant } from "../src/protocol/lease-grant.mjs";
+import { applicationIdentity } from "../src/protocol/l2-ack.mjs";
+import { encodeDeltaChunks } from "../src/memory/l2-sync.mjs";
+import { onChildTerminal, onParentApproved, onParentTerminal, prepareFanout } from "../src/crossproject.mjs";
+import { approveJob, g1Deferred, g1DirectorySync, runnerFixture } from "./g1-runner-fixture.mjs";
 
 const directories = [];
 const setupStores = [];
 
 function makeStore() {
-  const directory = mkdtempSync(path.join(tmpdir(), "claw-dispatcher-"));
+  const directory = g1DirectorySync("g1-dispatcher-");
   directories.push(directory);
   return createStore(directory);
 }
@@ -24,6 +33,10 @@ function makeContext({ laneKind = "remote", registerLane = true, budgetConfig = 
   const bus = new EventEmitter();
   const config = {
     timezone: "Etc/UTC",
+    allowlist: [
+      { channel: "telegram", userId: "requester-1", role: "owner" },
+      { channel: "telegram", userId: "owner-1", role: "owner" },
+    ],
     projects: [{ id: "project-1", homeLane: "worker" }],
     lanes: [{ id: "worker", kind: laneKind, enabled: true }],
     ...budgetConfig,
@@ -47,7 +60,7 @@ function makeContext({ laneKind = "remote", registerLane = true, budgetConfig = 
     logger: { error: vi.fn(), info: vi.fn() },
     projectRegistry: { byId: (id) => config.projects.find((project) => project.id === id) },
   };
-  const approvals = createApprovalService({ store, bus });
+  const approvals = createApprovalService({ store, bus, config });
   const budget = createBudgetService({ store, bus, config });
   setupStores.push({ store, bus, config, lane, directory, ctx, approvals, budget });
   return setupStores.at(-1);
@@ -59,6 +72,9 @@ function addJob(fixture, {
   const created = createJob({
     id, type, projectId: "project-1", readOnly, parentId: null,
   });
+  created.job = { ...created.job, callerId: "requester-1", callerRole: "owner",
+    adapter: "telegram", chatId: "chat-1", threadId: null };
+  created.event = { ...created.event, job: created.job };
   if (quorum) created.job.quorum = quorum;
   fixture.store.append(JOBS_STREAM, created.event);
   let job = created.job;
@@ -102,6 +118,7 @@ function startDispatcher(fixture, options = {}) {
     tickMs: 60_000,
     ...options,
   });
+  fixture.dispatcher = dispatcher;
   return { dispatcher, start: () => dispatcher.start() };
 }
 
@@ -119,10 +136,240 @@ function transitionsFor(store, jobId) {
     .filter((record) => record.kind === "job.transition" && record.jobId === jobId);
 }
 
-afterEach(() => {
+const integrationFixtures = [];
+afterEach(async () => {
   vi.useRealTimers();
-  for (const { dispatcher } of setupStores.splice(0)) void dispatcher?.stop?.();
+  for (const { dispatcher } of setupStores.splice(0)) await dispatcher?.stop?.();
+  await Promise.all(integrationFixtures.splice(0).map((fixture) => fixture.cleanup()));
   for (const directory of directories.splice(0)) rmSync(directory, { recursive: true, force: true });
+});
+
+async function realDispatchFixture() {
+  const f = await runnerFixture();
+  integrationFixtures.push(f);
+  const directory = createLaneDirectory();
+  directory.configure(f.config.lanes);
+  const lane = createLocalLane({
+    id: "execution-host", bus: f.bus,
+    runtime: { run: (job) => createRunners(f.ctx).runJob(job, { signal: job.signal, emit: job.emit }) },
+  });
+  directory.register(lane);
+  const budget = createBudgetService({ store: f.store, bus: f.bus, config: f.config });
+  return { ...f, directory, lane, budget };
+}
+
+function realDispatcher(f) {
+  const dispatcher = createDispatcher(f.ctx, { directory: f.directory, budget: f.budget, tickMs: 60_000 });
+  const cleanup = f.cleanup;
+  f.cleanup = async () => { await dispatcher.stop(); await cleanup(); };
+  integrationFixtures[integrationFixtures.length - 1].cleanup = f.cleanup;
+  return dispatcher;
+}
+
+async function realFanout(f) {
+  const deps = {
+    config: f.config, store: f.store, bus: f.bus, budget: f.budget, approvals: f.approvals,
+    caller: { channel: "telegram", userId: "requester-owner", role: "owner" },
+    chatId: "chat", threadId: null, scope: "general", lanes: f.directory,
+    secrets: f.ctx.secrets, channel: { id: "telegram", send: vi.fn(async () => ({ messageId: 1 })) },
+  };
+  const callback = (event) => {
+    onParentApproved(deps, event);
+    void onChildTerminal(deps, event);
+    void onParentTerminal(deps, event);
+  };
+  f.bus.on("job.transition", callback);
+  const receipt = await prepareFanout(deps, { argsText: "perform approved work -- project-1", updateId: "fanout-request" });
+  const parent = currentJobs(f.store)[receipt.jobId];
+  const approval = f.approvals.createApproval(parent);
+  f.approvals.issue(parent, { approval });
+  expect(await f.approvals.decide({
+    payload: approval.approve.slice(2), caller: deps.caller, chatId: "chat", threadId: null,
+  })).toMatchObject({ ok: true });
+  return { deps, parentId: parent.id };
+}
+
+describe("G1 dispatcher final authority and family integration", () => {
+  it("leases an explicitly approved scheduled skill through its actual configured owner channel", async () => {
+    const f = await realDispatchFixture();
+    const job = await approveJob(f, {
+      id: "a9000001", type: "skill",
+      fields: { adapter: "scheduler", updateId: "schedule:audit:slot-1", skill: "audit" },
+    });
+    const dispatcher = realDispatcher(f);
+    await dispatcher.start();
+    expect(transitionsFor(f.store, job.id).some(({ to }) => to === "leased")).toBe(true);
+    expect(currentJobs(f.store)[job.id].adapter).toBe("scheduler");
+  });
+
+  it("rechecks the actual fallback lane runtime instead of a preferred BYOK lane", async () => {
+    const f = await realDispatchFixture();
+    f.config.allowlist[0].role = "approver";
+    f.config.policy = { nonOwnerRuntime: "byok-only" };
+    f.config.projects[0].placement = { prefer: ["preferred-byok", "execution-host"] };
+    f.config.lanes.unshift({ id: "preferred-byok", kind: "remote", runtime: "byok:openai", enabled: true });
+    f.config.lanes[1].runtime = "copilot-sdk";
+    f.config.runtimes.byok = { openai: { keySecret: "PROVIDER_KEY", endpoint: "https://provider.example.test" } };
+    const registry = createWorkerRegistry();
+    f.directory.configure(f.config.lanes);
+    f.directory.register(createRemoteLane({ id: "preferred-byok", registry }));
+    const job = await approveJob(f, { id: "a2000001", fields: { callerRole: "owner" } });
+    const dispatcher = realDispatcher(f);
+    try {
+      await dispatcher.start();
+      expect(currentJobs(f.store)[job.id].state).toBe("approved");
+      expect(f.ctx.runtime.run).not.toHaveBeenCalled();
+      expect([...f.store.read("audit")].map(({ record }) => record.reason)).toContain("RUNTIME_POLICY_DENIED");
+    } finally {
+      registry.close();
+    }
+  });
+
+  it.each(["missing", "invalid-key", "invalid-endpoint"])("denies non-owner BYOK with %s references before leasing", async (invalid) => {
+    const f = await realDispatchFixture();
+    f.config.allowlist[0].role = "approver";
+    f.config.policy = { nonOwnerRuntime: "byok-only" };
+    f.config.projects[0].runtime = "byok:openai";
+    f.config.runtimes.byok = invalid === "missing" ? {} : {
+      openai: {
+        keySecret: invalid === "invalid-key" ? "bad key" : "PROVIDER_KEY",
+        endpoint: invalid === "invalid-endpoint" ? "file:private" : "https://provider.example.test",
+      },
+    };
+    const job = await approveJob(f, { id: { missing: "a2000002", "invalid-key": "a2000003", "invalid-endpoint": "a2000004" }[invalid] });
+    const dispatcher = realDispatcher(f);
+    await dispatcher.start();
+    expect(currentJobs(f.store)[job.id].state).toBe("approved");
+    expect(f.ctx.runtime.run).not.toHaveBeenCalled();
+  });
+
+  it.each(["runtime", "provider"])("never honors an unsigned stored %s override", async (field) => {
+    const f = await realDispatchFixture();
+    const value = field === "runtime" ? "openai" : { type: "openai", keySecret: "PROVIDER_KEY" };
+    const job = await approveJob(f, { id: field === "runtime" ? "a2000005" : "a2000006", fields: { [field]: value } });
+    const dispatcher = realDispatcher(f);
+    await dispatcher.start();
+    expect(currentJobs(f.store)[job.id].state).toBe("approved");
+    expect(f.ctx.runtime.run).not.toHaveBeenCalled();
+  });
+
+  it("rejects arbitrary parentId references to a genuine consumed parent approval", async () => {
+    const f = await realDispatchFixture();
+    const { parentId } = await realFanout(f);
+    const rogue = createJob({ id: "rogue-child", type: "task", projectId: "project-1", parentId });
+    rogue.job = { ...rogue.job, callerId: "requester-owner", callerRole: "owner", adapter: "telegram",
+      chatId: "chat", threadId: null, description: "unapproved additional work" };
+    f.store.append("jobs", { ...rogue.event, job: rogue.job });
+    let current = rogue.job;
+    for (const to of ["awaiting-approval", "approved"]) {
+      const updated = transition(current, to);
+      f.store.append("jobs", updated.event);
+      current = updated.job;
+    }
+    const dispatcher = realDispatcher(f);
+    await dispatcher.start();
+    await dispatcher.sweep();
+    expect(currentJobs(f.store)[rogue.job.id].state).toBe("approved");
+    expect(transitionsFor(f.store, rogue.job.id).some((event) => event.to === "leased")).toBe(false);
+  });
+
+  it("leases and settles the approved fanout parent only through the real dispatcher", async () => {
+    const f = await realDispatchFixture();
+    const { parentId, deps } = await realFanout(f);
+    const dispatcher = realDispatcher(f);
+    await dispatcher.start();
+    await vi.waitFor(() => expect(currentJobs(f.store)[parentId].state).toBe("succeeded"));
+    expect(transitionsFor(f.store, parentId).map((event) => event.to))
+      .toEqual(["awaiting-approval", "approved", "leased", "running", "succeeded"]);
+    for (const target of currentJobs(f.store)[parentId].targets) {
+      expect(currentJobs(f.store)[target.childId].state).toBe("succeeded");
+      expect(transitionsFor(f.store, target.childId).filter((event) => event.to === "leased")).toHaveLength(1);
+    }
+    await vi.waitFor(() => expect(deps.channel.send.mock.calls.filter(([payload]) => payload.text.startsWith("Fan-out")))
+      .toHaveLength(1));
+  });
+
+  it("rechecks current caller authority after asynchronous lease preparation", async () => {
+    const f = await realDispatchFixture();
+    const job = await approveJob(f, { id: "a2000007" });
+    const began = g1Deferred();
+    const prepared = g1Deferred();
+    f.lane.prepareLease = async () => { began.resolve(); await prepared.promise; };
+    const dispatcher = realDispatcher(f);
+    await dispatcher.start();
+    await began.promise;
+    f.config.allowlist[0].role = "viewer";
+    prepared.resolve();
+    await vi.waitFor(() => expect(currentJobs(f.store)[job.id].state).toBe("failed"));
+    expect(f.ctx.runtime.run).not.toHaveBeenCalled();
+  });
+
+  it("forwards signed remote financial facts and the real terminal sequence after canonical ACK", async () => {
+    const f = await realDispatchFixture();
+    const remoteId = "remote-execution";
+    const key = "fixture-remote-grant-key";
+    const laneConfig = { id: remoteId, kind: "remote", enabled: true };
+    f.config.lanes.push(laneConfig);
+    f.config.projects[0].placement = { prefer: [remoteId] };
+    f.config.projects[0].repo.remote = "https://example.test/project.git";
+    f.directory.configure(f.config.lanes);
+    const registry = createWorkerRegistry({
+      requireL2: true, applyL2: f.ctx.l2Receiver.receive,
+      signLease: ({ worker, grant }) => signGrant({ grant, subject: worker.id, key }),
+    });
+    const job = await approveJob(f, {
+      id: "a2000008", type: "plan", fields: { planPath: path.join("docs", "plans", "Phase-1-PLAN.md") },
+    });
+    const actuals = {
+      jobId: job.id, projectId: "project-1", runId: "remote-native-1", plan: "Phase-1-PLAN.md",
+      endedAt: "2026-10-10T16:00:00.000Z", usage: { costUSD: 0.125, premiumRequests: null },
+    };
+    registry.connect("registered-executor", {
+      laneId: remoteId, capabilities: { projects: ["project-1"] },
+      send(packet) {
+        if (packet.t === "lease") queueMicrotask(() => {
+          verifyGrant({ grant: packet.grant, job: packet.job, subject: "registered-executor", laneId: remoteId, key });
+          registry.onAck({ leaseId: packet.leaseId, attempt: packet.attempt, workerId: "registered-executor" });
+          registry.onEvent({
+            leaseId: packet.leaseId, attempt: packet.attempt, workerId: "registered-executor",
+            event: makeEvent(job.id, "started", {}, 1),
+          });
+          const [chunk] = encodeDeltaChunks({
+            deltaId: job.id, delta: { files: [], jsonl: { "openbrain-queue.jsonl": ['{"id":"remote-history"}\n'] }, maps: {} },
+          });
+          registry.onEvent({
+            leaseId: packet.leaseId, attempt: packet.attempt, workerId: "registered-executor",
+            event: makeEvent(job.id, "artifact", { ...chunk, jobId: job.id, projectId: "project-1" }, 2),
+          });
+        });
+        if (packet.t === "l2-applied") queueMicrotask(() => registry.onEvent({
+          leaseId: packet.leaseId, attempt: packet.attempt, workerId: "registered-executor",
+          event: makeEvent(job.id, "finished", {
+            status: "succeeded", l2: { ...applicationIdentity(packet), ok: packet.ok }, planActuals: actuals,
+          }, 3),
+        }));
+      },
+    });
+    f.directory.register(wrapPreparedLane(createRemoteLane({ id: remoteId, registry }),
+      createLeasePreparer({ ctx: f.ctx, laneConfig, directory: f.directory })));
+    const finished = [];
+    const terminals = [];
+    f.bus.on("job.finished", (event) => { if (event.jobId === job.id) finished.push(event); });
+    f.bus.on("lane.event", (event) => { if (event.jobId === job.id && event.type === "finished") terminals.push(event); });
+    const dispatcher = realDispatcher(f);
+    try {
+      await dispatcher.start();
+      await vi.waitFor(() => expect(currentJobs(f.store)[job.id].state).toBe("succeeded"));
+      expect(finished).toHaveLength(1);
+      expect(finished[0].planActuals).toEqual(actuals);
+      expect(terminals).toHaveLength(1);
+      expect(terminals[0].seq).toBe(3);
+      expect(terminals[0].data.planActuals).toEqual(actuals);
+      expect(Object.keys(transitionsFor(f.store, job.id).at(-1).result)).toEqual([]);
+    } finally {
+      registry.close();
+    }
+  });
 });
 
 describe("dispatcher", () => {

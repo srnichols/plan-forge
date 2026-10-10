@@ -1,6 +1,5 @@
 import { EventEmitter } from "node:events";
-import { mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
-import os from "node:os";
+import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { ClawError } from "../src/errors.mjs";
@@ -8,10 +7,12 @@ import { createJob, currentJobs, JOBS_STREAM, transition } from "../src/jobs/mod
 import { createRunners, resolvePlan } from "../src/jobs/runners.mjs";
 import { createStore } from "../src/state/store.mjs";
 import { run } from "../src/jobs/worktree.mjs";
+import { createL2Receiver } from "../src/protocol/l2-receiver.mjs";
+import { g1Directory } from "./g1-runner-fixture.mjs";
 
 const directories = [];
 async function tempDir() {
-  const directory = await mkdtemp(path.join(os.tmpdir(), "claw-runners-"));
+  const directory = await g1Directory("g1-runners-git-");
   directories.push(directory);
   return directory;
 }
@@ -84,7 +85,9 @@ async function makeFixture({
   const runner = async (cmd, args, options = {}) => {
     const record = { cmd, args: [...args], options };
     calls.push(record);
-    if (cmd === "gh") return { code: 0, stdout: "created https://example.test/pr/1\n", stderr: "" };
+    if (cmd === "gh" || cmd === context.config.runtimes.ghCommand?.[0]) {
+      return { code: 0, stdout: "created https://example.test/pr/1\n", stderr: "" };
+    }
     if (cmd === process.execPath && args.some((arg) => arg.endsWith("fake-pforge.mjs"))
       && args.at(-1) === "smith") return { code: 0, stdout: "smith ok", stderr: "" };
     if (cmd === "git" && args.includes("show-ref")) return run(cmd, args, options);
@@ -101,7 +104,8 @@ async function makeFixture({
   const context = {
     home,
     config: {
-      projects: [{ id: "p1", repo: { path: repo, baseBranch: "main" }, models: { work: "configured-work-model" } }],
+      lanes: [{ id: "local", kind: "local" }],
+      projects: [{ id: "p1", homeLane: "local", repo: { path: repo, baseBranch: "main" }, models: { work: "configured-work-model" } }],
       runtimes: { pforgeCommand: [process.execPath, "fake-pforge.mjs"] },
       bootstrap: { install: "none" },
     },
@@ -114,6 +118,7 @@ async function makeFixture({
     runner,
     features: features ?? [],
   };
+  context.l2Receiver = createL2Receiver({ config: context.config, currentLaneId: "local" });
   return { root, repo, home, store, job, context, calls, busEvents, mcpCalls };
 }
 
@@ -322,7 +327,8 @@ describe("job runners", () => {
     const args = JSON.parse(await readFile(argsFile, "utf8"));
     expect(args).toEqual([
       "run-plan",
-      path.join(f.home, "worktrees", "p1", "j1", "docs", "plans", "Phase-1-PLAN.md"),
+      path.join("docs", "plans", "Phase-1-PLAN.md"),
+      "--foreground",
       "--quorum=power",
       "--resume-from",
       "4",
@@ -340,7 +346,9 @@ describe("resolvePlan", () => {
     expect(await resolvePlan({ root, input: "Phase-1" })).toMatchObject({ kind: "unique" });
     await writeFile(path.join(root, "docs", "plans", "Phase-1-alt-PLAN.md"), "two");
     expect(await resolvePlan({ root, input: "Phase-1" })).toMatchObject({ kind: "multiple" });
-    expect(await resolvePlan({ root, input: "absent" })).toEqual({ kind: "none", candidates: [] });
-    await expect(resolvePlan({ root, input: "../outside" })).resolves.toMatchObject({ kind: "none" });
+    expect(await resolvePlan({ root, input: "absent" })).toMatchObject({
+      kind: "none", candidates: [], total: 0, truncated: false, limit: 20,
+    });
+    await expect(resolvePlan({ root, input: "../outside" })).rejects.toMatchObject({ code: "PLAN_PATH_ESCAPE" });
   });
 });

@@ -2,6 +2,7 @@ import { copyFile, lstat, mkdir, readFile, readdir, realpath, stat, symlink, wri
 import path from "node:path";
 import { ClawError } from "../errors.mjs";
 import { isInside, realpathNearest, resolveCommand, resolvePforgeCommand, run } from "./worktree.mjs";
+import { prepareJobEnvironment } from "./runner-environment.mjs";
 
 const OUTPUT_LIMIT = 64 * 1024;
 const SECRET_RELATIVE = path.join(".forge", "secrets.json").toLowerCase();
@@ -137,6 +138,77 @@ async function execute(runner, command, args, options) {
   }
 }
 
+function bootstrapFailure(step, code) {
+  return { ok: false, reason: "bootstrap", step, code };
+}
+
+async function copyBootstrapFiles({ sourceRoot, worktreePath, config }) {
+  for (const entry of config.bootstrap?.copy ?? []) {
+    try {
+      await copyEntry({ sourceRoot, destinationRoot: worktreePath, entry });
+    } catch (error) {
+      return bootstrapFailure("copy", error.code === "ENOENT"
+        ? "BOOTSTRAP_COPY_MISSING" : error.code ?? "BOOTSTRAP_COPY_FAILED");
+    }
+  }
+  return null;
+}
+
+async function linkDependencies({ sourceRoot, worktreePath }) {
+  const source = path.join(sourceRoot, "node_modules");
+  const destination = path.join(worktreePath, "node_modules");
+  const sourceMetadata = await lstat(source).catch((error) => {
+    if (error.code === "ENOENT") return null;
+    throw error;
+  });
+  if (!sourceMetadata?.isDirectory()) return bootstrapFailure("install", "BOOTSTRAP_LINK_SOURCE_MISSING");
+  try {
+    await lstat(destination);
+    return bootstrapFailure("install", "BOOTSTRAP_LINK_CONFLICT");
+  } catch (error) {
+    if (error.code !== "ENOENT") throw error;
+  }
+  await symlink(source, destination, process.platform === "win32" ? "junction" : "dir");
+  return null;
+}
+
+async function installDependencies({ sourceRoot, worktreePath, config, runner, env, signal, secrets }) {
+  const mode = installMode(config);
+  if (mode === "link") return linkDependencies({ sourceRoot, worktreePath });
+  if (mode === "none") return null;
+  if (mode !== "npm-ci" && mode !== "ci") return bootstrapFailure("install", "BOOTSTRAP_INSTALL_MODE");
+  const [command, ...prefix] = resolveCommand("npm", { env });
+  const installed = await execute(runner, command, [...prefix, "ci"], { cwd: worktreePath, env, signal });
+  signal?.throwIfAborted();
+  if (installed.code === 0) return null;
+  safeOutput(installed.stderr, secrets);
+  return bootstrapFailure("install", "BOOTSTRAP_INSTALL_FAILED");
+}
+
+function environmentForBootstrap({ job, config, secrets, env, signal }) {
+  try {
+    return { env: prepareJobEnvironment({
+      job, config, project: config.projects?.find((entry) => entry.id === job?.projectId),
+      secrets, env, signal,
+    }) };
+  } catch (error) {
+    if (signal?.aborted) throw error;
+    return { failure: bootstrapFailure("environment",
+      error instanceof ClawError ? error.code : "BOOTSTRAP_ENV_INVALID") };
+  }
+}
+
+function bootstrapConfig(job, config) {
+  const project = config.projects?.find((entry) => entry.id === job?.projectId);
+  return { ...config, bootstrap: { ...config.bootstrap, ...project?.bootstrap } };
+}
+
+function bootstrapError(error, signal) {
+  if (signal?.aborted) return "JOB_CANCELLED";
+  if (error instanceof ClawError) return error.code;
+  return error.code === "ENOENT" ? "BOOTSTRAP_COPY_MISSING" : "BOOTSTRAP_FAILED";
+}
+
 export async function bootstrapWorktree({
   job,
   worktree,
@@ -145,68 +217,29 @@ export async function bootstrapWorktree({
   config = {},
   secrets,
   runner = run,
+  env: baseEnv = process.env,
+  signal,
 } = {}) {
-  void job;
   const sourceRoot = typeof homeRepo === "string" ? homeRepo : homeRepo?.path;
   const worktreePath = typeof worktree === "string" ? worktree : worktree?.path;
   if (!sourceRoot || !worktreePath) {
     return { ok: false, reason: "bootstrap", step: "copy", code: "BOOTSTRAP_PATH_MISSING" };
   }
+  const effectiveConfig = bootstrapConfig(job, config);
   try {
-    for (const entry of config.bootstrap?.copy ?? []) {
-      try {
-        await copyEntry({ sourceRoot, destinationRoot: worktreePath, entry });
-      } catch (error) {
-        return {
-          ok: false,
-          reason: "bootstrap",
-          step: "copy",
-          code: error.code === "ENOENT" ? "BOOTSTRAP_COPY_MISSING" : error.code ?? "BOOTSTRAP_COPY_FAILED",
-        };
-      }
-    }
-
-    const env = { ...process.env };
-    for (const name of config.bootstrap?.env ?? []) {
-      const value = secrets?.get?.(name);
-      if (typeof value !== "string" || !value) {
-        return { ok: false, reason: "bootstrap", step: "environment", code: "BOOTSTRAP_SECRET_MISSING" };
-      }
-      env[name] = value;
-    }
-
-    const mode = installMode(config);
-    if (mode === "link") {
-      const source = path.join(sourceRoot, "node_modules");
-      const destination = path.join(worktreePath, "node_modules");
-      const sourceMetadata = await lstat(source).catch((error) => {
-        if (error.code === "ENOENT") return null;
-        throw error;
-      });
-      if (!sourceMetadata?.isDirectory()) {
-        return { ok: false, reason: "bootstrap", step: "install", code: "BOOTSTRAP_LINK_SOURCE_MISSING" };
-      }
-      try {
-        await lstat(destination);
-        return { ok: false, reason: "bootstrap", step: "install", code: "BOOTSTRAP_LINK_CONFLICT" };
-      } catch (error) {
-        if (error.code !== "ENOENT") throw error;
-      }
-      await symlink(source, destination, process.platform === "win32" ? "junction" : "dir");
-    } else if (mode === "npm-ci" || mode === "ci") {
-      const [command, ...prefix] = resolveCommand("npm");
-      const installed = await execute(runner, command, [...prefix, "ci"], { cwd: worktreePath, env });
-      if (installed.code !== 0) {
-        safeOutput(installed.stderr, secrets);
-        return { ok: false, reason: "bootstrap", step: "install", code: "BOOTSTRAP_INSTALL_FAILED" };
-      }
-    } else if (mode !== "none") {
-      return { ok: false, reason: "bootstrap", step: "install", code: "BOOTSTRAP_INSTALL_MODE" };
-    }
-
-    const pforge = resolvePforgeCommand({ config, cwd: worktreePath });
+    signal?.throwIfAborted();
+    const copied = await copyBootstrapFiles({ sourceRoot, worktreePath, config: effectiveConfig });
+    if (copied) return copied;
+    const environment = environmentForBootstrap({ job, config: effectiveConfig, secrets, env: baseEnv, signal });
+    if (environment.failure) return environment.failure;
+    const { env } = environment;
+    const installed = await installDependencies({ sourceRoot, worktreePath, config: effectiveConfig, runner, env, signal, secrets });
+    if (installed) return installed;
+    signal?.throwIfAborted();
+    const pforge = resolvePforgeCommand({ config: effectiveConfig, cwd: worktreePath });
     const [command, ...prefix] = pforge;
-    const result = await execute(runner, command, [...prefix, "smith"], { cwd: worktreePath, env });
+    const result = await execute(runner, command, [...prefix, "smith"], { cwd: worktreePath, env, signal });
+    signal?.throwIfAborted();
     safeOutput(result.stdout, secrets);
     safeOutput(result.stderr, secrets);
     if (result.code !== 0) {
@@ -215,8 +248,6 @@ export async function bootstrapWorktree({
     void forgeHome;
     return { ok: true, env };
   } catch (error) {
-    const code = error instanceof ClawError ? error.code
-      : error.code === "ENOENT" ? "BOOTSTRAP_COPY_MISSING" : "BOOTSTRAP_FAILED";
-    return { ok: false, reason: "bootstrap", step: "bootstrap", code };
+    return { ok: false, reason: "bootstrap", step: "bootstrap", code: bootstrapError(error, signal) };
   }
 }

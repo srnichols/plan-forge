@@ -78,8 +78,10 @@ The host configuration lives at `PFORGE_CLAW_HOME/config.json` (default home: `~
 | `runtimes.byok` | object | no | — | |
 | `runtimes.byok.anthropic` | object | no | — | |
 | `runtimes.byok.anthropic.keySecret` | string | no | — | pattern: `^[A-Z][A-Z0-9_]*$` |
+| `runtimes.byok.anthropic.endpoint` | string | no | — | minLength=1 |
 | `runtimes.byok.openai` | object | no | — | |
 | `runtimes.byok.openai.keySecret` | string | no | — | pattern: `^[A-Z][A-Z0-9_]*$` |
+| `runtimes.byok.openai.endpoint` | string | no | — | minLength=1 |
 | `runtimes.byok.azure` | object | no | — | |
 | `runtimes.byok.azure.keySecret` | string | no | — | pattern: `^[A-Z][A-Z0-9_]*$` |
 | `runtimes.byok.azure.endpoint` | string | no | — | |
@@ -90,9 +92,12 @@ The host configuration lives at `PFORGE_CLAW_HOME/config.json` (default home: `~
 | `lanes[].labels` | array | no | — | items: string |
 | `lanes[].enabled` | boolean | no | — | |
 | `lanes[].optIn` | boolean | no | — | |
+| `lanes[].runtime` | enum | no | — | copilot-sdk, anthropic, openai, azure; `byok:` aliases accepted |
 | `lanes[].k8s` | object | no | — | |
 | `lanes[].k8s.namespace` | string | no | — | |
 | `lanes[].k8s.defaultImage` | string | no | — | |
+| `lanes[].k8s.deadlineSeconds` | integer | no | — | minimum=1; per-job execution deadline |
+| `lanes[].k8s.ttlSecondsAfterFinished` | integer | no | — | minimum=0; cleanup retention starts only after canonical application acknowledgement |
 | `lanes[].k8s.laneSecret` | string | no | `"PFORGE_CLAW_K8S_LANE_SECRET"` | pattern: `^[A-Z][A-Z0-9_]*$` |
 | `lanes` | array | yes | — | items: object |
 | `projects[].id` | string | yes | — | minLength=1 |
@@ -112,6 +117,11 @@ The host configuration lives at `PFORGE_CLAW_HOME/config.json` (default home: `~
 | `projects[].models` | object | no | — | |
 | `projects[].models.chat` | string | no | — | |
 | `projects[].models.work` | string | no | — | |
+| `projects[].runtime` | enum | no | — | copilot-sdk, anthropic, openai, azure; `byok:` aliases accepted |
+| `projects[].bootstrap` | object | no | — | Per-project override of the host bootstrap settings |
+| `projects[].bootstrap.copy` | array | no | — | items: string |
+| `projects[].bootstrap.env` | array | no | — | Secret variable names only |
+| `projects[].bootstrap.install` | enum | no | — | link, ci, npm-ci, none |
 | `projects[].homeLane` | string | yes | — | |
 | `projects[].keepAlive` | boolean | no | — | |
 | `projects[].budget` | object | no | — | |
@@ -132,8 +142,8 @@ The host configuration lives at `PFORGE_CLAW_HOME/config.json` (default home: `~
 | `jobs.pushOnFailure` | boolean | no | `false` | |
 | `bootstrap` | object | no | — | |
 | `bootstrap.copy` | array | no | — | items: string |
-| `bootstrap.env` | array | no | — | items: string |
-| `bootstrap.install` | enum | no | — | enum: link, npm-ci |
+| `bootstrap.env` | array | no | — | Secret variable names only |
+| `bootstrap.install` | enum | no | — | enum: link, ci, npm-ci, none |
 | `mcp` | object | no | — | |
 | `mcp.serverName` | string | no | — | |
 | `mcp.idleMinutes` | number | no | — | minimum=0 |
@@ -150,6 +160,8 @@ The host configuration lives at `PFORGE_CLAW_HOME/config.json` (default home: `~
 | `capture.voice.enabled` | boolean | no | `false` | |
 | `capture.voice.provider` | string | no | — | |
 | `capture.voice.keySecret` | string | no | — | pattern: `^[A-Z][A-Z0-9_]*$` |
+| `capture.voice.endpoint` | string | no | — | Transcription endpoint; falls back to the configured provider endpoint |
+| `capture.voice.model` | string | no | — | Configured transcription model; no model is hardcoded |
 | `memory` | object | no | — | |
 | `memory.openbrain` | object | no | — | |
 | `memory.openbrain.endpoint` | string | no | — | |
@@ -174,6 +186,8 @@ The host configuration lives at `PFORGE_CLAW_HOME/config.json` (default home: `~
 ## Lanes and labels
 
 Lanes are operator-defined execution targets: `local`, `remote`, or `k8s`. Give them descriptive IDs and labels such as `macos`, `windows`, `linux`, or `ephemeral`; placement can prefer lane IDs and require labels. An `optIn` lane receives work only after an owner enables it with `/lane <id> on`. Each project names a `homeLane`, where its checkout and canonical `.forge` history live. Lanes are isolated execution capacity, not Forge-Master reasoning lanes.
+
+Lane IDs are identifiers, not implementation switches. A local home can have any ID, and a remote lane named `local` still uses the remote transport. Runtime selection follows `projects[].runtime`, then the executing lane's `runtime`, then `runtimes.default`. BYOK credentials are resolved from the executing lane's secret store at call time; configuration contains only provider endpoints and secret names. A non-owner request must have an eligible configured BYOK runtime; merely setting `nonOwnerRuntime: "byok-only"` does not authorize use of a Copilot seat.
 
 ## Telegram setup
 
@@ -211,11 +225,49 @@ Plain Kubernetes `NetworkPolicy` rules match IP blocks, not hostnames. Hostname 
 
 Mutating work requires an approval bound to both the requesting chat and the approving allowlisted identity. Approval tokens are hashed, single-use, time-limited, and cannot be issued by Forge-Master. Budget policy tracks reported USD and premium requests separately; usage that a runtime does not report stays `null`, never `0`. Once the configured unknown-usage threshold is exceeded, further mutating work is held. Budget holds require an owner-authorized release.
 
+A requesting owner may explicitly approve their own job; a second person is not required. Exact-expiry, current-role, chat/topic, forged-token and replay checks still apply. A fanout approval covers only the declared children, not any job that copies its parent ID. If a budget-hold card expires, an owner can retrieve a fresh same-topic card with `/budget`; retrieval never releases the hold automatically.
+
+Plan actuals are collected through the job workspace's own `forge_cost_report` and correlated with that run's summary before cleanup. Aggregate spend or a canonical home's latest run is not attributed to a job by guesswork. Missing or mismatched actuals remain unknown. Operator auto-approval of development tools does not change Forge-Claw's application approvals or SDK permission policy.
+
+Skill classification is conservative: only an explicit trusted `readOnly: true`
+metadata result can skip mutation approval. The current native
+`forge_run_skill` dry-run response does not expose that field, so its skills
+remain approval-pending even if their source frontmatter declares read-only.
+Forge-Claw does not infer permission from a model suggestion, skill name or
+missing metadata. This limitation does not disable skill execution after a
+valid approval.
+
 ## Security model summary
 
 The [Forge-Claw threat model on GitHub](https://github.com/srnichols/plan-forge/blob/planning/main/docs/PFORGE-CLAW-THREAT-MODEL.md) describes trust boundaries, abuse cases, mitigations, and known gaps. Allowlist identity and single-use approvals govern chat-triggered work; forwarded content is untrusted data; secrets stay outside configuration; each mutating job uses an isolated worktree or clone; workers connect outbound over authenticated TLS.
 
 Git worktrees are **not OS sandboxes**. They isolate repository changes, not processes, credentials, network access, or kernel privileges. Use a dedicated account or container boundary for stronger isolation. Preserve the threat model's blocked and pending caveats; do not infer safety guarantees from offline tests.
+
+## Experimental release readiness
+
+Forge-Claw is an opt-in Node ESM source package, not a new TypeScript build
+pipeline. A candidate needs reproducible dependency installation and a complete
+committed source tree, including the project MCP client and its history/runtime
+helpers. A green dirty-worktree test alone is not proof that a fresh checkout
+contains those modules.
+
+Maintainers must validate the complete unit and offline end-to-end suites,
+unchanged source-quality rules, public tool inventory and documentation before
+preparing a release. Release/version synchronization and the consumer ship
+allowlist must include Claw; that release-tooling follow-up remains separate from
+the current review repairs. No release version has been selected here, and no
+image publication or deployment is implied.
+
+Cross-platform CI at Node 22.12 and 24, an actual disposable Kubernetes/CNI run,
+and authenticated Telegram, GitHub Copilot/BYOK and memory checks remain distinct
+acceptance gates. Offline fixture images and mocked provider calls cannot replace
+those results. `/forget` remains unavailable, and there is no npm publication.
+
+Configure an operator environment only after the candidate is accepted: choose
+project remotes and paths, home/execution lanes, allowlisted identities and
+chat/topic routes, models/runtimes, private secret references, budgets and any
+cluster overlay. None of those operator values belongs in product source or the
+shipped example configurations.
 
 ## Live test environment
 
@@ -287,11 +339,26 @@ non-allowlisted destination. DNS failure, an unreachable destination, or a
 timeout alone is not evidence of policy denial. Record Job completion and
 deletion separately. Tear down only resources owned by that test run.
 
-If Kubernetes prerequisites are unavailable, record the scripts' explicit
-`SKIPPED:` reason as skipped, not passed. Kubernetes/CNI and live D4 diagnostics
+If Kubernetes prerequisites are unavailable, record the explicit blocked,
+not-run or skip reason as unverified, not passed. Kubernetes/CNI and live D4 diagnostics
 are not currently supplied by doctor; preserve doctor output without claiming
 it verifies those conditions. The current scripts and probe still require
 end-to-end validation before their output can be used as live lane evidence.
+
+The disposable Kubernetes gate now has separate dispatcher and worker fixture
+image targets in `pforge-claw/deploy/Dockerfile.k8s-fixtures`, built from the
+framework repository root. Pass `--context`, a fresh
+`pforge-claw-e2e-...` namespace, and explicit dispatcher/worker fixture image
+tags to the Bash gate, or the matching named PowerShell parameters. The CI
+workflow builds both targets and requires signed-job, positive canonical
+application-ACK, nonempty history-file and cleanup evidence. `blocked`,
+`dry-run`, missing proof and skip output cannot satisfy that gate.
+
+These images replace external model, Git/PR and Telegram edges for a dedicated
+test cluster; they are **not production images or live provider evidence**.
+Do not build, load or deploy them into an operator namespace without explicit
+authorization. Offline fixture tests prove the protocol and gate wiring, not
+that the actual image, CNI or cluster run has passed.
 
 ### Scenario (a): away from the desk
 

@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { ClawError } from "../errors.mjs";
 import { isCrossProjectReadable, MEMORY_ORIGINS } from "./memory-client.mjs";
 
 export const QUEUE_STREAM = "memory-queue";
@@ -6,6 +7,7 @@ export const BASE_BACKOFF_MS = 30_000;
 export const JITTER = 0.2;
 export const MAX_ATTEMPTS = 5;
 export const MAX_BATCH = 50;
+const CLOSED_CODE = "OPENBRAIN_CLOSED";
 
 function asTimestamp(value) {
   const timestamp = typeof value === "function" ? value() : value;
@@ -73,6 +75,148 @@ export function nextBackoffAt(attempts, now = Date.now, random = Math.random) {
   return asTimestamp(now) + BASE_BACKOFF_MS * (2 ** (attempts - 1)) * (1 + jitter);
 }
 
+function closedResult(fields = {}) {
+  return { ...fields, ok: false, code: CLOSED_CODE };
+}
+
+async function releaseConnection({ active, pending }) {
+  let acquired = active;
+  if (!acquired && pending) {
+    try {
+      acquired = await pending;
+    } catch (error) {
+      if (error instanceof ClawError && [CLOSED_CODE, "OPENBRAIN_UNREACHABLE"].includes(error.code)) return;
+      throw error;
+    }
+  }
+  if (typeof acquired?.close !== "function") return;
+  try {
+    await acquired.close();
+  } catch {
+    throw new ClawError("OPENBRAIN_CLOSE_FAILED");
+  }
+}
+
+async function connectWithSecret({ openbrain, secrets, connect }) {
+  const tokenName = openbrain.tokenSecret ?? "OPENBRAIN_KEY";
+  const token = secrets?.get?.(tokenName) ?? null;
+  if (!token) throw new ClawError("OPENBRAIN_KEY_MISSING");
+  const active = await connect({
+    endpoint: openbrain.endpoint,
+    headerName: openbrain.header ?? "x-brain-key",
+    token,
+  });
+  if (!active || typeof active.callTool !== "function") {
+    await releaseConnection({ active });
+    throw new ClawError("OPENBRAIN_TRANSPORT_INVALID");
+  }
+  return active;
+}
+
+function createConnectionOwner({ enabled, openbrain, secrets, connect }) {
+  const state = {
+    closed: false, connection: null, connectPromise: null, closePromise: null, waiters: new Set(),
+  };
+
+  function assertOpen() {
+    if (state.closed) throw new ClawError(CLOSED_CODE);
+  }
+
+  async function run(operation) {
+    assertOpen();
+    let cancel;
+    const cancelled = new Promise((_, reject) => {
+      cancel = () => reject(new ClawError(CLOSED_CODE));
+      state.waiters.add(cancel);
+    });
+    try {
+      const value = await Promise.race([
+        Promise.resolve().then(() => { assertOpen(); return operation(); }),
+        cancelled,
+      ]);
+      assertOpen();
+      return value;
+    } finally {
+      state.waiters.delete(cancel);
+    }
+  }
+
+  async function getConnection() {
+    assertOpen();
+    if (!enabled) throw new ClawError("OPENBRAIN_NO_ENDPOINT");
+    if (state.connection) return state.connection;
+    if (!state.connectPromise) {
+      state.connectPromise = Promise.resolve().then(async () => {
+        assertOpen();
+        const active = await connectWithSecret({ openbrain, secrets, connect });
+        if (!state.closed) state.connection = active;
+        return active;
+      }).catch((error) => {
+        state.connectPromise = null;
+        if (error instanceof ClawError && [CLOSED_CODE, "OPENBRAIN_CLOSE_FAILED"].includes(error.code)) throw error;
+        throw new ClawError("OPENBRAIN_UNREACHABLE");
+      });
+    }
+    const pending = state.connectPromise;
+    return run(() => pending);
+  }
+
+  async function callTool(name, args) {
+    return run(async () => {
+      const current = await getConnection();
+      assertOpen();
+      return current.callTool({ name, arguments: args });
+    });
+  }
+
+  async function listTools() {
+    return run(async () => {
+      const current = await getConnection();
+      assertOpen();
+      return current.listTools();
+    });
+  }
+
+  function close() {
+    if (state.closePromise) return state.closePromise;
+    const active = state.connection;
+    const pending = state.connectPromise;
+    state.closed = true;
+    state.connection = null;
+    for (const cancel of state.waiters) cancel();
+    state.waiters.clear();
+    state.closePromise = Promise.resolve().then(() => releaseConnection({ active, pending }));
+    return state.closePromise;
+  }
+
+  return { get closed() { return state.closed; }, assertOpen, run, getConnection, callTool, listTools, close };
+}
+
+function recordDeliveryFailure({ store, item, maxAttempts, now, random, logger, error }) {
+  const attempts = Number(item._attempts ?? 0) + 1;
+  let outcome = "retried";
+  if (attempts >= maxAttempts) {
+    store.append(QUEUE_STREAM, {
+      id: item.id,
+      _status: "failed",
+      _attempts: attempts,
+      failedAt: asTimestamp(now),
+    });
+    outcome = "deadLettered";
+  } else {
+    store.append(QUEUE_STREAM, {
+      id: item.id,
+      _status: "pending",
+      _attempts: attempts,
+      _nextAttemptAt: nextBackoffAt(attempts, now, random),
+    });
+  }
+  logger?.warn?.("OpenBrain delivery failed", {
+    code: publicErrorCode(error, "OPENBRAIN_UNREACHABLE"),
+  });
+  return outcome;
+}
+
 async function defaultConnect({ endpoint, headerName, token }) {
   const [{ Client }, { SSEClientTransport }] = await Promise.all([
     import("@modelcontextprotocol/sdk/client/index.js"),
@@ -83,7 +227,13 @@ async function defaultConnect({ endpoint, headerName, token }) {
     requestInit: { headers: { [headerName]: token } },
   });
   const client = new Client({ name: "pforge-claw-openbrain", version: "1.0.0" });
-  await client.connect(transport);
+  try {
+    await client.connect(transport);
+  } catch (error) {
+    // A failed handshake never transfers transport ownership to the direct client.
+    await releaseConnection({ active: transport });
+    throw error;
+  }
   return {
     callTool: (request) => client.callTool(request),
     listTools: () => client.listTools(),
@@ -105,39 +255,13 @@ export function createDirectClient({
 } = {}) {
   const openbrain = config.memory?.openbrain;
   const enabled = typeof openbrain?.endpoint === "string" && openbrain.endpoint.length > 0;
-  let connection = null;
-  let connectPromise = null;
+  const owner = createConnectionOwner({ enabled, openbrain, secrets, connect });
   let drainPromise = null;
-
-  async function getConnection() {
-    if (!enabled) throw Object.assign(new Error("OPENBRAIN_NO_ENDPOINT"), { code: "OPENBRAIN_NO_ENDPOINT" });
-    if (connection) return connection;
-    if (!connectPromise) {
-      connectPromise = Promise.resolve().then(async () => {
-        const tokenName = openbrain.tokenSecret ?? "OPENBRAIN_KEY";
-        const token = secrets?.get?.(tokenName) ?? null;
-        if (!token) throw Object.assign(new Error("OPENBRAIN_KEY_MISSING"), { code: "OPENBRAIN_KEY_MISSING" });
-        const result = await connect({
-          endpoint: openbrain.endpoint,
-          headerName: openbrain.header ?? "x-brain-key",
-          token,
-        });
-        if (!result || typeof result.callTool !== "function") throw new Error("OPENBRAIN_TRANSPORT_INVALID");
-        connection = result;
-        return result;
-      }).catch((error) => {
-        connectPromise = null;
-        throw Object.assign(new Error("OPENBRAIN_UNREACHABLE"), {
-          code: error?.code === "OPENBRAIN_NO_ENDPOINT" ? "OPENBRAIN_NO_ENDPOINT" : "OPENBRAIN_UNREACHABLE",
-        });
-      });
-    }
-    return connectPromise;
-  }
+  let closePromise = null;
 
   async function invoke(name, args) {
-    const activeConnection = await getConnection();
-    const result = await activeConnection.callTool({ name, arguments: args });
+    const result = await owner.callTool(name, args);
+    owner.assertOpen();
     const normalized = toolResult(result);
     if (result?.isError || normalized?.ok === false || normalized?.error) {
       const error = new Error("OPENBRAIN_TOOL_FAILED");
@@ -159,13 +283,15 @@ export function createDirectClient({
   }
 
   async function writeBot(thought) {
+    if (owner.closed) return closedResult();
     if (!enabled) return { ok: false, code: "OPENBRAIN_NO_ENDPOINT" };
     if (thought?.project !== `pforge-claw:${config.instanceId}`) {
       return { ok: false, code: "DIRECT_PROJECT_WRITE_FORBIDDEN" };
     }
     let record;
     try {
-      const content = await sanitize(thought.content);
+      const content = await owner.run(() => sanitize(thought.content));
+      owner.assertOpen();
       record = {
         content,
         ...(typeof thought.type === "string" ? { type: thought.type } : {}),
@@ -177,10 +303,11 @@ export function createDirectClient({
         ...(typeof thought.visibility === "string" ? { visibility: thought.visibility } : {}),
       };
     } catch {
-      return { ok: false, code: "MEMORY_SANITIZE_FAILED" };
+      return owner.closed ? closedResult() : { ok: false, code: "MEMORY_SANITIZE_FAILED" };
     }
     const id = String(idFactory());
     try {
+      owner.assertOpen();
       store.append(QUEUE_STREAM, {
         v: 1,
         id,
@@ -192,6 +319,7 @@ export function createDirectClient({
       });
       return { ok: true, queued: id };
     } catch (error) {
+      if (owner.closed) return closedResult();
       logger?.warn?.("OpenBrain queue write failed", { code: publicErrorCode(error, "MEMORY_STATE_FAILED") });
       return { ok: false, code: "MEMORY_STATE_FAILED" };
     }
@@ -199,12 +327,13 @@ export function createDirectClient({
 
   async function performDrain({ maxBatch = MAX_BATCH, maxAttempts = MAX_ATTEMPTS } = {}) {
     const empty = { delivered: 0, retried: 0, deadLettered: 0 };
+    if (owner.closed) return closedResult(empty);
     if (!enabled) return { ...empty, ok: false, code: "OPENBRAIN_NO_ENDPOINT" };
-    let current;
     try {
-      current = await getConnection();
+      await owner.getConnection();
+      owner.assertOpen();
     } catch {
-      return { ...empty, ok: false, code: "OPENBRAIN_UNREACHABLE" };
+      return owner.closed ? closedResult(empty) : { ...empty, ok: false, code: "OPENBRAIN_UNREACHABLE" };
     }
     const eligible = [...foldQueue(store).values()]
       .filter((record) => record._status === "pending" && Number(record._nextAttemptAt ?? 0) <= asTimestamp(now))
@@ -213,10 +342,8 @@ export function createDirectClient({
     // A remote success can precede a failed local status append, so delivery is at-least-once.
     for (const item of eligible) {
       try {
-        const result = await current.callTool({
-          name: "capture_thought",
-          arguments: item.record,
-        });
+        const result = await owner.callTool("capture_thought", item.record);
+        owner.assertOpen();
         if (result?.isError || toolResult(result)?.ok === false) throw new Error("OPENBRAIN_DELIVERY_FAILED");
         store.append(QUEUE_STREAM, {
           id: item.id,
@@ -226,33 +353,16 @@ export function createDirectClient({
         });
         totals.delivered += 1;
       } catch (error) {
-        const attempts = Number(item._attempts ?? 0) + 1;
-        if (attempts >= maxAttempts) {
-          store.append(QUEUE_STREAM, {
-            id: item.id,
-            _status: "failed",
-            _attempts: attempts,
-            failedAt: asTimestamp(now),
-          });
-          totals.deadLettered += 1;
-        } else {
-          store.append(QUEUE_STREAM, {
-            id: item.id,
-            _status: "pending",
-            _attempts: attempts,
-            _nextAttemptAt: nextBackoffAt(attempts, now, random),
-          });
-          totals.retried += 1;
-        }
-        logger?.warn?.("OpenBrain delivery failed", {
-          code: publicErrorCode(error, "OPENBRAIN_UNREACHABLE"),
-        });
+        if (owner.closed) return closedResult(totals);
+        const outcome = recordDeliveryFailure({ store, item, maxAttempts, now, random, logger, error });
+        totals[outcome] += 1;
       }
     }
     return totals;
   }
 
   function drain(options = {}) {
+    if (owner.closed) return Promise.resolve(closedResult({ delivered: 0, retried: 0, deadLettered: 0 }));
     if (drainPromise) return drainPromise;
     const operation = performDrain(options);
     drainPromise = operation.finally(() => {
@@ -262,11 +372,12 @@ export function createDirectClient({
   }
 
   async function searchAcross(query, { limit = 5 } = {}) {
+    if (owner.closed) return closedResult({ hits: [] });
     if (!enabled) return { ok: false, code: "OPENBRAIN_NO_ENDPOINT", hits: [] };
     const allowed = allowedProjects(registry, config);
     try {
       const normalized = await invoke("search_thoughts", {
-        query: await sanitize(query),
+        query: await owner.run(() => sanitize(query)),
         limit,
         projects: [...allowed.keys()],
       });
@@ -277,47 +388,52 @@ export function createDirectClient({
       });
       return {
         ok: true,
-        hits: await Promise.all(visibleHits.map(async (hit) => ({
+        hits: await owner.run(() => Promise.all(visibleHits.map(async (hit) => ({
           id: hit?.id ?? hit?.recordRef ?? null,
           project: hit?.project ?? null,
           content: await sanitize(hit?.content ?? hit?.snippet ?? hit?.text ?? ""),
           origin: MEMORY_ORIGINS.includes(hit?.origin) ? hit.origin : "untrusted",
           visibility: hit?.visibility ?? "normal",
-        }))),
+        })))),
       };
     } catch (error) {
+      if (owner.closed) return closedResult({ hits: [] });
       return { ok: false, code: publicErrorCode(error, "OPENBRAIN_UNREACHABLE"), hits: [] };
     }
   }
 
   async function capabilities() {
+    if (owner.closed) return closedResult({ canDelete: false });
     if (!enabled) return { canDelete: false };
     try {
-      const current = await getConnection();
-      const response = await current.listTools();
+      const response = await owner.listTools();
+      owner.assertOpen();
       return { canDelete: (response?.tools ?? []).some(validDeleteTool) };
     } catch {
-      return { canDelete: false };
+      return owner.closed ? closedResult({ canDelete: false }) : { canDelete: false };
     }
   }
 
   async function remove(id) {
+    if (owner.closed) return closedResult();
     if (!enabled) return { ok: false, code: "OPENBRAIN_NO_ENDPOINT" };
     if (typeof id !== "string" || !id) return { ok: false, code: "NOT_FOUND" };
     const available = await capabilities();
+    if (owner.closed) return closedResult();
     if (!available.canDelete) return { ok: false, code: "NOT_SUPPORTED" };
     try {
-      const current = await getConnection();
-      const response = await current.listTools();
+      const response = await owner.listTools();
       const tool = (response?.tools ?? []).find(validDeleteTool);
       if (!tool) return { ok: false, code: "NOT_SUPPORTED" };
-      const result = await current.callTool({ name: tool.name, arguments: { id } });
+      const result = await owner.callTool(tool.name, { id });
+      owner.assertOpen();
       const normalized = toolResult(result);
       if (result?.isError || normalized?.ok === false) {
         return { ok: false, code: normalized?.code === "NOT_FOUND" ? "NOT_FOUND" : "OPENBRAIN_DELETE_FAILED" };
       }
       return { ok: true };
     } catch (error) {
+      if (owner.closed) return closedResult();
       return { ok: false, code: publicErrorCode(error, "OPENBRAIN_UNREACHABLE") };
     }
   }
@@ -331,17 +447,14 @@ export function createDirectClient({
         code: publicErrorCode(error, "MEMORY_STATE_FAILED"),
       });
     }
-    if (!enabled) {
-      return {
-        enabled: false, reachable: false, canDelete: false,
-        pending: queueCounts.pending, deadLetters: queueCounts.deadLetters,
-      };
-    }
+    const inactive = { enabled, reachable: false, canDelete: false, ...queueCounts };
+    if (owner.closed) return closedResult(inactive);
+    if (!enabled) return inactive;
     let reachable = false;
     try {
-      const current = await getConnection();
+      const current = await owner.getConnection();
       if (typeof current.listTools === "function") {
-        await current.listTools();
+        await owner.run(() => current.listTools());
         reachable = true;
       }
     } catch {
@@ -353,6 +466,7 @@ export function createDirectClient({
     } catch {
       canDelete = false;
     }
+    if (owner.closed) return closedResult(inactive);
     return {
       enabled: true,
       reachable,
@@ -362,11 +476,14 @@ export function createDirectClient({
     };
   }
 
-  async function close() {
-    const active = connection;
-    connection = null;
-    connectPromise = null;
-    if (active?.close) await active.close();
+  function close() {
+    if (closePromise) return closePromise;
+    const activeDrain = drainPromise;
+    const releasing = owner.close();
+    closePromise = Promise.allSettled([releasing, activeDrain]).then(([released]) => {
+      if (released.status === "rejected") throw released.reason;
+    });
+    return closePromise;
   }
 
   return {

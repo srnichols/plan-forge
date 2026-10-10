@@ -1,12 +1,13 @@
-import { lstat, mkdir, mkdtemp, readFile, rm, symlink, writeFile } from "node:fs/promises";
-import os from "node:os";
+import { lstat, mkdir, readFile, rm, symlink, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { applyCopySet, bootstrapWorktree, collectCopySet } from "../src/jobs/bootstrap.mjs";
+import { g1Directory } from "./g1-runner-fixture.mjs";
+import { createSecrets } from "../src/secrets.mjs";
 
 const dirs = [];
 async function fixture() {
-  const root = await mkdtemp(path.join(os.tmpdir(), "claw-bootstrap-"));
+  const root = await g1Directory("g1-bootstrap-");
   dirs.push(root);
   const homeRepo = path.join(root, "home-repo");
   const worktree = path.join(root, "worktree");
@@ -20,7 +21,7 @@ async function fixture() {
     calls.push({ command, args, options });
     return { code: 0, stdout: "ready", stderr: "" };
   };
-  const secrets = { get: (name) => name === "TOKEN" ? "canary-secret" : null, redact: (value) => value.replaceAll("canary-secret", "«redacted:TOKEN»") };
+  const secrets = await createSecrets({ env: { TOKEN: "canary-secret" }, trackNames: ["TOKEN"] });
   return { root, homeRepo, worktree, calls, runner, secrets };
 }
 
@@ -161,5 +162,44 @@ describe("worktree bootstrap", () => {
     });
     expect(failed).toMatchObject({ ok: false, reason: "bootstrap", code: "BOOTSTRAP_SMITH_FAILED" });
     expect(JSON.stringify(failed)).not.toContain("canary-secret");
+  });
+
+  it("uses per-project bootstrap copy, environment and install before root defaults", async () => {
+    const f = await fixture();
+    await writeFile(path.join(f.homeRepo, "project-config.json"), "{}");
+    const result = await bootstrapWorktree({
+      job: { id: "j1", projectId: "p1" }, worktree: f.worktree, homeRepo: f.homeRepo,
+      config: {
+        bootstrap: { copy: ["missing-root-file"], env: ["MISSING_ROOT_KEY"], install: "ci" },
+        projects: [{ id: "p1", bootstrap: { copy: ["project-config.json"], env: ["TOKEN"], install: "none" } }],
+        runtimes: { pforgeCommand: [process.execPath, "fake"] },
+      },
+      env: { PATH: process.env.PATH }, secrets: f.secrets, runner: f.runner,
+    });
+    expect(result.ok).toBe(true);
+    expect(await readFile(path.join(f.worktree, "project-config.json"), "utf8")).toBe("{}");
+    expect(f.calls).toHaveLength(1);
+    expect(f.calls[0].options.env.TOKEN).toBe("canary-secret");
+    expect(f.calls[0].args.at(-1)).toBe("smith");
+  });
+
+  it.each(["project", "lane", "default"])("resolves the configured %s BYOK alias before bootstrap", async (source) => {
+    const f = await fixture();
+    const config = {
+      projects: [{ id: "p1", ...(source === "project" ? { runtime: "byok:openai" } : {}) }],
+      lanes: [{ id: "execution-host", ...(source === "lane" ? { runtime: "byok:openai" } : {}) }],
+      runtimes: {
+        default: source === "default" ? "byok:openai" : "copilot-sdk",
+        byok: { openai: { keySecret: "MISSING_PROVIDER_KEY", endpoint: "https://provider.example.test" } },
+        pforgeCommand: [process.execPath, "fake"],
+      },
+      bootstrap: { copy: [], env: [], install: "none" },
+    };
+    const result = await bootstrapWorktree({
+      job: { id: "j1", projectId: "p1", lane: "execution-host" },
+      worktree: f.worktree, homeRepo: f.homeRepo, config, env: {}, secrets: f.secrets, runner: f.runner,
+    });
+    expect(result).toMatchObject({ ok: false, code: "BYOK_KEY_MISSING" });
+    expect(f.calls).toEqual([]);
   });
 });

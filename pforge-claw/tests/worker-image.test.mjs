@@ -45,7 +45,7 @@ function executableExists(executable) {
 }
 
 function makeTemporaryDirectory() {
-  const directory = mkdtempSync(path.join(os.tmpdir(), "claw-worker-image-"));
+  const directory = mkdtempSync(path.join(__dirname, ".claw-worker-image-"));
   tempDirectories.push(directory);
   return directory;
 }
@@ -86,6 +86,15 @@ describe("worker base image", () => {
     });
     expect(instructions.filter(({ instr }) => instr === "EXPOSE")).toHaveLength(0);
     expect(instructions.some(({ instr, args }) => instr === "LABEL" && /io\.pforge\.claw\.d4=/.test(args))).toBe(true);
+  });
+
+  it("ships the job-local Git environment entrypoint instead of relying on host Git configuration", () => {
+    expect(instructions.some(({ instr, args }) => instr === "COPY"
+      && args.includes("deploy/worker-entrypoint.mjs"))).toBe(true);
+    expect(BASE_DOCKERFILE).toContain("/app/deploy/worker-entrypoint.mjs");
+    expect(BASE_DOCKERFILE).not.toMatch(/git\s+config\s+--(?:global|system)/);
+    expect(BASE_DOCKERFILE).toContain("PFORGE_CLAW_HOME=/work/claw");
+    expect(BASE_DOCKERFILE).toContain("HOME=/work/home");
   });
 });
 

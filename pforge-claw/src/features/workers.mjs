@@ -40,7 +40,7 @@ async function start(ctx) {
       port: ctx.config.http?.port ?? 3190,
     });
     state.closeables.push(() => http.close());
-    const registry = createWorkerRegistry({ signLease: ({ worker, grant }) => {
+    const registry = createWorkerRegistry({ requireL2: true, signLease: ({ worker, grant }) => {
       const subject = worker.jobScope ? `job:${worker.jobScope.jobId}` : worker.id;
       const key = worker.jobScope ? jobKeyFor(worker.laneId, worker.jobScope.jobId)
         : ctx.secrets.get(`PFORGE_CLAW_WORKER_SECRET__${worker.id}`);
@@ -52,6 +52,8 @@ async function start(ctx) {
     const enrollment = createEnrollment({
       store: ctx.store,
       secretFile: path.join(ctx.home, "secrets.json"),
+      secrets: ctx.secrets,
+      onRevoke: (workerId) => registry.revoke(workerId),
     });
     const server = createWorkerServer({
       registry,

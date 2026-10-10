@@ -1,6 +1,7 @@
 import { JOBS_STREAM, reduceJobs } from "./jobs/model.mjs";
 
 const MAX_SNAPSHOT_BYTES = 4096;
+const ISO_DATE_LENGTH = 10;
 const SENSITIVE_KEY = /secret|token|message|content|api.?key|credential/i;
 
 function projectRecord(record, projectId) {
@@ -45,7 +46,7 @@ function countSessions(records) {
 }
 
 function spendForToday(records) {
-  const today = new Date().toISOString().slice(0, 10);
+  const today = new Date().toISOString().slice(0, ISO_DATE_LENGTH);
   const todayRecords = records.filter((record) => String(record.ts ?? "").startsWith(today));
   if (todayRecords.length === 0) return null;
   const costs = todayRecords.map(({ usage }) => usage?.costUsd ?? usage?.usd ?? usage?.cost)
@@ -84,19 +85,8 @@ function trimSnapshot(snapshot) {
   return snapshot;
 }
 
-export function buildClawSnapshot(ctx, { project, features = ctx?.features ?? [] } = {}) {
-  const store = ctx?.store;
-  const redact = ctx?.secrets?.redact ?? ((value) => value);
-  const projectId = project?.id;
-  const sessions = readRecords(store, "sessions", project);
-  const jobEvents = readRecords(store, JOBS_STREAM, null);
-  const approvals = readRecords(store, "approvals", project);
-  const budget = readRecords(store, "budget", project);
-  const jobs = jobEvents.available
-    ? Object.values(jobEvents.records.reduce(reduceJobs, {}))
-      .filter((job) => String(job.projectId) === String(projectId))
-    : [];
-  const data = {
+function summarizeStateRecords({ sessions, jobEvents, approvals, budget, jobs }) {
+  return {
     sessions: sessions.available ? { available: true, count: countSessions(sessions.records) } : { available: false },
     queue: jobEvents.available
       ? {
@@ -113,15 +103,34 @@ export function buildClawSnapshot(ctx, { project, features = ctx?.features ?? []
     spendToday: budget.available ? spendForToday(budget.records) : null,
     features: {},
   };
+}
+
+function mergeFeatureSnapshots(ctx, { project, features, redact, target }) {
   for (const feature of features) {
     if (!feature?.available || typeof feature.snapshot !== "function") continue;
     try {
       const result = feature.snapshot(ctx, { project });
-      if (result !== null && result !== undefined) data.features[feature.name] = safeValue(result, redact);
+      if (result !== null && result !== undefined) target[feature.name] = safeValue(result, redact);
     } catch {
-      data.features[feature.name] = { available: false };
+      target[feature.name] = { available: false };
     }
   }
+}
+
+export function buildClawSnapshot(ctx, { project, features = ctx?.features ?? [] } = {}) {
+  const store = ctx?.store;
+  const redact = ctx?.secrets?.redact ?? ((value) => value);
+  const projectId = project?.id;
+  const sessions = readRecords(store, "sessions", project);
+  const jobEvents = readRecords(store, JOBS_STREAM, null);
+  const approvals = readRecords(store, "approvals", project);
+  const budget = readRecords(store, "budget", project);
+  const jobs = jobEvents.available
+    ? Object.values(jobEvents.records.reduce(reduceJobs, {}))
+      .filter((job) => String(job.projectId) === String(projectId))
+    : [];
+  const data = summarizeStateRecords({ sessions, jobEvents, approvals, budget, jobs });
+  mergeFeatureSnapshots(ctx, { project, features, redact, target: data.features });
   return trimSnapshot({
     kind: "pforge-claw-state",
     v: 1,

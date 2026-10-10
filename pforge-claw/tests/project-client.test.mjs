@@ -1,14 +1,14 @@
 import { EventEmitter } from "node:events";
-import { mkdtemp, mkdir, rm, writeFile } from "node:fs/promises";
-import os from "node:os";
+import { mkdir, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { buildLaunch, connectProject, createProjectClients, isMasterStub, probeForgeMaster } from "../src/mcp/project-client.mjs";
+import { g1Directory } from "./g1-runner-fixture.mjs";
 
 const directories = [];
 
 async function projectDirectory() {
-  const directory = await mkdtemp(path.join(os.tmpdir(), "claw-mcp-client-"));
+  const directory = await g1Directory("g1-project-client-");
   directories.push(directory);
   await mkdir(path.join(directory, ".vscode"), { recursive: true });
   return directory;
@@ -21,6 +21,10 @@ function project(id, repoPath = `C:\\projects\\${id}`) {
 function clientRegistry(projects) {
   const byId = new Map(projects.map((item) => [item.id, item]));
   return { byId: (id) => byId.get(id) };
+}
+
+function localConfig(options = {}) {
+  return { lanes: [{ id: "local", kind: "local", enabled: true }], ...options };
 }
 
 function deferred() {
@@ -47,7 +51,7 @@ describe("project MCP client", () => {
         },
       },
     }));
-    const launch = await buildLaunch(project("p1", repoPath), { mcp: { idleMinutes: 3 } }, {
+    const launch = await buildLaunch(project("p1", repoPath), localConfig({ mcp: { idleMinutes: 3 } }), {
       env: { PATH: "fake-path", PF_TEST_HOME: "expanded-home" },
       which: async () => true,
     });
@@ -64,7 +68,7 @@ describe("project MCP client", () => {
     expect(launch.env.MCP_HOME).toBe("expanded-home");
     expect(launch.env.PFORGE_TOOL_PROFILE).toBe("full");
 
-    const override = await buildLaunch(project("p1", repoPath), { mcp: { toolProfile: "core" } }, {
+    const override = await buildLaunch(project("p1", repoPath), localConfig({ mcp: { toolProfile: "core" } }), {
       env: { PATH: "fake-path", PF_TEST_HOME: "expanded-home" },
       which: async () => true,
     });
@@ -72,9 +76,9 @@ describe("project MCP client", () => {
   });
 
   it("rejects a remote lane and propagates resolver failures", async () => {
-    await expect(buildLaunch({ ...project("remote"), homeLane: "cluster" }, {}))
+    await expect(buildLaunch({ ...project("remote"), homeLane: "cluster" }, { lanes: [{ id: "cluster", kind: "remote" }] }))
       .rejects.toMatchObject({ code: "HOME_LANE_REMOTE" });
-    await expect(buildLaunch(project("p1"), {}, {
+    await expect(buildLaunch(project("p1"), localConfig(), {
       registry: { resolveMcpLaunch: async () => ({ ok: false, code: "MCP_UNRESOLVED_VAR", hint: "Set X." }) },
     })).rejects.toMatchObject({ code: "MCP_UNRESOLVED_VAR", details: { hint: "Set X." } });
   });
@@ -84,7 +88,7 @@ describe("project MCP client", () => {
     const gate = deferred();
     const connected = [];
     const manager = createProjectClients({
-      config: {},
+      config: localConfig(),
       registry: clientRegistry(projects),
       resolveLaunch: async (target) => ({ command: target.id }),
       connect: async (launch) => {
@@ -107,7 +111,7 @@ describe("project MCP client", () => {
     vi.useFakeTimers();
     const connected = [];
     const manager = createProjectClients({
-      config: { mcp: { idleMinutes: 0.001 } },
+      config: localConfig({ mcp: { idleMinutes: 0.001 } }),
       registry: clientRegistry([project("p1")]),
       resolveLaunch: async () => ({}),
       connect: async () => {
@@ -127,7 +131,7 @@ describe("project MCP client", () => {
   it("never spawns a project MCP process after closeAll (shutdown race with late callers)", async () => {
     const connected = [];
     const manager = createProjectClients({
-      config: {},
+      config: localConfig(),
       registry: clientRegistry([project("p1"), project("p2")]),
       resolveLaunch: async (target) => ({ command: target.id }),
       connect: async (launch) => {
@@ -150,7 +154,7 @@ describe("project MCP client", () => {
     const gate = deferred();
     const client = { call: () => gate.promise, close: vi.fn() };
     const manager = createProjectClients({
-      config: { mcp: { idleMinutes: 0.001 } },
+      config: localConfig({ mcp: { idleMinutes: 0.001 } }),
       registry: clientRegistry([project("p1")]),
       resolveLaunch: async () => ({}),
       connect: async () => client,
@@ -192,7 +196,7 @@ describe("project MCP client", () => {
   it("retries after a failed connection and reports Forge-Master probe results", async () => {
     let attempts = 0;
     const manager = createProjectClients({
-      config: {},
+      config: localConfig(),
       registry: clientRegistry([project("p1")]),
       resolveLaunch: async () => ({}),
       connect: async () => {

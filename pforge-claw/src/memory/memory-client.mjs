@@ -1,6 +1,10 @@
 import { randomUUID } from "node:crypto";
+import { ClawError } from "../errors.mjs";
+import { ROLES } from "../enums.mjs";
+import { captureErrorCode } from "../capture-policy.mjs";
 
 export const MEMORY_ORIGINS = Object.freeze(["trusted", "untrusted"]);
+export const MEMORY_TYPES = Object.freeze(["decision", "lesson", "convention", "pattern", "gotcha"]);
 export const MEMORY_STREAMS = Object.freeze({
   local: "memory-local",
   pending: "memory-pending",
@@ -25,27 +29,18 @@ function registryProject(registry, projectId, config) {
     ?? (config?.projects ?? []).find((project) => String(project.id) === String(projectId));
 }
 
-function normalizeToolResult(result) {
-  if (result?.structuredContent !== undefined) {
-    const structured = result.structuredContent;
-    if (typeof structured === "string") {
-      try {
-        return JSON.parse(structured);
-      } catch {
-        return { text: structured };
-      }
-    }
-    return structured;
-  }
-  const text = result?.content?.find((entry) => entry?.type === "text")?.text;
-  if (typeof text === "string") {
+/** @param {unknown} result @returns {Record<string, unknown>} */
+export function normalizeToolResult(result) {
+  const contentText = result?.content?.find((entry) => entry?.type === "text")?.text;
+  let payload = result?.structuredContent ?? contentText ?? result;
+  if (typeof payload === "string") {
     try {
-      return JSON.parse(text);
+      payload = JSON.parse(payload);
     } catch {
-      return { text };
+      return { text: payload };
     }
   }
-  return result && typeof result === "object" ? result : {};
+  return payload && typeof payload === "object" && !Array.isArray(payload) ? payload : {};
 }
 
 function latestById(state, record) {
@@ -85,7 +80,7 @@ export function buildCreatedBy(config, { userId, role } = {}) {
   if (typeof alias === "string" && /^[a-z][a-z0-9-]{0,31}$/.test(alias) && alias !== callerId) {
     return `pforge-claw:${alias}`;
   }
-  return `pforge-claw:${role ?? "unknown"}`;
+  return `pforge-claw:${ROLES.includes(role) ? role : "unknown"}`;
 }
 
 export function isL3Off(project) {
@@ -98,6 +93,17 @@ export function isCrossProjectReadable(project) {
   return Boolean(project) && project.visibility !== "restricted" && !isL3Off(project);
 }
 
+function redactIdentifiers(text, config) {
+  let sanitized = text;
+  for (const entry of config?.allowlist ?? []) {
+    for (const field of ["userId", "username", "name", "displayName"]) {
+      const identifier = String(entry?.[field] ?? "");
+      if (identifier) sanitized = sanitized.split(identifier).join("«redacted:user-id»");
+    }
+  }
+  return sanitized;
+}
+
 export function sanitizeRecord({ config, secrets, text } = {}) {
   let sanitized = typeof secrets?.redact === "function"
     ? secrets.redact(String(text ?? ""))
@@ -107,21 +113,73 @@ export function sanitizeRecord({ config, secrets, text } = {}) {
     .replace(PHONE_RE, "«redacted:phone»")
     .replace(IPV4_RE, "«redacted:ip»")
     .replace(USER_ID_RE, "«redacted:user-id»");
-  for (const entry of config?.allowlist ?? []) {
-    const id = String(entry?.userId ?? "");
-    if (id) sanitized = sanitized.split(id).join("«redacted:user-id»");
-  }
-  return sanitized.slice(0, MAX_CONTENT);
+  return redactIdentifiers(sanitized, config).slice(0, MAX_CONTENT);
 }
 
 export function normalizeTags(tags, origin = "trusted") {
   const values = Array.isArray(tags) ? tags : [];
   const normalized = values
     .filter((tag) => typeof tag === "string")
-    .map((tag) => tag.toLowerCase().replace(/[^a-z0-9:_-]/g, "").slice(0, MAX_TAG_LEN))
+    .map((tag) => tag.toLowerCase().replace(/[^a-z0-9:-]/g, "").slice(0, MAX_TAG_LEN))
     .filter((tag) => tag && tag !== "pforge-claw" && tag !== "untrusted");
   const mandatory = origin === "untrusted" ? ["pforge-claw", "untrusted"] : ["pforge-claw"];
   return [...new Set(normalized)].slice(0, MAX_TAGS - mandatory.length).concat(mandatory);
+}
+
+function isToolFailure(raw, normalized) {
+  return raw?.isError || raw?.error || normalized?.ok === false || normalized?.error;
+}
+
+function firstErrorCode(raw, normalized) {
+  for (const code of [normalized?.code, raw?.code, normalized?.error, raw?.error]) {
+    const safe = captureErrorCode({ code }, null);
+    if (safe) return safe;
+  }
+  return "MCP_TOOL_ERROR";
+}
+
+/** @param {unknown} raw @param {Record<string, unknown>} normalized @returns {string|null} */
+export function toolFailureCode(raw, normalized) {
+  return isToolFailure(raw, normalized) ? firstErrorCode(raw, normalized) : null;
+}
+
+function capturePayload({ config, secrets, project, projectId, input }) {
+  const sanitize = (text) => sanitizeRecord({ config, secrets, text });
+  const origin = input.origin ?? MEMORY_ORIGINS[0];
+  return {
+    content: sanitize(input.content),
+    type: input.type ?? "lesson",
+    project: projectId,
+    source: buildSource({
+      instanceId: sanitize(config.instanceId ?? "unknown"),
+      lane: sanitize(input.lane ?? "unknown"),
+      ref: sanitize(input.ref ?? "unknown"),
+    }),
+    created_by: buildCreatedBy(config, input.caller),
+    origin,
+    tags: normalizeTags((Array.isArray(input.tags) ? input.tags : [])
+      .filter((tag) => typeof tag === "string").map(sanitize), origin),
+    visibility: project.visibility === "restricted" ? "restricted" : "normal",
+  };
+}
+
+function isPendingCapture(saved) {
+  return saved?.queued === true || saved?.pending === true
+    || saved?.status === "queued" || saved?.status === "pending";
+}
+
+function sharedCaptureReceipt(saved) {
+  const receipt = {};
+  for (const key of ["id", "url", "text", "message"]) {
+    if (typeof saved?.[key] === "string" && saved[key]) receipt[key] = saved[key];
+  }
+  if (isPendingCapture(saved)) {
+    return { ok: false, code: "MEMORY_PENDING", stored: "project-mcp", ...receipt };
+  }
+  if (saved?.ok !== true && !receipt.id && !receipt.url) {
+    return { ok: false, code: "MEMORY_CAPTURE_UNCONFIRMED", ...receipt };
+  }
+  return { ok: true, stored: "project-mcp", ...receipt };
 }
 
 export function createMemoryClient({
@@ -139,76 +197,61 @@ export function createMemoryClient({
   }
 
   async function callProject(projectId, toolName, args) {
-    if (!mcp || typeof mcp.call !== "function") throw new Error("MCP_UNAVAILABLE");
+    if (!mcp || typeof mcp.call !== "function") throw new ClawError("MCP_UNAVAILABLE");
     const result = await mcp.call(projectId, toolName, args);
     const normalized = normalizeToolResult(result);
-    if (result?.isError || normalized?.ok === false || normalized?.error) {
-      throw new Error("MCP_TOOL_FAILED");
-    }
+    const code = toolFailureCode(result, normalized);
+    if (code) throw new ClawError(code);
     return normalized;
   }
 
-  async function capture(projectId, {
-    content,
-    type,
-    origin = "trusted",
-    tags,
-    lane,
-    ref,
-    caller = {},
-  } = {}) {
-    const project = projectFor(projectId);
-    const validOrigin = MEMORY_ORIGINS.includes(origin) ? origin : "trusted";
-    const payload = {
-      content: sanitizeRecord({ config, secrets, text: content }),
-      type: String(type ?? "lesson"),
-      project: projectId,
-      source: buildSource({ instanceId: config.instanceId, lane, ref }),
-      created_by: buildCreatedBy(config, caller),
-      origin: validOrigin,
-      tags: normalizeTags(tags, validOrigin),
-      visibility: project?.visibility === "restricted" ? "restricted" : "normal",
-    };
-    const id = String(idFactory());
+  function appendMemory({ projectId, payload, stream, status, localOnly = false }) {
+    store.append(stream, {
+      v: 1, id: String(idFactory()), projectId, payload,
+      ...(localOnly ? { localOnly: true } : {}),
+      _status: status, at: now(),
+    });
+  }
 
-    if (isL3Off(project)) {
-      try {
-        store.append(MEMORY_STREAMS.local, {
-          v: 1,
-          id,
-          projectId,
-          payload,
-          localOnly: true,
-          _status: "local",
-          at: now(),
-        });
-        return { ok: true, stored: "claw-state", l3: false };
-      } catch (error) {
-        logger?.warn?.("Local memory could not be stored", { code: error?.code ?? "MEMORY_STATE_FAILED" });
-        return { ok: false, code: "MEMORY_STATE_FAILED" };
-      }
-    }
-
+  function localCapture(projectId, payload) {
     try {
-      await callProject(projectId, "forge_memory_capture", payload);
-      return { ok: true, stored: "project-mcp" };
+      appendMemory({ projectId, payload, stream: MEMORY_STREAMS.local, status: "local", localOnly: true });
+      return { ok: true, stored: "claw-state", l3: false };
     } catch (error) {
-      try {
-        store.append(MEMORY_STREAMS.pending, {
-          v: 1,
-          id,
-          projectId,
-          payload,
-          _status: "pending",
-          at: now(),
-        });
-        return { ok: false, code: "MEMORY_PENDING" };
-      } catch (storeError) {
-        logger?.warn?.("Pending memory could not be stored", {
-          code: storeError?.code ?? "MEMORY_STATE_FAILED",
-        });
-        return { ok: false, code: "MEMORY_STATE_FAILED" };
-      }
+      logger?.warn?.("Local memory could not be stored", { code: captureErrorCode(error, "MEMORY_STATE_FAILED") });
+      return { ok: false, code: "MEMORY_STATE_FAILED" };
+    }
+  }
+
+  function queueCapture(projectId, payload, error) {
+    try {
+      appendMemory({ projectId, payload, stream: MEMORY_STREAMS.pending, status: "pending" });
+      const errorCode = captureErrorCode(error, null);
+      return { ok: false, code: "MEMORY_PENDING", ...(errorCode ? { errorCode } : {}) };
+    } catch (storeError) {
+      logger?.warn?.("Pending memory could not be stored", {
+        code: captureErrorCode(storeError, "MEMORY_STATE_FAILED"),
+      });
+      return { ok: false, code: "MEMORY_STATE_FAILED" };
+    }
+  }
+
+  async function capture(projectId, input = {}) {
+    const project = projectFor(projectId);
+    if (!project) return { ok: false, code: "MEMORY_PROJECT_UNAVAILABLE" };
+    if (!MEMORY_ORIGINS.includes(input.origin ?? MEMORY_ORIGINS[0])) {
+      return { ok: false, code: "MEMORY_ORIGIN_INVALID" };
+    }
+    if (!MEMORY_TYPES.includes(input.type ?? "lesson") || typeof input.content !== "string") {
+      return { ok: false, code: "MEMORY_CONTENT_INVALID" };
+    }
+    const payload = capturePayload({ config, secrets, project, projectId, input });
+    if (!payload.content.trim()) return { ok: false, code: "MEMORY_CONTENT_INVALID" };
+    if (isL3Off(project)) return localCapture(projectId, payload);
+    try {
+      return sharedCaptureReceipt(await callProject(projectId, "forge_memory_capture", payload));
+    } catch (error) {
+      return queueCapture(projectId, payload, error);
     }
   }
 

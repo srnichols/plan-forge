@@ -1,16 +1,23 @@
 import { existsSync } from "node:fs";
-import { mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
-import os from "node:os";
+import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import { EventEmitter } from "node:events";
 import path from "node:path";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { ClawError } from "../src/errors.mjs";
 import { addWorktree, assertInside, isInside, removeWorktree, resolveCommand, resolveGhCommand, resolvePforgeCommand, run, sweepWorktrees } from "../src/jobs/worktree.mjs";
 import { createStore } from "../src/state/store.mjs";
 import { JOBS_STREAM, createJob, transition } from "../src/jobs/model.mjs";
+import { g1Directory } from "./g1-runner-fixture.mjs";
+
+const spawn = vi.hoisted(() => vi.fn());
+vi.mock("node:child_process", async (original) => {
+  const actual = await original();
+  return { ...actual, spawn: (...args) => spawn.getMockImplementation() ? spawn(...args) : actual.spawn(...args) };
+});
 
 const dirs = [];
 async function tempDir() {
-  const dir = await mkdtemp(path.join(os.tmpdir(), "claw-worktree-"));
+  const dir = await g1Directory("g1-worktree-");
   dirs.push(dir);
   return dir;
 }
@@ -22,6 +29,8 @@ async function git(cwd, args) {
 }
 
 afterEach(async () => {
+  spawn.mockReset();
+  vi.useRealTimers();
   await Promise.all(dirs.splice(0).map((dir) => rm(dir, { recursive: true, force: true })));
 });
 
@@ -56,10 +65,10 @@ describe("worktree helpers", () => {
     expect(await removeWorktree({ repoPath: repo, path: created.path, runner })).toEqual({ ok: true });
   });
 
-  it.each(["../x", path.resolve(os.tmpdir(), "escape"), "a/b"])("rejects unsafe job id %s", async (id) => {
+  it.each(["../x", path.resolve("tests", ".g1-fixtures", "escape"), "a/b"])("rejects unsafe job id %s", async (id) => {
     await expect(addWorktree({
-      home: os.tmpdir(),
-      project: { id: "p1", repo: { path: os.tmpdir() } },
+      home: path.resolve("tests", ".g1-fixtures"),
+      project: { id: "p1", repo: { path: path.resolve("tests", ".g1-fixtures") } },
       job: { id },
     })).rejects.toMatchObject({ code: "WORKTREE_BAD_IDENTIFIER" });
   });
@@ -111,6 +120,15 @@ describe("worktree helpers", () => {
     })).toThrowError(expect.objectContaining({ code: "COMMAND_NOT_FOUND" }));
   });
 
+  it("resolves detached Windows Path and PathExt keys without mutating the environment", () => {
+    const env = { Path: "C:\\tools", PathExt: ".exe;.cmd" };
+    const before = { ...env };
+    expect(resolveCommand("git", {
+      platform: "win32", env, exists: (candidate) => candidate === path.win32.join("C:\\tools", "git.exe"),
+    })).toEqual([path.win32.join("C:\\tools", "git.exe")]);
+    expect(env).toEqual(before);
+  });
+
   it("validates ghCommand configuration without allowing command shims", () => {
     expect(resolveGhCommand({ config: {} })).toEqual(["gh"]);
     expect(resolveGhCommand({ config: { runtimes: { ghCommand: [process.execPath, "gh.mjs"] } } }))
@@ -155,5 +173,71 @@ describe("worktree helpers", () => {
     });
     expect(removed).toEqual([failedPath]);
     expect((await readFile(path.join(runningPath, ".claw-job.json"), "utf8"))).toContain("running");
+  });
+
+  it("awaits child termination after abort instead of treating its early error as cleanup proof", async () => {
+    const child = new EventEmitter();
+    child.pid = 101;
+    child.stdout = new EventEmitter();
+    child.stderr = new EventEmitter();
+    child.kill = vi.fn(() => {
+      child.emit("error", Object.assign(new Error("aborted"), { code: "ABORT_ERR" }));
+      return true;
+    });
+    spawn.mockReturnValue(child);
+    const controller = new AbortController();
+    let settled = false;
+    const pending = run(process.execPath, ["fixture-command"], { signal: controller.signal })
+      .then((completed) => { settled = true; return completed; });
+    controller.abort();
+    await Promise.resolve();
+    expect(settled).toBe(false);
+    child.emit("close", null);
+    expect((await pending).code).toBe(-1);
+    expect(child.kill).toHaveBeenCalledOnce();
+  });
+
+  it("awaits timeout termination before returning COMMAND_TIMEOUT", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(0);
+    const child = new EventEmitter();
+    child.pid = 102;
+    child.stdout = new EventEmitter();
+    child.stderr = new EventEmitter();
+    child.kill = vi.fn(() => true);
+    spawn.mockReturnValue(child);
+    let settled = false;
+    const pending = run(process.execPath, ["fixture-command"], { timeoutMs: 1000 })
+      .then((completed) => { settled = true; return completed; });
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(settled).toBe(false);
+    child.emit("close", null);
+    expect(await pending).toMatchObject({ code: -1, error: { code: "COMMAND_TIMEOUT" } });
+  });
+
+  it("never sweeps the only undelivered canonical-history copy even after retention expires", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(0);
+    const root = await tempDir();
+    const home = path.join(root, "home");
+    const pendingPath = path.join(home, "worktrees", "p1", "pending-history");
+    await mkdir(path.join(pendingPath, ".forge"), { recursive: true });
+    await writeFile(path.join(pendingPath, ".claw-job.json"), JSON.stringify({
+      jobId: "pending-history", projectId: "p1", l2Pending: true,
+    }));
+    await writeFile(path.join(pendingPath, ".forge", "openbrain-queue.jsonl"), '{"id":"sole-copy"}\n');
+    const store = createStore(path.join(root, "state"));
+    const created = createJob({ id: "pending-history", type: "task", projectId: "p1" });
+    store.append(JOBS_STREAM, created.event);
+    let job = created.job;
+    for (const state of ["awaiting-approval", "approved", "leased", "running", "cancelled"]) {
+      const updated = transition(job, state);
+      store.append(JOBS_STREAM, updated.event);
+      job = updated.job;
+    }
+    const runner = vi.fn(async () => ({ code: 0 }));
+    expect(await sweepWorktrees({ home, store, runner, now: () => 10 * 24 * 60 * 60 * 1000, keepHours: 1 })).toEqual([]);
+    expect(runner).not.toHaveBeenCalled();
+    expect(await readFile(path.join(pendingPath, ".forge", "openbrain-queue.jsonl"), "utf8")).toContain("sole-copy");
   });
 });

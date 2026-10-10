@@ -36,6 +36,20 @@ describe("Telegram client", () => {
     });
   });
 
+  it("keeps explicit chat and chat_member command scopes separate from the default", async () => {
+    const fetchImpl = vi.fn(async () => jsonResponse(200, { ok: true, result: true }));
+    const client = createTelegramClient({ getToken: () => TOKEN, fetchImpl });
+    const commands = [{ command: "ask", description: "Ask" }];
+    await client.setMyCommands(commands, { scope: { type: "chat", chat_id: "-42" } });
+    await client.setMyCommands(commands, { scope: { type: "chat_member", chat_id: "-42", user_id: "9" } });
+    await client.setMyCommands(commands);
+    expect(fetchImpl.mock.calls.map(([_url, options]) => JSON.parse(options.body))).toEqual([
+      { commands, scope: { type: "chat", chat_id: "-42" } },
+      { commands, scope: { type: "chat_member", chat_id: "-42", user_id: "9" } },
+      { commands },
+    ]);
+  });
+
   it("retries 429 responses after their bounded delay", async () => {
     vi.useFakeTimers();
     const fetchImpl = vi.fn()
@@ -65,6 +79,17 @@ describe("Telegram client", () => {
     await vi.advanceTimersByTimeAsync(60_000);
     await rejected;
     expect(fetchImpl).toHaveBeenCalledTimes(2);
+  });
+
+  it("preserves immediate retry exhaustion for a non-comparable retry budget", async () => {
+    const fetchImpl = vi.fn(async () => jsonResponse(429, { ok: false, parameters: { retry_after: 1 } }));
+    const sleep = vi.fn(async () => { throw new Error("unexpected retry"); });
+    const client = createTelegramClient({ getToken: () => TOKEN, fetchImpl, sleep, maxRetries: NaN });
+    await expect(client.getMe()).rejects.toMatchObject({
+      code: "TELEGRAM_RATE_LIMITED", details: { retryAfterMs: 1000 },
+    });
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
+    expect(sleep).not.toHaveBeenCalled();
   });
 
   it("does not retry unauthorized responses and requires the token before fetching", async () => {
@@ -111,6 +136,71 @@ describe("Telegram client", () => {
       code: "TELEGRAM_FILE_TOO_LARGE",
     });
   });
+
+  it.each([-1, Infinity, NaN, 1.5, 20 * 1024 * 1024 + 1, "2", null])(
+    "rejects an invalid download byte bound %s before any fetch",
+    async (maxBytes) => {
+      const fetchImpl = vi.fn(async () => jsonResponse(200, { ok: true, result: {} }));
+      const client = createTelegramClient({ getToken: () => TOKEN, fetchImpl });
+      await expect(client.downloadFile("f1", { maxBytes })).rejects.toMatchObject({
+        code: "TELEGRAM_FILE_LIMIT_INVALID",
+      });
+      expect(fetchImpl).not.toHaveBeenCalled();
+    },
+  );
+
+  it("rejects oversized declared files before downloading and allows an empty zero-bound file", async () => {
+    const oversized = vi.fn(async () => jsonResponse(200, {
+      ok: true, result: { file_path: "docs/a.bin", file_size: 3 },
+    }));
+    const client = createTelegramClient({ getToken: () => TOKEN, fetchImpl: oversized });
+    await expect(client.downloadFile("f1", { maxBytes: 2 })).rejects.toMatchObject({
+      code: "TELEGRAM_FILE_TOO_LARGE",
+    });
+    expect(oversized).toHaveBeenCalledTimes(1);
+
+    const empty = vi.fn()
+      .mockResolvedValueOnce(jsonResponse(200, { ok: true, result: { file_path: "docs/empty.bin", file_size: 0 } }))
+      .mockResolvedValueOnce(new Response(new Uint8Array()));
+    const zeroBound = createTelegramClient({ getToken: () => TOKEN, fetchImpl: empty });
+    await expect(zeroBound.downloadFile("empty", { maxBytes: 0 })).resolves.toEqual({
+      fileId: "empty", filePath: "docs/empty.bin", bytes: Buffer.alloc(0),
+    });
+  });
+
+  it("bounds non-streaming downloads and hides errors while consuming streamed bytes", async () => {
+    const fallback = vi.fn()
+      .mockResolvedValueOnce(jsonResponse(200, { ok: true, result: { file_path: "docs/a.bin" } }))
+      .mockResolvedValueOnce({ status: 200, ok: true, arrayBuffer: async () => new Uint8Array([1, 2, 3]).buffer });
+    const client = createTelegramClient({ getToken: () => TOKEN, fetchImpl: fallback });
+    await expect(client.downloadFile("f1", { maxBytes: 2 })).rejects.toMatchObject({
+      code: "TELEGRAM_FILE_TOO_LARGE",
+    });
+    const failingStream = new ReadableStream({
+      pull(controller) { controller.error(new Error(`stream leaked ${TOKEN}`)); },
+    });
+    const streamFetch = vi.fn()
+      .mockResolvedValueOnce(jsonResponse(200, { ok: true, result: { file_path: "docs/a.bin" } }))
+      .mockResolvedValueOnce(new Response(failingStream));
+    const streamClient = createTelegramClient({ getToken: () => TOKEN, fetchImpl: streamFetch });
+    try {
+      await streamClient.downloadFile("f1");
+      throw new Error("expected stream error");
+    } catch (error) {
+      expect(error.code).toBe("TELEGRAM_NETWORK");
+      expectTokenHidden(error);
+    }
+  });
+
+  it.each(["../secret", "/absolute", "https://example.test/file", "docs/%2e%2e/secret", ""])(
+    "rejects a malformed Telegram file path %s without a download",
+    async (filePath) => {
+      const fetchImpl = vi.fn(async () => jsonResponse(200, { ok: true, result: { file_path: filePath } }));
+      const client = createTelegramClient({ getToken: () => TOKEN, fetchImpl });
+      await expect(client.downloadFile("f1")).rejects.toMatchObject({ code: "TELEGRAM_FILE_PATH_INVALID" });
+      expect(fetchImpl).toHaveBeenCalledTimes(1);
+    },
+  );
 
   it("reads a rotated token for each method call and validates apiBase", async () => {
     const fetchImpl = vi.fn(async () => jsonResponse(200, { ok: true, result: true }));

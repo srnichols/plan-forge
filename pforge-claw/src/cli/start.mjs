@@ -14,6 +14,9 @@ import { createJobExecutor } from "../jobs/executor.mjs";
 import { createDispatcher } from "../dispatcher.mjs";
 import { getApprovalService } from "../approvals.mjs";
 import { getBudgetService } from "../budget.mjs";
+import workersFeature from "../features/workers.mjs";
+import { createL2Receiver } from "../protocol/l2-receiver.mjs";
+import { resolveForgeHome } from "../memory/l2-sync.mjs";
 
 const USAGE = "Usage: pforge claw start [--home <dir>]";
 
@@ -42,8 +45,7 @@ function cleanupAction(errors, operation) {
   };
 }
 
-export async function bootDispatcher(opts = {}) {
-  const home = opts.home ?? resolveHome({ env: opts.env ?? process.env });
+async function startupConfig(opts, home) {
   const load = opts.loadConfig ?? loadConfig;
   const loaded = opts.loadedConfig ?? await load({ home });
   const config = loaded.config;
@@ -60,6 +62,10 @@ export async function bootDispatcher(opts = {}) {
     const issue = validation.errors[0];
     throw new ClawError(issue.code, { hint: issue.hint });
   }
+  return config;
+}
+
+async function startupSecrets({ opts, config, home }) {
   const secrets = opts.secrets ?? await (opts.createSecrets ?? createSecrets)({
     env: opts.env ?? process.env,
     file: path.join(home, "secrets.json"),
@@ -72,6 +78,58 @@ export async function bootDispatcher(opts = {}) {
       });
     }
   }
+  return secrets;
+}
+
+function canonicalReceiver({ config, directory }) {
+  const registered = structuredClone(config);
+  const forward = createL2Receiver({ config: registered, currentLaneId: null, directory });
+  const local = new Map(registered.lanes.filter((lane) => lane.kind === "local").map((lane) => [
+    lane.id, createL2Receiver({ config: registered, currentLaneId: lane.id, directory }),
+  ]));
+  const projects = new Map(registered.projects.map((project) => [project.id, project]));
+  const receiverFor = (projectId) => {
+    const project = projects.get(projectId);
+    if (!project) return forward;
+    return local.get(resolveForgeHome({ project, config: registered }).laneId) ?? forward;
+  };
+  return {
+    receive: (transfer, options) => receiverFor(transfer?.projectId).receive(transfer, options),
+    read: (request, options) => receiverFor(request?.projectId).read(request, options),
+  };
+}
+
+function dispatcherContext({ opts, home, config, secrets, store, registry, projectRegistry, logger, clients, lanes, l2Receiver }) {
+  return {
+    home, config, secrets, store, registry, projectRegistry, logger,
+    bus: opts.bus ?? bus, mcp: clients, projectClients: clients, lanes, l2Receiver,
+    env: { ...(opts.env ?? process.env) },
+    ...(typeof opts.now === "function" ? { now: opts.now } : {}),
+    ...(opts.telegramTiming ? { telegramTiming: opts.telegramTiming } : {}),
+    ...(Number.isFinite(opts.schedulerTickMs) && opts.schedulerTickMs > 0 ? { schedulerTickMs: opts.schedulerTickMs } : {}),
+  };
+}
+
+function validateTelegramTiming(timing) {
+  if (timing !== undefined && (!timing || Array.isArray(timing)
+    || typeof timing.now !== "function" || typeof timing.sleep !== "function")) {
+    throw new ClawError("CHANNEL_TIMING_INVALID");
+  }
+}
+
+function installHistoryReceiver(ctx, workers) {
+  const feature = workers ?? ctx.features?.workers ?? workersFeature;
+  const workerRegistry = feature.registry?.();
+  if (!workerRegistry) return;
+  if (typeof workerRegistry.setL2Receiver !== "function") throw new ClawError("SERVICE_UNAVAILABLE", { service: "l2" });
+  workerRegistry.setL2Receiver(ctx.l2Receiver.receive);
+}
+
+export async function bootDispatcher(opts = {}) {
+  validateTelegramTiming(opts.telegramTiming);
+  const home = opts.home ?? resolveHome({ env: opts.env ?? process.env });
+  const config = await startupConfig(opts, home);
+  const secrets = await startupSecrets({ opts, config, home });
 
   const store = opts.store ?? (opts.createStore ?? createStore)(
     path.join(home, "state"), { redact: secrets.redact },
@@ -98,23 +156,15 @@ export async function bootDispatcher(opts = {}) {
     const projectRegistry = (opts.createRegistry ?? createRegistry)(config);
     const registry = { ...projectRegistry, resolveMcpLaunch };
     const logger = opts.logger ?? redactingLogger(secrets);
-    clients = (opts.createProjectClients ?? createProjectClients)({ config, registry, logger });
     const lanes = (opts.createLaneDirectory ?? createLaneDirectory)();
-    const ctx = {
-      home,
-      config,
-      secrets,
-      store,
-      registry,
-      projectRegistry,
-      logger,
-      bus: opts.bus ?? bus,
-      mcp: clients,
-      lanes,
-      // D28 test seams (dependency injection only): features read ctx.now / ctx.schedulerTickMs.
-      ...(typeof opts.now === "function" ? { now: opts.now } : {}),
-      ...(Number.isFinite(opts.schedulerTickMs) && opts.schedulerTickMs > 0 ? { schedulerTickMs: opts.schedulerTickMs } : {}),
-    };
+    lanes.configure?.(config.lanes);
+    const l2Receiver = canonicalReceiver({ config, directory: lanes });
+    clients = (opts.createProjectClients ?? createProjectClients)({
+      config, registry, logger, directory: lanes, secrets, env: opts.env ?? process.env,
+    });
+    const ctx = dispatcherContext({
+      opts, home, config, secrets, store, registry, projectRegistry, logger, clients, lanes, l2Receiver,
+    });
     const placementService = (opts.createPlacementService ?? createPlacementService)({
       store,
       config,
@@ -140,7 +190,9 @@ export async function bootDispatcher(opts = {}) {
       logger,
       workers: opts.workers,
       k8sApiFactory: opts.k8sApiFactory,
+      ctx,
     });
+    installHistoryReceiver(ctx, opts.workers);
     dispatcher = (opts.createDispatcher ?? createDispatcher)(ctx, {
       directory: lanes,
       placement: placementService,

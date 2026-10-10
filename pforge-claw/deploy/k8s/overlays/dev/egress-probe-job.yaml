@@ -9,12 +9,26 @@ spec:
     metadata:
       labels:
         app: pforge-claw-egress-probe
+        app.kubernetes.io/part-of: pforge-claw
+        pforge-claw/role: job
     spec:
       restartPolicy: Never
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        seccompProfile:
+          type: RuntimeDefault
       containers:
         - name: probe
-          image: curlimages/curl:8.12.1
+          image: pforge-claw-worker-node:dev
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
           command:
-            - sh
-            - -ec
-            - "curl -fsS --connect-timeout 5 --max-time 10 https://api.github.com/ >/dev/null; address=$(getent hosts example.com); address=${address%% *}; test -n \"$address\"; if curl -kfsS --resolve \"example.com:443:$address\" --connect-timeout 5 --max-time 10 https://example.com/ >/dev/null; then echo \"non-allowlisted egress unexpectedly succeeded\" >&2; exit 1; fi; echo \"non-allowlisted egress denied after DNS resolution\""
+            - node
+            - --input-type=module
+            - -e
+            - "import { lookup } from 'node:dns/promises'; const allowed = await fetch('http://pforge-claw-dispatcher:3190/healthz', { signal: AbortSignal.timeout(5000) }); if (!allowed.ok) throw new Error('allowed dispatcher unavailable'); await lookup('pforge-claw-egress-target'); let denied = false; try { await fetch('http://pforge-claw-egress-target:3190/healthz', { signal: AbortSignal.timeout(5000) }); } catch { denied = true; } if (!denied) throw new Error('worker policy unexpectedly allowed the negative target'); console.log('worker policy allowed dispatcher and DNS; negative target denied');"

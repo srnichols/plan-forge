@@ -16,7 +16,6 @@ export default {
   async start(ctx = {}) {
     await this.stop();
     const stt = createStt(ctx);
-    // One capture service backs both the triage buttons and the /remember, /recall, /idea, /bug commands.
     const captureService = createCaptureService({ ...ctx, channel: ctx.channel });
     unbindCapture = bindCaptureService(captureService);
     service = createTriageService({ ...ctx, channel: ctx.channel, sttService: stt, captureService });

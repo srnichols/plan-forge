@@ -20,6 +20,30 @@ const PROJECT_ID = "project-1";
 const CHAT_ID = "chat-1";
 const THREAD_ID = "topic-1";
 
+function progressAuthority() {
+  return {
+    allowlist: [
+      { channel: "telegram", userId: "owner-1", role: "owner" },
+      { channel: "telegram", userId: "viewer-1", role: "viewer" },
+    ],
+    projects: [{
+      id: PROJECT_ID, homeLane: "fixture-lane",
+      channel: { adapter: "telegram", chatId: CHAT_ID, topicId: THREAD_ID },
+    }],
+    lanes: [{ id: "fixture-lane", kind: "local", enabled: true }],
+    runtimes: { default: "copilot-sdk" },
+    policy: { ghcpRoles: ["owner"], nonOwnerRuntime: "byok-only" },
+  };
+}
+
+function recoveryInput(overrides = {}) {
+  return {
+    caller: { channel: "telegram", userId: "owner-1", role: "owner" },
+    project: { id: PROJECT_ID }, adapter: "telegram", chatId: CHAT_ID, threadId: THREAD_ID,
+    ...overrides,
+  };
+}
+
 function createMemoryStore() {
   const streams = new Map();
   return {
@@ -51,7 +75,8 @@ function createRunningJob(store, {
   let job = {
     ...created.job,
     description: "Improve the parser",
-    callerId: "requester-1",
+    callerId: "owner-1",
+    adapter: "telegram",
     createdAt: new Date(Date.now()).toISOString(),
     chatId: CHAT_ID,
     threadId: THREAD_ID,
@@ -86,6 +111,7 @@ function createChannel() {
 function createService(store, options = {}) {
   return createProgressService({
     store,
+    config: options.config ?? progressAuthority(),
     bus: options.bus ?? new EventEmitter(),
     channel: options.channel ?? createChannel(),
     mcp: options.mcp,
@@ -340,21 +366,24 @@ describe("progress recovery actions", () => {
     });
     const service = createService(store, { bus });
     service.onLaneEvent(laneEvent(job.id, 1, "slice", { index: 2, total: 5 }));
-    const retry = await service.createRecoveryJob(job, {
-      mode: "retry", caller: { userId: "owner-1" }, chatId: CHAT_ID, threadId: THREAD_ID,
-    });
-    const retryAgain = await service.createRecoveryJob(job, { mode: "retry" });
+    const retry = await service.createRecoveryJob(job, recoveryInput({ updateId: "retry-delivery" }));
+    const retryAgain = await service.createRecoveryJob(job, recoveryInput({ updateId: "retry-delivery" }));
     const unbind = bindProgressService(service);
     await progressCallback.handle({ project: { id: PROJECT_ID } }, {
       payload: `n:${job.id.slice(0, 8)}`,
       caller: { userId: "owner-1", role: "owner" },
+      adapter: "telegram",
+      updateId: "resume-delivery",
+      messageId: "failure-card",
       chatId: CHAT_ID,
       threadId: THREAD_ID,
     });
     const resumeChild = Object.values(currentJobs(store)).find((candidate) => (
       candidate.parentId === job.id && candidate.resumeFrom === 3
     ));
-    const resume = await service.createRecoveryJob(job, { mode: "resume" });
+    const resume = await service.createRecoveryJob(job, recoveryInput({
+      mode: "resume", updateId: "resume-delivery", messageId: "failure-card", fromCallback: true,
+    }));
     expect(retry.job).toMatchObject({
       parentId: job.id,
       state: "awaiting-approval",
@@ -377,8 +406,8 @@ describe("progress recovery actions", () => {
     const running = createRunningJob(store, { id: "a2222222b3333333c4444444" });
     const service = createService(store);
     expect(await service.createRecoveryJob(running)).toMatchObject({ error: "NOT_RETRYABLE" });
-    expect(await service.createRecoveryJob(failedTask, { mode: "resume" })).toMatchObject({ error: "NOT_RESUMABLE" });
-    expect(await service.createRecoveryJob(failedPlan, { mode: "resume" })).toMatchObject({ error: "NOT_RESUMABLE" });
+    expect(await service.createRecoveryJob(failedTask, recoveryInput({ mode: "resume" }))).toMatchObject({ error: "NOT_RESUMABLE" });
+    expect(await service.createRecoveryJob(failedPlan, recoveryInput({ mode: "resume" }))).toMatchObject({ error: "NOT_RESUMABLE" });
   });
 
   it("resolves jobs only within the same project, chat, topic, and allowed states", () => {
@@ -556,6 +585,9 @@ describe("progress recovery actions", () => {
     const input = {
       payload: `r:${job.id.slice(0, 8)}`,
       caller: { userId: "owner-1", role: "owner" },
+      adapter: "telegram",
+      updateId: "retry-callback-delivery",
+      messageId: "failure-card",
       chatId: CHAT_ID,
       threadId: THREAD_ID,
     };
@@ -594,5 +626,199 @@ describe("progress recovery actions", () => {
     await progressFeature.stop();
     expect(bus.listenerCount("job.transition")).toBe(0);
     expect(getProgressService()).toBeNull();
+  });
+});
+
+describe("progress extraction characterizations", () => {
+  it("preserves lane aliases, monotonic progress, sequence consumption and terminal filtering", async () => {
+    const store = createMemoryStore();
+    const channel = createChannel();
+    const job = createRunningJob(store);
+    const service = createService(store, { channel });
+    await startProgress(service, job);
+    const events = [
+      ["started", { laneId: "remote" }, "Lane: remote"],
+      ["progress", { percent: 37.6 }, "Progress: 38%"],
+      ["progress", { percent: 12 }, "Progress: 38%"],
+      ["cost", { costUSD: 0, usd: 9 }, "Spend: $0.00"],
+      ["cost", { usd: 1.25, cost: 9 }, "Spend: $1.25"],
+      ["slice", { index: 0, total: 4 }, "Slice: 1/4"],
+      ["artifact", { name: "branch-name", path: "ignored-path", kind: "branch" }, "State: running"],
+      ["needs-input", {}, "State: needs-input"],
+    ];
+    for (const [index, [type, payload, expected]] of events.entries()) {
+      service.onLaneEvent(laneEvent(job.id, index + 1, type, payload));
+      await vi.advanceTimersByTimeAsync(3000);
+      await drainMicrotasks();
+      expect(channel.edit.mock.calls.at(-1)[0].text).toContain(expected);
+    }
+    const editCount = channel.edit.mock.calls.length;
+    service.onLaneEvent(laneEvent(job.id, 10, "unrecognized", {}));
+    service.onLaneEvent(laneEvent(job.id, 9, "cost", { cost: 99 }));
+    service.onLaneEvent(laneEvent(job.id, Number.NaN, "progress", { percent: 100 }));
+    await vi.advanceTimersByTimeAsync(3000);
+    expect(channel.edit).toHaveBeenCalledTimes(editCount);
+    service.onJobFinished({ jobId: job.id, state: "succeeded", result: { summary: "Completed." } });
+    await drainMicrotasks();
+    expect(channel.edit.mock.calls.at(-1)[0].text).toContain("Artifacts: branch-name");
+    expect(channel.edit.mock.calls.at(-1)[0].text).toContain("Spend: $1.25");
+    service.onLaneEvent(laneEvent(job.id, 11, "cost", { cost: 99 }));
+    await vi.advanceTimersByTimeAsync(3000);
+    expect(channel.edit.mock.calls.at(-1)[0].text).toContain("Spend: $1.25");
+    await service.stop();
+  });
+
+  it("cancels pending timers and waits for the active edit before stop resolves", async () => {
+    const store = createMemoryStore();
+    const channel = createChannel();
+    let finishEdit;
+    channel.edit.mockImplementationOnce(() => new Promise((resolve) => { finishEdit = resolve; }));
+    const job = createRunningJob(store);
+    const service = createService(store, { channel });
+    await startProgress(service, job);
+    service.onLaneEvent(laneEvent(job.id, 1, "cost", { cost: 1 }));
+    await drainMicrotasks();
+    service.onLaneEvent(laneEvent(job.id, 2, "cost", { cost: 2 }));
+    let hasStopped = false;
+    const stopping = service.stop().then(() => { hasStopped = true; });
+    await drainMicrotasks();
+    expect(hasStopped).toBe(false);
+    finishEdit();
+    await stopping;
+    await vi.advanceTimersByTimeAsync(6000);
+    expect(hasStopped).toBe(true);
+    expect(channel.edit).toHaveBeenCalledTimes(1);
+    expect(service.snapshot()).toEqual({ tracked: 1, pendingEdits: 1 });
+  });
+
+  it("preserves recovery metadata and restart deduplication without inheriting authority", async () => {
+    const store = createMemoryStore();
+    const job = createRunningJob(store, {
+      type: "plan",
+      state: "failed",
+      fields: { planPath: "docs/plans/example.md", lane: "local", runtime: "byok:openai", approvalId: "old-approval" },
+    });
+    const service = createService(store);
+    expect(await service.createRecoveryJob(job, recoveryInput({
+      chatId: "override-chat", threadId: "override-topic",
+    }))).toMatchObject({ ok: false, error: "JOB_NOT_FOUND" });
+    const request = recoveryInput({ updateId: "metadata-delivery", messageId: "recovery-message" });
+    const recovered = await service.createRecoveryJob(job, request);
+    expect(recovered.job).toMatchObject({
+      parentId: job.id,
+      projectId: PROJECT_ID,
+      type: "plan",
+      state: "awaiting-approval",
+      planPath: "docs/plans/example.md",
+      description: "Improve the parser",
+      callerId: "owner-1",
+      chatId: CHAT_ID,
+      threadId: THREAD_ID,
+      createdAt: "1970-01-01T00:00:00.000Z",
+    });
+    expect(recovered.job).not.toHaveProperty("lane");
+    expect(recovered.job).not.toHaveProperty("runtime");
+    expect(recovered.job).not.toHaveProperty("approvalId");
+    await service.stop();
+    const restarted = createService(store);
+    expect(await restarted.createRecoveryJob(job, request)).toEqual({
+      ok: true,
+      jobId: recovered.jobId,
+      existing: true,
+      text: `Recovery job ${recovered.jobId} is already awaiting approval.`,
+    });
+    expect(Object.values(currentJobs(store)).filter((candidate) => candidate.parentId === job.id)).toHaveLength(1);
+    await restarted.stop();
+  });
+
+  it("preserves explicit recovery write failures and does not create a child on the first failed write", async () => {
+    const store = createMemoryStore();
+    const job = createRunningJob(store, { state: "failed" });
+    const append = store.append.bind(store);
+    store.append = (stream, record) => {
+      if (stream === JOBS_STREAM && record.kind === "job.created" && record.job.parentId) {
+        throw Object.assign(new Error("private store detail"), { code: "STORE_WRITE_FAILED" });
+      }
+      return append(stream, record);
+    };
+    const service = createService(store);
+    expect(await service.createRecoveryJob(job, recoveryInput())).toEqual({
+      ok: false, error: "STORE_WRITE_FAILED", text: "STORE_WRITE_FAILED: Recovery job was not created.",
+    });
+    expect(Object.values(currentJobs(store))).toHaveLength(1);
+    expect(records(store, "audit")).toContainEqual(expect.objectContaining({
+      kind: "progress-recovery-failed", jobId: job.id, mode: "retry", reason: "STORE_WRITE_FAILED",
+    }));
+    await service.stop();
+  });
+
+  it.each(["function", "object"])("preserves the %s lane lookup and accepts an unspecified cancellation result", async (kind) => {
+    const store = createMemoryStore();
+    const job = createRunningJob(store, { fields: { lane: "local" } });
+    const lane = { cancel: vi.fn(async () => undefined) };
+    const lanes = kind === "function" ? vi.fn(() => lane) : { local: lane };
+    const service = createService(store, { lanes });
+    expect(await service.abortJob(job, { userId: "owner-1" })).toEqual({
+      ok: true, text: "Cancellation requested.",
+    });
+    expect(lane.cancel).toHaveBeenCalledWith(job.id);
+    expect(currentJobs(store)[job.id].state).toBe("running");
+    expect(records(store, "audit")).toContainEqual(expect.objectContaining({
+      kind: "progress-abort-requested", jobId: job.id, userId: "owner-1",
+    }));
+    await service.stop();
+  });
+
+  it.each([
+    [{ error: "pforge-master not installed" }, "MCP_NOT_INSTALLED", "Forge-Master isn't installed for this project. Run `pforge claw doctor`."],
+    [{ error: "private details" }, "MCP_TOOL_ERROR", "MCP_TOOL_ERROR: couldn't explain right now."],
+    [{ isError: true }, "MCP_TOOL_ERROR", "MCP_TOOL_ERROR: couldn't explain right now."],
+    [{ ok: false }, "MCP_TOOL_ERROR", "MCP_TOOL_ERROR: couldn't explain right now."],
+  ])("keeps the explicit explanation error %s", async (response, error, text) => {
+    const store = createMemoryStore();
+    const job = createRunningJob(store, { state: "failed" });
+    const channel = createChannel();
+    const service = createService(store, { channel, mcp: { call: vi.fn(async () => response) } });
+    expect(await service.explainFailure(job, { chatId: CHAT_ID, threadId: THREAD_ID }))
+      .toEqual({ ok: false, error });
+    expect(channel.send).toHaveBeenCalledWith({ chatId: CHAT_ID, threadId: THREAD_ID, text });
+    expect(records(store, "progress")).toEqual([]);
+    await service.stop();
+  });
+
+  it("retains suggestion filtering, caps, redaction and empty-string reply precedence", async () => {
+    const store = createMemoryStore();
+    const job = createRunningJob(store, { state: "failed" });
+    const channel = createChannel();
+    const secrets = { redact: (text) => String(text).replaceAll("sensitive-canary", "[redacted]") };
+    const proposedActions = [
+      null,
+      { label: "", summary: "ignored" },
+      { label: 0, summary: "ignored" },
+      ...Array.from({ length: 7 }, (_, index) => ({
+        label: `${index}_sensitive-canary_${"x".repeat(100)}`,
+        summary: `sensitive-canary_${"y".repeat(1200)}`,
+      })),
+    ];
+    const service = createService(store, {
+      channel,
+      secrets,
+      mcp: { call: vi.fn(async () => ({ reply: "", text: "not selected", proposedActions })) },
+    });
+    await startProgress(service, job);
+    const result = await service.explainFailure(job, { chatId: CHAT_ID, threadId: THREAD_ID });
+    expect(result.ok).toBe(true);
+    expect(result.items).toHaveLength(5);
+    expect(result.items[0].label).toHaveLength(80);
+    expect(result.items[0].label).toContain("0_[redacted]_");
+    expect(result.items[0].label).toContain("… [truncated]");
+    expect(result.items[0].description).toHaveLength(1000);
+    expect(JSON.stringify(result.items)).not.toContain("sensitive-canary");
+    const edit = channel.edit.mock.calls.at(-1)[0];
+    expect(edit.text).toBe("");
+    expect(edit.replyMarkup.inline_keyboard.flat()).toHaveLength(8);
+    expect(edit.replyMarkup.inline_keyboard.flat().slice(3).map(({ callback_data: payload }) => payload))
+      .toEqual(Array.from({ length: 5 }, (_, index) => `f:s:${job.id.slice(0, 8)}:${index}`));
+    await service.stop();
   });
 });

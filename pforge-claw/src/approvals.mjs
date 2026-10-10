@@ -3,12 +3,13 @@ import { button, keyboard } from "./channels/telegram/format.mjs";
 import { ClawError } from "./errors.mjs";
 import { JOBS_STREAM, currentJobs, transition } from "./jobs/model.mjs";
 import { getPlacementService } from "./placement.mjs";
+import { APPROVER_ROLES, QUORUM_MODES } from "./enums.mjs";
 
 export const DEFAULT_TTL_MS = 15 * 60_000;
-export const APPROVER_ROLES = Object.freeze(["owner", "approver"]);
-export const QUORUM_MODES = Object.freeze(["auto", "power", "speed", "false"]);
+export { APPROVER_ROLES, QUORUM_MODES };
 export const MAX_CALLBACK_BYTES = 64;
 export const PAYLOAD_RE = /^([0-9a-f]{8}):([A-Za-z0-9_-]{22})(?::(x|auto|power|speed|false))?$/;
+const APPROVAL_CHANNEL = "telegram";
 
 const hashNonce = (nonce) => createHash("sha256").update(nonce).digest("hex");
 
@@ -52,17 +53,31 @@ function hashesMatch(expected, actual) {
   return expectedBuffer.length === actualBuffer.length && timingSafeEqual(expectedBuffer, actualBuffer);
 }
 
+function hasApprovalExpired(record, time) {
+  return record.kind === "approval.expired" || time >= record.expiresAt;
+}
+
+function hasApproverIdentity(approverId) {
+  return approverId !== undefined && approverId !== null && String(approverId).trim().length > 0;
+}
+
+function resolveApproverRole({ config, caller }) {
+  if (config === undefined) return caller?.role;
+  const identity = (config?.allowlist ?? []).find((entry) => entry.channel === APPROVAL_CHANNEL
+    && String(entry.userId) === String(caller?.userId));
+  return identity?.role;
+}
+
 export function verifyApproval(record, {
   nonce, chatId, threadId, approverRole, approverId, now = Date.now,
 } = {}) {
   if (!record) return { ok: false, reason: "unknown" };
   if (record.usedAt !== null && record.usedAt !== undefined) return { ok: false, reason: "replay" };
-  if (record.kind === "approval.expired" || now() > record.expiresAt) {
+  if (hasApprovalExpired(record, now())) {
     return { ok: false, reason: "expired" };
   }
   if (String(chatId) !== String(record.chatId)) return { ok: false, reason: "wrong-chat" };
-  if (!APPROVER_ROLES.includes(approverRole)
-    || String(approverId) === String(record.requesterId)) {
+  if (!APPROVER_ROLES.includes(approverRole) || !hasApproverIdentity(approverId)) {
     return { ok: false, reason: "wrong-user" };
   }
   if (!hashesMatch(record.nonceHash, hashNonce(nonce))
@@ -156,6 +171,14 @@ function projectMcp(mcp, projectId) {
   return mcp;
 }
 
+function hasDeclaredFanoutParent({ job, jobs }) {
+  const parent = jobs[job.parentId];
+  // Card suppression is not authorization: children wait for their parent even before approval consumption.
+  return parent?.type === "fanout" && parent.id === job.parentId
+    && Array.isArray(parent.targets)
+    && parent.targets.some((target) => target?.childId === job.id && target.projectId === job.projectId);
+}
+
 export async function buildApprovalCard({ job, project, mcp, approval, now = Date.now, ttlMs } = {}) {
   if (!job) return { ok: false, error: "ESTIMATE_UNAVAILABLE" };
   mcp = projectMcp(mcp, job.projectId ?? project?.id);
@@ -227,7 +250,7 @@ export async function buildApprovalCard({ job, project, mcp, approval, now = Dat
 }
 
 export function createApprovalService({
-  store, bus, mcp, channel, logger, now = Date.now, ttlMs = DEFAULT_TTL_MS,
+  store, bus, mcp, channel, logger, config, now = Date.now, ttlMs = DEFAULT_TTL_MS,
 } = {}) {
   function fold() {
     if (!store || typeof store.read !== "function") return approvalsFold([]);
@@ -293,7 +316,7 @@ export function createApprovalService({
         nonce: parsed.nonce,
         chatId,
         threadId,
-        approverRole: caller?.role,
+        approverRole: resolveApproverRole({ config, caller }),
         approverId: caller?.userId,
         now,
       });
@@ -305,6 +328,7 @@ export function createApprovalService({
       }
 
       const usedAt = now();
+      if (hasApprovalExpired(record, usedAt)) return { ok: false, reason: "expired" };
       appendApproval({
         v: 1,
         kind: "approval.consumed",
@@ -345,7 +369,7 @@ export function createApprovalService({
       const { byHash } = fold();
       const expired = [];
       for (const record of byHash.values()) {
-        if (record.kind !== "approval.issued" || record.usedAt !== null || now() <= record.expiresAt) continue;
+        if (record.kind !== "approval.issued" || record.usedAt !== null || !hasApprovalExpired(record, now())) continue;
         appendApproval({
           v: 1,
           kind: "approval.expired",
@@ -370,8 +394,10 @@ export function createApprovalService({
   function pendingWithoutCard() {
     if (!store) return [];
     const issuedJobIds = new Set([...fold().byHash.values()].map((record) => record.jobId));
-    return Object.values(currentJobs(store))
-      .filter((job) => job.state === "awaiting-approval" && !issuedJobIds.has(job.id));
+    const jobs = currentJobs(store);
+    return Object.values(jobs)
+      .filter((job) => job.state === "awaiting-approval" && !issuedJobIds.has(job.id)
+        && !hasDeclaredFanoutParent({ job, jobs }));
   }
 
   return {

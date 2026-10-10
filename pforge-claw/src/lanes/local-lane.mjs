@@ -2,8 +2,10 @@ import { JOB_TYPES } from "../enums.mjs";
 import { isMutating } from "../jobs/model.mjs";
 import { ClawError } from "../errors.mjs";
 import { createLaneEvent, createSeqCounter, assertLane } from "./lane.mjs";
+import { failureReason, normalizePlanActuals, PLAN_ACTUALS_UNCONFIRMED } from "../jobs/runner-lifecycle.mjs";
 
 export const DEFAULT_MAX_HEAVY = 2;
+const EVENT_BUFFER_LIMIT = 500;
 
 function configuredMaxHeavy(config) {
   const lanes = config?.lanes;
@@ -89,6 +91,7 @@ function createEntry(job) {
     state: "queued",
     nextSeq: createSeqCounter(),
     finished: false,
+    completion: Promise.withResolvers(),
   };
 }
 
@@ -112,7 +115,7 @@ function pushEvent(entry, type, data, { now, bus }) {
     return;
   }
   entry.buffer.push(event);
-  if (entry.buffer.length > 500) {
+  if (entry.buffer.length > EVENT_BUFFER_LIMIT) {
     const dropIndex = entry.buffer.findIndex((item) => item.type === "progress" || item.type === "log");
     if (dropIndex >= 0) entry.buffer.splice(dropIndex, 1);
   }
@@ -123,6 +126,10 @@ function finishEntry(entry, status, error, options) {
   entry.finished = true;
   entry.state = "finished";
   const data = { status, usage: entry.usage ?? null };
+  if (entry.job.type === "plan") {
+    data.planActuals = entry.planActuals ?? null;
+    if (!data.planActuals) data.planActualsError = entry.planActualsError ?? PLAN_ACTUALS_UNCONFIRMED;
+  }
   if (error !== undefined) data.error = error;
   pushEvent(entry, "finished", data, options);
   for (const wake of entry.waiters.splice(0)) wake({ value: undefined, done: true });
@@ -178,6 +185,26 @@ export function createLocalLane({
     removeProjectIfIdle(projects, entry.job.projectId, project);
   }
 
+  async function runEntry(entry) {
+    entry.state = "running";
+    pushEvent(entry, "started", {}, eventOptions);
+    const agent = runtimeFor ? await runtimeFor(entry.job) : runtime;
+    if (entry.controller.signal.aborted) throw new ClawError("JOB_CANCELLED");
+    if (!agent || typeof agent.run !== "function") throw new ClawError("RUNTIME_BAD_CONTRACT");
+    const result = await agent.run({
+      ...entry.job, jobId: entry.job.id, signal: entry.controller.signal,
+      emit: (type, data) => pushEvent(entry, type, data, eventOptions),
+    });
+    entry.usage = result?.usage;
+    if (entry.job.type === "plan") {
+      entry.planActuals = normalizePlanActuals({ job: entry.job, actuals: result?.planActuals });
+      const code = failureReason({ code: result?.planActualsError });
+      entry.planActualsError = code === "JOB_RUN_FAILED" ? PLAN_ACTUALS_UNCONFIRMED : code;
+    }
+    const status = entry.controller.signal.aborted ? "cancelled" : result?.status ?? "succeeded";
+    finishEntry(entry, status, result?.error, eventOptions);
+  }
+
   async function pump(projectId) {
     const project = projects.get(projectId);
     if (!project || project.active || project.queue.length === 0) return;
@@ -193,25 +220,14 @@ export function createLocalLane({
         finishEntry(entry, "cancelled", undefined, eventOptions);
         return;
       }
-      entry.state = "running";
-      pushEvent(entry, "started", {}, eventOptions);
-      const agent = runtimeFor ? await runtimeFor(entry.job) : runtime;
-      if (!agent || typeof agent.run !== "function") throw new ClawError("RUNTIME_BAD_CONTRACT");
-      const result = await agent.run({
-        ...entry.job,
-        jobId: entry.job.id,
-        signal: entry.controller.signal,
-        emit: (type, data) => pushEvent(entry, type, data, eventOptions),
-      });
-      entry.usage = result?.usage;
-      const status = entry.controller.signal.aborted ? "cancelled" : result?.status ?? "succeeded";
-      finishEntry(entry, status, result?.error, eventOptions);
+      await runEntry(entry);
     } catch (error) {
       const status = entry.controller.signal.aborted ? "cancelled" : "failed";
       finishEntry(entry, status, status === "failed" ? errorCode(error) : undefined, eventOptions);
     } finally {
       release?.();
       removeEntry(entry);
+      entry.completion.resolve();
       void pump(projectId);
     }
   }
@@ -222,18 +238,18 @@ export function createLocalLane({
     const project = projects.get(entry.job.projectId);
     const queueIndex = project?.queue.indexOf(entry) ?? -1;
     if (queueIndex >= 0) {
+      entry.controller.abort();
       project.queue.splice(queueIndex, 1);
       finishEntry(entry, "cancelled", undefined, eventOptions);
       jobs.delete(jobId);
       removeProjectIfIdle(projects, entry.job.projectId, project);
+      entry.completion.resolve();
       return { ok: true, state: "cancelled" };
     }
     entry.controller.abort();
-    if (entry.state === "running" || entry.state === "cancelling") {
-      entry.state = "cancelling";
-      return { ok: true, state: "cancelling" };
-    }
-    return { ok: true, state: "cancelling" };
+    entry.state = "cancelling";
+    await entry.completion.promise;
+    return { ok: true, state: "cancelled" };
   }
 
   function submit(job) {
@@ -259,7 +275,7 @@ export function createLocalLane({
     let running = 0;
     for (const project of projects.values()) {
       queued += project.queue.length;
-      if (project.active?.state === "running") running += 1;
+      if (project.active?.state === "running" || project.active?.state === "cancelling") running += 1;
       if (project.active?.state === "waiting") queued += 1;
     }
     return {

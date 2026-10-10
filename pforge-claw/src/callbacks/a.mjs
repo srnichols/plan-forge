@@ -9,6 +9,52 @@ function audit(service, record) {
   }
 }
 
+async function refuseApproval(service, { result, caller, chatId, threadId }) {
+  audit(service, {
+    kind: "approval-refused",
+    reason: typeof result?.reason === "string" ? result.reason : "INTERNAL",
+    userId: caller?.userId,
+    chatId,
+    threadId,
+  });
+  if (!service.channel || chatId === undefined || chatId === null) return;
+  try {
+    await service.channel.send({ chatId, threadId, text: "This approval is no longer valid." });
+  } catch {
+    // The neutral response is best-effort; never expose internal details.
+  }
+}
+
+function auditDecision(service, { result, caller, chatId, threadId }) {
+  audit(service, {
+    kind: "approval-decision",
+    jobId: result.jobId,
+    userId: caller?.userId,
+    chatId,
+    threadId,
+    decision: result.decision,
+    ...(result.quorum ? { quorum: result.quorum } : {}),
+  });
+}
+
+async function editDecisionCard(service, { result, caller, chatId, threadId, messageId }) {
+  if (!service.channel || messageId === undefined || messageId === null) return;
+  try {
+    const text = result.decision === "approve"
+      ? `✅ Approved by ${String(caller?.userId ?? "approver")}`
+      : "❌ Rejected";
+    await service.channel.edit({
+      chatId,
+      messageId,
+      threadId,
+      text,
+      replyMarkup: { inline_keyboard: [] },
+    });
+  } catch {
+    // The approval remains committed even if the card cannot be updated.
+  }
+}
+
 export default Object.freeze({
   prefix: "a",
   sinceSlice: 10,
@@ -27,47 +73,11 @@ export default Object.freeze({
       result = { ok: false, reason: "INTERNAL" };
     }
     if (!result?.ok) {
-      audit(service, {
-        kind: "approval-refused",
-        reason: typeof result?.reason === "string" ? result.reason : "INTERNAL",
-        userId: caller?.userId,
-        chatId,
-        threadId,
-      });
-      if (service.channel && chatId !== undefined && chatId !== null) {
-        try {
-          await service.channel.send({ chatId, threadId, text: "This approval is no longer valid." });
-        } catch {
-          // The neutral response is best-effort; never expose internal details.
-        }
-      }
+      await refuseApproval(service, { result, caller, chatId, threadId });
       return;
     }
 
-    audit(service, {
-      kind: "approval-decision",
-      jobId: result.jobId,
-      userId: caller?.userId,
-      chatId,
-      threadId,
-      decision: result.decision,
-      ...(result.quorum ? { quorum: result.quorum } : {}),
-    });
-    if (service.channel && messageId !== undefined && messageId !== null) {
-      try {
-        const text = result.decision === "approve"
-          ? `✅ Approved by ${String(caller?.userId ?? "approver")}`
-          : "❌ Rejected";
-        await service.channel.edit({
-          chatId,
-          messageId,
-          threadId,
-          text,
-          replyMarkup: { inline_keyboard: [] },
-        });
-      } catch {
-        // The approval remains committed even if the card cannot be updated.
-      }
-    }
+    auditDecision(service, { result, caller, chatId, threadId });
+    await editDecisionCard(service, { result, caller, chatId, threadId, messageId });
   },
 });

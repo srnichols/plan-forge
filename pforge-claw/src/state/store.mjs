@@ -1,8 +1,10 @@
+import { createHash, randomUUID } from "node:crypto";
 import {
   appendFileSync,
   closeSync,
   existsSync,
   fsyncSync,
+  ftruncateSync,
   mkdirSync,
   openSync,
   readFileSync,
@@ -19,6 +21,12 @@ import { ClawError } from "../errors.mjs";
 export const STREAM_RE = /^[a-z][a-z0-9-]{0,63}$/;
 export const STALE_LOCK_GRACE_MS = 5000;
 const LOCK_RETRIES = 3;
+const LINE_FEED = 0x0a;
+const CARRIAGE_RETURN = 0x0d;
+const PRIVATE_FILE_MODE = 0o600;
+const RECOVERY_FIELDS = Object.freeze([
+  "v", "stream", "source", "reason", "offset", "sourceSize", "byteLength", "sha256", "fragmentBase64",
+]);
 
 function deepRedact(value, redact, seen = new WeakMap()) {
   if (typeof value === "string") return redact(value);
@@ -52,24 +60,27 @@ function serializeRecord(record, redact, now) {
   }
 }
 
-function hasTornTail(file) {
+function hasUnterminatedTail(file) {
   if (!existsSync(file)) return false;
   const size = statSync(file).size;
   if (size === 0) return false;
   const descriptor = openSync(file, "r");
   try {
     const lastByte = Buffer.alloc(1);
-    readSync(descriptor, lastByte, 0, 1, size - 1);
-    return lastByte[0] !== 0x0a;
+    if (readSync(descriptor, lastByte, 0, 1, size - 1) !== 1) {
+      throw new ClawError("STORE_WRITE_FAILED");
+    }
+    return lastByte[0] !== LINE_FEED;
   } finally {
     closeSync(descriptor);
   }
 }
 
 function parseLine({ bytes, stream, lineNumber, end, terminated }) {
-  if (bytes.length === 0) return null;
+  const line = terminated && bytes.at(-1) === CARRIAGE_RETURN ? bytes.subarray(0, -1) : bytes;
+  if (line.length === 0) return null;
   try {
-    return { record: JSON.parse(bytes.toString("utf8")), end };
+    return { record: JSON.parse(line.toString("utf8")), end };
   } catch {
     if (!terminated) return null;
     throw new ClawError("STORE_CORRUPT", { stream, line: lineNumber });
@@ -80,10 +91,10 @@ function* parseLines({ bytes, stream, fromByte }) {
   let cursor = fromByte;
   let lineNumber = 1;
   for (let index = 0; index < fromByte; index += 1) {
-    if (bytes[index] === 0x0a) lineNumber += 1;
+    if (bytes[index] === LINE_FEED) lineNumber += 1;
   }
   while (cursor < bytes.length) {
-    const newline = bytes.indexOf(0x0a, cursor);
+    const newline = bytes.indexOf(LINE_FEED, cursor);
     if (newline === -1) {
       const parsed = parseLine({
         bytes: bytes.subarray(cursor),
@@ -152,12 +163,155 @@ function classifyHolder({ file, now, kill }) {
 
 function tryAcquire(file, pid, now) {
   try {
-    writeFileSync(file, JSON.stringify({ pid, ts: now().toISOString() }), { flag: "wx" });
-    return true;
+    const contents = JSON.stringify({ pid, ts: now().toISOString(), id: randomUUID() });
+    writeFileSync(file, contents, { flag: "wx" });
+    return contents;
   } catch (error) {
-    if (error.code === "EEXIST") return false;
+    if (error.code === "EEXIST") return null;
     throw error;
   }
+}
+
+function createWriterLock({ directory, pid, now, kill }) {
+  const file = join(directory, "dispatcher.lock");
+  let owner = null;
+  const assertOwned = () => {
+    let contents;
+    try {
+      contents = readFileSync(file, "utf8");
+    } catch {
+      throw new ClawError("STATE_LOCKED", { pid: null });
+    }
+    if (!owner || contents !== owner.contents) throw new ClawError("STATE_LOCKED", { pid: null });
+  };
+  const lock = () => {
+    for (let attempt = 0; attempt < LOCK_RETRIES; attempt += 1) {
+      const contents = tryAcquire(file, pid, now);
+      if (contents !== null) {
+        const claim = { contents };
+        owner = claim;
+        return () => {
+          if (owner !== claim) return;
+          let current;
+          try {
+            current = readFileSync(file, "utf8");
+          } catch (error) {
+            if (error.code !== "ENOENT") throw error;
+            owner = null;
+            return;
+          }
+          if (current === contents) removeLock(file);
+          owner = null;
+        };
+      }
+      if (classifyHolder({ file, now, kill }) !== "retry") break;
+    }
+    throw new ClawError("STATE_LOCKED");
+  };
+  const runWithLock = (action) => {
+    const release = owner === null ? lock() : null;
+    try {
+      assertOwned();
+      const output = action(assertOwned);
+      assertOwned();
+      return output;
+    } finally {
+      if (release) release();
+    }
+  };
+  return { lock, runWithLock };
+}
+
+function performStoreWrite({ stream, operation, action }) {
+  try {
+    return action();
+  } catch (error) {
+    if (error instanceof ClawError) {
+      const hasOperation = error.details.stream === stream && typeof error.details.operation === "string";
+      if (error.code !== "STORE_WRITE_FAILED" || hasOperation) throw error;
+    }
+    throw new ClawError("STORE_WRITE_FAILED", { stream, operation });
+  }
+}
+
+function writeAll(descriptor, bytes) {
+  let offset = 0;
+  while (offset < bytes.length) {
+    const count = writeSync(descriptor, bytes, offset, bytes.length - offset);
+    if (count <= 0) throw new ClawError("STORE_WRITE_FAILED");
+    offset += count;
+  }
+}
+
+function matchesRecovery(record, expected) {
+  return isPlainObject(record)
+    && RECOVERY_FIELDS.every((field) => record[field] === expected[field])
+    && typeof record.ts === "string" && Number.isFinite(Date.parse(record.ts));
+}
+
+function syncRecoveryDirectory(directory) {
+  if (process.platform === "win32") return;
+  const descriptor = openSync(directory, "r");
+  try {
+    fsyncSync(descriptor);
+  } finally {
+    closeSync(descriptor);
+  }
+}
+
+function preserveTail({ directory, stream, bytes, offset, now, readJson, writeJsonAtomic }) {
+  const fragment = bytes.subarray(offset);
+  const sha256 = createHash("sha256").update(fragment).digest("hex");
+  const name = `${stream}.recovery-${offset}-${sha256}.json`;
+  const recovery = {
+    v: 1,
+    stream,
+    source: `${stream}.jsonl`,
+    reason: "invalid-unterminated-tail",
+    offset,
+    sourceSize: bytes.length,
+    byteLength: fragment.length,
+    sha256,
+    fragmentBase64: fragment.toString("base64"),
+    ts: now().toISOString(),
+  };
+  performStoreWrite({ stream, operation: "quarantine", action: () => {
+    const previous = readJson(name, undefined);
+    if (previous !== undefined && !matchesRecovery(previous, recovery)) {
+      throw new ClawError("STORE_CORRUPT", { stream, recovery: true });
+    }
+    // Raw bytes are evidence, not a new event: never redact or overwrite a prior quarantine.
+    if (previous === undefined) writeJsonAtomic(name, recovery);
+    if (!matchesRecovery(readJson(name, undefined), recovery)) {
+      throw new ClawError("STORE_WRITE_FAILED");
+    }
+    syncRecoveryDirectory(directory);
+  } });
+}
+
+function truncateTail({ file, offset, stream }) {
+  performStoreWrite({ stream, operation: "repair", action: () => {
+    const descriptor = openSync(file, "r+");
+    try {
+      ftruncateSync(descriptor, offset);
+      fsyncSync(descriptor);
+    } finally {
+      closeSync(descriptor);
+    }
+  } });
+}
+
+function prepareAppend({ directory, file, stream, now, readJson, writeJsonAtomic, assertOwned }) {
+  if (!hasUnterminatedTail(file)) return "";
+  const bytes = readFileSync(file);
+  let lastRecordEnd = 0;
+  for (const { end } of parseLines({ bytes, stream, fromByte: 0 })) lastRecordEnd = end;
+  if (lastRecordEnd === bytes.length) return "\n";
+  const offset = bytes.lastIndexOf(LINE_FEED) + 1;
+  preserveTail({ directory, stream, bytes, offset, now, readJson, writeJsonAtomic });
+  assertOwned();
+  truncateTail({ file, offset, stream });
+  return "";
 }
 
 export function createStore(dir, {
@@ -169,6 +323,7 @@ export function createStore(dir, {
   let counter = 0;
   const directory = dir;
   mkdirSync(directory, { recursive: true });
+  const { lock, runWithLock } = createWriterLock({ directory, pid, now, kill });
   const streamPath = (stream) => {
     if (typeof stream !== "string" || !STREAM_RE.test(stream)) {
       throw new ClawError("STORE_BAD_STREAM");
@@ -189,8 +344,8 @@ export function createStore(dir, {
     const temporary = `${target}.${pid}.${counter++}.tmp`;
     let descriptor;
     try {
-      descriptor = openSync(temporary, "wx");
-      writeSync(descriptor, JSON.stringify(value));
+      descriptor = openSync(temporary, "wx", PRIVATE_FILE_MODE);
+      writeAll(descriptor, Buffer.from(JSON.stringify(value)));
       fsyncSync(descriptor);
       closeSync(descriptor);
       descriptor = undefined;
@@ -241,7 +396,7 @@ export function createStore(dir, {
     try {
       const previousByte = Buffer.alloc(1);
       readSync(descriptor, previousByte, 0, 1, snapshot.offset - 1);
-      return previousByte[0] === 0x0a;
+      return previousByte[0] === LINE_FEED;
     } finally {
       closeSync(descriptor);
     }
@@ -271,30 +426,16 @@ export function createStore(dir, {
     });
     return { offset: result.offset, count: result.count };
   };
-  const lock = () => {
-    const file = join(directory, "dispatcher.lock");
-    for (let attempt = 0; attempt < LOCK_RETRIES; attempt += 1) {
-      if (tryAcquire(file, pid, now)) {
-        return () => {
-          let contents;
-          try {
-            contents = JSON.parse(readFileSync(file, "utf8"));
-          } catch (error) {
-            if (error.code === "ENOENT") return;
-            throw error;
-          }
-          if (contents.pid === pid) removeLock(file);
-        };
-      }
-      if (classifyHolder({ file, now, kill }) !== "retry") break;
-    }
-    throw new ClawError("STATE_LOCKED");
-  };
   return { append: (stream, record) => {
     const file = streamPath(stream);
     const { line, record: stored } = serializeRecord(record, redact, now);
-    const prefix = hasTornTail(file) ? "\n" : "";
-    appendFileSync(file, `${prefix}${line}\n`);
-    return stored;
+    return performStoreWrite({ stream, operation: "append", action: () => runWithLock((assertOwned) => {
+      const prefix = prepareAppend({
+        directory, file, stream, now, readJson, writeJsonAtomic, assertOwned,
+      });
+      assertOwned();
+      appendFileSync(file, `${prefix}${line}\n`);
+      return stored;
+    }) });
   }, read, fold, snapshot, writeJsonAtomic, readJson, lock };
 }

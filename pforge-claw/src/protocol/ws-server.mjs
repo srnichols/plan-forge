@@ -3,8 +3,8 @@ import { WebSocketServer } from "ws";
 import { ClawError } from "../errors.mjs";
 import { challenge, enrollmentMac, verifyEnrollmentMac, verifyMac } from "./auth.mjs";
 import { CLOSE_CODES, decode, encode, MAX_FRAME_BYTES, message } from "./messages.mjs";
+import { SECRET_PREFIX } from "./enrollment.mjs";
 
-const SECRET_PREFIX = "PFORGE_CLAW_WORKER_SECRET__";
 const HANDSHAKE_STATES = Object.freeze({ HELLO: "AWAIT_HELLO", AUTH: "AWAIT_AUTH", READY: "READY" });
 
 function deriveSecret(privateKey, publicKey, codeHash, workerId) {
@@ -128,6 +128,11 @@ export function createWorkerServer({
       });
       const secret = deriveSecret(pair.privateKey, publicWorkerKey, codeHash, workerId);
       await enrollment.register({ workerId, laneId, secret });
+      if (typeof secrets.refresh !== "function") throw new ClawError("WORKER_SECRET_REFRESH_UNAVAILABLE");
+      await secrets.refresh();
+      if (secrets.get(`${SECRET_PREFIX}${workerId}`) !== secret) {
+        throw new ClawError("WORKER_SECRET_REFRESH_FAILED");
+      }
       const proof = enrollmentMac(codeHash, context.nonce, publicKey, workerId);
       context.nonce = null;
       send(message("ready", { workerId, pub: publicKey, mac: proof }));
@@ -153,7 +158,11 @@ export function createWorkerServer({
           return;
         }
         const secret = secrets.get(`${SECRET_PREFIX}${workerId}`);
-        if (!secret || !verifyMac(secret, context.nonce, workerId, authMessage.mac)) {
+        if (!secret) {
+          failHandshake("WORKER_SECRET_MISSING");
+          return;
+        }
+        if (!verifyMac(secret, context.nonce, workerId, authMessage.mac)) {
           failHandshake("WORKER_AUTH_FAILED");
           return;
         }

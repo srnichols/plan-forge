@@ -81,6 +81,30 @@ function hasRequiredLabels(lane, requires) {
   return requires.every((label) => labels.includes(label));
 }
 
+function candidateLaneIds({ project, lanes, restricted }) {
+  const ids = preferredLaneIds(project);
+  if (!restricted) {
+    const seen = new Set(ids);
+    for (const lane of lanes) {
+      if (typeof lane?.id === "string" && !seen.has(lane.id)) {
+        ids.push(lane.id);
+        seen.add(lane.id);
+      }
+    }
+  }
+  return ids;
+}
+
+function skippedReason({ lane, id, project, projects, requires, restricted, laneState, health }) {
+  if (!lane) return SKIP.UNKNOWN;
+  if (lane.enabled === false) return SKIP.DISABLED;
+  if (lane.optIn && laneState?.lanes?.[id]?.on !== true) return SKIP.OPT_IN_OFF;
+  if (!hasRequiredLabels(lane, requires)) return SKIP.MISSING_LABELS;
+  if (restricted && !laneIsDedicated(id, project, projects)) return SKIP.NOT_DEDICATED;
+  const status = laneStatus({ lane, laneState: laneState?.lanes?.[id], health: healthForLane(health, lane) });
+  return status.status === "online" ? null : SKIP.OFFLINE;
+}
+
 /**
  * Selects a launchable lane without relaxing project label or restricted-lane rules.
  * @param {{project: object, projects?: object[], lanes: object[], laneState?: object, health?: object|Map|Function}} options Placement inputs.
@@ -90,16 +114,7 @@ export function placeJob({
   project, projects = [], lanes = [], laneState = EMPTY_LANE_STATE, health,
 } = {}) {
   const restricted = project?.visibility === "restricted";
-  const candidateIds = preferredLaneIds(project);
-  if (!restricted) {
-    const seen = new Set(candidateIds);
-    for (const lane of lanes) {
-      if (typeof lane?.id === "string" && !seen.has(lane.id)) {
-        candidateIds.push(lane.id);
-        seen.add(lane.id);
-      }
-    }
-  }
+  const candidateIds = candidateLaneIds({ project, lanes, restricted });
   const laneById = new Map(lanes.map((lane) => [lane?.id, lane]));
   const requires = Array.isArray(project?.placement?.requires) ? project.placement.requires : [];
   const skipped = [];
@@ -109,22 +124,13 @@ export function placeJob({
 
   for (const id of candidateIds) {
     const lane = laneById.get(id);
-    let reason = null;
-    if (!lane) reason = SKIP.UNKNOWN;
-    else if (lane.enabled === false) reason = SKIP.DISABLED;
-    else if (lane.optIn && laneState?.lanes?.[id]?.on !== true) reason = SKIP.OPT_IN_OFF;
-    else if (!hasRequiredLabels(lane, requires)) reason = SKIP.MISSING_LABELS;
-    else if (restricted && !laneIsDedicated(id, project, projects)) reason = SKIP.NOT_DEDICATED;
-    else {
-      const status = laneStatus({ lane, laneState: laneState?.lanes?.[id], health: healthForLane(health, lane) });
-      if (status.status !== "online") reason = SKIP.OFFLINE;
-      else return {
+    const reason = skippedReason({ lane, id, project, projects, requires, restricted, laneState, health });
+    if (reason === null) return {
         ok: true,
         laneId: id,
         skipped,
         explanation: formatExplanation(id, skipped),
       };
-    }
     skipped.push({ id, reason });
   }
 

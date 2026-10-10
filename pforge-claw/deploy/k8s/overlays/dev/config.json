@@ -16,15 +16,17 @@
     { "channel": "telegram", "userId": "<viewer-id>", "role": "viewer" }
   ],
   "policy": { "ghcpRoles": ["owner"], "nonOwnerRuntime": "byok-only" },
-  "runtimes": { "default": "<runtime>", "pforgeCommand": "auto" },
+  "runtimes": { "default": "copilot-sdk", "pforgeCommand": "auto" },
   "lanes": [
     { "id": "local", "kind": "local", "enabled": true },
     {
       "id": "k8s-dev",
       "kind": "k8s",
       "enabled": true,
-      "k8s": { "namespace": "<namespace>", "defaultImage": "pforge-claw-worker-node:dev" },
-      "egress": { "allow": ["dns", "https"] }
+      "k8s": {
+        "namespace": "<namespace>", "defaultImage": "pforge-claw-worker-node:dev",
+        "deadlineSeconds": 120, "ttlSecondsAfterFinished": 10
+      }
     }
   ],
   "projects": [
@@ -34,7 +36,7 @@
       "repo": { "path": "<workspace>/fixture-1", "baseBranch": "main" },
       "channel": { "adapter": "telegram", "chatId": "<chat-id>", "topicId": "<topic-1>" },
       "homeLane": "local",
-      "placement": { "prefer": ["local"], "requires": [] }
+      "placement": { "prefer": ["k8s-dev"], "requires": [] }
     },
     {
       "id": "fixture-2",
@@ -54,5 +56,6 @@
       "placement": { "prefer": ["local"], "requires": [] }
     }
   ],
-  "http": { "bind": "127.0.0.1", "port": 3190 }
+  "k8s": { "egress": { "allow": [] } },
+  "http": { "bind": "0.0.0.0", "port": 3190 }
 }

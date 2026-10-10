@@ -1,15 +1,21 @@
 import { EventEmitter } from "node:events";
+import { createHash } from "node:crypto";
 import { Readable } from "node:stream";
 import { readFileSync } from "node:fs";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
-import os from "node:os";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { ClawError } from "../src/errors.mjs";
 import { createK8sClient } from "../src/k8s/api.mjs";
 import { assertLane } from "../src/lanes/lane.mjs";
-import { buildJobSpec, createK8sJobLane as createLane, runPodJob } from "../src/lanes/k8s-job-lane.mjs";
+import { buildJobSpec, createK8sJobLane as createLane, runPodJob, startPodMcp } from "../src/lanes/k8s-job-lane.mjs";
 import { deriveJobKey } from "../src/protocol/lease-grant.mjs";
+import { finalizePodJob } from "../src/lanes/k8s-job-lane.mjs";
+import { encodeDeltaChunks } from "../src/memory/l2-sync.mjs";
+import { createL2Receiver } from "../src/protocol/l2-receiver.mjs";
+import { createWorkerRegistry } from "../src/protocol/worker-registry.mjs";
+import { L2_APPLIED_MESSAGE } from "../src/protocol/messages.mjs";
 
 const tempDirs = [];
 const jobKey = "b".repeat(64);
@@ -21,7 +27,7 @@ function createK8sJobLane(options) {
 }
 
 async function tempDirectory() {
-  const dir = await mkdtemp(path.join(os.tmpdir(), "claw-k8s-lane-"));
+  const dir = await mkdtemp(path.join(path.dirname(fileURLToPath(import.meta.url)), ".claw-k8s-lane-"));
   tempDirs.push(dir);
   return dir;
 }
@@ -90,12 +96,95 @@ function laneEvent(jobId, seq, type, data = {}) {
   return { v: 1, jobId, seq, ts: new Date(0).toISOString(), type, data };
 }
 
+function appliedEvent(jobId, seq) {
+  return laneEvent(jobId, seq, "finished", {
+    status: "succeeded",
+    l2: { jobId, projectId: "project-one", deltaId: `${jobId}:fixture`, sha256Total: createHash("sha256").update(jobId).digest("hex"), ok: true },
+  });
+}
+
+function fixtureCompletion(event) {
+  return { ok: true, event, applicationAck: event.data.l2 };
+}
+
 afterEach(async () => {
+  vi.restoreAllMocks();
   vi.useRealTimers();
+  vi.unstubAllGlobals();
+  vi.unstubAllEnvs();
   await Promise.all(tempDirs.splice(0).map((dir) => rm(dir, { recursive: true, force: true })));
 });
 
 describe("Kubernetes Job specification", () => {
+  it("does not let Kubernetes TTL garbage-collect the only undelivered history copy", () => {
+    const spec = buildJobSpec(fixtureSpec({
+      lane: { id: "jobs", kind: "k8s", k8s: { defaultImage: "worker:test", ttlSecondsAfterFinished: 5 } },
+    }));
+    expect(spec.spec).not.toHaveProperty("ttlSecondsAfterFinished");
+    expect(spec.metadata.annotations).toMatchObject({ "pforge-claw/cleanup-after-ack-seconds": "5" });
+  });
+
+  it.each(["PFORGE_CLAW_WORKER_SECRET", "PFORGE_CLAW_K8S_LANE_SECRET", "CUSTOM_LANE_CREDENTIAL"])(
+    "refuses a lane-wide credential in the pod environment: %s", (name) => {
+      expect(() => buildJobSpec(fixtureSpec({
+        lane: {
+          id: "jobs", kind: "k8s",
+          k8s: {
+            defaultImage: "worker:test", laneSecret: "CUSTOM_LANE_CREDENTIAL",
+            secrets: { env: { [name]: { name: "lane-authentication", key: "credential" } } },
+          },
+        },
+      }))).toThrowError(expect.objectContaining({ code: "LANE_BAD_CONFIG" }));
+    },
+  );
+
+  it("projects only signed bootstrap/provider secret references for a prepared Job", () => {
+    const job = {
+      id: "signed-secret-refs", projectId: "project-one", runtime: "azure",
+      provider: { type: "azure", keySecret: "APP_AZURE_KEY", endpoint: "https://example.com/azure" },
+      project: { id: "project-one", bootstrap: { copy: [], env: ["APP_ENV"], install: "none" } },
+      leaseGrant: { v: 1 },
+    };
+    const spec = buildJobSpec(fixtureSpec({
+      job,
+      lane: {
+        id: "jobs", kind: "k8s",
+        k8s: {
+          defaultImage: "worker:dev",
+          secrets: { env: {
+            APP_ENV: { name: "app-bootstrap", key: "value" },
+            APP_AZURE_KEY: { name: "app-provider", key: "key" },
+            UNRELATED_KEY: { name: "another-project", key: "key" },
+          } },
+        },
+      },
+    }));
+    const env = spec.spec.template.spec.containers[0].env;
+    expect(env).toEqual(expect.arrayContaining([
+      { name: "APP_ENV", valueFrom: { secretKeyRef: { name: "app-bootstrap", key: "value" } } },
+      { name: "APP_AZURE_KEY", valueFrom: { secretKeyRef: { name: "app-provider", key: "key" } } },
+    ]));
+    expect(env.some(({ name }) => name === "UNRELATED_KEY")).toBe(false);
+    expect(JSON.stringify(spec)).not.toContain("apiKey");
+    expect(JSON.stringify(spec)).not.toContain("another-project");
+  });
+
+  it.each(["bootstrap", "provider"])("refuses a missing signed %s Secret reference before creating a Job", (kind) => {
+    const job = {
+      id: "missing-secret-ref", projectId: "project-one", leaseGrant: { v: 1 },
+      project: { id: "project-one", bootstrap: { copy: [], env: kind === "bootstrap" ? ["APP_ENV"] : [], install: "none" } },
+      ...(kind === "provider" ? { provider: { type: "openai", keySecret: "APP_OPENAI_KEY" } } : {}),
+    };
+    expect(() => buildJobSpec(fixtureSpec({ job }))).toThrowError(expect.objectContaining({ code: "BOOTSTRAP_SECRET_MISSING" }));
+  });
+  it("keeps a writable job-local home on the work volume while the root filesystem is read-only", () => {
+    const pod = buildJobSpec(fixtureSpec()).spec.template.spec;
+    expect(pod.containers[0].securityContext.readOnlyRootFilesystem).toBe(true);
+    expect(pod.containers[0].env).toContainEqual({ name: "HOME", value: "/work/home" });
+    expect(pod.containers[0].env).toContainEqual({ name: "PFORGE_CLAW_HOME", value: "/work/claw" });
+    expect(pod.containers[0].volumeMounts).toContainEqual({ name: "work", mountPath: "/work" });
+    expect(pod.volumes).toContainEqual({ name: "work", emptyDir: {} });
+  });
   it("lane secret never appears in the Job spec", () => {
     const laneSecret = "fixture-lane-secret-canary";
     const derived = deriveJobKey({ laneSecret, laneId: "jobs", jobId: "job-1" });
@@ -158,8 +247,9 @@ describe("Kubernetes Job specification", () => {
     expect(spec.spec).toMatchObject({
       backoffLimit: 0,
       activeDeadlineSeconds: 1800,
-      ttlSecondsAfterFinished: 300,
     });
+    expect(spec.spec).not.toHaveProperty("ttlSecondsAfterFinished");
+    expect(spec.metadata.annotations).toMatchObject({ "pforge-claw/cleanup-after-ack-seconds": "300" });
     expect(pod).toMatchObject({
       restartPolicy: "Never",
       automountServiceAccountToken: false,
@@ -172,6 +262,7 @@ describe("Kubernetes Job specification", () => {
     });
     expect(container.securityContext).toEqual({
       allowPrivilegeEscalation: false,
+      readOnlyRootFilesystem: true,
       capabilities: { drop: ["ALL"] },
     });
     expect(container.resources).toEqual({
@@ -221,6 +312,19 @@ describe("Kubernetes Job specification", () => {
 });
 
 describe("in-cluster Kubernetes API", () => {
+  it("never exposes an arbitrary API reason in a structured error", async () => {
+    const canary = "fixture-g4-api-reason-credential";
+    const client = createK8sClient({
+      host: "kubernetes",
+      readFile: async (file) => path.basename(file) === "token" ? canary : Buffer.from("ca"),
+      request: fakeRequest([response(403, JSON.stringify({ reason: canary }))]),
+    });
+    const error = await client.getJob("claw", "job-one").catch((failure) => failure);
+    expect(error.code).toBe("K8S_API");
+    expect(JSON.stringify(error).includes(canary)).toBe(false);
+    expect(error.details.reason).toBe("forbidden");
+  });
+
   it("uses the namespace path, CA, bearer token, and re-reads the projected token", async () => {
     const requests = [];
     const values = ["tok-CANARY-123", "tok-CANARY-456"];
@@ -388,14 +492,345 @@ describe("in-cluster Kubernetes API", () => {
 });
 
 describe("Kubernetes Job lane lifecycle", () => {
-  it("deletes an unknown job by its derived name and treats 404 as success", async () => {
+  it("starts successful pod cleanup only after the matching canonical ACK and configured retention", async () => {
+    vi.useFakeTimers();
+    const job = { id: "ack-fenced-cleanup", projectId: "project-one", type: "task" };
+    const final = appliedEvent(job.id, 2);
+    const registry = {
+      enqueue: () => ({ iterator: asyncEvents([laneEvent(job.id, 1, "started"), final]) }),
+      cancel: vi.fn(), completion: () => fixtureCompletion(final),
+    };
+    const api = { createJob: async () => ({}), getJob: vi.fn(), deleteJob: vi.fn(async () => ({})), watchJob: async function* watch() {} };
+    const lane = createK8sJobLane({ id: "jobs", config: appConfig({ ttlSecondsAfterFinished: 5 }), registry, api });
+    const events = [];
+    for await (const event of lane.submit(job)) events.push(event);
+    expect(events.at(-1).data.status).toBe("succeeded");
+    expect(api.deleteJob).not.toHaveBeenCalled();
+    await vi.advanceTimersByTimeAsync(5001);
+    expect(api.deleteJob).toHaveBeenCalledExactlyOnceWith("claw", "pforge-claw-ack-fenced-cleanup");
+  });
+
+  it("cancels a running pod without deleting its unacknowledged job-local history", async () => {
+    const job = { id: "cancel-retains-history", projectId: "project-one", type: "task" };
+    const release = Promise.withResolvers();
+    const registry = {
+      enqueue: () => ({ iterator: {
+        async *[Symbol.asyncIterator]() {
+          yield laneEvent(job.id, 1, "started");
+          await release.promise;
+          yield laneEvent(job.id, 2, "finished", { status: "cancelled" });
+        },
+      } }),
+      cancel: vi.fn(async () => { release.resolve(); return { ok: true, state: "cancelling" }; }),
+      completion: () => null,
+    };
+    const api = { createJob: async () => ({}), getJob: vi.fn(), deleteJob: vi.fn(), watchJob: async function* watch() {} };
+    const lane = createK8sJobLane({ id: "jobs", config: appConfig(), registry, api });
+    const stream = lane.submit(job)[Symbol.asyncIterator]();
+    await expect(stream.next()).resolves.toMatchObject({ value: { type: "started" } });
+    const cancellation = await lane.cancel(job.id);
+    expect(cancellation).toMatchObject({ ok: true, state: "cancelling" });
+    expect(api.deleteJob).not.toHaveBeenCalled();
+    await expect(stream.next()).resolves.toMatchObject({ value: { type: "finished", data: { status: "cancelled" } } });
+    await stream.return();
+  });
+
+  it("delivers a real canonical receiver ACK before accepting a K8s worker terminal success", async () => {
+    const workdir = await tempDirectory();
+    const config = appConfig();
+    config.lanes.push({ id: "local", kind: "local" });
+    config.projects[0].homeLane = "local";
+    config.projects[0].repo.path = workdir;
+    const receiver = createL2Receiver({ config, currentLaneId: "local" });
+    const registry = createWorkerRegistry({ requireL2: true });
+    registry.setL2Receiver(receiver.receive);
+    const job = { id: "canonical-k8s-lane", projectId: "project-one", type: "task", mutating: true };
+    const workerId = `job:${job.id}`;
+    const leased = Promise.withResolvers();
+    const applied = Promise.withResolvers();
+    registry.connect(workerId, {
+      laneId: "jobs", jobScope: { jobId: job.id }, capabilities: { projects: ["project-one"] },
+      send: (packet) => {
+        if (packet.t === "lease") leased.resolve(packet);
+        if (packet.t === L2_APPLIED_MESSAGE) applied.resolve(packet);
+      },
+    });
+    const lane = createK8sJobLane({
+      id: "jobs", config, registry,
+      api: { createJob: async () => ({}), getJob: vi.fn(), deleteJob: vi.fn(), watchJob: async function* watch() {} },
+    });
+    try {
+      const collection = (async () => {
+        const events = [];
+        for await (const event of lane.submit(job)) events.push(event);
+        return events;
+      })();
+      const lease = await leased.promise;
+      const scope = { leaseId: lease.leaseId, attempt: lease.attempt, workerId };
+      registry.onAck(scope);
+      registry.onEvent({ ...scope, event: laneEvent(job.id, 1, "started") });
+      const line = '{"id":"g4-canonical-byte-proof","text":"offline queue leftover"}';
+      const delta = { files: [], jsonl: { "openbrain-queue.jsonl": [line] }, maps: {} };
+      const [chunk] = encodeDeltaChunks({ delta, deltaId: `${job.id}:history` });
+      registry.onEvent({ ...scope, event: laneEvent(job.id, 2, "artifact", chunk) });
+      const wireAck = await applied.promise;
+      const ack = { jobId: wireAck.jobId, projectId: wireAck.projectId, deltaId: wireAck.deltaId, sha256Total: wireAck.sha256Total, ok: wireAck.ok };
+      expect(ack.ok).toBe(true);
+      registry.onEvent({ ...scope, event: laneEvent(job.id, 3, "finished", { status: "succeeded", l2: ack }) });
+      const events = await collection;
+      expect(events.map(({ type }) => type)).toEqual(["started", "artifact", "finished"]);
+      expect(events.at(-1).data.status).toBe("succeeded");
+      expect(registry.completion(job.id).applicationAck).toEqual(ack);
+      expect(await readFile(path.join(workdir, ".forge", "openbrain-queue.jsonl"), "utf8")).toBe(`${line}\n`);
+    } finally {
+      registry.close();
+    }
+  });
+
+  it("refuses terminal success without canonical application proof even if the worker sent finished", async () => {
+    const job = { id: "unconfirmed-success", projectId: "project-one", type: "task" };
+    const registry = {
+      enqueue: () => ({ iterator: asyncEvents([
+        laneEvent(job.id, 1, "started"),
+        laneEvent(job.id, 2, "finished", { status: "succeeded" }),
+      ]) }),
+      cancel: vi.fn(), completion: () => ({ ok: false, applicationAck: null }),
+    };
+    const lane = createK8sJobLane({
+      id: "jobs", config: appConfig(), registry,
+      api: { createJob: async () => ({}), getJob: vi.fn(), deleteJob: vi.fn(), watchJob: async function* watch() {} },
+    });
+    const events = [];
+    for await (const event of lane.submit(job)) events.push(event);
+    expect(events.at(-1)).toMatchObject({
+      type: "finished", data: { status: "failed", reason: "l2-sync-incomplete" },
+    });
+  });
+
+  it("requires an explicit namespace matching provisioned RBAC instead of silently using default", () => {
+    const config = appConfig();
+    delete config.lanes[0].k8s.namespace;
+    expect(() => createK8sJobLane({
+      id: "jobs", config,
+      api: { createJob: vi.fn(), getJob: vi.fn(), deleteJob: vi.fn(), watchJob: vi.fn() },
+      registry: { enqueue: vi.fn(), cancel: vi.fn() },
+    })).toThrowError(expect.objectContaining({ code: "LANE_BAD_CONFIG" }));
+  });
+
+  describe("pod finalization application acknowledgement", () => {
+    const jobId = "g4-finalize";
+    const projectId = "project-one";
+    const delta = { files: [], jsonl: { "openbrain-queue.jsonl": ['{"id":"offline-leftover"}'] }, maps: {} };
+
+    it("fails closed when application fails and never returns a secret-bearing transport exception", async () => {
+      const stop = vi.fn();
+      const canary = "fixture-g4-apply-error-secret";
+      const result = await finalizePodJob({
+        repoDir: await tempDirectory(), jobId, projectId,
+        env: {}, runner: async () => ({ code: 1 }), startMcp: async () => ({ stop }),
+        collectDelta: async () => delta, awaitAck: async () => { throw new Error(canary); },
+        deadlineMs: 1000, now: () => 0,
+      });
+      expect(result).toEqual({ status: "failed", reason: "l2-sync-incomplete" });
+      expect(stop).toHaveBeenCalledOnce();
+      expect(JSON.stringify(result).includes(canary)).toBe(false);
+    });
+
+    it("does not return unexpected secret-bearing fields from an otherwise valid application ACK", async () => {
+      const canary = "fixture-g4-ack-secret";
+      const result = await finalizePodJob({
+        repoDir: await tempDirectory(), jobId, projectId,
+        env: {}, runner: async () => ({ code: 1 }), startMcp: async () => ({ stop: vi.fn() }),
+        collectDelta: async () => delta,
+        awaitAck: async ({ transfer }) => ({
+          jobId: transfer.jobId, projectId: transfer.projectId, deltaId: transfer.deltaId,
+          sha256Total: transfer.sha256Total, ok: true, token: canary,
+        }),
+        deadlineMs: 1000, now: () => 0,
+      });
+      expect(result.status).toBe("ok");
+      expect(JSON.stringify(result).includes(canary)).toBe(false);
+    });
+
+    it.each([true, undefined, null, { lastSeq: 99 }, { ok: true }])(
+      "never treats transport or missing acknowledgement %j as canonical application", async (ack) => {
+        const stop = vi.fn();
+        const result = await finalizePodJob({
+          repoDir: await tempDirectory(), jobId, projectId,
+          env: {}, runner: async () => ({ code: 1 }), startMcp: async () => ({ stop }),
+          collectDelta: async () => delta, awaitAck: async () => ack, deadlineMs: 1000, now: () => 0,
+        });
+        expect(result).toEqual({ status: "failed", reason: "l2-sync-incomplete" });
+        expect(stop).toHaveBeenCalledOnce();
+      },
+    );
+
+    it("accepts only an identity-matching application ACK for the exact checksummed transfer", async () => {
+      const stop = vi.fn();
+      const ackTransfer = vi.fn(async ({ transfer }) => {
+        expect(transfer.chunks).toEqual(encodeDeltaChunks({ delta, deltaId: transfer.deltaId }));
+        return { jobId: transfer.jobId, projectId: transfer.projectId, deltaId: transfer.deltaId, sha256Total: transfer.sha256Total, ok: true };
+      });
+      const result = await finalizePodJob({
+        repoDir: await tempDirectory(), jobId, projectId,
+        env: {}, runner: async () => ({ code: 1 }), startMcp: async () => ({ stop }),
+        collectDelta: async () => delta, awaitAck: ackTransfer, deadlineMs: 1000, now: () => 0,
+      });
+      expect(result.status).toBe("ok");
+      expect(result.applicationAck).toMatchObject({ jobId, projectId, ok: true });
+      expect(stop).toHaveBeenCalledOnce();
+    });
+
+    it.each(["jobId", "projectId", "deltaId", "sha256Total"])("rejects a positive ACK for another %s", async (field) => {
+      const result = await finalizePodJob({
+        repoDir: await tempDirectory(), jobId, projectId,
+        env: {}, runner: async () => ({ code: 1 }), startMcp: async () => ({ stop: vi.fn() }),
+        collectDelta: async () => delta,
+        awaitAck: async ({ transfer }) => ({
+          jobId: transfer?.jobId, projectId: transfer?.projectId, deltaId: transfer?.deltaId,
+          sha256Total: transfer?.sha256Total, ok: true, [field]: field === "sha256Total" ? "a".repeat(64) : "another-identity",
+        }),
+        deadlineMs: 1000, now: () => 0,
+      });
+      expect(result).toEqual({ status: "failed", reason: "l2-sync-incomplete" });
+    });
+  });
+
+  it.each(["registerPending", "revoke"])("validates the required job authentication lifecycle port %s", (missing) => {
+    const registry = { enqueue: vi.fn(), cancel: vi.fn(), registerPending: vi.fn(), revoke: vi.fn() };
+    delete registry[missing];
+    expect(() => createLane({
+      id: "jobs", config: appConfig(), registry,
+      api: { createJob: vi.fn(), getJob: vi.fn(), deleteJob: vi.fn(), watchJob: vi.fn() },
+    })).toThrowError(expect.objectContaining({ code: "LANE_BAD_CONFIG" }));
+  });
+
+  it("drains worker PR and history queued before a Kubernetes failure before emitting that failure", async () => {
+    const job = { id: "watch-failure-fifo", projectId: "project-one", type: "task" };
+    const artifacts = [
+      laneEvent(job.id, 2, "artifact", { kind: "pr", url: "https://example.com/pr/2" }),
+      laneEvent(job.id, 3, "artifact", { kind: "l2-delta", entries: [{ path: "audit.jsonl" }] }),
+    ];
+    const registry = {
+      enqueue: () => ({ iterator: asyncEvents([
+        laneEvent(job.id, 1, "started"), ...artifacts,
+        laneEvent(job.id, 4, "finished", { status: "succeeded" }),
+      ]) }),
+      cancel: vi.fn(async () => ({ ok: true })),
+    };
+    const api = {
+      createJob: vi.fn(async () => ({})), getJob: vi.fn(), deleteJob: vi.fn(),
+      watchJob: async function* watch() {
+        yield { type: "MODIFIED", object: { status: { conditions: [
+          { type: "Failed", status: "True", reason: "DeadlineExceeded" },
+        ] } } };
+      },
+    };
+    const lane = createK8sJobLane({ id: "jobs", config: appConfig(), api, registry });
+    const events = [];
+    for await (const event of lane.submit(job)) events.push(event);
+    expect(events.filter((event) => event.type === "artifact")).toEqual(artifacts);
+    expect(events.map((event) => event.seq)).toEqual([1, 2, 3, 4]);
+    expect(events.at(-1)).toMatchObject({
+      type: "finished", data: { status: "failed", reason: "l2-sync-incomplete" },
+    });
+    expect(events.filter((event) => event.type === "finished")).toHaveLength(1);
+  });
+
+  it("fails a worker stream that ends without a final event after delivering its history", async () => {
+    vi.useFakeTimers();
+    const job = { id: "ended-stream", projectId: "project-one" };
+    const releaseWatch = Promise.withResolvers();
+    const registry = {
+      enqueue: () => ({ iterator: asyncEvents([
+        laneEvent(job.id, 1, "started"),
+        laneEvent(job.id, 2, "artifact", { kind: "l2-delta", entries: [] }),
+      ]) }),
+      cancel: vi.fn(),
+    };
+    const api = {
+      createJob: vi.fn(async () => ({})), getJob: vi.fn(), deleteJob: vi.fn(),
+      watchJob: async function* watch() {
+        await releaseWatch.promise;
+        yield { type: "MODIFIED", object: { status: { conditions: [
+          { type: "Failed", status: "True", reason: "DeadlineExceeded" },
+        ] } } };
+      },
+    };
+    const lane = createK8sJobLane({ id: "jobs", config: appConfig(), api, registry });
+    const stream = lane.submit(job)[Symbol.asyncIterator]();
+    await expect(stream.next()).resolves.toMatchObject({ value: { type: "started" } });
+    await expect(stream.next()).resolves.toMatchObject({ value: { type: "artifact" } });
+    let final;
+    const pending = stream.next().then((event) => { final = event; });
+    await vi.advanceTimersByTimeAsync(1);
+    try {
+      expect(final).toMatchObject({
+        value: { type: "finished", seq: 3, data: { status: "failed", reason: "l2-sync-incomplete" } },
+      });
+    } finally {
+      releaseWatch.resolve();
+      await pending;
+      await stream.return();
+    }
+  });
+
+  it("drains buffered PR and L2 artifacts before terminal success when the consumer pauses", async () => {
+    const job = { id: "job-slow-consumer", projectId: "project-one", type: "task" };
+    const release = Promise.withResolvers();
+    const produced = Promise.withResolvers();
+    const expected = [
+      laneEvent(job.id, 1, "started"),
+      laneEvent(job.id, 2, "artifact", { kind: "pr", url: "https://example.com/pr/1" }),
+      laneEvent(job.id, 3, "artifact", { kind: "l2-delta", entries: [{ path: "audit.jsonl" }] }),
+      appliedEvent(job.id, 4),
+    ];
+    let index = 0;
+    const source = {
+      async next() {
+        if (index > 0) await release.promise;
+        const event = expected[index++];
+        if (event?.type === "finished") queueMicrotask(produced.resolve);
+        return event ? { value: event, done: false } : { done: true };
+      },
+      return: vi.fn(async () => ({ done: true })),
+      [Symbol.asyncIterator]() { return this; },
+    };
+    const registry = {
+      enqueue: () => ({ iterator: source }),
+      cancel: vi.fn(),
+      revoke: vi.fn(),
+      completion: () => fixtureCompletion(expected.at(-1)),
+    };
+    const api = {
+      createJob: vi.fn(async () => ({})),
+      getJob: vi.fn(),
+      deleteJob: vi.fn(),
+      watchJob: async function* watch() {},
+    };
+    const lane = createK8sJobLane({ id: "jobs", config: appConfig(), api, registry });
+    const stream = lane.submit(job)[Symbol.asyncIterator]();
+    const first = await stream.next();
+    expect(first.value).toEqual(expected[0]);
+    release.resolve();
+    await produced.promise;
+    await Promise.resolve();
+    const received = [first.value];
+    for await (const event of { [Symbol.asyncIterator]: () => stream }) received.push(event);
+    expect(received).toEqual(expected);
+    expect(received.filter((event) => event.type === "finished")).toHaveLength(1);
+    expect(registry.revoke).toHaveBeenCalledExactlyOnceWith(job.id);
+    expect(source.return).toHaveBeenCalledOnce();
+    expect(lane.health().active).toBe(0);
+  });
+  it("retains an unknown job rather than deleting a possibly unacknowledged history copy", async () => {
     const deletion = vi.fn(async () => { throw new ClawError("K8S_API", { status: 404 }); });
     const lane = createK8sJobLane({
       id: "jobs", config: appConfig(), registry: { enqueue: vi.fn(), cancel: () => ({ ok: false, error: "JOB_UNKNOWN" }) },
       api: { createJob: vi.fn(), getJob: vi.fn(), watchJob: vi.fn(), deleteJob: deletion },
     });
     expect(await lane.cancel("unknown-job")).toMatchObject({ ok: true });
-    expect(deletion).toHaveBeenCalledWith("claw", "pforge-claw-unknown-job");
+    expect(deletion).not.toHaveBeenCalled();
   });
   it("reports a missing lane secret while a provisioned idle lane is healthy", async () => {
     const options = {
@@ -433,15 +868,17 @@ describe("Kubernetes Job lane lifecycle", () => {
   });
   it("forwards worker events in order and emits one terminal event", async () => {
     const job = { id: "job-123", projectId: "project-one", type: "task" };
+    const final = appliedEvent(job.id, 3);
     const registry = {
       enqueue: vi.fn(() => ({ iterator: asyncEvents([
         laneEvent(job.id, 1, "started"),
         laneEvent(job.id, 2, "progress"),
         laneEvent(job.id, 2, "progress", { duplicate: true }),
-        laneEvent(job.id, 3, "finished", { status: "succeeded" }),
+        final,
       ]) })),
       cancel: vi.fn(async () => ({ ok: true, state: "cancelling" })),
       snapshot: () => ({ byLane: { jobs: { connected: 1 } } }),
+      completion: () => fixtureCompletion(final),
     };
     const api = {
       createJob: vi.fn(async () => ({})),
@@ -579,10 +1016,12 @@ describe("Kubernetes Job lane lifecycle", () => {
 
   it("uses a single terminal guard and treats owned 409 Jobs as adoptable", async () => {
     const job = { id: "already-created", projectId: "project-one" };
+    const final = appliedEvent(job.id, 2);
     const registry = {
-      enqueue: () => ({ iterator: asyncEvents([laneEvent(job.id, 1, "started"), laneEvent(job.id, 2, "finished", { status: "succeeded" })]) }),
+      enqueue: () => ({ iterator: asyncEvents([laneEvent(job.id, 1, "started"), final]) }),
       cancel: async () => ({ ok: true }),
       snapshot: () => ({ byLane: {} }),
+      completion: () => fixtureCompletion(final),
     };
     const api = {
       createJob: async () => { throw new ClawError("K8S_API", { status: 409, reason: "conflict" }); },
@@ -659,11 +1098,11 @@ describe("Kubernetes Job lane lifecycle", () => {
     });
     await stream.return();
     expect(api.deleteJob).toHaveBeenCalledOnce();
-    expect(await lane.cancel(job.id)).toEqual({ ok: true, state: "cancelling" });
-    expect(await lane.cancel(job.id)).toEqual({ ok: true, state: "cancelling" });
+    expect(await lane.cancel(job.id)).toEqual({ ok: true, state: "cancelling", historyRetained: true });
+    expect(await lane.cancel(job.id)).toEqual({ ok: true, state: "cancelling", historyRetained: true });
   });
 
-  it("treats 404 deletion as already gone and returns authorization failures", async () => {
+  it("retains running jobs on cancellation even when Kubernetes deletion would return 404 or 403", async () => {
     const registry = {
       enqueue: () => ({
         iterator: {
@@ -715,12 +1154,161 @@ describe("Kubernetes Job lane lifecycle", () => {
     });
     const forbiddenStream = forbiddenLane.submit({ id: "active-job", projectId: "project-one" })[Symbol.asyncIterator]();
     await expect(forbiddenStream.next()).resolves.toMatchObject({ value: { type: "started" } });
-    await expect(forbiddenLane.cancel("active-job")).resolves.toEqual({ ok: false, error: "K8S_API" });
+    await expect(forbiddenLane.cancel("active-job")).resolves.toEqual({ ok: true, state: "cancelling", historyRetained: true });
     await forbiddenStream.return();
   });
 });
 
 describe("pod-side clone and bootstrap", () => {
+  it("honors the supplied approved project's bootstrap choices over stale host defaults", async () => {
+    const workdir = await tempDirectory();
+    const job = {
+      id: "approved-project-bootstrap", projectId: "project-one", quorum: "speed", resumeFrom: 2,
+      project: Object.freeze({
+        id: "project-one",
+        repo: Object.freeze({ url: "https://example.com/approved.git", defaultBranch: "approved-base" }),
+        models: Object.freeze({ work: "approved-work-model" }),
+        bootstrap: Object.freeze({ copy: [], env: ["APP_ENV"], install: "none" }),
+      }),
+    };
+    const runner = vi.fn(async () => {
+      const { mkdir } = await import("node:fs/promises");
+      await mkdir(path.join(workdir, "repo"), { recursive: true });
+      return { code: 0 };
+    });
+    const boot = await runPodJob({
+      job, project: job.project, workdir, runner, requestCopySet: async () => [],
+      config: { bootstrap: { copy: [], env: [], install: "ci" }, runtimes: { pforgeCommand: ["pforge"] } },
+      secrets: { get: (name) => name === "APP_ENV" ? "fixture-approved-environment" : undefined },
+    });
+    expect(boot.ok).toBe(true);
+    expect(runner.mock.calls.some(([, args]) => args.includes("ci"))).toBe(false);
+    expect(boot.env.APP_ENV).toBe("fixture-approved-environment");
+    expect(job.quorum).toBe("speed");
+    expect(job.resumeFrom).toBe(2);
+    expect(job.project.models.work).toBe("approved-work-model");
+  });
+
+  it("uses the supplied job-owned environment rather than inheriting dispatcher process values", async () => {
+    const workdir = await tempDirectory();
+    const preparedEnv = { G4_JOB_SCOPE: "fixture-only", GIT_AUTHOR_NAME: "Approved Job Author" };
+    const runner = vi.fn(async () => ({ code: 1 }));
+    await runPodJob({
+      job: { id: "prepared-environment" },
+      project: { repo: { url: "https://example.com/approved.git", defaultBranch: "main" } },
+      env: preparedEnv, workdir, runner, requestCopySet: async () => [],
+    });
+    expect(runner.mock.calls[0][2].env.G4_JOB_SCOPE).toBe("fixture-only");
+    expect(runner.mock.calls[0][2].env.GIT_AUTHOR_NAME).toBe("Approved Job Author");
+    expect(preparedEnv).not.toHaveProperty("HOME");
+  });
+
+  it.each(["http://example.com/repo.git", "git://example.com/repo.git", "file:///repo", "ext::unexpected-helper", "repo-on-host"])(
+    "refuses a non-HTTPS token-only clone before invoking Git: %s", async (remote) => {
+      const runner = vi.fn();
+      const boot = await runPodJob({
+        job: { id: "unsupported-transport" },
+        project: { repo: { remote, baseBranch: "main" } },
+        requestCopySet: async () => [], runner, workdir: await tempDirectory(),
+      });
+      expect(boot).toMatchObject({ ok: false, reason: "bootstrap", code: "REMOTE_AUTH_UNSUPPORTED" });
+      expect(runner).not.toHaveBeenCalled();
+    },
+  );
+
+  it("honors a verified bootstrap install none instead of silently running npm ci", async () => {
+    const workdir = await tempDirectory();
+    const runner = vi.fn(async (command) => {
+      if (command === "git") {
+        const { mkdir } = await import("node:fs/promises");
+        await mkdir(path.join(workdir, "repo"), { recursive: true });
+      }
+      return { code: 0 };
+    });
+    const result = await runPodJob({
+      job: { id: "signed-install-choice" },
+      project: { repo: { remote: "https://example.com/repo.git", baseBranch: "main" }, bootstrap: { copy: [] } },
+      config: { bootstrap: { copy: [], env: [], install: "none" }, runtimes: { pforgeCommand: ["pforge"] } },
+      requestCopySet: async () => [],
+      runner,
+      workdir,
+    });
+    expect(result.ok).toBe(true);
+    expect(runner.mock.calls.map(([command]) => path.basename(command))).toEqual(["git", "git", "pforge"]);
+    expect(runner.mock.calls.some(([, args]) => args.includes("ci"))).toBe(false);
+  });
+
+  it("gives the initial HTTPS clone isolated token-backed Git authentication and generic authors", async () => {
+    vi.stubEnv("GH_TOKEN", "");
+    vi.stubEnv("GIT_AUTHOR_NAME", "");
+    vi.stubEnv("GIT_AUTHOR_EMAIL", "");
+    vi.stubEnv("GIT_COMMITTER_NAME", "");
+    vi.stubEnv("GIT_COMMITTER_EMAIL", "");
+    const workdir = await tempDirectory();
+    const runner = vi.fn(async () => ({ code: 1 }));
+    const token = "fixture-git-credential-canary";
+    await runPodJob({
+      job: { id: "authenticated-clone" },
+      project: { repo: { remote: "https://example.com/repo.git", baseBranch: "main" } },
+      workdir,
+      secrets: { get: (name) => name === "PFORGE_CLAW_GH_TOKEN" ? token : undefined },
+      requestCopySet: async () => [],
+      runner,
+    });
+    const [command, args, options] = runner.mock.calls[0];
+    expect(command).toBe("git");
+    expect(options.env).toMatchObject({
+      HOME: path.join(workdir, "home"),
+      GH_TOKEN: token,
+      GIT_TERMINAL_PROMPT: "0",
+      GIT_CONFIG_NOSYSTEM: "1",
+      GIT_CONFIG_GLOBAL: path.join(workdir, "home", ".gitconfig"),
+      GIT_CONFIG_COUNT: "2",
+      GIT_CONFIG_KEY_0: "credential.helper",
+      GIT_CONFIG_VALUE_0: "",
+      GIT_CONFIG_KEY_1: "credential.helper",
+      GIT_CONFIG_VALUE_1: "!gh auth git-credential",
+      GIT_AUTHOR_NAME: "Forge-Claw",
+      GIT_AUTHOR_EMAIL: "claw@localhost",
+      GIT_COMMITTER_NAME: "Forge-Claw",
+      GIT_COMMITTER_EMAIL: "claw@localhost",
+    });
+    expect(JSON.stringify(args)).not.toContain(token);
+    expect(args).not.toContain("--global");
+  });
+
+  it("preserves configured author and committer identities in the clone environment", async () => {
+    vi.stubEnv("GIT_AUTHOR_NAME", "Configured Author");
+    vi.stubEnv("GIT_AUTHOR_EMAIL", "author@example.com");
+    vi.stubEnv("GIT_COMMITTER_NAME", "Configured Committer");
+    vi.stubEnv("GIT_COMMITTER_EMAIL", "committer@example.com");
+    const runner = vi.fn(async () => ({ code: 1 }));
+    await runPodJob({
+      job: { id: "configured-author" },
+      project: { repo: { remote: "https://example.com/repo.git", baseBranch: "main" } },
+      workdir: await tempDirectory(),
+      requestCopySet: async () => [],
+      runner,
+    });
+    expect(runner.mock.calls[0][2].env).toMatchObject({
+      GIT_AUTHOR_NAME: "Configured Author",
+      GIT_AUTHOR_EMAIL: "author@example.com",
+      GIT_COMMITTER_NAME: "Configured Committer",
+      GIT_COMMITTER_EMAIL: "committer@example.com",
+    });
+  });
+
+  it("refuses credentials in an HTTPS repository URL before invoking Git", async () => {
+    const runner = vi.fn();
+    await expect(runPodJob({
+      job: { id: "embedded-credentials" },
+      project: { repo: { remote: "https://user:fixture-credential@example.com/repo.git", baseBranch: "main" } },
+      requestCopySet: async () => [],
+      runner,
+    })).resolves.toMatchObject({ ok: false, reason: "bootstrap", step: "clone", code: "REMOTE_AUTH_UNSUPPORTED" });
+    expect(runner).not.toHaveBeenCalled();
+  });
+
   it("clones, copies allowed files, installs, and runs smith in order", async () => {
     const workdir = await tempDirectory();
     const repoDir = path.join(workdir, "repo");
@@ -806,6 +1394,28 @@ describe("pod-side clone and bootstrap", () => {
       runner,
     })).resolves.toMatchObject({ ok: false, code: "REMOTE_AUTH_UNSUPPORTED" });
     expect(runner).not.toHaveBeenCalled();
+  });
+});
+
+describe("pod-local MCP environment", () => {
+  it("passes the prepared job environment to MCP without mutating the process environment", async () => {
+    const preparedEnv = Object.freeze({ G4_JOB_SCOPE: "mcp-fixture" });
+    const child = new EventEmitter();
+    child.exitCode = null;
+    child.signalCode = null;
+    child.kill = vi.fn(() => { child.exitCode = 0; child.emit("exit", 0); });
+    const spawnFn = vi.fn(() => child);
+    vi.stubGlobal("fetch", vi.fn(async () => ({ status: 405 })));
+    const mcp = await startPodMcp({
+      repoDir: path.join(path.dirname(fileURLToPath(import.meta.url)), "fixture-repo"),
+      env: preparedEnv, spawnFn, now: () => 0, sleep: async () => {},
+    });
+    try {
+      expect(spawnFn.mock.calls[0][2].env === preparedEnv).toBe(true);
+      expect(process.env.G4_JOB_SCOPE).toBeUndefined();
+    } finally {
+      await mcp.stop();
+    }
   });
 });
 

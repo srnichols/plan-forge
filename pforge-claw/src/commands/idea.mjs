@@ -1,6 +1,7 @@
 import { ROLES } from "../enums.mjs";
 import { ClawError } from "../errors.mjs";
 import { getBoundCaptureService } from "../handlers/capture-commands.mjs";
+import { captureProvenance } from "../capture-policy.mjs";
 
 export default Object.freeze({
   name: "idea", aliases: [], args: "<idea>", summary: "Capture a project idea and echo its smelt id",
@@ -18,6 +19,7 @@ export default Object.freeze({
       threadId: args.threadId,
       updateId: args.updateId,
       text: args.argsText ?? "",
+      ...captureProvenance(args),
     });
   },
 });

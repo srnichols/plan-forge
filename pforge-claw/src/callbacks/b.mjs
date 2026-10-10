@@ -1,4 +1,4 @@
-import { getBudgetService } from "../budget.mjs";
+import { getBudgetService, OVERRIDE_PREFIX } from "../budget.mjs";
 import { ROLES } from "../enums.mjs";
 import { writeApprovalAudit } from "../approvals.mjs";
 
@@ -7,72 +7,63 @@ function audit(service, record) {
     if (service?.audit) service.audit(record);
     else writeApprovalAudit(record);
   } catch {
-    // Callback acknowledgement must not expose storage failures.
+    return false;
+  }
+}
+
+function callerMetadata({ caller, chatId, threadId }) {
+  return { userId: caller?.userId, chatId, threadId };
+}
+
+async function refuseOverride(service, request, reason) {
+  audit(service, { kind: "budget-override-refused", reason, ...callerMetadata(request) });
+  if (!service.channel || request.chatId === undefined || request.chatId === null) return;
+  try {
+    await service.channel.send({
+      chatId: request.chatId, threadId: request.threadId, text: "This override is no longer valid.",
+    });
+  } catch {
+    audit(service, { kind: "budget-override-reply-failed", reason: "CHANNEL_SEND_FAILED", ...callerMetadata(request) });
+  }
+}
+
+async function acknowledgeRelease(service, request, jobId) {
+  audit(service, { kind: "budget-override-released", jobId, ...callerMetadata(request) });
+  if (!service.channel || request.messageId === undefined || request.messageId === null) return;
+  try {
+    await service.channel.edit({
+      chatId: request.chatId,
+      messageId: request.messageId,
+      threadId: request.threadId,
+      text: `✅ Released over budget by ${String(request.caller?.userId ?? "owner")}`,
+      replyMarkup: { inline_keyboard: [] },
+    });
+  } catch {
+    // A failed edit cannot undo the committed release or trigger a second send.
+    audit(service, { kind: "budget-override-reply-failed", jobId, reason: "CHANNEL_EDIT_FAILED", ...callerMetadata(request) });
   }
 }
 
 export default Object.freeze({
-  prefix: "b",
+  prefix: OVERRIDE_PREFIX,
   sinceSlice: 11,
   available: true,
   roles: [ROLES[0]],
-  async handle(_ctx, { payload, caller, chatId, threadId, messageId } = {}) {
+  async handle(_ctx, request = {}) {
     const service = getBudgetService();
     if (!service) {
-      audit(null, { kind: "budget-override-refused", reason: "unavailable", userId: caller?.userId, chatId, threadId });
+      audit(null, { kind: "budget-override-refused", reason: "unavailable", ...callerMetadata(request) });
       return;
     }
     try {
-      const result = await service.override({ payload, caller, chatId, threadId });
+      const result = await service.override(request);
       if (!result?.ok) {
-        audit(service, {
-          kind: "budget-override-refused",
-          reason: typeof result?.reason === "string" ? result.reason : "internal",
-          userId: caller?.userId,
-          chatId,
-          threadId,
-        });
-        if (service.channel && chatId !== undefined && chatId !== null) {
-          try {
-            await service.channel.send({ chatId, threadId, text: "This override is no longer valid." });
-          } catch {
-            // A neutral refusal is best-effort.
-          }
-        }
+        await refuseOverride(service, request, typeof result?.reason === "string" ? result.reason : "internal");
         return;
       }
-      audit(service, {
-        kind: "budget-override-released",
-        jobId: result.jobId,
-        userId: caller?.userId,
-        chatId,
-        threadId,
-      });
-      if (service.channel && messageId !== undefined && messageId !== null) {
-        try {
-          await service.channel.edit({
-            chatId,
-            messageId,
-            threadId,
-            text: `✅ Released over budget by ${String(caller?.userId ?? "owner")}`,
-            replyMarkup: { inline_keyboard: [] },
-          });
-        } catch {
-          // The release is committed even if the card cannot be updated.
-        }
-      }
+      await acknowledgeRelease(service, request, result.jobId);
     } catch {
-      audit(service, {
-        kind: "budget-override-refused", reason: "internal",
-        userId: caller?.userId, chatId, threadId,
-      });
-      if (service.channel && chatId !== undefined && chatId !== null) {
-        try {
-          await service.channel.send({ chatId, threadId, text: "This override is no longer valid." });
-        } catch {
-          // Callback handling remains non-throwing.
-        }
-      }
+      await refuseOverride(service, request, "internal");
     }
   },
 });

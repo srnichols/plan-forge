@@ -18,6 +18,13 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 - `forge_master_observe` is now registered on `pforge-mcp` as a proxy to the Forge-Master studio child, so any MCP client connected to a project can start/stop the observer and page insights (`limit`, `cursor`). There is no in-process fallback; an unreachable child returns `FORGE_MASTER_UNAVAILABLE`. Listed in the `liveguard` tool profile.
 - Memory provenance (`origin`, `tags`, `visibility`) and recall fencing, including fencing of untrusted recall.
 
+### Fixed
+
+- **Forge-Claw review hardening** — foreground plans return the real child outcome; prepared job environments reach runtime, MCP and Git/PR operations; cancellation fences publication; signed choices and canonical-history application acknowledgements gate worker completion and cleanup. Approvals retain current identity, exact-expiry, single-use and declared-fanout proof checks.
+- **Configurable Forge-Claw homes and runtimes** — home routing uses configured lane kind rather than a lane's name. The normative schema now describes lane/project runtime selection, provider endpoints, project bootstrap overrides and optional voice settings. Restricted jobs and captures stay in their authorized scope; budget holds can be retrieved explicitly after a card expires.
+- **Truthful offline validation** — task requests and scheduled slots retain durable identity across response failure/restart, failed preparation cannot reuse an old job, and Kubernetes CI requires signed-job, canonical-file and cleanup evidence from disposable fixture images. Offline results do not imply live provider, image, cluster or cross-platform acceptance.
+- **Governed recovery and source boundaries** — retries recheck current authority and full request scope, retain the actually approved choices, and recover a committed child after a partial response or restart without inheriting a plan parent's approval. Canonical history and signed runtime selection use shared lower-level helpers rather than loading workspace/executor composition cycles.
+
 ## [3.32.0] — 2026-10-07 — Analyze and diagnose from the CLI, .NET gates on Microsoft.Testing.Platform
 
 ### Added

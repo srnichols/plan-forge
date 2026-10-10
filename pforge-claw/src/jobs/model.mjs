@@ -4,6 +4,9 @@ import { ClawError } from "../errors.mjs";
 export const JOBS_STREAM = "jobs";
 export const READ_TYPES = Object.freeze(["ask", "capture"]);
 export const TERMINAL = Object.freeze(["succeeded", "failed", "cancelled", "rejected", "expired"]);
+const RESULT_FIELDS = Object.freeze(["branch", "prUrl"]);
+const METADATA_TEXT_LIMIT = 200;
+const PR_URL_PATTERN = /^https:\/\/\S{1,300}$/;
 
 function freezeDeep(value) {
   Object.freeze(value);
@@ -72,20 +75,30 @@ export function createJob({ id, type, projectId, readOnly, parentId }) {
   return { job, event: { kind: "job.created", job } };
 }
 
-export function transition(job, to, meta = {}) {
+function validateResultMeta(result, to) {
+  if (to !== "succeeded" || !isPlainObject(result)
+    || Object.keys(result).some((field) => !RESULT_FIELDS.includes(field))) {
+    throw new ClawError("JOB_BAD_META");
+  }
+  if (Object.hasOwn(result, "branch")
+    && (typeof result.branch !== "string" || result.branch.length > METADATA_TEXT_LIMIT)) {
+    throw new ClawError("JOB_BAD_META");
+  }
+  if (Object.hasOwn(result, "prUrl")
+    && (typeof result.prUrl !== "string" || !PR_URL_PATTERN.test(result.prUrl))) {
+    throw new ClawError("JOB_BAD_META");
+  }
+}
+
+function validateTransitionMeta(meta, to) {
   if (!isPlainObject(meta)) throw new ClawError("JOB_BAD_META");
   if (Object.hasOwn(meta, "lane")
     && (to !== "leased" || !validIdentifier(meta.lane))) throw new ClawError("JOB_BAD_META");
-  if (Object.hasOwn(meta, "result")) {
-    const result = meta.result;
-    if (to !== "succeeded" || !isPlainObject(result)
-      || (Object.hasOwn(result, "branch")
-        && (typeof result.branch !== "string" || result.branch.length > 200))
-      || (Object.hasOwn(result, "prUrl")
-        && (typeof result.prUrl !== "string" || !/^https:\/\/\S{1,300}$/.test(result.prUrl)))) {
-      throw new ClawError("JOB_BAD_META");
-    }
-  }
+  if (Object.hasOwn(meta, "result")) validateResultMeta(meta.result, to);
+}
+
+export function transition(job, to, meta = {}) {
+  validateTransitionMeta(meta, to);
   const from = job.state;
   const table = TRANSITIONS[job.mutating ? "mutating" : "read"];
   if (!JOB_STATES.includes(to) || !table[from]?.includes(to)) {
@@ -96,23 +109,20 @@ export function transition(job, to, meta = {}) {
       type: job.type,
     });
   }
-  const reason = typeof meta.reason === "string" && meta.reason.length <= 200
+  const reason = typeof meta.reason === "string" && meta.reason.length <= METADATA_TEXT_LIMIT
     ? meta.reason
     : undefined;
-  const result = {
-    job: {
-      ...job,
-      state: to,
-      ...(to === "leased" && Object.hasOwn(meta, "lane") ? { lane: meta.lane } : {}),
-      ...(to === "succeeded" && meta.result ? meta.result : {}),
-    },
-    event: { kind: "job.transition", jobId: job.id, from, to, reason },
-  };
-  if (to === "leased" && Object.hasOwn(meta, "lane")) result.event.lane = meta.lane;
-  if (to === "succeeded" && meta.result) result.event.result = { ...meta.result };
-  return {
-    ...result,
-  };
+  const updatedJob = { ...job, state: to };
+  const event = { kind: "job.transition", jobId: job.id, from, to, reason };
+  if (to === "leased" && Object.hasOwn(meta, "lane")) {
+    updatedJob.lane = meta.lane;
+    event.lane = meta.lane;
+  }
+  if (to === "succeeded" && Object.hasOwn(meta, "result")) {
+    Object.assign(updatedJob, meta.result);
+    event.result = { ...meta.result };
+  }
+  return { job: updatedJob, event };
 }
 
 export function reduceJobs(acc, event) {

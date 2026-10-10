@@ -1,7 +1,7 @@
-import { mkdtempSync, readFileSync, rmSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { join, relative, sep } from "node:path";
+import { fileURLToPath } from "node:url";
+import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import alertsCallback from "../src/callbacks/x.mjs";
 import alertsFeature from "../src/features/alerts.mjs";
 import {
@@ -9,9 +9,11 @@ import {
   bindAlertsService,
   createAlertsService,
   fingerprint,
+  getAlertsService,
 } from "../src/alerts.mjs";
 import { createStore } from "../src/state/store.mjs";
 import { currentJobs } from "../src/jobs/model.mjs";
+import { createRegistry } from "../src/registry.mjs";
 import { ROLES } from "../src/enums.mjs";
 
 const PROJECT = {
@@ -20,8 +22,11 @@ const PROJECT = {
   channel: { chatId: "chat-1", topicId: "topic-1" },
 };
 const directories = [];
+const fixtureHome = fileURLToPath(new URL("../.forge/", import.meta.url));
+mkdirSync(fixtureHome, { recursive: true });
+const FIXTURE_ROOT = mkdtempSync(join(fixtureHome, "claw-alerts-suite-"));
 
-function makeStore(directory = mkdtempSync(join(tmpdir(), "claw-alerts-"))) {
+function makeStore(directory = mkdtempSync(join(FIXTURE_ROOT, "claw-alerts-"))) {
   if (!directories.includes(directory)) directories.push(directory);
   return createStore(directory);
 }
@@ -58,22 +63,40 @@ function statusPage(items, { hasMore = false, nextCursor = null, stopped = false
   };
 }
 
+function makeAlertConfig(projects = [PROJECT]) {
+  return {
+    projects,
+    lanes: [],
+    allowlist: [
+      { channel: "telegram", userId: "owner-1", role: ROLES[0] },
+      { channel: "telegram", userId: "approver-1", role: ROLES[1] },
+      { channel: "telegram", userId: "viewer-1", role: ROLES[2] },
+    ],
+    policy: { ghcpRoles: [ROLES[0]], nonOwnerRuntime: "byok-only" },
+  };
+}
+
 function createService({
   store = makeStore(),
   mcp = { call: vi.fn(async () => statusPage([])) },
   channel = makeChannel(),
   registry = { all: () => [PROJECT], byId: (id) => id === PROJECT.id ? PROJECT : undefined },
+  config = makeAlertConfig(registry.all()),
+  getConfig,
+  lanes,
   options = {},
   secrets,
   logger = { debug: vi.fn(), warn: vi.fn(), error: vi.fn() },
+  now = Date.now,
 } = {}) {
   return {
     store,
     mcp,
     channel,
     logger,
+    config,
     service: createAlertsService({
-      store, mcp, registry, channel, logger, secrets, now: Date.now, options,
+      store, mcp, registry, channel, config, getConfig, lanes, logger, secrets, now, options,
     }),
   };
 }
@@ -93,9 +116,17 @@ afterEach(async () => {
   for (const directory of directories.splice(0)) rmSync(directory, { recursive: true, force: true });
 });
 
+afterAll(() => rmSync(FIXTURE_ROOT, { recursive: true, force: true }));
+
 describe("alert observer polling", () => {
+  it("keeps generated alert state outside the product source inventory", () => {
+    makeStore();
+    const packageRoot = fileURLToPath(new URL("../", import.meta.url));
+    expect(relative(packageRoot, directories.at(-1)).split(sep)[0]).toBe(".forge");
+  });
+
   it("passes page cursors, follows pages, and persists high-water and resume cursors", async () => {
-    const directory = mkdtempSync(join(tmpdir(), "claw-alerts-pages-"));
+    const directory = mkdtempSync(join(FIXTURE_ROOT, "claw-alerts-pages-"));
     directories.push(directory);
     const store = makeStore(directory);
     const calls = [];
@@ -178,7 +209,7 @@ describe("alert observer polling", () => {
 
 describe("alert delivery and dedupe", () => {
   it("dedupes by insight id across a service restart", async () => {
-    const directory = mkdtempSync(join(tmpdir(), "claw-alerts-dedupe-"));
+    const directory = mkdtempSync(join(FIXTURE_ROOT, "claw-alerts-dedupe-"));
     directories.push(directory);
     const store = makeStore(directory);
     const page = statusPage([insight(4, { id: "same-id" })]);
@@ -298,7 +329,7 @@ describe("alert delivery and dedupe", () => {
 
   it("redacts, escapes, bounds evidence and provides short callbacks", async () => {
     const canary = "alert-secret-canary";
-    const directory = mkdtempSync(join(tmpdir(), "claw-alerts-redact-"));
+    const directory = mkdtempSync(join(FIXTURE_ROOT, "claw-alerts-redact-"));
     directories.push(directory);
     const store = createStore(directory, {
       redact: (text) => String(text).replaceAll(canary, "[redacted]"),
@@ -371,7 +402,7 @@ describe("fallback and stale-work nudges", () => {
 
   it("collects stale, held-budget, and failed-worktree nudges at strict thresholds", async () => {
     const store = makeStore();
-    const worktree = mkdtempSync(join(tmpdir(), "claw-alert-worktree-"));
+    const worktree = mkdtempSync(join(FIXTURE_ROOT, "claw-alert-worktree-"));
     directories.push(worktree);
     store.append("jobs", { kind: "job.created", job: {
       id: "held-job", projectId: PROJECT.id, type: "task", state: "queued", mutating: true,
@@ -622,5 +653,589 @@ describe("alert actions and feature checks", () => {
     for (const item of channel.send.mock.calls[0][0].replyMarkup.inline_keyboard.flat()) {
       expect(Buffer.byteLength(item.callback_data, "utf8")).toBeLessThanOrEqual(64);
     }
+  });
+});
+
+describe("alert lint packet characterization", () => {
+  it("keeps the frozen defaults, raw event allowlist and public service surface", async () => {
+    const alerts = await import("../src/alerts.mjs");
+    expect(ALERT_DEFAULTS).toEqual({
+      pollMs: 60_000, pageLimit: 25, maxPages: 3, dedupeWindowMs: 21_600_000,
+      staleDays: 7, heldBudgetMs: 86_400_000, watchDurationMs: 2_000, watchMaxEvents: 50,
+    });
+    expect(Object.isFrozen(ALERT_DEFAULTS)).toBe(true);
+    expect(alerts.RAW_EVENT_TYPES).toEqual([
+      "liveguard", "liveguard-tool-completed", "secret-scan", "drift-alert", "run-failed",
+    ]);
+    expect(Object.isFrozen(alerts.RAW_EVENT_TYPES)).toBe(true);
+    expect(Object.keys(alerts).sort()).toEqual([
+      "ALERT_DEFAULTS", "RAW_EVENT_TYPES", "bindAlertsService", "createAlertsService",
+      "fingerprint", "getAlertsService", "replyAlerts", "writeAlertsAudit",
+    ].sort());
+    expect(Object.keys(createService().service).sort()).toEqual([
+      "store", "channel", "logger", "pollProject", "pollAll", "collectNudges",
+      "handleAction", "sourceFor", "lastPollAt", "snapshot",
+    ].sort());
+  });
+
+  it.each([
+    ["structured JSON", (page) => ({ structuredContent: JSON.stringify(page) })],
+    ["text content", (page) => ({ content: [{ type: "image" }, { type: "text", text: JSON.stringify(page) }] })],
+  ])("pulls %s pages and skips non-finite insight sequences", async (_name, wrap) => {
+    const mcp = { call: vi.fn(async () => wrap(statusPage([
+      { seq: "not-a-number", insight: { summary: "ignored" } },
+      insight(2),
+    ]))) };
+    const { service, store, channel } = createService({ mcp });
+    expect(await service.pollProject(PROJECT)).toEqual({ source: "observer", resumeCursor: null });
+    expect(mcp.call).toHaveBeenCalledExactlyOnceWith(
+      PROJECT.id, "forge_master_observe", { action: "status", limit: 25 },
+    );
+    expect(channel.send).toHaveBeenCalledOnce();
+    expect(store.readJson("cursors.json", null).projects[PROJECT.id]).toEqual({
+      source: "observer", insightSeq: 2, resumeCursor: null,
+    });
+  });
+
+  it.each([
+    ["flagged tool error", { isError: true, structuredContent: { error: "OBSERVER_EDGE" } }, "OBSERVER_EDGE"],
+    ["reported failure", { ok: false, error: "OBSERVER_DENIED" }, "OBSERVER_DENIED"],
+    ["invalid status", { ok: true, status: [], insights: { items: [] } }, "OBSERVER_STATUS_INVALID"],
+    ["invalid page", { ok: true, status: { stopped: false }, insights: { items: null } }, "OBSERVER_PAGE_INVALID"],
+  ])("preserves cursor and failure reporting for %s", async (_name, raw, code) => {
+    const { service, store, channel, mcp, logger } = createService({
+      mcp: { call: vi.fn(async () => raw) },
+    });
+    store.writeJsonAtomic("cursors.json", { v: 1, projects: {
+      [PROJECT.id]: { insightSeq: 8, resumeCursor: "3", source: "observer" },
+    } });
+    await expect(service.pollProject(PROJECT)).rejects.toMatchObject({ code });
+    expect(store.readJson("cursors.json", null).projects[PROJECT.id]).toEqual({
+      insightSeq: 8, resumeCursor: "3", source: "observer",
+    });
+    expect(service.lastPollAt).toBeNull();
+    expect(service.snapshot()).toEqual({ projects: [{
+      id: PROJECT.id, source: "observer", lastPollAt: null, lastError: code,
+    }] });
+    expect(mcp.call).toHaveBeenCalledOnce();
+    expect(channel.send).not.toHaveBeenCalled();
+    expect(logger.warn).toHaveBeenCalledWith("Alerts project poll failed", { projectId: PROJECT.id, code });
+  });
+
+  it.each(["3", "4", "invalid", 2])("clears an invalid resumed next cursor %s only after page delivery", async (nextCursor) => {
+    const { service, store, mcp, channel, logger } = createService({
+      mcp: { call: vi.fn(async () => statusPage([insight(2)], { hasMore: true, nextCursor })) },
+    });
+    store.writeJsonAtomic("cursors.json", { v: 1, projects: {
+      [PROJECT.id]: { insightSeq: 8, resumeCursor: "3" },
+    } });
+    expect(await service.pollProject(PROJECT)).toEqual({ source: "observer", resumeCursor: null });
+    expect(mcp.call).toHaveBeenCalledExactlyOnceWith(
+      PROJECT.id, "forge_master_observe", { action: "status", limit: 25, cursor: "3" },
+    );
+    expect(channel.send).toHaveBeenCalledOnce();
+    expect(store.readJson("cursors.json", null).projects[PROJECT.id].insightSeq).toBe(8);
+    expect(logger.warn).toHaveBeenCalledWith("Observer cursor did not decrease", {
+      projectId: PROJECT.id, code: "OBSERVER_CURSOR_INVALID",
+    });
+  });
+
+  it("retries an undeliverable observer page without committing its high-water mark", async () => {
+    const channel = {};
+    const { service, store, mcp } = createService({
+      channel, mcp: { call: vi.fn(async () => statusPage([insight(2)])) },
+    });
+    expect(await service.pollProject(PROJECT)).toEqual({ source: "observer", unavailable: true });
+    expect(store.readJson("cursors.json", null).projects[PROJECT.id]).toEqual({ source: "observer" });
+    expect(records(store)).toEqual([]);
+    channel.send = vi.fn(async () => ({ messageId: "retry" }));
+    expect(await service.pollProject(PROJECT)).toEqual({ source: "observer", headSeq: 2, resumeCursor: null });
+    expect(mcp.call).toHaveBeenCalledTimes(2);
+    expect(channel.send).toHaveBeenCalledOnce();
+  });
+
+  it("filters and sorts raw LiveGuard events while preserving the original timestamp cursor", async () => {
+    const lastStamp = Date.parse("2026-10-07T18:03:00.000Z");
+    const { service, store, channel } = createService({
+      mcp: { call: vi.fn()
+        .mockResolvedValueOnce(statusPage([], { stopped: true }))
+        .mockResolvedValueOnce({ events: [
+          { ts: lastStamp, type: "liveguard", data: { severity: "error", message: "Later raw alert", ref: "late-ref" } },
+          { timestamp: "2026-10-07T18:01:00.000Z", type: "drift-alert", summary: "Earlier raw alert" },
+          { ts: "2026-10-07T18:00:00.000Z", type: "run-failed", summary: "already covered" },
+          { ts: "invalid", type: "secret-scan", summary: "invalid timestamp" },
+          { ts: "2026-10-07T18:02:00.000Z", type: "forge-master-insight", summary: "not raw LiveGuard" },
+        ] }) },
+    });
+    store.writeJsonAtomic("cursors.json", { v: 1, projects: {
+      [PROJECT.id]: { watchTs: "2026-10-07T18:00:00.000Z" },
+    } });
+    expect(await service.pollProject(PROJECT)).toEqual({ source: "watch-live", events: 2 });
+    expect(channel.send.mock.calls.map(([message]) => message.text)).toEqual([
+      "🟠\nEarlier raw alert\n• drift\\-alert",
+      "🔴\nLater raw alert\n• liveguard: late\\-ref",
+    ]);
+    expect(store.readJson("cursors.json", null).projects[PROJECT.id].watchTs).toBe(lastStamp);
+  });
+
+  it.each([
+    [{ ok: false, error: "WATCH_DENIED" }, "WATCH_DENIED"],
+    [{ ok: true }, "WATCH_LIVE_RESPONSE_INVALID"],
+  ])("reports raw fallback failures without advancing watchTs", async (raw, code) => {
+    const { service, store, channel } = createService({
+      mcp: { call: vi.fn()
+        .mockResolvedValueOnce(statusPage([], { stopped: true }))
+        .mockResolvedValueOnce(raw) },
+    });
+    const watchTs = "2026-10-07T18:00:00.000Z";
+    store.writeJsonAtomic("cursors.json", { v: 1, projects: { [PROJECT.id]: { watchTs } } });
+    await expect(service.pollProject(PROJECT)).rejects.toMatchObject({ code });
+    expect(store.readJson("cursors.json", null).projects[PROJECT.id]).toEqual({ source: "watch-live", watchTs });
+    expect(channel.send).not.toHaveBeenCalled();
+  });
+
+  it("retains card bounds, evidence bounds and nested redaction", async () => {
+    const canary = "alert-characterization-canary";
+    const summary = `${canary} *failure* ${"x".repeat(4000)}`;
+    const item = insight(1, { summary, severity: "high", suggestedAction: { args: { detail: canary } } });
+    item.insight.evidence = Array.from({ length: 5 }, (_value, index) => ({
+      eventType: "gate-failed", ref: `${index}-${canary}`, nested: { detail: canary },
+    }));
+    const { service, channel, store } = createService({
+      secrets: { redact: (text) => text.replaceAll(canary, "[redacted]") },
+      mcp: { call: vi.fn(async () => statusPage([item])) },
+    });
+    await service.pollProject(PROJECT);
+    const message = channel.send.mock.calls[0][0];
+    const [emission] = records(store);
+    expect(message.text).toHaveLength(3800);
+    expect(message.text.startsWith("🔴\n\\[redacted\\] \\*failure\\* ")).toBe(true);
+    expect(emission.summary).toHaveLength(500);
+    expect(emission.evidence).toHaveLength(3);
+    expect(JSON.stringify(emission)).not.toContain(canary);
+    expect(message.replyMarkup.inline_keyboard.flat()).toHaveLength(3);
+  });
+
+  it("keeps restricted alerts and actions in their own project topic", async () => {
+    const restricted = { ...PROJECT, id: "restricted-project", visibility: "restricted",
+      channel: { chatId: "restricted-chat", topicId: "restricted-topic" } };
+    const projects = [PROJECT, restricted];
+    const { service, store, channel, mcp } = createService({
+      registry: { all: () => projects, byId: (id) => projects.find((project) => project.id === id) },
+      mcp: { call: vi.fn(async (projectId) => statusPage([
+        insight(1, { id: "shared-insight-id", summary: projectId === restricted.id ? "Restricted alert content" : "Normal alert content" }),
+      ])) },
+    });
+    expect((await service.pollAll()).map((result) => result.status)).toEqual(["fulfilled", "fulfilled"]);
+    expect(channel.send.mock.calls.find(([message]) => message.chatId === PROJECT.channel.chatId)[0].text)
+      .not.toContain("Restricted alert content");
+    expect(channel.send.mock.calls.find(([message]) => message.chatId === restricted.channel.chatId)[0])
+      .toMatchObject({ threadId: restricted.channel.topicId, text: expect.stringContaining("Restricted alert content") });
+    const emitted = records(store).find((record) => record.projectId === restricted.id);
+    const request = { action: "d", ref: emitted.ref, caller: { role: ROLES[0], userId: "owner-1" },
+      chatId: PROJECT.channel.chatId, topicId: PROJECT.channel.topicId };
+    expect(await service.handleAction(request)).toEqual({
+      ok: false, error: "wrong-topic", text: "This alert belongs to a different topic.",
+    });
+    expect(await service.handleAction({ ...request, caller: { role: ROLES[2], userId: "viewer-1" },
+      chatId: restricted.channel.chatId, topicId: restricted.channel.topicId })).toMatchObject({ ok: false, error: "role" });
+    expect(currentJobs(store)).toEqual({});
+    const accepted = await service.handleAction({ ...request, chatId: restricted.channel.chatId, topicId: restricted.channel.topicId });
+    expect(currentJobs(store)[accepted.jobId]).toMatchObject({ projectId: restricted.id, state: "awaiting-approval", mutating: true });
+    expect(await service.handleAction({ ...request, chatId: restricted.channel.chatId, topicId: restricted.channel.topicId }))
+      .toMatchObject({ ok: true, duplicate: true, jobId: accepted.jobId });
+    expect(mcp.call.mock.calls.every(([, tool]) => tool === "forge_master_observe")).toBe(true);
+  });
+
+  it("accepts the exact action expiry boundary and rejects the next millisecond", async () => {
+    const now = Date.now();
+    const { service, store, mcp } = createService({ mcp: { call: vi.fn(async () => ({ ok: true })) } });
+    vi.setSystemTime(now - ALERT_DEFAULTS.dedupeWindowMs);
+    store.append("alerts", { kind: "alert.emitted", projectId: PROJECT.id, ref: "eeeeeeee", summary: "Boundary alert" });
+    vi.setSystemTime(now);
+    const request = { action: "b", ref: "eeeeeeee", caller: { role: ROLES[1], userId: "approver-1" },
+      chatId: PROJECT.channel.chatId, threadId: PROJECT.channel.topicId };
+    expect(await service.handleAction(request)).toEqual({ ok: true, text: "Bug report filed." });
+    await vi.advanceTimersByTimeAsync(1);
+    expect(await service.handleAction(request)).toEqual({ ok: false, error: "unknown-or-expired", text: "This alert expired." });
+    expect(mcp.call).toHaveBeenCalledOnce();
+    expect(records(store).filter((record) => record.kind === "alert.action").map((record) => record.outcome))
+      .toEqual(["accepted", "unknown-or-expired"]);
+  });
+
+  it("keeps failed bug actions unsuccessful and records the actual failure code", async () => {
+    const { service, store } = createService({
+      mcp: { call: vi.fn(async () => ({ isError: true, structuredContent: { error: "BUG_EDGE_FAILED" } })) },
+    });
+    store.append("alerts", { kind: "alert.emitted", projectId: PROJECT.id, ref: "ffffffff", summary: "Failing bug alert" });
+    expect(await service.handleAction({ action: "b", ref: "ffffffff",
+      caller: { role: ROLES[0], userId: "owner-1" }, chatId: PROJECT.channel.chatId, topicId: PROJECT.channel.topicId }))
+      .toEqual({ ok: false, error: "BUG_EDGE_FAILED", text: "This alert action could not be completed." });
+    expect(records(store).at(-1)).toMatchObject({ kind: "alert.action", outcome: "BUG_EDGE_FAILED" });
+    expect(currentJobs(store)).toEqual({});
+  });
+
+  it("distinguishes never-run metadata from positive and unknown run history", async () => {
+    const hardenedAt = new Date(Date.now() - ALERT_DEFAULTS.staleDays * 86_400_000 - 1).toISOString();
+    const eligible = [
+      { name: "zero-count", runCount: 0 }, { name: "false-flag", hasRun: false },
+      { name: "never-flag", neverRun: true }, { name: "null-at", lastRunAt: null },
+      { name: "null-run", lastRun: null },
+    ];
+    const alreadyRun = [
+      { name: "positive-count", runCount: 1, neverRun: true },
+      { name: "true-flag", hasRun: true, neverRun: true },
+      { name: "known-at", lastRunAt: hardenedAt, neverRun: true },
+      { name: "known-run", lastRun: "run-one", neverRun: true },
+      { name: "known-id", lastRunId: "run-one", neverRun: true },
+      { name: "unknown-run" },
+    ];
+    const { service, channel, logger } = createService({
+      mcp: { call: vi.fn(async () => ({ ok: true, plans: [...eligible, ...alreadyRun].map((plan) => ({
+        status: "hardened", hardenedAt, ...plan,
+      })) })) },
+    });
+    expect(await service.collectNudges()).toHaveLength(eligible.length);
+    expect(channel.send).toHaveBeenCalledTimes(eligible.length);
+    expect(logger.debug).toHaveBeenCalledExactlyOnceWith("Stale plan run history is unknown", {
+      projectId: PROJECT.id, code: "ALERTS_PLAN_RUN_UNKNOWN",
+    });
+  });
+
+  it("keeps per-project nudge failures isolated and records their codes", async () => {
+    const other = { ...PROJECT, id: "other-project", channel: { chatId: "other-chat", topicId: "other-topic" } };
+    const projects = [PROJECT, other];
+    const { service, channel, logger } = createService({
+      registry: { all: () => projects },
+      mcp: { call: vi.fn(async (projectId) => projectId === PROJECT.id
+        ? { ok: false, error: "PLAN_EDGE_FAILED" }
+        : { ok: true, hardened: true, hardenedAt: "2026-09-01T00:00:00.000Z", runCount: 0, name: "Other phase" }) },
+    });
+    expect(await service.collectNudges()).toMatchObject([{ projectId: other.id, eventType: "nudge.stale-phase" }]);
+    expect(channel.send).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({ chatId: other.channel.chatId }));
+    expect(logger.warn).toHaveBeenCalledWith("Plan status nudge check failed", {
+      projectId: PROJECT.id, code: "PLAN_EDGE_FAILED",
+    });
+  });
+
+  it("shares a pending project poll and clears the in-flight entry after failure", async () => {
+    let fail;
+    const mcp = { call: vi.fn()
+      .mockImplementationOnce(() => new Promise((_resolve, reject) => { fail = reject; }))
+      .mockResolvedValue(statusPage([])) };
+    const { service, logger } = createService({ mcp });
+    const first = service.pollProject(PROJECT);
+    const second = service.pollProject(PROJECT);
+    expect(mcp.call).toHaveBeenCalledOnce();
+    const settled = Promise.allSettled([first, second]);
+    fail(Object.assign(new Error("pending poll failed"), { code: "PENDING_EDGE_FAILED" }));
+    expect((await settled).map((result) => result.status)).toEqual(["rejected", "rejected"]);
+    await service.pollProject(PROJECT);
+    expect(mcp.call).toHaveBeenCalledTimes(2);
+    expect(service.snapshot().projects[0]).not.toHaveProperty("lastError");
+    expect(logger.warn).toHaveBeenCalledOnce();
+  });
+
+  it("waits for pending work on stop without closing MCP or subscribing to shared events", async () => {
+    let finish;
+    const mcp = { call: vi.fn((_projectId, tool) => tool === "forge_master_observe"
+      ? new Promise((resolve) => { finish = resolve; })
+      : Promise.resolve({ ok: true, plans: [] })), close: vi.fn() };
+    const events = { on: vi.fn(), off: vi.fn() };
+    const setTimer = vi.fn();
+    await alertsFeature.start({ store: makeStore(), registry: { all: () => [PROJECT] },
+      mcp, events, channel: makeChannel(), setTimer });
+    let stopped = false;
+    const stopping = alertsFeature.stop().then(() => { stopped = true; });
+    await Promise.resolve();
+    expect(stopped).toBe(false);
+    expect(alertsFeature.snapshot()).toEqual({ projects: [] });
+    finish(statusPage([]));
+    await stopping;
+    await vi.advanceTimersByTimeAsync(ALERT_DEFAULTS.pollMs);
+    expect(mcp.call.mock.calls.map(([, tool]) => tool)).toEqual(["forge_master_observe", "forge_plan_status"]);
+    expect(setTimer).not.toHaveBeenCalled();
+    expect(mcp.close).not.toHaveBeenCalled();
+    expect(events.on).not.toHaveBeenCalled();
+    expect(events.off).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    [0, 60_000], [-1, 60_000], [NaN, 60_000], [Infinity, 60_000], ["1234", 1234],
+  ])("preserves timer normalization for %s", async (pollMs, expected) => {
+    const timerRef = { unref: vi.fn() };
+    const setTimer = vi.fn(() => timerRef);
+    const clearTimer = vi.fn();
+    await alertsFeature.start({ store: makeStore(), registry: { all: () => [] },
+      mcp: { call: vi.fn() }, channel: makeChannel(), alertsOptions: { pollMs }, setTimer, clearTimer });
+    await vi.advanceTimersByTimeAsync(0);
+    expect(setTimer).toHaveBeenCalledExactlyOnceWith(expect.any(Function), expected);
+    expect(timerRef.unref).toHaveBeenCalledOnce();
+    await alertsFeature.stop();
+    expect(clearTimer).toHaveBeenCalledExactlyOnceWith(timerRef);
+  });
+
+  it.each([
+    ["structured JSON", { structuredContent: JSON.stringify({ ok: true, status: { stopped: false } }) }, "ok", undefined],
+    ["flagged unavailable", { isError: true, structuredContent: { error: "FORGE_MASTER_UNAVAILABLE" } }, "warn", "FORGE_MASTER_UNAVAILABLE"],
+    ["stopped top-level", { ok: true, running: false }, "warn", undefined],
+    ["bad JSON", { structuredContent: "not JSON" }, "warn", "MCP_TOOL_ERROR"],
+  ])("preserves doctor diagnostics for %s", async (_name, raw, status, code) => {
+    const mcp = { call: vi.fn(async () => raw) };
+    const [check] = await alertsFeature.doctorChecks({ live: true, registry: { all: () => [PROJECT] }, mcp });
+    expect(check).toMatchObject({ name: `alerts:${PROJECT.id}`, status });
+    if (code === undefined) expect(check).not.toHaveProperty("code");
+    else expect(check.code).toBe(code);
+    expect(mcp.call).toHaveBeenCalledExactlyOnceWith(PROJECT.id, "forge_master_observe", { action: "status" });
+  });
+});
+
+describe("alert lint extraction parity", () => {
+  it.each(["opaque", "NaN"])("preserves the rejection comparison for a saved non-numeric cursor %s", async (resumeCursor) => {
+    const { service, store, mcp, logger } = createService({
+      options: { maxPages: 2 },
+      mcp: { call: vi.fn()
+        .mockResolvedValueOnce(statusPage([insight(4)], { hasMore: true, nextCursor: "3" }))
+        .mockResolvedValueOnce(statusPage([insight(2)])) },
+    });
+    store.writeJsonAtomic("cursors.json", { v: 1, projects: {
+      [PROJECT.id]: { insightSeq: 8, resumeCursor },
+    } });
+    expect(await service.pollProject(PROJECT)).toEqual({ source: "observer", resumeCursor: null });
+    expect(mcp.call.mock.calls.map(([, tool, args]) => [tool, args])).toEqual([
+      ["forge_master_observe", { action: "status", limit: 25, cursor: resumeCursor }],
+      ["forge_master_observe", { action: "status", limit: 25, cursor: "3" }],
+    ]);
+    expect(store.readJson("cursors.json", null).projects[PROJECT.id]).toEqual({
+      insightSeq: 8, resumeCursor: null, source: "observer",
+    });
+    expect(logger.warn).not.toHaveBeenCalled();
+  });
+
+  it("calls the injected service clock without a receiver in every extracted concern", async () => {
+    const receivers = [];
+    const clockTime = Date.now();
+    function readClock() {
+      receivers.push(this);
+      return Date.now();
+    }
+    const store = makeStore();
+    store.append("alerts", { kind: "alert.emitted", projectId: PROJECT.id,
+      eventType: "clock-fixture", ref: "cccccccc", summary: "Clock fixture alert", ts: clockTime });
+    const { service } = createService({
+      store,
+      now: readClock,
+      mcp: { call: vi.fn(async (_projectId, tool) => {
+        if (tool === "forge_master_observe") return statusPage([insight(2)]);
+        if (tool === "forge_plan_status") return { ok: true, hardened: true, runCount: 0,
+          name: "Clock fixture phase", hardenedAt: new Date(clockTime - 8 * 86_400_000).toISOString() };
+        return { ok: true };
+      }) },
+    });
+    await service.pollProject(PROJECT);
+    expect(await service.collectNudges()).toHaveLength(1);
+    expect(await service.handleAction({ action: "b", ref: "cccccccc",
+      caller: { role: ROLES[0], userId: "owner-1" },
+      chatId: PROJECT.channel.chatId, topicId: PROJECT.channel.topicId }))
+      .toEqual({ ok: true, text: "Bug report filed." });
+    expect(service.lastPollAt).toBe(clockTime);
+    expect(records(store).filter((record) => record.kind === "alert.emitted").map((record) => Date.parse(record.ts)))
+      .toEqual([clockTime, clockTime, clockTime]);
+    expect(receivers.length).toBeGreaterThan(1);
+    expect(receivers.every((receiver) => receiver === undefined)).toBe(true);
+  });
+
+  it("retains the effective raw cursor after partial delivery and preserves same-time events", async () => {
+    const firstStamp = "2026-10-07T18:01:00.000Z";
+    const finalStamp = "2026-10-07T18:02:00.000Z";
+    const events = [
+      { timestamp: firstStamp, type: "liveguard", summary: "First same-time alert" },
+      { ts: Date.parse(firstStamp), type: "drift-alert", summary: "Second same-time alert" },
+      { at: finalStamp, type: "run-failed", summary: "Later alert" },
+    ];
+    const channel = makeChannel();
+    channel.send.mockResolvedValueOnce({ messageId: "first" })
+      .mockResolvedValueOnce({ messageId: "second" })
+      .mockRejectedValueOnce(new Error("LiveGuard delivery failed"))
+      .mockResolvedValue({ messageId: "retry" });
+    const { service, store } = createService({
+      channel,
+      mcp: { call: vi.fn(async (_projectId, tool) => tool === "forge_master_observe"
+        ? statusPage([], { stopped: true }) : { events }) },
+    });
+    await expect(service.pollProject(PROJECT)).rejects.toThrow("LiveGuard delivery failed");
+    expect(store.readJson("cursors.json", null).projects[PROJECT.id]).toEqual({
+      source: "watch-live", watchTs: Date.parse(firstStamp),
+    });
+    expect(await service.pollProject(PROJECT)).toEqual({ source: "watch-live", events: 1 });
+    expect(store.readJson("cursors.json", null).projects[PROJECT.id].watchTs).toBe(finalStamp);
+    expect(channel.send).toHaveBeenCalledTimes(4);
+    expect(records(store).filter((record) => record.kind === "alert.emitted").map((record) => record.eventType))
+      .toEqual(["liveguard", "drift-alert", "run-failed"]);
+    expect(service.snapshot().projects[0]).not.toHaveProperty("lastError");
+  });
+
+  it.each([
+    ["flagged wrapper precedence", { isError: true, error: "WRAPPER_ERROR",
+      structuredContent: { error: "PAYLOAD_ERROR" } }, "PAYLOAD_ERROR", "Observer probe failed (PAYLOAD_ERROR)."],
+    ["flagged wrapper fallback", { isError: true, error: "WRAPPER_ERROR",
+      structuredContent: { status: { stopped: false } } }, "WRAPPER_ERROR", "Observer probe failed (WRAPPER_ERROR)."],
+    ["flagged payload default", { structuredContent: { isError: true } },
+      "MCP_TOOL_ERROR", "Observer probe failed (MCP_TOOL_ERROR)."],
+    ["flagged unavailable", { isError: true, structuredContent: { error: "FORGE_MASTER_UNAVAILABLE" } },
+      "FORGE_MASTER_UNAVAILABLE", "Observer probe failed (FORGE_MASTER_UNAVAILABLE)."],
+    ["unflagged unavailable", { structuredContent: { error: "FORGE_MASTER_UNAVAILABLE" } },
+      "FORGE_MASTER_UNAVAILABLE", "Forge-Master observer unavailable; using forge_watch_live fallback."],
+    ["code-absent failure", { ok: false }, undefined, "Observer probe failed (undefined)."],
+    ["empty error with failure flag", { ok: false, error: "" }, "", "Observer probe failed ()."],
+  ])("preserves doctor error ordering and detail for %s", async (_name, raw, code, detail) => {
+    const mcp = { call: vi.fn(async () => raw) };
+    const [check] = await alertsFeature.doctorChecks({ live: true, registry: { all: () => [PROJECT] }, mcp });
+    expect(check).toStrictEqual({ name: `alerts:${PROJECT.id}`, status: "warn", code, detail });
+    expect(mcp.call).toHaveBeenCalledExactlyOnceWith(PROJECT.id, "forge_master_observe", { action: "status" });
+  });
+
+  it.each([
+    ["explicit unavailable code", { code: "FORGE_MASTER_UNAVAILABLE", message: "offline" },
+      "FORGE_MASTER_UNAVAILABLE", "Forge-Master observer unavailable; using forge_watch_live fallback."],
+    ["unavailable detail", { detail: "FORGE_MASTER_UNAVAILABLE", message: "offline" },
+      "FORGE_MASTER_UNAVAILABLE", "Forge-Master observer unavailable; using forge_watch_live fallback."],
+    ["explicit other code wins", { code: "OTHER_PROBE_ERROR", detail: "FORGE_MASTER_UNAVAILABLE" },
+      "OTHER_PROBE_ERROR", "Observer probe failed (OTHER_PROBE_ERROR)."],
+    ["code-absent error", { message: "offline" }, "MCP_TOOL_ERROR", "Observer probe failed (MCP_TOOL_ERROR)."],
+  ])("preserves doctor thrown-error diagnostics for %s", async (_name, error, code, detail) => {
+    const mcp = { call: vi.fn(async () => { throw error; }) };
+    const [check] = await alertsFeature.doctorChecks({ live: true, registry: { all: () => [PROJECT] }, mcp });
+    expect(check).toStrictEqual({ name: `alerts:${PROJECT.id}`, status: "warn", code, detail });
+  });
+});
+
+describe("alert task producer integration", () => {
+  function appendTaskAlert(store, fields = {}) {
+    return store.append("alerts", {
+      kind: "alert.emitted", projectId: PROJECT.id, eventType: "run-failed",
+      fp: "a".repeat(64), ref: "aaaaaaaa", summary: "Governed alert task",
+      suggestedAction: { type: "task", args: { runtime: "unsigned-override", provider: "unsigned-override" } },
+      ...fields,
+    });
+  }
+
+  function taskRequest(fields = {}) {
+    return { action: "d", ref: "aaaaaaaa", caller: { role: ROLES[0], userId: "owner-1", channel: "telegram" },
+      chatId: PROJECT.channel.chatId, topicId: PROJECT.channel.topicId, ...fields };
+  }
+
+  it.each(["d", "s"])("uses actual producer authority and structured durable result for %s", async (action) => {
+    const { service, store, mcp } = createService();
+    appendTaskAlert(store, { id: "stored-alert-record" });
+    const result = await service.handleAction(taskRequest({ action }));
+    expect(result).toMatchObject({ ok: true, jobId: expect.any(String), state: "awaiting-approval" });
+    const job = currentJobs(store)[result.jobId];
+    expect(job).toMatchObject({
+      id: result.jobId, type: "task", state: result.state, mutating: true,
+      projectId: PROJECT.id, callerId: "owner-1", callerRole: ROLES[0],
+      chatId: PROJECT.channel.chatId, threadId: PROJECT.channel.topicId,
+      adapter: "telegram", updateId: "alert:stored-alert-record",
+    });
+    expect(job).not.toHaveProperty("runtime");
+    expect(job).not.toHaveProperty("provider");
+    if (action === "s") expect(job.origin).toBe("untrusted");
+    expect(records(store, "jobs").filter((record) => record.kind === "job.created")).toHaveLength(1);
+    expect(records(store, "jobs").filter((record) => record.kind === "job.transition").map((record) => record.to))
+      .toEqual(["awaiting-approval"]);
+    expect(mcp.call).not.toHaveBeenCalled();
+  });
+
+  it("recovers one task after action-audit loss, restart and concurrent draft-button replay", async () => {
+    const directory = mkdtempSync(join(FIXTURE_ROOT, "claw-alert-task-recovery-"));
+    const store = makeStore(directory);
+    const first = createService({ store });
+    appendTaskAlert(store);
+    const accepted = await first.service.handleAction(taskRequest());
+    expect(accepted.ok).toBe(true);
+    const originalJob = currentJobs(store)[accepted.jobId];
+    expect(originalJob.updateId).toMatch(/^alert:[0-9a-f]{64}$/);
+    writeFileSync(join(directory, "alerts.jsonl"), `${records(store)
+      .filter((record) => record.kind !== "alert.action").map((record) => JSON.stringify(record)).join("\n")}\n`);
+    const reopened = createService({ store: makeStore(directory), config: first.config });
+    const replayed = await Promise.all([
+      reopened.service.handleAction(taskRequest()),
+      reopened.service.handleAction(taskRequest({ action: "s" })),
+    ]);
+    expect(replayed.map((result) => result.jobId)).toEqual([accepted.jobId, accepted.jobId]);
+    expect(replayed.every((result) => result.ok && result.state === "awaiting-approval")).toBe(true);
+    expect(Object.values(currentJobs(reopened.store))).toHaveLength(1);
+    expect(records(reopened.store, "jobs").filter((record) => record.kind === "job.created")).toHaveLength(1);
+    expect(currentJobs(reopened.store)[accepted.jobId].updateId).toBe(originalJob.updateId);
+  });
+
+  it.each(["demoted", "removed", "runtime-unavailable"])("reauthorizes a repeated action after %s", async (change) => {
+    let activeConfig = makeAlertConfig();
+    const { service, store } = createService({ config: activeConfig, getConfig: () => activeConfig });
+    appendTaskAlert(store, { id: "reauthorized-alert" });
+    const accepted = await service.handleAction(taskRequest());
+    expect(accepted.ok).toBe(true);
+    const changed = makeAlertConfig();
+    if (change === "demoted") changed.allowlist[0].role = ROLES[2];
+    if (change === "removed") changed.allowlist = changed.allowlist.filter((entry) => entry.userId !== "owner-1");
+    if (change === "runtime-unavailable") changed.projects = [{ ...PROJECT, runtime: "unavailable-runtime" }];
+    activeConfig = changed;
+    expect(await service.handleAction(taskRequest())).toEqual({
+      ok: false, error: "TASK_PREPARE_FAILED", text: "This alert action could not be completed.",
+    });
+    expect(Object.values(currentJobs(store))).toHaveLength(1);
+    expect(records(store).at(-1)).toMatchObject({ kind: "alert.action", outcome: "TASK_PREPARE_FAILED" });
+  });
+
+  it("does not invent producer authority when actual configuration is absent", async () => {
+    const { service, store } = createService({ config: null });
+    appendTaskAlert(store);
+    expect(await service.handleAction(taskRequest())).toMatchObject({ ok: false, error: "TASK_PREPARE_FAILED" });
+    expect(currentJobs(store)).toEqual({});
+  });
+
+  it("keeps non-owner GHCP denied and configured BYOK approval-pending", async () => {
+    const config = makeAlertConfig();
+    const secrets = { get: (name) => name === "PFORGE_ALERT_TEST_PROVIDER" ? "alert-test-provider-fixture" : undefined };
+    const { service, store } = createService({ config, secrets });
+    appendTaskAlert(store);
+    const request = taskRequest({ caller: { role: ROLES[1], userId: "approver-1", channel: "telegram" } });
+    expect(await service.handleAction(request)).toMatchObject({ ok: false, error: "TASK_PREPARE_FAILED" });
+    expect(currentJobs(store)).toEqual({});
+    config.projects = [{ ...PROJECT, runtime: "openai" }];
+    config.runtimes = { byok: { openai: { keySecret: "PFORGE_ALERT_TEST_PROVIDER",
+      endpoint: "https://provider.example" } } };
+    const accepted = await service.handleAction(request);
+    expect(accepted).toMatchObject({ ok: true, state: "awaiting-approval", jobId: expect.any(String) });
+    expect(currentJobs(store)[accepted.jobId]).toMatchObject({
+      callerId: "approver-1", callerRole: ROLES[1], constraint: "byok-only", state: "awaiting-approval",
+    });
+    expect(currentJobs(store)[accepted.jobId]).not.toHaveProperty("runtime");
+    expect(currentJobs(store)[accepted.jobId]).not.toHaveProperty("provider");
+  });
+
+  it.each(["removed", "missing-configuration"])("keeps feature-bound task preparation on the actual current composition context after %s", async (change) => {
+    const store = makeStore();
+    const config = makeAlertConfig();
+    const mcp = { call: vi.fn(async (_projectId, tool) => tool === "forge_master_observe"
+      ? statusPage([]) : { ok: true, plans: [] }) };
+    const context = {
+      store, config, getConfig() { return this.config; }, registry: createRegistry(config),
+      mcp, channel: makeChannel(), setTimer: vi.fn(), now: Date.now,
+    };
+    await alertsFeature.start(context);
+    appendTaskAlert(store, { id: "composition-alert" });
+    const active = getAlertsService();
+    expect(await active.handleAction(taskRequest())).toMatchObject({ ok: true, state: "awaiting-approval" });
+    context.config = change === "missing-configuration" ? null : { ...config, allowlist: [] };
+    expect(await active.handleAction(taskRequest())).toMatchObject({ ok: false, error: "TASK_PREPARE_FAILED" });
+    expect(Object.values(currentJobs(store))).toHaveLength(1);
+  });
+
+  it("guards the structured producer result boundary against display-text parsing", () => {
+    const source = readFileSync(new URL("../src/alerts.mjs", import.meta.url), "utf8");
+    expect(source).not.toContain("/Task job ([A-Za-z0-9._-]+)/");
+    expect(source).toContain("response.jobId");
+    expect(source).toContain("response.state");
   });
 });

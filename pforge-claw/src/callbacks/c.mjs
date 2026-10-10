@@ -2,6 +2,7 @@ import { createHash, timingSafeEqual } from "node:crypto";
 import { ROLES } from "../enums.mjs";
 import { getMemoryRuntime } from "../features/memory.mjs";
 import { MEMORY_STREAMS } from "../memory/memory-client.mjs";
+import { captureWriteCaller } from "../capture-policy.mjs";
 
 function latestConfirmation(store, id) {
   return store.fold(MEMORY_STREAMS.confirm, (latest, record) => (
@@ -31,29 +32,68 @@ function reject(code) {
   return { ok: false, code };
 }
 
+function confirmationTime(context) {
+  const now = context.now ?? Date.now;
+  return typeof now === "function" ? now() : now;
+}
+
+function validConfirmation(pending, parsed, input, time) {
+  return Boolean(pending)
+    && pending._status === "pending"
+    && nonceMatches(parsed.id, pending.nonceHash)
+    && Number.isFinite(pending.expiresAt)
+    && pending.expiresAt > time
+    && identityMatches(pending, input);
+}
+
+function authorizedCaller({ context, pending, parsed, input }) {
+  if (parsed.answer === "n" && pending.purpose !== "forget") return input.caller;
+  const caller = captureWriteCaller({
+    config: context.config, caller: input.caller, adapter: input.adapter ?? context.channel?.id,
+  });
+  if (pending.purpose === "forget" && caller?.role !== ROLES[0]) return null;
+  return caller;
+}
+
+function hasConfiguredProject(context, projectId) {
+  return context.config?.projects?.some((project) => project.id === projectId);
+}
+
+async function applyConfirmation({ client, direct, pending, caller, id }) {
+  if (pending.purpose === "forget") {
+    const capability = await direct?.capabilities?.();
+    if (capability?.canDelete !== true) return reject("NOT_SUPPORTED");
+    return direct.remove(pending.memoryId);
+  }
+  return client.capture(pending.projectId, {
+    content: pending.content, type: pending.type ?? "lesson", origin: "untrusted",
+    tags: pending.tags, lane: pending.lane ?? "confirm", ref: pending.ref ?? id,
+    caller: { userId: caller.userId, role: caller.role },
+  });
+}
+
 export default Object.freeze({
   prefix: "c",
   sinceSlice: 24,
   available: true,
   roles: [ROLES[0], ROLES[1], ROLES[2]],
-  async handle(_callbackContext, { payload, caller, chatId, threadId } = {}) {
-    const parsed = parsePayload(payload);
+  async handle(_callbackContext, input = {}) {
+    const parsed = parsePayload(input.payload);
     const { client, context, direct } = getMemoryRuntime();
     const store = context?.store;
     if (!parsed || !store || !client) return reject("MEMORY_CONFIRM_INVALID");
 
     const pending = latestConfirmation(store, parsed.id);
-    const now = context.now ?? Date.now;
-    const time = typeof now === "function" ? now() : now;
-    if (!pending
-      || pending._status !== "pending"
-      || !nonceMatches(parsed.id, pending.nonceHash)
-      || !Number.isFinite(pending.expiresAt)
-      || pending.expiresAt <= time
-      || !identityMatches(pending, { caller, chatId, threadId })) {
+    const time = confirmationTime(context);
+    if (!validConfirmation(pending, parsed, input, time)) {
       return reject("MEMORY_CONFIRM_REJECTED");
     }
-    if (pending.purpose === "forget" && caller?.role !== ROLES[0]) return reject("FORBIDDEN");
+    const caller = authorizedCaller({ context, pending, parsed, input });
+    if (!caller) return reject("FORBIDDEN");
+    if (pending.purpose !== "forget"
+      && !hasConfiguredProject(context, pending.projectId)) {
+      return reject("MEMORY_CONFIRM_REJECTED");
+    }
 
     store.append(MEMORY_STREAMS.confirm, {
       id: parsed.id,
@@ -63,19 +103,6 @@ export default Object.freeze({
     });
     if (parsed.answer === "n") return { ok: true, canceled: true };
 
-    if (pending.purpose === "forget") {
-      const capability = await direct?.capabilities?.();
-      if (capability?.canDelete !== true) return reject("NOT_SUPPORTED");
-      return direct.remove(pending.memoryId);
-    }
-    return client.capture(pending.projectId, {
-      content: pending.content,
-      type: pending.type ?? "lesson",
-      origin: "untrusted",
-      tags: pending.tags,
-      lane: pending.lane ?? "confirm",
-      ref: pending.ref ?? parsed.id,
-      caller: { userId: caller?.userId, role: caller?.role },
-    });
+    return applyConfirmation({ client, direct, pending, caller, id: parsed.id });
   },
 });

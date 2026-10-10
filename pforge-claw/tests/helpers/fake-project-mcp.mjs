@@ -1,5 +1,6 @@
 #!/usr/bin/env node
-import { appendFile } from "node:fs/promises";
+import { appendFile, readFile } from "node:fs/promises";
+import path from "node:path";
 import { parseArgs } from "node:util";
 
 const TOOLS = Object.freeze([
@@ -20,6 +21,28 @@ const TOOLS = Object.freeze([
   "forge_plan_status",
 ]);
 let logPath;
+const MAX_WATCH_BYTES = 64 * 1024;
+const FIXTURE_RUN_ID = "fixture-run-1";
+
+async function watchFixture(args) {
+  if (path.resolve(args.targetPath ?? "") !== process.cwd()) throw new Error("FAKE_WATCH_SCOPE_INVALID");
+  let events = [];
+  try {
+    const contents = await readFile(path.join(process.cwd(), ".forge", "runs", FIXTURE_RUN_ID, "events.log"), "utf8");
+    if (Buffer.byteLength(contents) > MAX_WATCH_BYTES) throw new Error("FAKE_WATCH_EVENTS_TOO_LARGE");
+    events = contents.split("\n").filter(Boolean).map((line) => JSON.parse(line));
+  } catch (error) {
+    if (error.code !== "ENOENT") throw error;
+  }
+  const limit = args.maxCapturedEvents ?? 100;
+  const captured = events.slice(-limit);
+  return {
+    ok: true, mode: "polling", durationMs: args.durationMs ?? 1000,
+    capturedEvents: captured.length, droppedEvents: Math.max(0, events.length - captured.length),
+    maxCapturedEvents: limit, capturedAnomalies: 0, eventProjection: args.verbose ? "verbose" : "lite",
+    events: args.verbose ? captured : captured.map(({ ts, type }) => ({ ts, type, correlationId: null })),
+  };
+}
 
 function parseOptions() {
   const parsed = parseArgs({
@@ -48,7 +71,6 @@ function toolResult(name) {
       false: estimate("false"),
     },
     forge_cost_report: { totalCostUSD: 0, runs: [] },
-    forge_watch_live: { state: "idle", active: false, events: [] },
     forge_abort: { ok: true, aborted: false },
     forge_search: { hits: [], total: 0, message: "No fixture matches." },
     forge_capabilities: { tools: TOOLS },
@@ -102,7 +124,8 @@ async function respond(message) {
       })}\n`);
       return;
     }
-    const result = { content: [{ type: "text", text: JSON.stringify(toolResult(name)) }] };
+    const output = name === "forge_watch_live" ? await watchFixture(params.arguments ?? {}) : toolResult(name);
+    const result = { content: [{ type: "text", text: JSON.stringify(output) }] };
     process.stdout.write(`${JSON.stringify({ jsonrpc: "2.0", id, result })}\n`);
     return;
   }

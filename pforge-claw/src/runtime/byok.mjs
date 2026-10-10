@@ -6,6 +6,17 @@ const DEFAULT_KEY_SECRETS = Object.freeze({
   azure: "AZURE_OPENAI_API_KEY",
 });
 
+/** Returns configuration references only; resolved credentials never belong in a lease. */
+export function byokProviderReference({ type, config } = {}) {
+  if (!BYOK_PROVIDERS.includes(type)) return null;
+  const providerConfig = config?.runtimes?.byok?.[type];
+  return {
+    type,
+    keySecret: providerConfig?.keySecret ?? DEFAULT_KEY_SECRETS[type],
+    ...(providerConfig?.endpoint !== undefined ? { endpoint: providerConfig.endpoint } : {}),
+  };
+}
+
 export function buildByokProvider({ type, config, secrets }) {
   if (!BYOK_PROVIDERS.includes(type)) {
     return {
@@ -16,14 +27,13 @@ export function buildByokProvider({ type, config, secrets }) {
     };
   }
 
-  const providerConfig = config?.runtimes?.byok?.[type];
-  const secretName = providerConfig?.keySecret ?? DEFAULT_KEY_SECRETS[type];
-  const apiKey = secrets?.get(secretName);
-  if (apiKey === null || apiKey === undefined) {
+  const reference = byokProviderReference({ type, config });
+  const apiKey = secrets?.get(reference.keySecret);
+  if (typeof apiKey !== "string" || !apiKey.trim()) {
     return { ok: false, error: "BYOK_KEY_MISSING", provider: type };
   }
 
-  const endpoint = providerConfig?.endpoint;
+  const endpoint = reference.endpoint;
   if (typeof endpoint !== "string" || endpoint.trim().length === 0) {
     return { ok: false, error: "BYOK_ENDPOINT_MISSING", provider: type };
   }

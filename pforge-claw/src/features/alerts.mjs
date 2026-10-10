@@ -5,6 +5,9 @@ import {
   getAlertsService,
 } from "../alerts.mjs";
 
+const OBSERVER_UNAVAILABLE_CODE = "FORGE_MASTER_UNAVAILABLE";
+const MCP_TOOL_ERROR_CODE = "MCP_TOOL_ERROR";
+
 let service = null;
 let unbind = null;
 let context = null;
@@ -79,6 +82,74 @@ function scheduleNext(ctx) {
   timer?.unref?.();
 }
 
+function observerPayload(result) {
+  const payload = result?.structuredContent ?? result;
+  return typeof payload === "string" ? JSON.parse(payload) : payload;
+}
+
+function observerFailureCheck(project, code) {
+  return {
+    name: `alerts:${project.id}`,
+    status: "warn",
+    code,
+    detail: `Observer probe failed (${code}).`,
+  };
+}
+
+function observerUnavailableCheck(project) {
+  return {
+    name: `alerts:${project.id}`,
+    status: "warn",
+    code: OBSERVER_UNAVAILABLE_CODE,
+    detail: "Forge-Master observer unavailable; using forge_watch_live fallback.",
+  };
+}
+
+function returnedObserverErrorCode(result, payload) {
+  return payload?.error ?? result?.error ?? MCP_TOOL_ERROR_CODE;
+}
+
+function isObserverStopped(payload) {
+  return payload?.status?.stopped === true
+    || payload?.status?.running === false
+    || payload?.running === false;
+}
+
+function observerResponseCheck(project, result) {
+  const payload = observerPayload(result);
+  if (result?.isError || payload?.isError) {
+    return observerFailureCheck(project, returnedObserverErrorCode(result, payload));
+  }
+  if (payload?.error === OBSERVER_UNAVAILABLE_CODE) return observerUnavailableCheck(project);
+  if (payload?.ok === false || payload?.error) return observerFailureCheck(project, payload.error);
+  if (isObserverStopped(payload)) {
+    return {
+      name: `alerts:${project.id}`,
+      status: "warn",
+      detail: "run `forge_master_observe start` or set `keepAlive: true`; using forge_watch_live fallback",
+    };
+  }
+  return { name: `alerts:${project.id}`, status: "ok", detail: "observer insights available" };
+}
+
+function thrownObserverErrorCode(error) {
+  if (typeof error?.code === "string") return error.code;
+  const details = `${error?.detail ?? ""} ${error?.message ?? ""}`;
+  return details.includes(OBSERVER_UNAVAILABLE_CODE) ? OBSERVER_UNAVAILABLE_CODE : MCP_TOOL_ERROR_CODE;
+}
+
+async function probeObserver(ctx, project) {
+  try {
+    const result = await ctx.mcp.call(project.id, "forge_master_observe", { action: "status" });
+    return observerResponseCheck(project, result);
+  } catch (error) {
+    const code = thrownObserverErrorCode(error);
+    return code === OBSERVER_UNAVAILABLE_CODE
+      ? observerUnavailableCheck(project)
+      : observerFailureCheck(project, code);
+  }
+}
+
 async function doctorChecks(ctx = {}) {
   const projects = projectsFor(ctx);
   if (projects.length === 0) {
@@ -97,59 +168,7 @@ async function doctorChecks(ctx = {}) {
     ];
   }
 
-  return Promise.all(projects.map(async (project) => {
-    try {
-      const result = await ctx.mcp.call(project.id, "forge_master_observe", { action: "status" });
-      const payload = result?.structuredContent ?? result;
-      const data = typeof payload === "string" ? JSON.parse(payload) : payload;
-      if (result?.isError || data?.isError) {
-        const code = data?.error ?? result?.error ?? "MCP_TOOL_ERROR";
-        return {
-          name: `alerts:${project.id}`,
-          status: "warn",
-          code,
-          detail: `Observer probe failed (${code}).`,
-        };
-      }
-      if (data?.error === "FORGE_MASTER_UNAVAILABLE") {
-        return {
-          name: `alerts:${project.id}`,
-          status: "warn",
-          code: "FORGE_MASTER_UNAVAILABLE",
-          detail: "Forge-Master observer unavailable; using forge_watch_live fallback.",
-        };
-      }
-      if (data?.ok === false || data?.error) {
-        return {
-          name: `alerts:${project.id}`,
-          status: "warn",
-          code: data.error,
-          detail: `Observer probe failed (${data.error}).`,
-        };
-      }
-      if (data?.status?.stopped === true || data?.status?.running === false || data?.running === false) {
-        return {
-          name: `alerts:${project.id}`,
-          status: "warn",
-          detail: "run `forge_master_observe start` or set `keepAlive: true`; using forge_watch_live fallback",
-        };
-      }
-      return { name: `alerts:${project.id}`, status: "ok", detail: "observer insights available" };
-    } catch (error) {
-      const details = `${error?.detail ?? ""} ${error?.message ?? ""}`;
-      const code = typeof error?.code === "string"
-        ? error.code
-        : details.includes("FORGE_MASTER_UNAVAILABLE") ? "FORGE_MASTER_UNAVAILABLE" : "MCP_TOOL_ERROR";
-      return {
-        name: `alerts:${project.id}`,
-        status: "warn",
-        code,
-        detail: code === "FORGE_MASTER_UNAVAILABLE"
-          ? "Forge-Master observer unavailable; using forge_watch_live fallback."
-          : `Observer probe failed (${code}).`,
-      };
-    }
-  }));
+  return Promise.all(projects.map((project) => probeObserver(ctx, project)));
 }
 
 export default {
@@ -165,6 +184,8 @@ export default {
       registry: ctx.registry ?? ctx.projectRegistry,
       channel: ctx.channel,
       config: ctx.config,
+      getConfig: () => ctx.getConfig?.() ?? ctx.config,
+      lanes: ctx.lanes,
       logger: ctx.logger,
       secrets: ctx.secrets,
       now: ctx.now ?? Date.now,

@@ -39,9 +39,17 @@ function workerState(entries, workerId) {
   return found ? state : "unknown";
 }
 
-export function createEnrollment({ store, secretFile, now = Date.now, randomBytesFn = randomBytes } = {}) {
+export function createEnrollment({
+  store, secretFile, secrets, onRevoke = () => {}, now = Date.now, randomBytesFn = randomBytes,
+} = {}) {
   if (!store || typeof store.append !== "function" || typeof store.fold !== "function") {
     throw new ClawError("ENROLL_STORE_BAD_CONTRACT");
+  }
+
+  async function refreshSecrets() {
+    if (!secrets) return;
+    if (typeof secrets.refresh !== "function") throw new ClawError("WORKER_SECRET_REFRESH_UNAVAILABLE");
+    await secrets.refresh();
   }
 
   function issue(laneId) {
@@ -83,6 +91,7 @@ export function createEnrollment({ store, secretFile, now = Date.now, randomByte
       throw new ClawError("SECRET_WRITE_FAILED", { name });
     }
     store.append("enrollment", { v: 1, op: "registered", workerId, laneId });
+    await refreshSecrets();
     return { workerId, laneId };
   }
 
@@ -90,7 +99,12 @@ export function createEnrollment({ store, secretFile, now = Date.now, randomByte
     if (workerState(records(store), workerId) === "unknown") throw new ClawError("WORKER_UNKNOWN");
     const name = `${SECRET_PREFIX}${workerId}`;
     store.append("enrollment", { v: 1, op: "revoked", workerId });
-    await deleteSecret({ file: secretFile, name });
+    try {
+      await deleteSecret({ file: secretFile, name });
+      await refreshSecrets();
+    } finally {
+      await onRevoke(workerId);
+    }
     return { revoked: true };
   }
 

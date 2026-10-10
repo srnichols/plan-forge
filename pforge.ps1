@@ -4580,6 +4580,7 @@ function Invoke-RunPlan {
         }
         Write-Host ""
         & node @nodeArgs
+        exit $LASTEXITCODE
     } else {
         # Background mode — default for interactive use
         if ($assisted) {

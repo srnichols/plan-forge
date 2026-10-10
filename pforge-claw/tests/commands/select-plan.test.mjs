@@ -5,6 +5,9 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { selectPlan } from "../../src/callbacks/s.mjs";
 import { currentJobs } from "../../src/jobs/model.mjs";
 import { createStore } from "../../src/state/store.mjs";
+import { c2Authority } from "../c2-fixtures.mjs";
+import { resolvePlan } from "../../src/jobs/plan-resolution.mjs";
+import { HOME_PLAN_RESOLVE_TOOL } from "../../src/enums.mjs";
 
 const directories = [];
 async function fixture() {
@@ -13,8 +16,14 @@ async function fixture() {
   const repo = path.join(root, "repo");
   await mkdir(path.join(repo, "docs", "plans"), { recursive: true });
   await writeFile(path.join(repo, "docs", "plans", "Phase-1-PLAN.md"), "# plan");
+  const project = {
+    id: "p1", repo: { path: repo },
+    channel: { adapter: "telegram", chatId: "c1", topicId: "t1" },
+  };
+  const authority = c2Authority(project);
+  authority.config.allowlist.push({ channel: "telegram", userId: "other", role: "owner" });
   return {
-    project: { id: "p1", repo: { path: repo } },
+    project, ...authority,
     store: createStore(path.join(root, "state")),
     pending: new Map([["short", {
       callerId: "u1",
@@ -24,7 +33,9 @@ async function fixture() {
       candidates: ["docs/plans/Phase-1-PLAN.md"],
       expiresAt: Date.now() + 60_000,
     }]]),
-    mcp: { call: vi.fn(async () => ({ estimate: "tool-backed" })) },
+    mcp: { call: vi.fn(async (tool, args, options) => tool === HOME_PLAN_RESOLVE_TOOL
+      ? resolvePlan({ root: repo, ...args, signal: options?.signal })
+      : ({ estimate: "tool-backed" })) },
   };
 }
 
@@ -45,7 +56,7 @@ describe("plan selection callback", () => {
     expect(result.text).toContain("awaiting approval");
     expect(f.pending.has("short")).toBe(false);
     expect(Object.values(currentJobs(f.store))[0]).toMatchObject({
-      type: "plan", planPath: path.join("docs", "plans", "Phase-1-PLAN.md"), state: "awaiting-approval",
+      type: "plan", planPath: path.posix.join("docs", "plans", "Phase-1-PLAN.md"), state: "awaiting-approval",
     });
   });
 

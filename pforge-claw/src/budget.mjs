@@ -2,6 +2,7 @@ import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
 import { button, keyboard } from "./channels/telegram/format.mjs";
 import { ROLES } from "./enums.mjs";
 import { currentJobs, JOBS_STREAM, transition } from "./jobs/model.mjs";
+import { normalizePlanActuals } from "./jobs/runner-lifecycle.mjs";
 
 export const BUDGET_STREAM = "budget";
 export const BUDGET_UNITS = Object.freeze(["costUSD", "premiumRequests"]);
@@ -10,7 +11,11 @@ export const OVERRIDE_PREFIX = "b";
 export const DEFAULT_TZ = "Etc/UTC";
 
 const CALLBACK_BYTES = 64;
-const OVERRIDE_TTL_MS = 15 * 60_000;
+const OVERRIDE_TTL_MS = 900_000;
+const OVERRIDE_NONCE_BYTES = 16;
+const SHORT_JOB_ID_LENGTH = 8;
+const HELD_JOB_LIMIT = 20;
+const OVERRIDE_PAYLOAD = /^(?:b:)?([A-Za-z0-9._-]{1,8}):([A-Za-z0-9_-]{22})$/;
 const FORMATTERS = new Map();
 let warnedInvalidTimeZone = false;
 let budgetService = null;
@@ -75,6 +80,10 @@ function projectForRecord(record) {
   return project && typeof project === "object" ? project.id : project;
 }
 
+function jobUsageKey(record) {
+  return JSON.stringify([projectForRecord(record), record.jobId]);
+}
+
 function deduplicateRecords(records) {
   const withoutJob = [];
   const byJobAndSource = new Map();
@@ -83,13 +92,13 @@ function deduplicateRecords(records) {
       withoutJob.push(record);
       continue;
     }
-    byJobAndSource.set(`${record.jobId}\u0000${record.source ?? (record.kind === "ask" ? "ask" : "unknown")}`, record);
+    byJobAndSource.set(`${jobUsageKey(record)}\u0000${record.source ?? (record.kind === "ask" ? "ask" : "unknown")}`, record);
   }
   const selected = [...withoutJob, ...byJobAndSource.values()];
   const costReports = new Set(selected
     .filter((record) => record.source === "cost-report" && record.jobId)
-    .map((record) => record.jobId));
-  return selected.filter((record) => !(record.source === "session" && costReports.has(record.jobId)));
+    .map(jobUsageKey));
+  return selected.filter((record) => !(record.source === "session" && costReports.has(jobUsageKey(record))));
 }
 
 function emptyTotals() {
@@ -103,13 +112,20 @@ function addUsage(totals, usage) {
   }
 }
 
+function unknownCounter() {
+  return { jobIds: new Set(), unidentified: 0 };
+}
+
+function addUnknown(counter, jobId) {
+  if (jobId) counter.jobIds.add(String(jobId));
+  else counter.unidentified += 1;
+}
+
 export function foldLedger({ records = [], timeZone = DEFAULT_TZ, day } = {}) {
   const global = emptyTotals();
   const projects = {};
-  const unknownIds = new Set();
-  let unidentifiedUnknowns = 0;
-  const projectUnknownIds = new Map();
-  const projectUnidentifiedUnknowns = new Map();
+  const unknown = unknownCounter();
+  const projectUnknown = new Map();
   for (const record of deduplicateRecords(records)) {
     if (!["usage", "ask"].includes(record?.kind)) continue;
     const at = recordTime(record);
@@ -122,20 +138,15 @@ export function foldLedger({ records = [], timeZone = DEFAULT_TZ, day } = {}) {
     addUsage(global, usage);
     addUsage(projects[key], usage);
     if (usage.costUSD === null && usage.premiumRequests === null) {
-      if (record.jobId) unknownIds.add(String(record.jobId));
-      else unidentifiedUnknowns += 1;
-      if (record.jobId) {
-        projectUnknownIds.set(key, projectUnknownIds.get(key) ?? new Set());
-        projectUnknownIds.get(key).add(String(record.jobId));
-      } else {
-        projectUnidentifiedUnknowns.set(key, (projectUnidentifiedUnknowns.get(key) ?? 0) + 1);
-      }
+      addUnknown(unknown, record.jobId);
+      if (!projectUnknown.has(key)) projectUnknown.set(key, unknownCounter());
+      addUnknown(projectUnknown.get(key), record.jobId);
     }
   }
-  global.unknownUsageJobs = unknownIds.size + unidentifiedUnknowns;
+  global.unknownUsageJobs = unknown.jobIds.size + unknown.unidentified;
   for (const [projectId, totals] of Object.entries(projects)) {
-    totals.unknownUsageJobs = (projectUnknownIds.get(projectId)?.size ?? 0)
-      + (projectUnidentifiedUnknowns.get(projectId) ?? 0);
+    const counter = projectUnknown.get(projectId);
+    totals.unknownUsageJobs = counter ? counter.jobIds.size + counter.unidentified : 0;
   }
   return { global, projects };
 }
@@ -144,6 +155,15 @@ function storedRecords(store, stream) {
   return typeof store?.read === "function"
     ? [...store.read(stream)].map(({ record }) => record)
     : [];
+}
+
+function ledgerActuals({ store, source, projectId, jobId, actuals }) {
+  if (source !== USAGE_SOURCES[2] || actuals?.jobId !== jobId || actuals?.projectId !== projectId) return null;
+  return normalizePlanActuals({ job: currentJobs(store)[jobId], actuals });
+}
+
+function actualsAttribution(actuals) {
+  return actuals ? { runId: actuals.runId, plan: actuals.plan, endedAt: actuals.endedAt } : {};
 }
 
 function hashNonce(nonce) {
@@ -205,6 +225,100 @@ function configuredProject(config, projectId) {
   return config?.projects?.find((project) => String(project.id) === String(projectId));
 }
 
+function sameLocation(left, right) {
+  return String(left.chatId ?? "") === String(right.chatId ?? "")
+    && String(left.threadId ?? "") === String(right.threadId ?? "");
+}
+
+function currentOwnerId(caller, config) {
+  if (caller?.role !== ROLES[0]) return null;
+  const id = caller.userId;
+  if (typeof id !== "string" && !Number.isSafeInteger(id)) return null;
+  if (String(id).trim().length === 0) return null;
+  if (Array.isArray(config.allowlist) && !config.allowlist.some((identity) => (
+    identity.role === ROLES[0] && String(identity.userId) === String(id)
+  ))) return null;
+  return String(id);
+}
+
+function visibleHeldJobs(store, { projectId, visibleProjects } = {}) {
+  const selected = visibleProjects
+    ? new Set(visibleProjects.map((project) => String(project.id ?? project)))
+    : null;
+  return Object.values(currentJobs(store)).filter((job) => (
+    job.state === "held-budget"
+    && (projectId === undefined || String(job.projectId) === String(projectId))
+    && (!selected || selected.has(String(job.projectId)))
+  ));
+}
+
+function issueOverride({ job, reason, result, ownerId = null, append, now }) {
+  const nonce = randomBytes(OVERRIDE_NONCE_BYTES).toString("base64url");
+  const shortId = job.id.slice(0, SHORT_JOB_ID_LENGTH);
+  const payload = `${OVERRIDE_PREFIX}:${shortId}:${nonce}`;
+  const overrideButton = button("Approve over budget", payload);
+  const record = {
+    v: 1, kind: "override.issued", jobId: job.id, shortId,
+    chatId: job.chatId === undefined || job.chatId === null ? null : String(job.chatId),
+    threadId: job.threadId ?? null,
+    ownerId,
+    nonceHash: hashNonce(nonce),
+    expiresAt: now() + OVERRIDE_TTL_MS,
+    reason, spent: result?.spent ?? null, cap: result?.cap ?? null,
+  };
+  append(BUDGET_STREAM, record);
+  return { record, overrideButton };
+}
+
+function sendHoldCard({ job, result, issue, channel, logger }) {
+  if (!channel || !issue.record.chatId) return;
+  const summary = `${result.reason}: ${formatSpend(result.spent ?? null, result.unit)} / ${formatCap(result.cap ?? null, result.unit)}`;
+  void Promise.resolve().then(() => channel.send({
+    chatId: issue.record.chatId,
+    threadId: issue.record.threadId,
+    text: `Job ${job.id} held by budget governor\nReason: ${summary}`,
+    replyMarkup: keyboard([[issue.overrideButton]]),
+  })).catch((error) => {
+    logger?.warn?.("Budget hold card could not be sent", { code: error?.code ?? "CHANNEL_SEND_FAILED" });
+  });
+}
+
+function issuedOverride(rows, payload) {
+  if (typeof payload !== "string" || Buffer.byteLength(payload, "utf8") > CALLBACK_BYTES) return null;
+  const match = OVERRIDE_PAYLOAD.exec(payload);
+  if (!match) return null;
+  const [, shortId, nonce] = match;
+  const nonceHash = hashNonce(nonce);
+  return rows.findLast((record) => record.kind === "override.issued"
+    && record.shortId === shortId && hashesMatch(record.nonceHash, nonceHash)) ?? null;
+}
+
+function overrideRefusal({ issue, rows, ownerId, chatId, threadId, epochMs }) {
+  if (!sameLocation({ chatId, threadId }, issue)) return "chat";
+  if (!Number.isFinite(issue.expiresAt) || epochMs >= issue.expiresAt) return "expired";
+  if (issue.ownerId !== null && issue.ownerId !== undefined && String(issue.ownerId) !== ownerId) return "user";
+  if (rows.some((record) => record.kind === "override.consumed" && record.nonceHash === issue.nonceHash)) return "used";
+  const latest = rows.findLast((record) => record.kind === "override.issued" && record.jobId === issue.jobId);
+  if (latest.nonceHash !== issue.nonceHash) return "stale";
+  return null;
+}
+
+function authorizeOverride({ store, config, request, epochMs }) {
+  const { payload, caller, chatId, threadId } = request;
+  if (caller?.role !== ROLES[0]) return { ok: false, reason: "role" };
+  const ownerId = currentOwnerId(caller, config);
+  if (ownerId === null) return { ok: false, reason: "user" };
+  const rows = overrideRows(store);
+  const issue = issuedOverride(rows, payload);
+  if (!issue) return { ok: false, reason: "tampered" };
+  const refusal = overrideRefusal({ issue, rows, ownerId, chatId, threadId, epochMs });
+  if (refusal) return { ok: false, reason: refusal };
+  const job = currentJobs(store)[issue.jobId];
+  if (job?.state !== "held-budget") return { ok: false, reason: "stale" };
+  if (!sameLocation(job, issue)) return { ok: false, reason: "chat" };
+  return { ok: true, job, issue, ownerId };
+}
+
 export function createBudgetService({
   store, bus, config = {}, mcp, channel, logger, now = Date.now,
 } = {}) {
@@ -219,13 +333,23 @@ export function createBudgetService({
     return foldLedger({ records: storedRecords(store, BUDGET_STREAM), timeZone, day });
   }
 
-  function recordUsage({ source, projectId, jobId = null, usage, at = now() } = {}) {
+  function recordUsage({ source, projectId, jobId = null, usage, at = now(), planActuals } = {}) {
     if (!USAGE_SOURCES.includes(source)) throw Object.assign(new Error("Invalid usage source"), { code: "BUDGET_SOURCE_INVALID" });
-    const normalized = normalizeUsage(usage);
+    const actuals = ledgerActuals({ store, source, projectId, jobId, actuals: planActuals });
+    const normalized = normalizeUsage(planActuals === undefined ? usage : actuals?.usage);
     return append(BUDGET_STREAM, {
-      v: 1, kind: "usage", source, project: projectId, jobId, at,
+      v: 1, kind: "usage", source, project: projectId, jobId,
+      at: actuals ? Date.parse(actuals.endedAt) : at,
       costUSD: normalized.costUSD, premiumRequests: normalized.premiumRequests,
+      ...actualsAttribution(actuals),
     });
+  }
+
+  function hasUsage({ source, projectId, jobId } = {}) {
+    return storedRecords(store, BUDGET_STREAM).some((record) => (
+      record.kind === "usage" && record.source === source
+      && record.jobId === jobId && String(projectForRecord(record)) === String(projectId)
+    ));
   }
 
   function today({ projectId } = {}) {
@@ -281,45 +405,34 @@ export function createBudgetService({
     return { ok: true };
   }
 
-  function issueOverride(job, reason, result) {
-    const nonce = randomBytes(16).toString("base64url");
-    const shortId = job.id.slice(0, 8);
-    const record = {
-      v: 1, kind: "override.issued", jobId: job.id, shortId,
-      chatId: job.chatId === undefined || job.chatId === null ? null : String(job.chatId),
-      threadId: job.threadId ?? null,
-      nonceHash: hashNonce(nonce),
-      expiresAt: now() + OVERRIDE_TTL_MS,
-      reason, spent: result?.spent ?? null, cap: result?.cap ?? null,
-    };
-    append(BUDGET_STREAM, record);
-    const payload = `${OVERRIDE_PREFIX}:${shortId}:${nonce}`;
-    if (Buffer.byteLength(payload, "utf8") > CALLBACK_BYTES) throw Object.assign(new Error("Callback data too long"), { code: "CALLBACK_DATA_TOO_LONG" });
-    if (channel && record.chatId) {
-      const summary = result
-        ? `${result.reason}: ${formatSpend(result.spent ?? null, result.unit)} / ${formatCap(result.cap ?? null, result.unit)}`
-        : reason;
-      const text = `Job ${job.id} held by budget governor\nReason: ${summary}`;
-      const replyMarkup = keyboard([[button("Approve over budget", payload)]]);
-      void Promise.resolve().then(() => channel.send({
-        chatId: record.chatId, threadId: record.threadId, text, replyMarkup,
-      })).catch((error) => {
-        logger?.warn?.("Budget hold card could not be sent", { code: error?.code ?? "CHANNEL_SEND_FAILED" });
-      });
+  function reissueHeld({ caller, chatId, threadId, projectId, visibleProjects } = {}) {
+    const ownerId = currentOwnerId(caller, config);
+    if (ownerId === null) return {};
+    const jobs = visibleHeldJobs(store, { projectId, visibleProjects })
+      .filter((job) => job.mutating === true && job.chatId !== undefined && job.chatId !== null
+        && sameLocation(job, { chatId, threadId }))
+      .slice(0, HELD_JOB_LIMIT);
+    const reasons = heldReasons(store);
+    const rows = jobs.map((job) => [issueOverride({
+      job, ownerId, reason: reasons.get(job.id) ?? "budget", append, now,
+    }).overrideButton]);
+    return rows.length ? { replyMarkup: keyboard(rows) } : {};
+  }
+
+  function checkedBudget(job) {
+    try {
+      return check(job);
+    } catch (error) {
+      logger?.error?.("Budget check failed; holding job", { code: error?.code ?? "BUDGET_CHECK_FAILED" });
+      return { ok: false, reason: "error" };
     }
   }
 
   function gate(jobId) {
     const job = currentJobs(store)[jobId];
     if (job?.state !== "approved" || !job.mutating) return;
-    let result;
-    try {
-      result = check(job);
-      if (result.ok) return;
-    } catch (error) {
-      logger?.error?.("Budget check failed; holding job", { code: error?.code ?? "BUDGET_CHECK_FAILED" });
-      result = { ok: false, reason: "error" };
-    }
+    const result = checkedBudget(job);
+    if (result.ok) return;
     const updated = transition(job, "held-budget", {
       reason: `budget:${result.reason === "error" ? "error" : result.reason}`,
     });
@@ -330,7 +443,10 @@ export function createBudgetService({
       logger?.error?.("Budget hold transition listener failed", { code: error?.code ?? "EVENT_LISTENER_FAILED" });
     }
     try {
-      issueOverride(job, result.reason === "error" ? "budget:error" : result.reason, result);
+      const issue = issueOverride({
+        job, reason: result.reason === "error" ? "budget:error" : result.reason, result, append, now,
+      });
+      sendHoldCard({ job, result, issue, channel, logger });
     } catch (error) {
       logger?.error?.("Budget override could not be issued", { code: error?.code ?? "BUDGET_OVERRIDE_ISSUE_FAILED" });
     }
@@ -338,32 +454,18 @@ export function createBudgetService({
 
   function override({ payload, caller, chatId, threadId } = {}) {
     try {
-      if (caller?.role !== ROLES[0]) return { ok: false, reason: "role" };
-      const match = typeof payload === "string"
-        ? /^(?:b:)?([A-Za-z0-9._-]{1,8}):([A-Za-z0-9_-]{22})$/.exec(payload)
-        : null;
-      if (!match || Buffer.byteLength(payload, "utf8") > CALLBACK_BYTES) return { ok: false, reason: "tampered" };
-      const [, shortId, nonce] = match;
-      const nonceHash = hashNonce(nonce);
-      const rows = overrideRows(store);
-      const issue = rows.findLast((record) => record.kind === "override.issued"
-        && record.shortId === shortId && hashesMatch(record.nonceHash, nonceHash));
-      if (!issue) return { ok: false, reason: "tampered" };
-      if (String(chatId ?? "") !== String(issue.chatId ?? "")
-        || String(threadId ?? "") !== String(issue.threadId ?? "")) return { ok: false, reason: "chat" };
-      if (now() > issue.expiresAt) return { ok: false, reason: "expired" };
-      if (rows.some((record) => record.kind === "override.consumed" && record.nonceHash === issue.nonceHash)) {
-        return { ok: false, reason: "used" };
-      }
-      const job = currentJobs(store)[issue.jobId];
-      if (job?.state !== "held-budget") return { ok: false, reason: "stale" };
+      const authorization = authorizeOverride({
+        store, config, request: { payload, caller, chatId, threadId }, epochMs: now(),
+      });
+      if (!authorization.ok) return authorization;
+      const { job, issue, ownerId } = authorization;
       const day = dayKey({ epochMs: now(), timeZone });
       append(BUDGET_STREAM, {
         v: 1, kind: "override.consumed", jobId: job.id, day,
-        approverId: String(caller.userId), usedAt: now(), nonceHash: issue.nonceHash,
+        approverId: ownerId, usedAt: now(), nonceHash: issue.nonceHash,
       });
       append(BUDGET_STREAM, {
-        v: 1, kind: "override", jobId: job.id, day, approverId: String(caller.userId),
+        v: 1, kind: "override", jobId: job.id, day, approverId: ownerId,
       });
       const updated = transition(job, "approved", { reason: "budget:override" });
       append(JOBS_STREAM, updated.event);
@@ -398,12 +500,9 @@ export function createBudgetService({
       lines.push(`global  ${formatSpend(summary.global.costUSD, "costUSD")} / ${formatCap(capFor(globalCap, "costUSD"), "costUSD")} · ${formatSpend(summary.global.premiumRequests, "premiumRequests")} / ${formatCap(capFor(globalCap, "premiumRequests"), "premiumRequests")} premium · unknown ${summary.global.unknownUsageJobs}`);
     }
     lines.push(`Time zone: ${summary.timeZone}`);
-    const held = Object.values(currentJobs(store))
-      .filter((job) => job.state === "held-budget"
-        && (projectId === undefined || String(job.projectId) === String(projectId))
-        && (!selected || selected.has(String(job.projectId))));
+    const held = visibleHeldJobs(store, { projectId, visibleProjects });
     const reasons = heldReasons(store);
-    const shown = held.slice(0, 20);
+    const shown = held.slice(0, HELD_JOB_LIMIT);
     if (shown.length) {
       lines.push("Held jobs:");
       for (const job of shown) lines.push(`${job.id}  ${reasons.get(job.id) ?? "budget"}`);
@@ -438,7 +537,7 @@ export function createBudgetService({
   }
 
   return {
-    store, config, channel, audit, recordUsage, today, check, gate, override, render, snapshot,
+    store, config, channel, audit, recordUsage, hasUsage, today, check, gate, override, reissueHeld, render, snapshot,
   };
 }
 

@@ -17,7 +17,8 @@ export default Object.freeze({
   sinceSlice: 6,
   available: true,
   roles: [...ROLES],
-  async handle(_context, { payload, caller, chatId, threadId, commands } = {}) {
+  async handle(_context, input = {}) {
+    const { payload, caller, chatId, threadId } = input;
     if (!proposalService) {
       auditTap?.({ chatId, threadId, id: payload });
       return [];
@@ -25,6 +26,6 @@ export default Object.freeze({
     if (typeof proposalService.runProposal !== "function") {
       throw new ClawError("SERVICE_UNAVAILABLE");
     }
-    return proposalService.runProposal({ id: payload, caller, chatId, threadId, commands });
+    return proposalService.runProposal({ ...input, id: payload, caller, chatId, threadId });
   },
 });

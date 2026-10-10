@@ -5,6 +5,7 @@ import {
   onChildTerminal,
   onParentApproved,
   onParentClosed,
+  onParentTerminal,
   reconcile,
 } from "../crossproject.mjs";
 import { currentJobs, TERMINAL } from "../jobs/model.mjs";
@@ -40,29 +41,38 @@ function attach(ctx, eventName, handler) {
   listeners.push([eventName, handler]);
 }
 
+function parentHandler(state) {
+  if (["approved", "leased", "running"].includes(state)) return onParentApproved;
+  if (["rejected", "expired"].includes(state)) return onParentClosed;
+  return TERMINAL.includes(state) ? onParentTerminal : null;
+}
+
+function transitionHandler(job, event) {
+  if (job.type === "fanout") return parentHandler(event.to);
+  return job.parentId && TERMINAL.includes(event.to) ? onChildTerminal : null;
+}
+
+function pendingReportId(job, handler) {
+  if (handler === onParentTerminal) return job.id;
+  if (handler !== onChildTerminal) return null;
+  const parent = currentJobs(dependencies.store)[job.parentId];
+  return parent?.type === "fanout" && TERMINAL.includes(parent.state) ? parent.id : null;
+}
+
 function handleTransition(event) {
   if (event?.kind !== "job.transition" || !dependencies) return;
-  let result;
-  let pendingParent = null;
   try {
     const job = currentJobs(dependencies.store)[event.jobId];
-    if (event.to === "approved" && job?.type === "fanout") {
-      result = onParentApproved(dependencies, event);
-    } else if (["rejected", "expired"].includes(event.to) && job?.type === "fanout") {
-      result = onParentClosed(dependencies, event);
-    } else if (TERMINAL.includes(event.to) && job?.parentId) {
-      const parent = currentJobs(dependencies.store)[job.parentId];
-      if (parent?.type === "fanout" && parent.state === "running") pendingParent = parent.id;
-      result = onChildTerminal(dependencies, event);
-      if (pendingParent && currentJobs(dependencies.store)[pendingParent]?.state === "running") {
-        pendingParent = null;
-      }
+    if (!job || job.state !== event.to) return;
+    const handler = transitionHandler(job, event);
+    if (!handler) return;
+    const result = handler(dependencies, event);
+    if (result && typeof result.then === "function") {
+      track(result, pendingReportId(job, handler));
     }
   } catch (error) {
     logFailure(error);
-    return;
   }
-  if (result && typeof result.then === "function") track(result, pendingParent);
 }
 
 export default {
@@ -74,12 +84,13 @@ export default {
     dependencies = {
       ...ctx,
       registry: ctx.registry ?? ctx.projectRegistry,
-      budget: getBudgetService(),
+      budget: getBudgetService() ?? ctx.budget,
       approvals: createApprovalService({
         store: ctx.store,
         bus: ctx.bus,
         channel: ctx.channel,
         logger: ctx.logger,
+        config: ctx.config,
         now: ctx.now ?? Date.now,
       }),
     };

@@ -18,6 +18,10 @@ export const JOB_STATES = Object.freeze([
 export const LANE_KINDS = Object.freeze(["local", "remote", "k8s"]);
 export const VISIBILITY = Object.freeze(["normal", "restricted"]);
 export const ROLES = Object.freeze(["owner", "approver", "viewer"]);
+export const APPROVER_ROLES = Object.freeze([ROLES[0], ROLES[1]]);
+export const QUORUM_MODES = Object.freeze(["auto", "power", "speed", "false"]);
+export const HOME_PLAN_RESOLVE_TOOL = "claw.plan.resolve";
+export const SCHEDULE_REQUEST_ADAPTER = "scheduler";
 export const LANE_EVENT_TYPES = Object.freeze([
   "started",
   "progress",

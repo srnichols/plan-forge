@@ -4,10 +4,11 @@ import { randomBytes } from "node:crypto";
 import { EventEmitter } from "node:events";
 import { readFile } from "node:fs/promises";
 import { buildLaunch, createProjectClients } from "../mcp/project-client.mjs";
-import { createJobExecutor } from "../jobs/executor.mjs";
+import { createJobExecutor, executionConfigFor } from "../jobs/executor.mjs";
+import { snapshotExecutionChoices } from "../jobs/execution-choices.mjs";
 import { clonedWorkspace, createLeaseJobSource, deferredWorktreeWorkspace } from "../jobs/lease-jobs.mjs";
 import { collectCopySet } from "../jobs/bootstrap.mjs";
-import { verifyGrant } from "../protocol/lease-grant.mjs";
+import { LEASE_GRANT_INVALID, verifyGrant } from "../protocol/lease-grant.mjs";
 import { finalizePodJob, runPodJob } from "../lanes/k8s-job-lane.mjs";
 import { computeDelta, snapshotForge } from "../memory/l2-sync.mjs";
 import { run as runCommand } from "../jobs/worktree.mjs";
@@ -18,8 +19,10 @@ import { createStore } from "../state/store.mjs";
 import { createRegistry, resolveMcpLaunch } from "../registry.mjs";
 import { createEnrollment } from "../protocol/enrollment.mjs";
 import { writeSecret } from "../protocol/secret-file.mjs";
-import { enrollWorker, createWorkerAgent, detectCapabilities } from "../protocol/worker-agent.mjs";
+import { enrollWorker, createWorkerAgent, createL2Receiver, detectCapabilities } from "../protocol/worker-agent.mjs";
 import { ClawError } from "../errors.mjs";
+import { deltaApplicationIdentity, matchesApplicationAck, matchesLeaseAck } from "../protocol/l2-ack.mjs";
+import { L2_ACK_ERRORS } from "../protocol/messages.mjs";
 
 const USAGE = [
   "Usage: pforge claw worker [enroll --lane <id> [--rotate] | join --code <code> [--url <ws(s)>] | revoke <workerId> | --one-shot --job <id> | [--home <dir>]]",
@@ -63,7 +66,7 @@ async function loadRuntimeConfig(home) {
 
 function createEnrollmentContext({ home, secrets }) {
   const store = createStore(path.join(home, "state"), { redact: secrets.redact });
-  return { store, enrollment: createEnrollment({ store, secretFile: path.join(home, "secrets.json") }) };
+  return { store, enrollment: createEnrollment({ store, secretFile: path.join(home, "secrets.json"), secrets }) };
 }
 
 function lockStore(store) {
@@ -152,45 +155,99 @@ async function joinCommand({ home, config, code, url }) {
 }
 
 export function leasedJob(job, { subject, laneId, key, expectJobId } = {}) {
+  if (!job || typeof job !== "object" || Array.isArray(job)) throw new ClawError(LEASE_GRANT_INVALID);
   const { leaseGrant, ...plain } = job;
   verifyGrant({ grant: leaseGrant, job: plain, subject, laneId, key, expectJobId });
-  return job;
+  return snapshotExecutionChoices(job);
+}
+
+function leaseIdentity(job) {
+  const grant = job?.leaseGrant;
+  if (typeof grant?.leaseId !== "string" || !grant.leaseId
+    || !Number.isSafeInteger(grant.attempt) || grant.attempt < 1) return null;
+  return { leaseId: grant.leaseId, attempt: grant.attempt };
+}
+
+function isSuccessfulTerminal(job, event) {
+  return Boolean(event?.type === "finished" && event.jobId === job.id
+    && event.data?.status === "succeeded" && event.data.l2?.ok === true);
+}
+
+function hasCleanupProof({ entry, job, event, applicationAck }) {
+  if (!entry?.identity || !applicationAck || !job || job.projectId !== entry.job.projectId) return false;
+  const lease = leaseIdentity(entry.job);
+  return isSuccessfulTerminal(entry.job, event) && applicationAck.ok === true
+    && matchesApplicationAck(entry.identity, applicationAck)
+    && matchesApplicationAck(entry.identity, event.data.l2)
+    && matchesLeaseAck(lease, job.leaseGrant) && matchesLeaseAck(lease, applicationAck);
 }
 
 export function createLeaseExecution({ ctx, clients, subject, laneId, key, runtimeFactory } = {}) {
   const workspaces = new Map();
-  const executor = createJobExecutor({
-    ctx, clients, runtimeFactory, jobsFor: createLeaseJobSource,
-    workspaceFor: (job) => {
-      const project = ctx.config.projects.find((entry) => entry.id === job.projectId);
-      if (!project) throw new ClawError("PROJECT_NOT_FOUND");
-      const workspace = deferredWorktreeWorkspace({
-        repoPath: project.repo.path, jobId: job.id, home: ctx.home, project,
-        config: ctx.config, secrets: ctx.secrets, runner: ctx.runner,
-      });
-      workspaces.set(job.id, workspace);
-      return workspace;
-    },
-  });
+  const verifiedJobs = new Map();
+  const executionCtx = { ...ctx, projectClients: clients };
+  let executor;
+  function recordVerifiedLease(verified) {
+    const previous = verifiedJobs.get(verified.id);
+    if (previous && previous.leaseGrant.jobDigest !== verified.leaseGrant.jobDigest) {
+      throw new ClawError(LEASE_GRANT_INVALID);
+    }
+    const previousLease = leaseIdentity(previous);
+    const nextLease = leaseIdentity(verified);
+    if (previousLease && (!nextLease || nextLease.attempt < previousLease.attempt
+      || (nextLease.attempt === previousLease.attempt && nextLease.leaseId !== previousLease.leaseId))) {
+      throw new ClawError(LEASE_GRANT_INVALID);
+    }
+    verifiedJobs.set(verified.id, verified);
+    const entry = workspaces.get(verified.id);
+    if (entry) entry.job = verified;
+    return verified;
+  }
+  function workspaceFor(job) {
+    const config = executionConfigFor({ job, config: ctx.config });
+    const project = config.projects.find((entry) => entry.id === job.projectId);
+    if (!project) throw new ClawError("PROJECT_NOT_FOUND");
+    const workspace = deferredWorktreeWorkspace({
+      repoPath: project.repo.path, jobId: job.id, home: ctx.home, project,
+      config, secrets: ctx.secrets, runner: ctx.runner, bootstrapFiles: job.bootstrapFiles,
+    });
+    const verified = verifiedJobs.get(job.id);
+    if (!verified) throw new ClawError(LEASE_GRANT_INVALID);
+    workspaces.set(job.id, { workspace, job: verified, identity: null });
+    return workspace;
+  }
   return {
-    verifyLease: (job) => leasedJob(job, { subject, laneId, key }),
+    verifyLease: (job) => recordVerifiedLease(leasedJob(job, { subject, laneId, key })),
     runtimeFor: (job) => {
-      leasedJob(job, { subject, laneId, key });
-      return executor.runtimeFor(job);
+      const verified = leasedJob(job, { subject, laneId, key });
+      recordVerifiedLease(verified);
+      executor ??= createJobExecutor({
+        ctx: { ...executionCtx, externalHistoryDelivery: true }, clients, runtimeFactory,
+        jobsFor: createLeaseJobSource, workspaceFor,
+      });
+      return executor.runtimeFor(verified);
     },
     l2: {
-      forgeDirFor: (job) => workspaces.get(job.id)?.forgeDirFor(),
+      forgeDirFor: (job) => workspaces.get(job.id)?.workspace.forgeDirFor(),
       snapshot: async () => null,
-      collect: async ({ forgeDir }) => {
-        const workspace = [...workspaces.values()].find((entry) => entry.forgeDirFor() === forgeDir);
-        if (!workspace) throw new ClawError("L2_WORKSPACE_MISSING");
-        return workspace.delta();
+      collect: async ({ forgeDir, deltaId }) => {
+        const entry = [...workspaces.values()].find((current) => current.workspace.forgeDirFor() === forgeDir);
+        if (!entry) throw new ClawError("L2_WORKSPACE_MISSING");
+        const delta = await entry.workspace.delta();
+        entry.identity = deltaApplicationIdentity({ jobId: entry.job.id, projectId: entry.job.projectId, deltaId, delta });
+        return delta;
       },
     },
-    async afterJob({ job, event }) {
-      const workspace = workspaces.get(job.id);
-      await workspace?.settle({ ok: event.data.status === "succeeded" });
+    async afterJob({ job, event, applicationAck }) {
+      const entry = workspaces.get(job.id);
+      if (!hasCleanupProof({ entry, job, event, applicationAck })) {
+        return { ok: false, code: L2_ACK_ERRORS.UNCONFIRMED };
+      }
+      await entry.workspace.release(null, { success: true });
+      await entry.workspace.settle({ ok: true });
       workspaces.delete(job.id);
+      verifiedJobs.delete(job.id);
+      return { ok: true };
     },
   };
 }
@@ -222,12 +279,14 @@ async function runWorker({ home, config }) {
     config,
     registry,
     logger,
+    currentLaneId: laneId,
     resolveLaunch: (project, currentConfig, options) => buildLaunch(
-      { ...project, homeLane: "local" }, currentConfig, options,
+      project, currentConfig, { ...options, currentLaneId: laneId },
     ),
   });
   const ctx = { home, config, secrets, registry, logger, bus: new EventEmitter(), features: [] };
   const execution = createLeaseExecution({ ctx, clients, subject: identity.workerId, laneId, key: secret });
+  const historyReceiver = createL2Receiver({ config, currentLaneId: laneId });
   const localLane = createLocalLane({
     id: laneId,
     config,
@@ -237,14 +296,16 @@ async function runWorker({ home, config }) {
   const agent = createWorkerAgent({
     url, workerId: identity.workerId, secret, laneId, capabilities, localLane,
     verifyLease: execution.verifyLease, l2: execution.l2, afterJob: execution.afterJob,
-    readHandler: async ({ projectId, tool, args = {} }) => {
+    readHandler: async (request, { signal } = {}) => {
+      const { projectId, tool, args = {} } = request;
+      if (tool === "l2.apply") return historyReceiver.read(request, { signal });
       const project = projectRegistry.byId(projectId ?? args.projectId);
       if (!project || project.homeLane !== laneId) throw new ClawError("PROJECT_NOT_FOUND");
       if (typeof tool !== "string" || !tool) throw new ClawError("READ_BAD_REQUEST");
       if (tool === "claw.bootstrap.copySet") {
         return collectCopySet({ repoPath: project.repo.path, paths: project.bootstrap?.copy });
       }
-      return clients.call(projectId, tool, args);
+      return clients.call(projectId, tool, args, { signal });
     },
     allowInsecureLan: workerConfig.allowInsecureLan === true,
     logger,
@@ -293,13 +354,20 @@ async function podConfig(repoDir, job) {
     forge = {};
   }
   if (!forge || typeof forge !== "object" || Array.isArray(forge)) throw new ClawError("CONFIG_INVALID");
-  return {
-    ...forge,
-    projects: [{
-      id: job.projectId, homeLane: "local", models: forge.models,
-      repo: { ...job.project.repo, path: repoDir, baseBranch: job.project.repo.defaultBranch ?? job.project.repo.baseBranch },
-    }],
-  };
+  return podExecutionConfig(job, repoDir, forge);
+}
+
+function podExecutionConfig(job, repoDir, local = {}) {
+  return executionConfigFor({
+    job,
+    config: {
+      ...local,
+      projects: [{
+        id: job.projectId, homeLane: "local", models: local.models,
+        repo: { ...job.project.repo, path: repoDir, baseBranch: job.project.repo.defaultBranch ?? job.project.repo.baseBranch },
+      }],
+    },
+  });
 }
 
 export async function runOneShot(env = process.env, {
@@ -322,32 +390,43 @@ export async function runOneShot(env = process.env, {
   });
 
   async function runPodLease(job, input, options) {
-    leasedJob(job, { subject, laneId, key, expectJobId: jobId });
+    const verified = leasedJob(job, { subject, laneId, key, expectJobId: jobId });
+    const bootstrapConfig = podExecutionConfig(verified, path.join(workdir, "repo"));
     const signal = input.signal;
+    let jobEnv = { ...env };
     const podRunner = (command, args, commandOptions = {}) => {
       signal?.throwIfAborted();
-      return runner(command, args, { ...commandOptions, signal });
+      return runner(command, args, { ...commandOptions, env: commandOptions.env ?? jobEnv, signal });
     };
     const boot = await runPodJob({
-      job, project: job.project, config: {}, requestCopySet: async () => job.bootstrapFiles,
+      job: verified, project: verified.project, config: bootstrapConfig,
+      requestCopySet: async () => verified.bootstrapFiles, env: jobEnv,
       workdir, runner: podRunner, secrets,
     });
     if (!boot.ok) throw new ClawError(boot.code ?? "BOOTSTRAP_FAILED", { reason: "bootstrap" });
-    const config = await podConfig(boot.repoDir, job);
+    jobEnv = boot.env;
+    const config = await podConfig(boot.repoDir, verified);
     forgeDir = path.join(boot.repoDir, ".forge");
     snapshot = await snapshotForge({ forgeDir });
     const registry = { ...createRegistry(config), resolveMcpLaunch };
-    clients = clientsFactory({ config, registry, logger });
+    clients = clientsFactory({
+      config, registry, logger, env: jobEnv,
+      resolveLaunch: (project, currentConfig, launchOptions) => buildLaunch(
+        { ...project, homeLane: "local" }, currentConfig, { ...launchOptions, env: jobEnv },
+      ),
+    });
     const executor = createJobExecutor({
-      ctx: { config, secrets, registry, logger, bus: new EventEmitter(), features: [], runner: podRunner },
+      ctx: { config, secrets, registry, logger, env: jobEnv, bus: new EventEmitter(), features: [], runner: podRunner, projectClients: clients, externalHistoryDelivery: true },
       clients, runtimeFactory, jobsFor: createLeaseJobSource,
       workspaceFor: () => clonedWorkspace({ repoDir: boot.repoDir, env: boot.env, jobId }),
     });
-    const runtime = await executor.runtimeFor(job);
+    const runtime = await executor.runtimeFor(verified);
     const result = await runtime.run(input, options);
     const finalized = await finalize({
-      repoDir: boot.repoDir, env, runner: podRunner, deadlineMs,
-      collectDelta: async () => null, awaitAck: async () => true,
+      repoDir: boot.repoDir, jobId, projectId: verified.projectId,
+      env: jobEnv, runner: podRunner, deadlineMs,
+      collectDelta: () => computeDelta({ forgeDir, snapshot }),
+      awaitAck: ({ delta, transfer }) => agent.syncHistory({ jobId, delta, deltaId: transfer?.deltaId }),
     });
     return finalized.status === "failed" ? { status: "failed", error: "l2-sync-incomplete" } : result;
   }
@@ -361,7 +440,10 @@ export async function runOneShot(env = process.env, {
       collect: async () => snapshot ? computeDelta({ forgeDir, snapshot }) : null,
     },
     afterJob: ({ event }) => { terminal = event; },
-    onLeaseAcked: () => resolveDone(terminal?.data.status === "succeeded" ? 0 : 1),
+    onLeaseAcked: ({ applicationAck }) => resolveDone(
+      terminal?.data.status === "succeeded" && applicationAck?.ok === true
+        && matchesApplicationAck(terminal.data.l2, applicationAck) ? 0 : 1,
+    ),
     onPermanentClose: () => resolveDone(1),
   });
   const timer = setTimeout(() => {
@@ -392,31 +474,35 @@ async function run(argv = []) {
   }
   const home = parsed.values.home ?? resolveHome();
   try {
-    if (parsed.values["one-shot"] || parsed.values.job) {
-      if (command !== "run" || positionals.length) throw new ClawError("WORKER_USAGE", { hint: USAGE });
+    const oneShot = parsed.values["one-shot"] || parsed.values.job;
+    validateWorkerArguments({ command, positionals, oneShot });
+    if (oneShot) {
       return await runOneShot(process.env, { jobId: parsed.values.job });
     }
-    if (command === "join" && positionals.length > 0) throw new ClawError("WORKER_USAGE", { hint: USAGE });
-    if ((command === "run" || command === "enroll") && positionals.length > 0) {
-      throw new ClawError("WORKER_USAGE", { hint: USAGE });
-    }
     const config = await loadRuntimeConfig(home);
-    if (command === "enroll") await enrollCommand({ home, config, laneId: parsed.values.lane, rotate: parsed.values.rotate });
-    else if (command === "join") {
-      await joinCommand({ home, config, code: parsed.values.code, url: parsed.values.url });
-    }     else if (command === "revoke") {
-      if (positionals.length !== 1) throw new ClawError("WORKER_USAGE", { hint: USAGE });
-      await revokeCommand({ home, config, workerId: positionals[0] });
-    }
-    else await runWorker({
-      home, config, oneShot: parsed.values["one-shot"], jobId: parsed.values.job,
-    });
+    await runWorkerCommand({ command, home, config, values: parsed.values, positionals });
     return 0;
   } catch (error) {
     const failure = error instanceof ClawError ? error : new ClawError("WORKER_FAILED");
     process.stderr.write(`${failure.code}${failure.details?.hint ? `: ${failure.details.hint}` : ""}\n`);
     return 2;
   }
+}
+
+function validateWorkerArguments({ command, positionals, oneShot }) {
+  if (oneShot && command !== "run") throw new ClawError("WORKER_USAGE", { hint: USAGE });
+  const expected = command === "revoke" ? 1 : 0;
+  if (positionals.length !== expected) throw new ClawError("WORKER_USAGE", { hint: USAGE });
+}
+
+async function runWorkerCommand({ command, home, config, values, positionals }) {
+  const actions = {
+    enroll: () => enrollCommand({ home, config, laneId: values.lane, rotate: values.rotate }),
+    join: () => joinCommand({ home, config, code: values.code, url: values.url }),
+    revoke: () => revokeCommand({ home, config, workerId: positionals[0] }),
+    run: () => runWorker({ home, config }),
+  };
+  return actions[command]();
 }
 
 export default {

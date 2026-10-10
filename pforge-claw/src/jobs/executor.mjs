@@ -1,83 +1,55 @@
 import { ClawError } from "../errors.mjs";
 import { createRunners } from "./runners.mjs";
-import { buildLaunch } from "../mcp/project-client.mjs";
-import { createAgentRuntime, normalizeRuntimeId } from "../runtime/agent-runtime.mjs";
-
-function projectFor(config, job) {
-  return config?.projects?.find((project) => project.id === job?.projectId) ?? null;
-}
-
-function callerRole(config, job) {
-  return config?.allowlist?.find((entry) => String(entry.userId) === String(job?.callerId))?.role;
-}
-
-function selectedRuntime(config, job) {
-  if (typeof job?.runtime === "string") return normalizeRuntimeId(job.runtime);
-  return normalizeRuntimeId(projectFor(config, job)?.runtime
-    ?? config?.runtimes?.default
-    ?? "copilot-sdk");
-}
-
-export async function resolveJobRuntime({ job, config, runtimeFactory } = {}) {
-  const id = selectedRuntime(config, job);
-  const ghcpRoles = config?.policy?.ghcpRoles ?? ["owner"];
-  if (typeof job?.runtime !== "string" && id === "copilot-sdk" && !ghcpRoles.includes(callerRole(config, job))) {
-    throw new ClawError("RUNTIME_POLICY_DENIED");
-  }
-  if (typeof runtimeFactory !== "function") throw new ClawError("RUNTIME_BAD_CONTRACT");
-  const runtime = await runtimeFactory({ id, job, config, project: projectFor(config, job) });
-  if (!runtime || runtime.id !== id || typeof runtime.run !== "function") {
-    throw new ClawError("RUNTIME_BAD_CONTRACT");
-  }
-  return runtime;
-}
+import { buildWorktreeLaunch } from "../mcp/project-client.mjs";
+import { createAgentRuntime, resolveJobRuntime, resolveJobRuntimeId } from "../runtime/agent-runtime.mjs";
+import { byokProviderReference } from "../runtime/byok.mjs";
+import { canonical } from "../protocol/lease-grant.mjs";
+import { executionConfigFor, snapshotExecutionChoices } from "./execution-choices.mjs";
 
 export function createJobExecutor({
   ctx, clients, runtimeFactory, createSession, jobsFor, workspaceFor,
 } = {}) {
   const runtimes = new Map();
 
-  async function runtimeFor(job) {
+  async function runtimeFor(inputJob) {
+    const job = snapshotExecutionChoices(inputJob);
     if (job.runtime !== undefined && !job.leaseGrant) throw new ClawError("RUNTIME_POLICY_DENIED");
-    if (job.runtime === undefined && selectedRuntime(ctx.config, job) === "copilot-sdk"
-      && !(ctx.config?.policy?.ghcpRoles ?? ["owner"]).includes(callerRole(ctx.config, job))) {
-      throw new ClawError("RUNTIME_POLICY_DENIED");
-    }
-    const id = selectedRuntime(ctx.config, job);
-    if (!runtimes.has(id)) {
+    const config = executionConfigFor({ job, config: ctx.config });
+    const id = resolveJobRuntimeId({ job, config });
+    const cacheKey = canonical({ id, provider: byokProviderReference({ type: id, config }) });
+    if (!runtimes.has(cacheKey)) {
       const factory = runtimeFactory ?? ((options) => createAgentRuntime({
         ...options,
         secrets: ctx.secrets,
         createSession,
       }));
-      const pending = resolveJobRuntime({ job, config: ctx.config, runtimeFactory: factory });
-      runtimes.set(id, pending);
+      const pending = resolveJobRuntime({ job, config, runtimeFactory: factory });
+      runtimes.set(cacheKey, pending);
       pending.catch(() => {
-        if (runtimes.get(id) === pending) runtimes.delete(id);
+        if (runtimes.get(cacheKey) === pending) runtimes.delete(cacheKey);
       });
     }
-    const runtime = await runtimes.get(id);
-    const project = projectFor(ctx.config, job);
+    const runtime = await runtimes.get(cacheKey);
+    const project = config?.projects?.find((candidate) => candidate.id === job?.projectId) ?? null;
     const scopedMcp = {
       call: (tool, args) => clients.call(job.projectId, tool, args),
     };
     const runner = createRunners({
       ...ctx,
+      config,
       runtime,
       mcp: scopedMcp,
-      mcpLaunchForWorktree: ({ project: currentProject, cwd }) => buildLaunch({
-        ...currentProject,
-        repo: { ...currentProject.repo, path: cwd },
-        homeLane: "local",
-      }, ctx.config, { registry: ctx.registry }),
+      mcpLaunchForWorktree: ({ project: currentProject, cwd, env }) => buildWorktreeLaunch({
+        project: currentProject, config, cwd, env, registry: ctx.registry,
+      }),
     }, {
       ...(typeof jobsFor === "function" ? { jobs: jobsFor(job) } : {}),
       ...(typeof workspaceFor === "function" ? { workspace: workspaceFor(job) } : {}),
     });
     return {
       id,
-      run: (input, options = {}) => runner.runJob({
-        ...input,
+      run: (input = {}, options = {}) => runner.runJob({
+        ...job,
         projectId: project?.id ?? input.projectId,
       }, {
         signal: options.signal ?? input.signal,
@@ -88,3 +60,5 @@ export function createJobExecutor({
 
   return { runtimeFor };
 }
+
+export { executionConfigFor, resolveJobRuntime };

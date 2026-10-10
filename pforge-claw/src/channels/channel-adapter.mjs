@@ -1,5 +1,7 @@
 import { ClawError } from "../errors.mjs";
 
+export const CHANNEL_MAX_FILE_BYTES = 20_971_520;
+
 export const CHANNEL_ADAPTER_METHODS = Object.freeze([
   "start",
   "stop",
@@ -14,13 +16,24 @@ export const CHANNEL_ADAPTER_METHODS = Object.freeze([
 /**
  * Update envelope: { v:1, adapter, updateId, kind:"message"|"callback",
  * chatId, threadId, userId, messageId, text, callbackId, data, files }.
- * All identifiers are strings.
+ * Identifiers are strings or null when absent.
+ * files contains only { kind:"voice"|"photo"|"file", fileId, mimeType? }.
+ * Audio uses kind:"voice"; photos select the latest size. Attachment IDs
+ * are bounded to 256 characters, MIME types to 128.
+ * Optional entities contains at most 100 URL/text_link entries with
+ * { type, offset, length, url? }; link targets are bounded to 2048 characters.
+ * Optional forwarded:true / forwardOrigin:{type} never retains sender identities.
  *
  * Limits: frozen { maxMessageLength:4096, chunkLength:3800,
  * maxCallbackDataBytes:64, maxFileBytes:20*1024*1024,
  * parseMode:"MarkdownV2" }.
  *
  * Message reference: { chatId, messageId, threadId }.
+ * setMenu(commands, {scope}={}) preserves the supplied channel scope; omitting
+ * options retains the default menu. Telegram chat menus union their topics.
+ * download({fileId,maxBytes?}) returns {fileId,filePath,bytes:Buffer};
+ * filePath is remote metadata, not a local path. maxBytes cannot exceed the
+ * adapter limit. The consumer owns any byte-to-local-file bridge and cleanup.
  */
 export function assertChannelAdapter(adapter) {
   const missing = CHANNEL_ADAPTER_METHODS.filter((method) => typeof adapter?.[method] !== "function");
@@ -39,7 +52,7 @@ export function runChannelAdapterContract({ describe, it, expect, makeAdapter })
         maxMessageLength: 4096,
         chunkLength: 3800,
         maxCallbackDataBytes: 64,
-        maxFileBytes: 20 * 1024 * 1024,
+        maxFileBytes: CHANNEL_MAX_FILE_BYTES,
         parseMode: "MarkdownV2",
       }));
     });

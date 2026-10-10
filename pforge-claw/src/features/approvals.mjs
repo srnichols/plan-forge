@@ -9,6 +9,7 @@ let interval = null;
 let context = null;
 let inFlight = false;
 let activeTick = null;
+const DEFAULT_APPROVAL_INTERVAL_MS = 30_000;
 
 function appendAudit(ctx, record) {
   try {
@@ -23,44 +24,40 @@ function projectFor(ctx, job) {
     ?? (ctx.config?.projects ?? []).find((project) => project.id === job.projectId);
 }
 
-async function runTick() {
-  if (!service || !context) return;
-  const ctx = context;
-  const activeService = service;
-  if (activeService.channel) {
-    for (const job of activeService.pendingWithoutCard()) {
-      if (job.chatId === undefined || job.chatId === null || String(job.chatId).length === 0) {
-        appendAudit(ctx, { kind: "approval-card-skipped", reason: "missing-chat", jobId: job.id });
-        continue;
-      }
-      const approval = activeService.createApproval(job);
-      const card = await activeService.buildApprovalCard({
-        job,
-        project: projectFor(ctx, job),
-        approval,
-      });
-      if (!card || card.error === "ESTIMATE_UNAVAILABLE") {
-        appendAudit(ctx, { kind: "approval-card-skipped", reason: "estimate-unavailable", jobId: job.id });
-        continue;
-      }
-      try {
-        const sent = await activeService.channel.send({
-          chatId: String(job.chatId),
-          threadId: job.threadId,
-          text: card.text,
-          replyMarkup: card.keyboard,
-        });
-        const messageRef = Array.isArray(sent) ? sent[0] : sent;
-        activeService.issue(job, { messageRef, approval });
-      } catch (error) {
-        appendAudit(ctx, {
-          kind: "approval-card-failed",
-          reason: typeof error?.code === "string" ? error.code : "CHANNEL_SEND_FAILED",
-          jobId: job.id,
-        });
-      }
-    }
+async function issuePendingCard(activeService, ctx, job) {
+  if (job.chatId === undefined || job.chatId === null || String(job.chatId).length === 0) {
+    appendAudit(ctx, { kind: "approval-card-skipped", reason: "missing-chat", jobId: job.id });
+    return;
   }
+  const approval = activeService.createApproval(job);
+  const card = await activeService.buildApprovalCard({
+    job,
+    project: projectFor(ctx, job),
+    approval,
+  });
+  if (!card || card.error === "ESTIMATE_UNAVAILABLE") {
+    appendAudit(ctx, { kind: "approval-card-skipped", reason: "estimate-unavailable", jobId: job.id });
+    return;
+  }
+  try {
+    const sent = await activeService.channel.send({
+      chatId: String(job.chatId),
+      threadId: job.threadId,
+      text: card.text,
+      replyMarkup: card.keyboard,
+    });
+    const messageRef = Array.isArray(sent) ? sent[0] : sent;
+    activeService.issue(job, { messageRef, approval });
+  } catch (error) {
+    appendAudit(ctx, {
+      kind: "approval-card-failed",
+      reason: typeof error?.code === "string" ? error.code : "CHANNEL_SEND_FAILED",
+      jobId: job.id,
+    });
+  }
+}
+
+async function expireCards(activeService, ctx) {
   try {
     const expired = activeService.sweep();
     if (!activeService.channel) return;
@@ -85,6 +82,18 @@ async function runTick() {
       reason: typeof error?.code === "string" ? error.code : "APPROVAL_SWEEP_FAILED",
     });
   }
+}
+
+async function runTick() {
+  if (!service || !context) return;
+  const ctx = context;
+  const activeService = service;
+  if (activeService.channel) {
+    for (const job of activeService.pendingWithoutCard()) {
+      await issuePendingCard(activeService, ctx, job);
+    }
+  }
+  await expireCards(activeService, ctx);
 }
 
 function tick() {
@@ -113,12 +122,13 @@ export default {
       mcp: ctx.mcp,
       channel: ctx.channel,
       logger: ctx.logger,
+      config: ctx.config,
       now: ctx.now ?? Date.now,
       ttlMs: ctx.approvalTtlMs,
     });
     unbind = bindApprovalService(service);
     await tick();
-    interval = setInterval(() => { void tick(); }, ctx.approvalIntervalMs ?? 30_000);
+    interval = setInterval(() => { void tick(); }, ctx.approvalIntervalMs ?? DEFAULT_APPROVAL_INTERVAL_MS);
     interval.unref?.();
   },
   async stop() {

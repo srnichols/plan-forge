@@ -166,6 +166,25 @@ describe("job model", () => {
     expect(expected["job-two"].state).toBe("running");
   });
 
+  it.each([
+    ["state", "approved"],
+    ["id", "other-job"],
+    ["projectId", "other-project"],
+    ["mutating", false],
+    ["readOnly", true],
+    ["lane", "other-lane"],
+    ["runtime", "other-runtime"],
+  ])("rejects result metadata that overwrites the protected %s field", (field, value) => {
+    const running = walk(makeJob("protected-result", "task"), [
+      "awaiting-approval", "approved", "leased", "running",
+    ]);
+    const original = { ...running };
+    expect(() => transition(running, "succeeded", {
+      result: { branch: "claw/protected-result", [field]: value },
+    })).toThrowError(expect.objectContaining({ code: "JOB_BAD_META" }));
+    expect(running).toEqual(original);
+  });
+
   it("rejects duplicate creates, unknown jobs, and replay mismatches", () => {
     const created = createJob({ id: "duplicate", type: "ask", projectId: "project-1" });
     const withCreated = reduceJobs({}, created.event);

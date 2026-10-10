@@ -1,17 +1,20 @@
 import { spawn } from "node:child_process";
 import { createHash } from "node:crypto";
-import { readFile } from "node:fs/promises";
+import { mkdir, readFile } from "node:fs/promises";
 import path from "node:path";
 import { ClawError } from "../errors.mjs";
 import { applyCopySet, bootstrapWorktree, COPYSET_MAX_BYTES, DEFAULT_COPY_PATHS, validateCopyEntry } from "../jobs/bootstrap.mjs";
+import { snapshotExecutionChoices } from "../jobs/execution-choices.mjs";
 import { resolvePforgeCommand, run } from "../jobs/worktree.mjs";
 import { assertLane } from "./lane.mjs";
-import { L2_SYNC_INCOMPLETE } from "../memory/l2-sync.mjs";
+import { encodeDeltaChunks, L2_SYNC_INCOMPLETE } from "../memory/l2-sync.mjs";
+import { applicationIdentity, matchesApplicationAck } from "../protocol/l2-ack.mjs";
+import { createPodGitEnvironment } from "../k8s/pod-git-env.mjs";
+import { streamJobEvents } from "../k8s/job-event-stream.mjs";
 
 const DNS_LABEL_VALUE = /[^a-z0-9-]+/g;
 const DNS_LABEL_EDGES = /^-+|-+$/g;
 const JOB_KEY_PATTERN = /^[0-9a-f]{64}$/;
-const CONNECT_TIMEOUT_REASON = "worker-connect-timeout";
 const FINAL_EVENT_TIMEOUT_MS = 10_000;
 const MCP_READY_TIMEOUT_MS = 15_000;
 const MCP_POLL_INTERVAL_MS = 200;
@@ -19,6 +22,10 @@ const MCP_STOP_TIMEOUT_MS = 1000;
 const MCP_REQUEST_TIMEOUT_MS = 500;
 const MCP_PORT = "3100";
 const SYNC_ACK_POLL_MS = 100;
+const JOB_NAME_MAX_LENGTH = 63;
+const JOB_ID_MAX_LENGTH = 51;
+const JOB_DEADLINE_SECONDS = 3600;
+const JOB_TTL_SECONDS = 600;
 const DEFAULT_RESOURCES = Object.freeze({
   requests: Object.freeze({ cpu: "500m", memory: "1Gi" }),
   limits: Object.freeze({ cpu: "2", memory: "4Gi" }),
@@ -73,31 +80,35 @@ function resourceRequirements(resources) {
   };
 }
 
-export function buildJobSpec({ job, project, lane, dispatcherUrl, jobKey } = {}) {
+function validateJobSpecIdentity({ job, project, lane, dispatcherUrl }) {
   if (!job || typeof job.id !== "string" || !job.id
     || !project || typeof project.id !== "string" || !project.id
     || !lane || typeof lane !== "object") {
     throw new ClawError("LANE_BAD_CONFIG");
   }
-  const k8s = lane.k8s ?? {};
-  const image = project.image ?? k8s.defaultImage;
-  if (typeof image !== "string" || !image.trim()) throw new ClawError("K8S_NO_IMAGE");
   if (typeof dispatcherUrl !== "string" || !dispatcherUrl.trim()) throw new ClawError("LANE_BAD_CONFIG");
+}
 
-  const deadlineSeconds = k8s.deadlineSeconds ?? 3600;
-  const ttlSecondsAfterFinished = k8s.ttlSecondsAfterFinished ?? 600;
+function jobDeadlines(k8s) {
+  const deadlineSeconds = k8s.deadlineSeconds ?? JOB_DEADLINE_SECONDS;
+  const ttlSecondsAfterFinished = k8s.ttlSecondsAfterFinished ?? JOB_TTL_SECONDS;
   if (!Number.isInteger(deadlineSeconds) || deadlineSeconds <= 0
     || !Number.isInteger(ttlSecondsAfterFinished) || ttlSecondsAfterFinished < 0) {
     throw new ClawError("LANE_BAD_CONFIG");
   }
+  return { deadlineSeconds, ttlSecondsAfterFinished };
+}
 
-  const safeJob = uniqueLabel(job.id, 51);
-  const name = `pforge-claw-${safeJob}`.slice(0, 63).replace(/-+$/g, "");
-  const labels = {
-    "app.kubernetes.io/part-of": "pforge-claw",
-    "pforge-claw/job-id": uniqueLabel(job.id),
-    "pforge-claw/project": uniqueLabel(project.id),
-  };
+function jobName(jobId) {
+  return `pforge-claw-${uniqueLabel(jobId, JOB_ID_MAX_LENGTH)}`
+    .slice(0, JOB_NAME_MAX_LENGTH).replace(/-+$/g, "");
+}
+
+function appendSecretEnvironment({ env, name, reference }) {
+  if (reference) env.push({ name, ...secretKeyRef(reference.name, reference.key) });
+}
+
+function jobEnvironment({ job, lane, dispatcherUrl, jobKey, deadlineSeconds }) {
   const env = [
     { name: "PFORGE_CLAW_DISPATCHER_URL", value: dispatcherUrl },
     { name: "PFORGE_CLAW_JOB_ID", value: job.id },
@@ -105,28 +116,51 @@ export function buildJobSpec({ job, project, lane, dispatcherUrl, jobKey } = {})
     { name: "PFORGE_CLAW_LANE_ID", value: lane.id },
     { name: "PFORGE_CLAW_JOB_DEADLINE_SECONDS", value: String(deadlineSeconds) },
     { name: "HOME", value: "/work/home" },
+    { name: "PFORGE_CLAW_HOME", value: "/work/claw" },
   ];
-  const secrets = k8s.secrets ?? {};
+  const secrets = lane.k8s?.secrets ?? {};
   const githubSecret = configuredSecret(secrets, "github", "pforge-claw-github", "token");
   const copilotSecret = configuredSecret(secrets, "copilot", null, "token");
   const bridgeSecretRef = configuredSecret(secrets, "bridge", null, "secret");
   if (!githubSecret || (jobKey !== undefined && !JOB_KEY_PATTERN.test(jobKey))) throw new ClawError("LANE_BAD_CONFIG");
   env.push({ name: "PFORGE_CLAW_GH_TOKEN", ...secretKeyRef(githubSecret.name, githubSecret.key) });
-  if (copilotSecret) {
-    env.push({ name: "PFORGE_CLAW_COPILOT_TOKEN", ...secretKeyRef(copilotSecret.name, copilotSecret.key) });
-  }
-  if (bridgeSecretRef) {
-    env.push({ name: "PFORGE_BRIDGE_SECRET", ...secretKeyRef(bridgeSecretRef.name, bridgeSecretRef.key) });
-  }
-  for (const [envName, reference] of Object.entries(secrets.env ?? {})) {
-    if (envName === "PFORGE_CLAW_JOB_KEY" || env.some((entry) => entry.name === envName) || !/^[A-Z][A-Z0-9_]*$/.test(envName)
+  appendSecretEnvironment({ env, name: "PFORGE_CLAW_COPILOT_TOKEN", reference: copilotSecret });
+  appendSecretEnvironment({ env, name: "PFORGE_BRIDGE_SECRET", reference: bridgeSecretRef });
+  appendExtraSecrets({ env, references: secrets.env ?? {}, job, lane });
+  return env;
+}
+
+function signedSecretNames(job) {
+  if (!job.leaseGrant) return null;
+  if (job.provider && Object.hasOwn(job.provider, "apiKey")) throw new ClawError("LANE_BAD_CONFIG");
+  const names = new Set(job.project?.bootstrap?.env ?? []);
+  if (job.provider?.keySecret) names.add(job.provider.keySecret);
+  return names;
+}
+
+function appendExtraSecrets({ env, references, job, lane }) {
+  const required = signedSecretNames(job);
+  const laneCredentials = new Set([
+    "PFORGE_CLAW_WORKER_SECRET", "PFORGE_CLAW_K8S_LANE_SECRET", lane.k8s?.laneSecret,
+  ]);
+  for (const [envName, reference] of Object.entries(references)) {
+    if (laneCredentials.has(envName) || envName === "PFORGE_CLAW_JOB_KEY"
+      || env.some((entry) => entry.name === envName) || !/^[A-Z][A-Z0-9_]*$/.test(envName)
       || typeof reference?.name !== "string" || !reference.name
       || typeof reference.key !== "string" || !reference.key) {
       throw new ClawError("LANE_BAD_CONFIG");
     }
+    if (required && !required.has(envName)) continue;
     env.push({ name: envName, ...secretKeyRef(reference.name, reference.key) });
   }
+  for (const envName of required ?? []) {
+    if (!env.some((entry) => entry.name === envName && entry.valueFrom?.secretKeyRef)) {
+      throw new ClawError("BOOTSTRAP_SECRET_MISSING");
+    }
+  }
+}
 
+function jobWorkspace(k8s) {
   const volumes = [{ name: "work", emptyDir: {} }, { name: "tmp", emptyDir: {} }];
   const volumeMounts = [
     { name: "work", mountPath: "/work" },
@@ -137,15 +171,32 @@ export function buildJobSpec({ job, project, lane, dispatcherUrl, jobKey } = {})
     volumes.push({ name: "repo-cache", persistentVolumeClaim: { claimName } });
     volumeMounts.push({ name: "repo-cache", mountPath: "/cache", readOnly: true });
   }
+  return { volumes, volumeMounts };
+}
 
+export function buildJobSpec({ job, project, lane, dispatcherUrl, jobKey } = {}) {
+  validateJobSpecIdentity({ job, project, lane, dispatcherUrl });
+  const k8s = lane.k8s ?? {};
+  const image = project.image ?? k8s.defaultImage;
+  if (typeof image !== "string" || !image.trim()) throw new ClawError("K8S_NO_IMAGE");
+  const { deadlineSeconds, ttlSecondsAfterFinished } = jobDeadlines(k8s);
+  const labels = {
+    "app.kubernetes.io/part-of": "pforge-claw",
+    "pforge-claw/job-id": uniqueLabel(job.id),
+    "pforge-claw/project": uniqueLabel(project.id),
+  };
+  const env = jobEnvironment({ job, lane, dispatcherUrl, jobKey, deadlineSeconds });
+  const { volumes, volumeMounts } = jobWorkspace(k8s);
   return {
     apiVersion: "batch/v1",
     kind: "Job",
-    metadata: { name, labels },
+    metadata: {
+      name: jobName(job.id), labels,
+      annotations: { "pforge-claw/cleanup-after-ack-seconds": String(ttlSecondsAfterFinished) },
+    },
     spec: {
       backoffLimit: 0,
       activeDeadlineSeconds: deadlineSeconds,
-      ttlSecondsAfterFinished,
       template: {
         metadata: { labels: { ...labels, "pforge-claw/role": "job" } },
         spec: {
@@ -165,6 +216,7 @@ export function buildJobSpec({ job, project, lane, dispatcherUrl, jobKey } = {})
             resources: resourceRequirements(k8s.resources),
             securityContext: {
               allowPrivilegeEscalation: false,
+              readOnlyRootFilesystem: true,
               capabilities: { drop: ["ALL"] },
             },
             volumeMounts,
@@ -191,16 +243,6 @@ function finished(jobId, data, seq = 1, now = Date.now) {
   };
 }
 
-function conditionReason(job, conditionType) {
-  return job?.status?.conditions?.find((condition) => condition.type === conditionType && condition.status === "True")
-    ?.reason;
-}
-
-function hasCondition(job, conditionType) {
-  return job?.status?.conditions?.some((condition) => condition.type === conditionType && condition.status === "True")
-    ?? false;
-}
-
 function isNotFound(error) {
   return error?.code === "K8S_API" && error.details?.status === 404;
 }
@@ -214,24 +256,28 @@ async function probeMcp(url) {
   }
 }
 
-/**
- * Start the project MCP HTTP server on the pod-local fixed port.
- * @param {{repoDir: string, runner?: Function, spawnFn?: Function, now?: Function, sleep?: Function}} options
- */
-export async function startPodMcp({
-  repoDir, runner = run, spawnFn = spawn, now = Date.now,
-  sleep = (duration) => new Promise((resolve) => setTimeout(resolve, duration)),
-} = {}) {
-  void runner;
+function validateMcpOptions({ repoDir, spawnFn, now, sleep }) {
   if (typeof repoDir !== "string" || !repoDir || typeof spawnFn !== "function"
     || typeof now !== "function" || typeof sleep !== "function") {
     throw new ClawError("L2_MCP_START_FAILED");
   }
+}
+
+/**
+ * Start the project MCP HTTP server on the pod-local fixed port.
+ * @param {{repoDir: string, env?: object, runner?: Function, spawnFn?: Function, now?: Function, sleep?: Function}} options
+ */
+export async function startPodMcp({
+  repoDir, env = process.env, runner = run, spawnFn = spawn, now = Date.now,
+  sleep = (duration) => new Promise((resolve) => setTimeout(resolve, duration)),
+} = {}) {
+  void runner;
+  validateMcpOptions({ repoDir, spawnFn, now, sleep });
   let child;
   try {
     child = spawnFn(process.execPath, [
       path.join(repoDir, "pforge-mcp", "server.mjs"), "--port", MCP_PORT,
-    ], { cwd: repoDir, env: process.env, stdio: "ignore", windowsHide: true });
+    ], { cwd: repoDir, env, stdio: "ignore", windowsHide: true });
   } catch {
     throw new ClawError("L2_MCP_START_FAILED");
   }
@@ -240,8 +286,9 @@ export async function startPodMcp({
   }
   let spawnFailed = false;
   child.once("error", () => { spawnFailed = true; });
+  const isRunning = () => !spawnFailed && child.exitCode === null && child.signalCode === null;
   const stop = async () => {
-    if (spawnFailed || child.exitCode !== null || child.signalCode !== null) return;
+    if (!isRunning()) return;
     await new Promise((resolve) => {
       const timer = setTimeout(resolve, MCP_STOP_TIMEOUT_MS);
       child.once("exit", () => {
@@ -252,10 +299,10 @@ export async function startPodMcp({
     });
   };
   const expiresAt = now() + MCP_READY_TIMEOUT_MS;
-  while (!spawnFailed && now() < expiresAt && child.exitCode === null && child.signalCode === null) {
+  while (isRunning() && now() < expiresAt) {
     if (await probeMcp(`http://127.0.0.1:${MCP_PORT}/mcp`)) {
       await sleep(MCP_POLL_INTERVAL_MS);
-      if (!spawnFailed && child.exitCode === null && child.signalCode === null) return { stop };
+      if (isRunning()) return { stop };
       break;
     }
     await sleep(Math.min(MCP_POLL_INTERVAL_MS, Math.max(0, expiresAt - now())));
@@ -279,7 +326,7 @@ async function drainPodMemory({ repoDir, runner, suppliedEnv }) {
     config: suppliedEnv.config ?? suppliedEnv,
     cwd: repoDir,
   });
-  const childEnv = Object.fromEntries(Object.entries({ ...process.env, ...suppliedEnv })
+  const childEnv = Object.fromEntries(Object.entries(suppliedEnv)
     .filter(([key, value]) => key !== "config" && typeof value === "string"));
   const secret = await bridgeSecret(repoDir, suppliedEnv);
   if (secret) childEnv.PFORGE_BRIDGE_SECRET = secret;
@@ -317,17 +364,28 @@ export async function awaitSyncAck({
  */
 export async function finalizePodJob({
   repoDir, runner = run, env = process.env, startMcp = startPodMcp,
-  collectDelta, awaitAck, deadlineMs, now = Date.now,
+  collectDelta, awaitAck, deadlineMs, now = Date.now, jobId = env.PFORGE_CLAW_JOB_ID, projectId,
 } = {}) {
   if (typeof collectDelta !== "function" || typeof awaitAck !== "function"
     || !Number.isFinite(deadlineMs) || typeof now !== "function") {
     throw new ClawError("L2_MALFORMED");
   }
-  const mcp = await startMcp({ repoDir, runner });
+  const mcp = await startMcp({ repoDir, runner, env });
   try {
     await drainPodMemory({ repoDir, runner, suppliedEnv: env });
-    const delta = await collectDelta({ repoDir });
-    if (!delta) return { status: "ok" };
+    const collected = await collectDelta({ repoDir });
+    if (!collected) return { status: "ok" };
+    const delta = snapshotExecutionChoices(collected);
+    const chunks = encodeDeltaChunks({ delta, deltaId: `${jobId}:pod-finalize:v1` });
+    let transfer;
+    try {
+      transfer = snapshotExecutionChoices({
+        ...applicationIdentity({ jobId, projectId, deltaId: chunks[0].deltaId, sha256Total: chunks[0].sha256Total }),
+        chunks,
+      });
+    } catch {
+      return { status: "failed", reason: L2_SYNC_INCOMPLETE };
+    }
     const remainingMs = Math.max(0, deadlineMs - now());
     if (!remainingMs) return { status: "failed", reason: L2_SYNC_INCOMPLETE };
     let timeoutId;
@@ -336,14 +394,15 @@ export async function finalizePodJob({
     });
     try {
       const acknowledgement = await Promise.race([
-        awaitAck({ delta, deadlineMs, timeoutMs: remainingMs }),
+        awaitAck({ delta, transfer, deadlineMs, timeoutMs: remainingMs }),
         timeout,
       ]);
-      const acknowledged = acknowledgement !== false && acknowledgement?.ok !== false
-        && acknowledgement?.status !== "failed";
+      const acknowledged = matchesApplicationAck(transfer, acknowledgement) && acknowledgement.ok === true;
       return acknowledged
-        ? { status: "ok" }
+        ? { status: "ok", applicationAck: snapshotExecutionChoices({ ...applicationIdentity(transfer), ok: true }) }
         : { status: "failed", reason: L2_SYNC_INCOMPLETE };
+    } catch {
+      return { status: "failed", reason: L2_SYNC_INCOMPLETE };
     } finally {
       clearTimeout(timeoutId);
     }
@@ -352,44 +411,45 @@ export async function finalizePodJob({
   }
 }
 
-export async function runPodJob({
-  job,
-  project,
-  config = {},
-  requestCopySet,
-  runner = run,
-  workdir = "/work",
-  secrets = { get: (name) => process.env[name] },
-} = {}) {
-  const remote = project?.repo?.url ?? project?.repo?.remote;
-  const baseBranch = project?.repo?.defaultBranch ?? project?.repo?.baseBranch;
-  if (!job || typeof remote !== "string" || !remote || typeof baseBranch !== "string" || !baseBranch
-    || typeof requestCopySet !== "function" || typeof runner !== "function") {
-    return { ok: false, reason: "bootstrap", step: "clone" };
+function unsupportedRemote(remote) {
+  try {
+    const url = new URL(remote);
+    return url.protocol !== "https:" || !url.hostname || Boolean(url.username || url.password || url.search || url.hash);
+  } catch {
+    return true;
   }
-  const repoDir = path.join(workdir, "repo");
-  const cloneArgs = ["clone"];
-  if (remote.startsWith("ssh://") || remote.startsWith("git@")) {
-    return { ok: false, reason: "bootstrap", step: "clone", code: "REMOTE_AUTH_UNSUPPORTED" };
-  }
-  const laneK8s = config.lane?.k8s
+}
+
+function podK8sConfig(config) {
+  return config.lane?.k8s
     ?? config.k8s
     ?? config.lanes?.find?.((entry) => entry.kind === "k8s")?.k8s
     ?? {};
+}
+
+async function clonePodRepository({ project, config, repoDir, workdir, runner, env }) {
+  const remote = project.repo.url ?? project.repo.remote;
+  const baseBranch = project.repo.defaultBranch ?? project.repo.baseBranch;
+  if (unsupportedRemote(remote)) {
+    return { ok: false, reason: "bootstrap", step: "clone", code: "REMOTE_AUTH_UNSUPPORTED" };
+  }
+  const cloneArgs = ["clone"];
+  const laneK8s = podK8sConfig(config);
   if (laneK8s.repoCache?.claimName) cloneArgs.push("--reference", "/cache");
   cloneArgs.push("--depth", "1", "--branch", baseBranch, "--", remote, repoDir);
-  let clone;
   try {
-    clone = await runner("git", cloneArgs, { cwd: workdir });
+    await mkdir(env.HOME, { recursive: true });
+    const clone = await runner("git", cloneArgs, { cwd: workdir, env });
+    if (clone?.code === 0) return { ok: true };
   } catch {
     return { ok: false, reason: "bootstrap", step: "clone", code: "REPO_CLONE_FAILED" };
   }
-  if (clone?.code !== 0) {
-    return { ok: false, reason: "bootstrap", step: "clone", code: "REPO_CLONE_FAILED" };
-  }
+  return { ok: false, reason: "bootstrap", step: "clone", code: "REPO_CLONE_FAILED" };
+}
 
+async function copyPodBootstrapFiles({ job, project, config, repoDir, requestCopySet, runner, env }) {
   try {
-    const branch = await runner("git", ["-C", repoDir, "checkout", "-b", `claw/${job.id}`]);
+    const branch = await runner("git", ["-C", repoDir, "checkout", "-b", `claw/${job.id}`], { env });
     if (branch.code !== 0) throw new ClawError("WORKTREE_ADD_FAILED");
     const requested = project.bootstrap?.copy ?? config.bootstrap?.copy ?? DEFAULT_COPY_PATHS;
     const allowedPaths = requested.map(validateCopyEntry);
@@ -404,14 +464,56 @@ export async function runPodJob({
     }
     if (files.length !== new Set(allowedPaths).size) throw new ClawError("CLAW_COPYSET_MISSING");
     await applyCopySet({ repoPath: repoDir, files, maxBytes: COPYSET_MAX_BYTES });
+    return { ok: true };
   } catch (error) {
     return { ok: false, reason: "bootstrap", step: "copy", code: error.code ?? "BOOTSTRAP_COPY_INVALID" };
   }
+}
 
+function validPodJobInputs({ job, project, requestCopySet, runner }) {
+  const remote = project?.repo?.url ?? project?.repo?.remote;
+  const baseBranch = project?.repo?.defaultBranch ?? project?.repo?.baseBranch;
+  return Boolean(job && typeof remote === "string" && remote && typeof baseBranch === "string" && baseBranch
+    && typeof requestCopySet === "function" && typeof runner === "function");
+}
+
+function podBootstrapEnvironment({ env, bootstrap, secrets }) {
+  const bootEnv = { ...env };
+  for (const name of bootstrap.env ?? []) {
+    const value = secrets?.get?.(name);
+    if (typeof value !== "string" || !value) throw new ClawError("BOOTSTRAP_SECRET_MISSING");
+    bootEnv[name] = value;
+  }
+  return createPodGitEnvironment({ env: bootEnv, home: env.HOME, secrets });
+}
+
+export async function runPodJob({
+  job, project, config = {}, requestCopySet, runner = run, workdir = "/work",
+  env: suppliedEnv = process.env,
+  secrets = { get: (name) => process.env[name] },
+} = {}) {
+  if (!validPodJobInputs({ job, project, requestCopySet, runner })) {
+    return { ok: false, reason: "bootstrap", step: "clone" };
+  }
+  const repoDir = path.join(workdir, "repo");
+  const env = createPodGitEnvironment({ env: suppliedEnv, home: path.join(workdir, "home"), secrets });
+  const cloned = await clonePodRepository({ project, config, repoDir, workdir, runner, env });
+  if (!cloned.ok) return cloned;
+  const copied = await copyPodBootstrapFiles({ job, project, config, repoDir, requestCopySet, runner, env });
+  if (!copied.ok) return copied;
   const bootstrapConfig = {
     ...config,
-    bootstrap: { ...config.bootstrap, copy: [], install: "ci" },
+    bootstrap: {
+      ...config.bootstrap, ...project.bootstrap,
+      copy: [], install: project.bootstrap?.install ?? config.bootstrap?.install ?? "ci",
+    },
   };
+  let jobEnv;
+  try {
+    jobEnv = podBootstrapEnvironment({ env, bootstrap: bootstrapConfig.bootstrap, secrets });
+  } catch (error) {
+    return { ok: false, reason: "bootstrap", step: "environment", code: error.code ?? "BOOTSTRAP_SECRET_MISSING" };
+  }
   const result = await bootstrapWorktree({
     job,
     worktree: repoDir,
@@ -419,10 +521,87 @@ export async function runPodJob({
     homeRepo: repoDir,
     config: bootstrapConfig,
     secrets,
-    runner,
+    runner: (command, args, options = {}) => runner(command, args, {
+      ...options,
+      env: jobEnv,
+    }),
   });
   if (!result.ok) return result;
-  return { ok: true, repoDir, env: result.env };
+  return {
+    ok: true, repoDir,
+    env: jobEnv,
+  };
+}
+
+function validateLanePorts({ id, lane, api, registry, connectTimeoutMs, now }) {
+  if (typeof id !== "string" || !id || lane?.kind !== "k8s"
+    || !Number.isFinite(connectTimeoutMs) || connectTimeoutMs <= 0 || typeof now !== "function") {
+    throw new ClawError("LANE_BAD_CONFIG");
+  }
+  for (const [port, methods] of [
+    [api, ["createJob", "deleteJob", "watchJob", "getJob"]],
+    [registry, ["enqueue", "cancel", "registerPending", "revoke"]],
+  ]) {
+    if (!port || methods.some((method) => typeof port[method] !== "function")) {
+      throw new ClawError("LANE_BAD_CONFIG");
+    }
+  }
+}
+
+async function createOrAdoptJob({ api, namespace, spec, jobId, recordError }) {
+  try {
+    await api.createJob(namespace, spec);
+    return null;
+  } catch (error) {
+    if (error?.code !== "K8S_API" || error.details?.status !== 409) {
+      recordError(error);
+      return { status: "failed", error: "K8S_API", reason: errorReason(error) };
+    }
+    try {
+      const existing = await api.getJob(namespace, spec.metadata.name);
+      if (existing?.metadata?.labels?.["pforge-claw/job-id"] !== uniqueLabel(jobId)) {
+        return { status: "failed", error: "JOB_DUPLICATE", reason: "conflict" };
+      }
+      return null;
+    } catch (readError) {
+      return { status: "failed", error: "K8S_API", reason: errorReason(readError) };
+    }
+  }
+}
+
+function prepareJobSubmission({ job, config, lane, dispatcherUrl, jobKeyFor }) {
+  const project = config.projects?.find((entry) => entry.id === job.projectId);
+  if (!project) throw new ClawError("LANE_BAD_CONFIG");
+  const jobKey = jobKeyFor(job.id);
+  if (typeof jobKey !== "string" || !JOB_KEY_PATTERN.test(jobKey)) throw new ClawError("K8S_LANE_SECRET_MISSING");
+  const spec = buildJobSpec({ job, project, lane, dispatcherUrl, jobKey });
+  return {
+    spec,
+    name: spec.metadata.name,
+    byokOnly: !spec.spec.template.spec.containers[0].env
+      .some((entry) => entry.name === "PFORGE_CLAW_COPILOT_TOKEN"),
+  };
+}
+
+function canonicalCompletion({ registry, job, event }) {
+  if (event.type !== "finished" || event.data?.status !== "succeeded") return event;
+  const completion = appliedCompletion(registry, job.id);
+  if (completion && completion.applicationAck.projectId === job.projectId && completion.event.seq === event.seq
+    && matchesApplicationAck(completion.applicationAck, event.data.l2)) return event;
+  return { ...event, data: { ...event.data, status: "failed", reason: L2_SYNC_INCOMPLETE } };
+}
+
+function appliedCompletion(registry, jobId) {
+  const completion = registry.completion?.(jobId);
+  const ack = completion?.applicationAck;
+  if (completion?.ok !== true || ack?.ok !== true || ack.jobId !== jobId || completion.event?.jobId !== jobId
+    || !matchesApplicationAck(ack, completion.event.data?.l2)) return null;
+  return completion;
+}
+
+function cleanupEligible({ registry, jobId, active }) {
+  if (active && !active.started) return true;
+  return Boolean(appliedCompletion(registry, jobId));
 }
 
 export function createK8sJobLane({
@@ -436,18 +615,11 @@ export function createK8sJobLane({
   canDeriveJobKeys = () => false,
 } = {}) {
   const lane = configuredLane(config, id);
-  if (typeof id !== "string" || !id || lane?.kind !== "k8s"
-    || !api || typeof api.createJob !== "function" || typeof api.deleteJob !== "function"
-    || typeof api.watchJob !== "function" || typeof api.getJob !== "function"
-    || !registry || typeof registry.enqueue !== "function" || typeof registry.cancel !== "function"
-    || !Number.isFinite(connectTimeoutMs) || connectTimeoutMs <= 0
-    || typeof now !== "function") {
-    throw new ClawError("LANE_BAD_CONFIG");
-  }
+  validateLanePorts({ id, lane, api, registry, connectTimeoutMs, now });
   const k8s = lane.k8s ?? {};
-  const namespace = k8s.namespace ?? "default";
+  const namespace = k8s.namespace;
   const dispatcherUrl = config.worker?.dispatcherUrl;
-  if (!/^[a-z0-9]([-a-z0-9]{0,61}[a-z0-9])?$/.test(namespace)
+  if (typeof namespace !== "string" || !/^[a-z0-9]([-a-z0-9]{0,61}[a-z0-9])?$/.test(namespace)
     || typeof dispatcherUrl !== "string" || !dispatcherUrl) {
     throw new ClawError("LANE_BAD_CONFIG");
   }
@@ -475,182 +647,61 @@ export function createK8sJobLane({
       yield finished(job.id, { status: "failed", error: "K8S_LANE_SECRET_MISSING" });
       return;
     }
-    let spec;
-    let name;
-    let byokOnly;
+    let submission;
     try {
-      const project = config.projects?.find((entry) => entry.id === job.projectId);
-      if (!project) throw new ClawError("LANE_BAD_CONFIG");
-      const jobKey = jobKeyFor(job.id);
-      if (typeof jobKey !== "string" || !JOB_KEY_PATTERN.test(jobKey)) throw new ClawError("K8S_LANE_SECRET_MISSING");
-      spec = buildJobSpec({ job, project, lane, dispatcherUrl, jobKey });
-      name = spec.metadata.name;
-      byokOnly = !spec.spec.template.spec.containers[0].env
-        .some((entry) => entry.name === "PFORGE_CLAW_COPILOT_TOKEN");
+      submission = prepareJobSubmission({ job, config, lane, dispatcherUrl, jobKeyFor });
     } catch (error) {
       yield finished(job?.id, { status: "failed", error: error?.code ?? "LANE_BAD_CONFIG", reason: errorReason(error) });
       return;
     }
 
+    const { spec, name, byokOnly } = submission;
     const record = { name, namespace, byokOnly, started: false };
     activeJobs.set(job.id, record);
     let source;
-    let watchController;
-    let workerDone = false;
-    let terminalSent = false;
-    let transferOpen = false;
-    let lastSeq = 0;
-    let connectTimer;
-    let finalTimer;
-    const queue = [];
-    let wake;
-    const push = (value) => {
-      if (wake) {
-        const resolve = wake;
-        wake = null;
-        resolve(value);
-      } else queue.push(value);
-    };
-    const take = () => queue.length
-      ? Promise.resolve(queue.shift())
-      : new Promise((resolve) => { wake = resolve; });
-    const emitTerminal = (data) => {
-      if (terminalSent) return;
-      terminalSent = true;
-      push({ kind: "terminal", event: finished(job.id, data, lastSeq + 1, now) });
-    };
 
     try {
       registry.registerPending(id, job.id, { deadlineMs: now() + spec.spec.activeDeadlineSeconds * 1000 });
-      try {
-        await api.createJob(namespace, spec);
-      } catch (error) {
-        if (error?.code === "K8S_API" && error.details?.status === 409) {
-          try {
-            const existing = await api.getJob(namespace, name);
-            if (existing?.metadata?.labels?.["pforge-claw/job-id"] !== uniqueLabel(job.id)) {
-              emitTerminal({ status: "failed", error: "JOB_DUPLICATE", reason: "conflict" });
-              yield await take().then((item) => item.event);
-              return;
-            }
-          } catch (readError) {
-            emitTerminal({ status: "failed", error: "K8S_API", reason: errorReason(readError) });
-            yield await take().then((item) => item.event);
-            return;
-          }
-        } else {
-          lastError = { code: error?.code ?? "K8S_API", reason: errorReason(error) };
-          emitTerminal({ status: "failed", error: "K8S_API", reason: errorReason(error) });
-          yield await take().then((item) => item.event);
-          return;
-        }
+      const createError = await createOrAdoptJob({
+        api, namespace, spec, jobId: job.id,
+        recordError: (error) => { lastError = { code: error?.code ?? "K8S_API", reason: errorReason(error) }; },
+      });
+      if (createError) {
+        yield finished(job.id, createError, 1, now);
+        return;
       }
 
       const { iterator } = registry.enqueue(id, { kind: "job", job });
       source = iterator[Symbol.asyncIterator]();
-      watchController = new AbortController();
       if (cancelIntent.has(job.id)) {
         await registry.cancel(job.id);
         await deleteIgnoringNotFound(name);
       }
-      connectTimer = setTimeout(() => {
-        if (record.started || terminalSent) return;
-        void deleteIgnoringNotFound(name);
-        emitTerminal({ status: "failed", reason: CONNECT_TIMEOUT_REASON });
-      }, connectTimeoutMs);
-      connectTimer.unref?.();
-
-      const workerPump = (async () => {
-        try {
-          while (true) {
-            const next = await source.next();
-            if (next.done) break;
-            const event = next.value;
-            if (Number.isFinite(event?.seq)) {
-              if (event.seq <= lastSeq) continue;
-              lastSeq = event.seq;
-            }
-            if (event?.type === "started") {
-              record.started = true;
-              clearTimeout(connectTimer);
-            }
-            if (event?.type === "artifact" && event.data?.kind === "l2-delta") transferOpen = true;
-            if (event?.type === "finished") {
-              transferOpen = false;
-              workerDone = true;
-              clearTimeout(connectTimer);
-              clearTimeout(finalTimer);
-              if (!terminalSent) {
-                terminalSent = true;
-                push({ kind: "terminal", event });
-              }
-              break;
-            }
-            push({ kind: "worker", event });
-          }
-        } catch (error) {
-          lastError = { code: error?.code ?? "WORKER_STREAM", reason: errorReason(error) };
-        } finally {
-          push({ kind: "worker-done" });
+      const events = streamJobEvents({
+        jobId: job.id, source, now, connectTimeoutMs, finalTimeoutMs: FINAL_EVENT_TIMEOUT_MS,
+        watch: (options) => api.watchJob(namespace, name, options),
+        onStarted: () => { record.started = true; },
+        onError: (error) => { lastError = error; },
+        onIncomplete: () => {
+          incompleteSyncs += 1;
+          lastError = { code: L2_SYNC_INCOMPLETE, reason: L2_SYNC_INCOMPLETE };
+        },
+        onConnectionTimeout: () => deleteIgnoringNotFound(name),
+      });
+      for await (const event of events) {
+        const checked = canonicalCompletion({ registry, job, event });
+        if (checked !== event) {
+          incompleteSyncs += 1;
+          lastError = { code: L2_SYNC_INCOMPLETE, reason: L2_SYNC_INCOMPLETE };
         }
-      })();
-
-      const watchPump = (async () => {
-        try {
-          for await (const event of api.watchJob(namespace, name, { signal: watchController.signal })) {
-            if (watchController.signal.aborted || terminalSent) break;
-            const failedReason = conditionReason(event?.object, "Failed");
-            if (failedReason) {
-              const incompleteTransfer = failedReason === "DeadlineExceeded" && transferOpen;
-              if (incompleteTransfer) {
-                incompleteSyncs += 1;
-                lastError = { code: L2_SYNC_INCOMPLETE, reason: L2_SYNC_INCOMPLETE };
-              }
-              emitTerminal({
-                status: "failed",
-                reason: incompleteTransfer ? L2_SYNC_INCOMPLETE
-                  : failedReason === "DeadlineExceeded" ? "deadline" : "pod-failed",
-              });
-              break;
-            }
-            if (hasCondition(event?.object, "Complete") && !workerDone && !finalTimer) {
-              finalTimer = setTimeout(() => {
-                emitTerminal({ status: "failed", reason: "no-final-event" });
-              }, FINAL_EVENT_TIMEOUT_MS);
-              finalTimer.unref?.();
-            }
-          }
-        } catch (error) {
-          if (!watchController.signal.aborted) {
-            lastError = { code: error?.code ?? "K8S_WATCH", reason: errorReason(error) };
-          }
-        } finally {
-          push({ kind: "watch-done" });
+        if (checked.type === "finished" && checked.data?.status === "succeeded") {
+          const cleanupTimer = setTimeout(() => { void deleteIgnoringNotFound(name); }, (k8s.ttlSecondsAfterFinished ?? JOB_TTL_SECONDS) * 1000);
+          cleanupTimer.unref?.();
         }
-      })();
-
-      while (!terminalSent) {
-        const item = await take();
-        if (!item) continue;
-        if (item.kind === "worker" || item.kind === "terminal") yield item.event;
-        if (item.kind === "terminal") break;
-        if (item.kind === "watch-done" && workerDone) {
-          emitTerminal({ status: "failed", reason: "watch-ended" });
-        }
-      }
-      if (terminalSent) {
-        const terminal = queue.find((item) => item.kind === "terminal");
-        if (terminal) yield terminal.event;
+        yield checked;
       }
     } finally {
       registry.revoke(job.id);
-      clearTimeout(connectTimer);
-      clearTimeout(finalTimer);
-      watchController?.abort();
-      await source?.return?.();
-      if (!terminalSent && cancelIntent.has(job.id)) {
-        emitTerminal({ status: "cancelled" });
-      }
       activeJobs.delete(job.id);
       cancelIntent.delete(job.id);
     }
@@ -667,7 +718,11 @@ export function createK8sJobLane({
       registryError = error?.code ?? "WORKER_CANCEL";
     }
     registry.revoke(jobId);
-    const name = active?.name ?? `pforge-claw-${uniqueLabel(jobId, 51)}`.slice(0, 63).replace(/-+$/g, "");
+    if (!cleanupEligible({ registry, jobId, active })) {
+      if (registryError) return { ok: false, error: registryError };
+      return { ok: true, state: "cancelling", historyRetained: true };
+    }
+    const name = active?.name ?? jobName(jobId);
     const deletion = await deleteIgnoringNotFound(name);
     if (!deletion.ok) return deletion;
     if (registryError) return { ok: false, error: registryError };

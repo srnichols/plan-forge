@@ -9,6 +9,23 @@ let channel;
 let service;
 let unbind = null;
 
+function boundAskCommands(commands, askService) {
+  return commands.map((command) => {
+    if (command.name !== "ask" && command.name !== "new") return command;
+    return {
+      ...command,
+      handle: (context, input) => command.handle.call({
+        service: command.name === "ask" ? {
+          ask: (args) => askService.ask({
+            ...args, updateId: input.updateId, adapter: input.adapter, messageId: input.messageId,
+            untrustedContext: input.untrustedContext,
+          }),
+        } : askService,
+      }, context, input),
+    };
+  });
+}
+
 export default {
   name: "chat",
   available: true,
@@ -24,6 +41,8 @@ export default {
         secrets: ctx.secrets,
         stateDir: path.join(ctx.home ?? resolveHome(), "state"),
         store: ctx.store,
+        now: ctx.telegramTiming?.now ?? Date.now,
+        sleep: ctx.telegramTiming?.sleep,
         onUpdate: (update) => ctx.onTelegramUpdate(update),
         onError: (error) => ctx.logger?.error?.("Telegram poller error", { code: error?.code ?? "TELEGRAM_ERROR" }),
       });
@@ -36,13 +55,7 @@ export default {
         features: ctx.features,
       };
       service = createAskService(askContext);
-      const commandRegistry = COMMANDS.map((command) => {
-        if (command.name !== "ask" && command.name !== "new") return command;
-        return {
-          ...command,
-          handle: (context, args) => command.handle.call({ service }, context, args),
-        };
-      });
+      const commandRegistry = boundAskCommands(COMMANDS, service);
       askContext.commands = commandRegistry;
       const registry = ctx.projectRegistry ?? createRegistry(ctx.config);
       router = createRouter({
@@ -52,9 +65,11 @@ export default {
         registry,
         logger: ctx.logger,
         commandRegistry,
-        services: ctx.services,
+        services: { ...ctx.services, secrets: ctx.secrets, lanes: ctx.lanes },
         clients: ctx.mcp,
+        now: ctx.now ?? Date.now,
       });
+      askContext.control = router;
       unbind = bindProposalService(service);
       await router.syncMenus();
       if ((ctx.config?.channels?.telegram?.mode ?? "poll") === "poll") {

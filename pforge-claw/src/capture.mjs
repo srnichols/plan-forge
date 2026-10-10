@@ -1,5 +1,4 @@
 import { randomBytes } from "node:crypto";
-import { createJob, transition, JOBS_STREAM } from "./jobs/model.mjs";
 import { button, chunkText, keyboard } from "./channels/telegram/format.mjs";
 import {
   MEMORY_TYPES,
@@ -7,43 +6,79 @@ import {
   createCaptureService,
 } from "./handlers/capture-commands.mjs";
 import { createAskService } from "./handlers/ask.mjs";
-import { ROLES } from "./enums.mjs";
+import { MAX_CONTENT, sanitizeRecord } from "./memory/memory-client.mjs";
+import {
+  captureErrorCode, captureWriteCaller, CAPTURE_ID_BYTES, CAPTURE_PENDING_TTL_MS,
+  CAPTURE_REPLY_CHARS, CAPTURE_WRITE_DENIED,
+} from "./capture-policy.mjs";
+import { transcribeCaptureAudio } from "./capture-media.mjs";
 
 export const TRIAGE_ACTIONS = Object.freeze(["bug", "idea", "remember", "ask"]);
 const TRIAGE_LABELS = Object.freeze(["🐞 Bug", "💡 Idea", "🧠 Remember", "❓ Ask about it"]);
-const WRITE_ACTIONS = Object.freeze(["bug", "idea", "remember"]);
 const PENDING_STREAM = "capture-inbox";
-const TTL_MS = 15 * 60_000;
-const MAX_CHARS = 3500;
+const TTL_MS = CAPTURE_PENDING_TTL_MS;
+const MAX_CHARS = MAX_CONTENT;
+const ASK_TRIAGE_INDEX = TRIAGE_ACTIONS.indexOf("ask");
+const UNTRUSTED_KINDS = Object.freeze({
+  forward: "forward", link: "link", voice: "transcript", photo: "file", file: "file",
+});
 export const ASK_PROMPT = "Explain the captured material provided as untrusted context.";
 
 function messageText(message) {
-  return typeof message?.text === "string" ? message.text : typeof message?.caption === "string" ? message.caption : "";
+  return typeof message?.text === "string" ? message.text : "";
 }
 
+function captureAddress(ctx, update) {
+  return {
+    chatId: update?.chatId,
+    threadId: update?.threadId,
+    adapter: ctx.channel?.id ?? update?.adapter ?? "chat",
+  };
+}
+
+function isVoiceEnabled(config) {
+  return config?.capture?.voice?.enabled === true;
+}
+
+function mediaFile(message, kind) {
+  const files = Array.isArray(message.files) ? message.files : [];
+  return files.find((file) => file?.kind === kind && typeof file.fileId === "string" && file.fileId);
+}
+
+function classifiedFile(kind, text, file) {
+  return {
+    kind, text, fileId: file.fileId,
+    ...(typeof file.mimeType === "string" ? { mimeType: file.mimeType } : {}),
+  };
+}
+
+function linkText(message, text) {
+  const entities = Array.isArray(message.entities) ? message.entities : [];
+  const urls = entities.filter((entity) => entity.type === "text_link" && typeof entity.url === "string")
+    .map((entity) => entity.url);
+  const content = [...new Set([text, ...urls])].filter(Boolean).join("\n");
+  return /https?:\/\/\S+/i.test(text) || entities.some((entity) => entity.type === "url" || entity.type === "text_link")
+    ? content : null;
+}
+
+/**
+ * @param {{text?: string, forwarded?: boolean, files?: Array<{kind: "voice"|"photo"|"file",
+ * fileId: string, mimeType?: string}>, entities?: Array<{type: string, url?: string}>}} update
+ * @returns {{kind: string, text: string, fileId?: string, mimeType?: string}|null}
+ */
 export function classifyMessage(update) {
-  const message = update?.message ?? update ?? {};
+  const message = update ?? {};
   const text = messageText(message);
-  const forward = message.forwarded === true
-    || ["forward_origin", "forward_from", "forward_date", "forward_sender_name"]
-      .some((key) => message[key] !== undefined);
-  if (forward) return { kind: "forward", text };
-
-  const voiceFileId = message.voice?.file_id ?? message.audio?.file_id
-    ?? message.files?.find((file) => file?.kind === "voice")?.fileId
-    ?? message.files?.find((file) => file?.kind === "voice")?.file_id;
-  if (voiceFileId) return { kind: "voice", text, fileId: voiceFileId };
-
-  const photoFileId = message.photo?.at(-1)?.file_id
-    ?? message.files?.find((file) => file?.kind === "photo")?.fileId
-    ?? message.files?.find((file) => file?.kind === "photo")?.file_id;
-  if (photoFileId) return { kind: "photo", text, fileId: photoFileId };
-
-  if (/https?:\/\/\S+/i.test(text)
-    || message.entities?.some((entity) => entity?.type === "url" || entity?.type === "text_link")) {
-    return { kind: "link", text };
-  }
-  return null;
+  const linked = linkText(message, text);
+  const content = linked ?? text;
+  const voice = mediaFile(message, "voice");
+  if (voice) return classifiedFile("voice", content, voice);
+  if (message.forwarded === true) return { kind: "forward", text: content };
+  const photo = mediaFile(message, "photo");
+  if (photo) return classifiedFile("photo", content, photo);
+  const file = mediaFile(message, "file");
+  if (file) return classifiedFile("file", content, file);
+  return linked === null ? null : { kind: "link", text: linked };
 }
 
 function safeText(secrets, value) {
@@ -62,26 +97,63 @@ function latestPending(store, id) {
   ), null);
 }
 
-function safeIdentifier(value) {
-  return String(value ?? "local").replace(/[^A-Za-z0-9._-]/g, "-").replace(/^-+|-+$/g, "") || "local";
+function selectionStage(action) {
+  if (action === "u") return "transcript";
+  if (action.startsWith("r")) return "remember";
+  return "triage";
+}
+
+function validStage(pending, action) {
+  return action === "x"
+    ? ["transcript", "remember"].includes(pending.stage)
+    : pending.stage === selectionStage(action);
+}
+
+function isWriteSelection(action) {
+  return action.startsWith("r") || ["0", "1", "2"].includes(action);
+}
+
+function checkSelection(ctx, input, time) {
+  const match = /^([0-9a-f]{8}):([0-3]|u|x|r[0-4])$/.exec(String(input.payload ?? ""));
+  if (!match) return { error: "Invalid selection." };
+  const [, id, action] = match;
+  const pending = latestPending(ctx.store, id);
+  if (!pending || pending.expiresAt <= time) return { error: "This capture expired." };
+  if (pending.used) return { error: "This capture was already used." };
+  if (!identityMatches(pending, input)) return { error: "This capture belongs to a different user, chat, or topic." };
+  if (!validStage(pending, action)) return { error: "Invalid selection." };
+  const caller = isWriteSelection(action) ? captureWriteCaller({
+    config: ctx.config, caller: input.caller, adapter: input.adapter ?? pending.adapter,
+  }) : input.caller;
+  if (!caller) return { error: CAPTURE_WRITE_DENIED };
+  const project = ctx.config.projects?.find((entry) => entry.id === pending.projectId);
+  if (!project) return { error: "This capture expired." };
+  return { id, action, pending, caller, project };
+}
+
+function untrustedContext(pending) {
+  return [{
+    kind: UNTRUSTED_KINDS[pending.kind] ?? "other",
+    ...(pending.source ? { source: pending.source } : {}),
+    text: pending.text,
+  }];
 }
 
 export function createTriageService(ctx) {
   const now = ctx.now ?? Date.now;
-  const idFactory = ctx.idFactory ?? (() => randomBytes(4).toString("hex"));
+  const idFactory = ctx.idFactory ?? (() => randomBytes(CAPTURE_ID_BYTES).toString("hex"));
   const captureService = ctx.captureService ?? createCaptureService(ctx);
   const askService = ctx.askService ?? createAskService(ctx);
-  const stt = ctx.sttService;
   const inFlight = new Map();
 
   async function send({ chatId, threadId, text, replyMarkup }) {
     const safe = safeText(ctx.secrets, text);
-    for (const chunk of chunkText(safe, 1900)) {
+    for (const chunk of chunkText(safe, CAPTURE_REPLY_CHARS)) {
       await ctx.channel.send({ chatId, threadId, text: chunk, ...(replyMarkup ? { replyMarkup } : {}) });
     }
   }
 
-  function savePending({ stage, project, caller, chatId, threadId, text, kind }) {
+  function savePending({ stage, project, caller, chatId, threadId, text, kind, source, adapter }) {
     const id = String(idFactory());
     const record = {
       v: 1,
@@ -93,7 +165,10 @@ export function createTriageService(ctx) {
       userId: String(caller?.userId ?? ""),
       role: caller?.role ?? "unknown",
       text,
+      origin: "untrusted",
       ...(kind ? { kind } : {}),
+      ...(source ? { source } : {}),
+      ...(adapter ? { adapter } : {}),
       expiresAt: now() + TTL_MS,
       used: false,
     };
@@ -103,23 +178,25 @@ export function createTriageService(ctx) {
 
   function triageKeyboard({ id, role }) {
     const actions = role === "viewer"
-      ? [3]
+      ? [ASK_TRIAGE_INDEX]
       : TRIAGE_ACTIONS.map((_action, index) => index);
     return keyboard(actions.map((index) => [
       button(TRIAGE_LABELS[index], `t:${id}:${index}`),
     ]));
   }
 
-  async function offerTriage({ update, project, caller, text, kind }) {
-    const chatId = update?.chatId ?? update?.message?.chatId;
-    const threadId = update?.threadId ?? update?.message?.threadId;
-    const content = safeText(ctx.secrets, text ?? messageText(update?.message ?? update));
+  async function offerTriage({ update, project, caller, text, kind, source }) {
+    const { chatId, threadId, adapter } = captureAddress(ctx, update);
+    const captureKind = kind ?? "other";
+    const content = safeText(ctx.secrets, text ?? messageText(update))
+      || `[${captureKind} capture]`;
     if (content.length > MAX_CHARS) {
       await send({ chatId, threadId, text: `Captured content exceeds ${MAX_CHARS} characters.` });
       return [];
     }
     const pending = savePending({
       stage: "triage", project, caller, chatId, threadId, text: content, kind,
+      source: source ?? `${adapter}:${captureKind}`, adapter,
     });
     await send({
       chatId,
@@ -137,51 +214,40 @@ export function createTriageService(ctx) {
   }
 
   async function offerTranscript({ update, project, caller, classified }) {
-    const chatId = update?.chatId ?? update?.message?.chatId;
-    const threadId = update?.threadId ?? update?.message?.threadId;
-    if (ctx.config?.capture?.voice?.enabled !== true) {
+    const { chatId, threadId, adapter } = captureAddress(ctx, update);
+    if (!isVoiceEnabled(ctx.config)) {
       await send({ chatId, threadId, text: "Voice capture is not enabled." });
       return [];
     }
 
-    try {
-      const downloaded = await ctx.channel.download({ fileId: classified.fileId });
-      const result = await stt.transcribe({
-        audioPath: downloaded?.audioPath ?? downloaded?.path,
-        mimeType: downloaded?.mimeType ?? classified.mimeType ?? "audio/ogg",
-      });
-      if (!result?.ok) {
-        await send({ chatId, threadId, text: `Voice transcription failed (${result?.error ?? "STT_REQUEST_FAILED"}).` });
-        return [];
-      }
-      const content = safeText(ctx.secrets, result.text);
-      if (content.length > MAX_CHARS) {
-        await send({ chatId, threadId, text: `Captured content exceeds ${MAX_CHARS} characters.` });
-        return [];
-      }
-      const pending = savePending({
-        stage: "transcript", project, caller, chatId, threadId, text: content, kind: "voice",
-      });
-      await send({
-        chatId,
-        threadId,
-        text: `Transcript:\n${content}\n\nUse this transcript or discard it.`,
-        replyMarkup: keyboard([
-          [button("✅ Use", `t:${pending.id}:u`), button("✖ Discard", `t:${pending.id}:x`)],
-        ]),
-      });
-    } catch (error) {
-      const code = /^[A-Z][A-Z0-9_]{0,63}$/.test(String(error?.code ?? ""))
-        ? error.code
-        : "STT_REQUEST_FAILED";
+    const result = await transcribeCaptureAudio({
+      channel: ctx.channel, stt: ctx.sttService, home: ctx.home, classified, logger: ctx.logger,
+    });
+    if (!result?.ok || typeof result.text !== "string" || !result.text.trim()) {
+      const code = captureErrorCode({ code: result?.error }, "STT_REQUEST_FAILED");
       await send({ chatId, threadId, text: `Voice transcription failed (${code}).` });
+      return [];
     }
+    const content = safeText(ctx.secrets, result.text);
+    if (content.length > MAX_CHARS) {
+      await send({ chatId, threadId, text: `Captured content exceeds ${MAX_CHARS} characters.` });
+      return [];
+    }
+    const pending = savePending({
+      stage: "transcript", project, caller, chatId, threadId, text: content, kind: "voice",
+      adapter, source: `${adapter}:voice`,
+    });
+    await send({
+      chatId, threadId, text: `Transcript:\n${content}\n\nUse this transcript or discard it.`,
+      replyMarkup: keyboard([
+        [button("✅ Use", `t:${pending.id}:u`), button("✖ Discard", `t:${pending.id}:x`)],
+      ]),
+    });
     return [];
   }
 
   async function handleInbound({ update, project, caller } = {}) {
-    const chatId = update?.chatId ?? update?.message?.chatId;
-    const threadId = update?.threadId ?? update?.message?.threadId;
+    const { chatId, threadId } = captureAddress(ctx, update);
     if (!project?.id) {
       await send({ chatId, threadId, text: "Capture works in a project topic only." });
       return { handled: true };
@@ -196,161 +262,69 @@ export function createTriageService(ctx) {
     return { handled: true };
   }
 
-  async function complete({ payload, caller, chatId, threadId }) {
-    const match = /^([0-9a-f]{8}):([0-3]|u|x|r[0-4])$/.exec(String(payload ?? ""));
-    const reject = async (message) => {
-      await send({ chatId, threadId, text: message });
-      return [];
-    };
-    if (!match) return reject("Invalid selection.");
-    const [, id, action] = match;
-    const pending = latestPending(ctx.store, id);
-    if (!pending || pending.expiresAt <= now()) return reject("This capture expired.");
-    if (pending.used) return reject("This capture was already used.");
-    if (!identityMatches(pending, { caller, chatId, threadId })) {
-      return reject("This capture belongs to a different user, chat, or topic.");
-    }
-    const transcriptAction = action === "u";
-    const discardAction = action === "x";
-    const rememberAction = action.startsWith("r");
-    if ((transcriptAction && pending.stage !== "transcript")
-      || (rememberAction && pending.stage !== "remember")
-      || (discardAction && !["transcript", "remember"].includes(pending.stage))
-      || (!transcriptAction && !rememberAction && !discardAction && pending.stage !== "triage")) {
-      return reject("Invalid selection.");
-    }
+  async function offerRemember({ pending, project, caller, chatId, threadId }) {
+    const content = sanitizeRecord({ config: ctx.config, secrets: ctx.secrets, text: pending.text });
+    const next = savePending({
+      ...pending, stage: "remember", project, caller, chatId, threadId, text: content,
+    });
+    const rows = MEMORY_TYPE_LABELS.map((label, index) => [button(label, `t:${next.id}:r${index}`)]);
+    rows.push([button("✖ Cancel", `t:${next.id}:x`)]);
+    await send({
+      chatId, threadId,
+      text: `Store exactly this as untrusted memory? Pick a type to confirm.\n\n${content}`,
+      replyMarkup: keyboard(rows),
+    });
+    return [];
+  }
+
+  async function executeSelection({ id, action, pending, project, caller, chatId, threadId }) {
     if (action === "x") {
-      ctx.store.append(PENDING_STREAM, { id, used: true });
       await send({ chatId, threadId, text: "Discarded." });
       return [];
     }
-    const actionIndex = Number(action);
-    const selectedAction = TRIAGE_ACTIONS[actionIndex];
-    if ((selectedAction && WRITE_ACTIONS.includes(selectedAction) && !ROLES.slice(0, 2).includes(caller?.role))) {
-      return reject("This action requires an owner or approver.");
+    if (action === "u") return offerTriage({
+      update: { chatId, threadId, adapter: pending.adapter }, project, caller,
+      text: pending.text, kind: "voice", source: pending.source,
+    });
+    const selected = TRIAGE_ACTIONS[Number(action)];
+    if (selected === "remember") return offerRemember({ pending, project, caller, chatId, threadId });
+    if (selected === "ask") return askService.ask({
+      project, caller, chatId, threadId, adapter: pending.adapter,
+      text: ASK_PROMPT, untrustedContext: untrustedContext(pending),
+    });
+    const replies = action.startsWith("r")
+      ? await captureService.captureConfirmed({
+        project, caller, chatId, threadId, adapter: pending.adapter, key: `triage:${id}`,
+        type: MEMORY_TYPES[Number(action.slice(1))], content: pending.text, origin: "untrusted",
+        ref: "capture", confirmed: true,
+      })
+      : await captureService[selected]({
+        project, caller, chatId, threadId, adapter: pending.adapter,
+        text: pending.text, updateId: `triage:${id}`, origin: "untrusted",
+        untrustedContext: untrustedContext(pending),
+      });
+    for (const reply of Array.isArray(replies) ? replies : [replies]) {
+      if (typeof reply?.text === "string") await send({ chatId, threadId, ...reply });
     }
-    const existing = inFlight.get(id);
-    if (existing) return existing;
-    ctx.store.append(PENDING_STREAM, { id, used: true });
+    return [];
+  }
 
-    const project = ctx.config.projects?.find((entry) => entry.id === pending.projectId);
-    if (!project) {
-      await send({ chatId, threadId, text: "This capture expired." });
+  async function complete(input) {
+    const { chatId, threadId } = input;
+    const selection = checkSelection(ctx, input, now());
+    if (selection.error) {
+      await send({ chatId, threadId, text: selection.error });
       return [];
     }
-    const operation = (async () => {
-      if (action === "u") {
-        return offerTriage({
-          update: { chatId, threadId, text: pending.text },
-          project,
-          caller,
-          text: pending.text,
-          kind: "voice",
-        });
-      }
-      if (selectedAction === "bug" || selectedAction === "idea") {
-        const replies = await captureService[selectedAction]({
-          project,
-          caller,
-          chatId,
-          threadId,
-          text: pending.text,
-          updateId: `triage:${id}`,
-        });
-        for (const reply of Array.isArray(replies) ? replies : [replies]) {
-          if (typeof reply?.text === "string") await send({ chatId, threadId, text: reply.text });
-        }
-        return [];
-      }
-      if (selectedAction === "remember") {
-        const next = savePending({
-          stage: "remember",
-          project,
-          caller,
-          chatId,
-          threadId,
-          text: pending.text,
-          kind: pending.kind,
-        });
-        const rows = MEMORY_TYPE_LABELS.map((label, index) => [button(label, `t:${next.id}:r${index}`)]);
-        rows.push([button("✖ Cancel", `t:${next.id}:x`)]);
-        await send({
-          chatId,
-          threadId,
-          text: `Store exactly this as untrusted memory? Pick a type to confirm.\n\n${pending.text}`,
-          replyMarkup: keyboard(rows),
-        });
-        return [];
-      }
-      if (rememberAction) {
-        return captureUntrustedMemory({ id, pending, project, caller, chatId, threadId, action });
-      }
-      if (selectedAction === "ask") {
-        return askService.ask({
-          project,
-          caller,
-          chatId,
-          threadId,
-          text: ASK_PROMPT,
-          untrustedContext: pending.text,
-        });
-      }
-      return reject("Invalid selection.");
-    })();
-    inFlight.set(id, operation);
+    if (inFlight.has(selection.id)) return inFlight.get(selection.id);
+    ctx.store.append(PENDING_STREAM, { id: selection.id, used: true });
+    const operation = executeSelection({ ...selection, chatId, threadId });
+    inFlight.set(selection.id, operation);
     try {
       return await operation;
     } finally {
-      inFlight.delete(id);
+      inFlight.delete(selection.id);
     }
-  }
-
-  async function captureUntrustedMemory({ id, pending, project, caller, chatId, threadId, action }) {
-    const index = Number(action.slice(1));
-    const type = MEMORY_TYPES[index];
-    const created = createJob({
-      id: String(idFactory()),
-      type: "capture",
-      projectId: project.id,
-    });
-    let job = created.job;
-    ctx.store.append(JOBS_STREAM, created.event);
-    const leased = transition(job, "leased");
-    ctx.store.append(JOBS_STREAM, leased.event);
-    job = leased.job;
-    const running = transition(job, "running");
-    ctx.store.append(JOBS_STREAM, running.event);
-    job = running.job;
-    try {
-      const result = await ctx.mcp.call(project.id, "forge_memory_capture", {
-        content: pending.text,
-        type,
-        origin: "untrusted",
-        project: project.id,
-        visibility: project.visibility ?? "normal",
-        source: `pforge-claw/${safeIdentifier(ctx.config.instanceId)}/${safeIdentifier(project.homeLane ?? "local")}/capture`,
-        created_by: `pforge-claw:${caller?.role ?? "unknown"}`,
-      });
-      const response = result?.structuredContent;
-      if (result?.isError || result?.error || response?.ok === false || response?.error) {
-        const candidate = response?.code ?? response?.error ?? result?.error;
-        const code = /^[A-Z][A-Z0-9_]{0,63}$/.test(String(candidate ?? ""))
-          ? candidate
-          : "MCP_TOOL_ERROR";
-        throw Object.assign(new Error(), { code });
-      }
-      const succeeded = transition(job, "succeeded");
-      ctx.store.append(JOBS_STREAM, succeeded.event);
-      await send({ chatId, threadId, text: `Stored ${type} as untrusted memory.` });
-    } catch (error) {
-      const failed = transition(job, "failed");
-      ctx.store.append(JOBS_STREAM, failed.event);
-      const code = /^[A-Z][A-Z0-9_]{0,63}$/.test(String(error?.code ?? ""))
-        ? error.code
-        : "MCP_TOOL_ERROR";
-      await send({ chatId, threadId, text: `Memory capture failed (${code}).` });
-    }
-    return [];
   }
 
   function snapshot() {
@@ -368,7 +342,7 @@ export function createTriageService(ctx) {
     offerTriage,
     offerTranscript,
     complete,
-    voiceEnabled: ctx.config?.capture?.voice?.enabled === true,
+    voiceEnabled: isVoiceEnabled(ctx.config),
     snapshot,
   };
 }

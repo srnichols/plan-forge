@@ -1,5 +1,6 @@
 import { ClawError } from "../errors.mjs";
 import { assertLane } from "./lane.mjs";
+import { READ_ERRORS } from "../protocol/messages.mjs";
 
 export function createRemoteLane({ id, registry, capabilities = {} } = {}) {
   if (typeof id !== "string" || !id || !registry) throw new ClawError("LANE_BAD_CONFIG");
@@ -19,34 +20,42 @@ export function createRemoteLane({ id, registry, capabilities = {} } = {}) {
     }
   }
 
-  async function read(request, { timeoutMs = 30_000 } = {}) {
+  async function read(request, { timeoutMs = 30_000, signal } = {}) {
+    if (signal?.aborted) throw new ClawError(READ_ERRORS.CANCELLED);
     const { jobId, iterator } = registry.enqueue(id, { kind: "read", request });
     const source = iterator[Symbol.asyncIterator]();
     let timer;
+    let onAbort;
     try {
-      return await Promise.race([
+      const completed = await Promise.race([
         (async () => {
           while (true) {
             const next = await source.next();
-            if (next.done) throw new ClawError("READ_FAILED");
+            if (next.done) throw new ClawError(READ_ERRORS.FAILED);
             if (next.value.type === "finished") {
               if (next.value.data.status !== "ok") {
-                throw new ClawError(next.value.data.code ?? "READ_FAILED");
+                throw new ClawError(next.value.data.code ?? READ_ERRORS.FAILED);
               }
               return next.value.data.result;
             }
           }
         })(),
         new Promise((_, reject) => {
-          timer = setTimeout(() => reject(new ClawError("READ_TIMEOUT")), timeoutMs);
+          timer = setTimeout(() => reject(new ClawError(READ_ERRORS.TIMEOUT)), timeoutMs);
           timer?.unref?.();
+          onAbort = () => reject(new ClawError(READ_ERRORS.CANCELLED));
+          signal?.addEventListener("abort", onAbort, { once: true });
+          if (signal?.aborted) onAbort();
         }),
       ]);
+      if (signal?.aborted) throw new ClawError(READ_ERRORS.CANCELLED);
+      return completed;
     } catch (error) {
-      if (error instanceof ClawError && error.code === "READ_TIMEOUT") registry.cancel(jobId);
+      if (error instanceof ClawError && [READ_ERRORS.TIMEOUT, READ_ERRORS.CANCELLED].includes(error.code)) registry.cancel(jobId);
       throw error;
     } finally {
       clearTimeout(timer);
+      signal?.removeEventListener("abort", onAbort);
       await source.return?.();
     }
   }

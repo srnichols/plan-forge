@@ -2,7 +2,10 @@ import { createApprovalService, issueApproval } from "../approvals.mjs";
 import { collectDigest, renderDigest, sendDigest } from "../digest.mjs";
 import { prepareSkill } from "../commands/skill.mjs";
 import { ClawError } from "../errors.mjs";
+import { ROLES, SCHEDULE_REQUEST_ADAPTER } from "../enums.mjs";
+import { currentCaller } from "../handlers/c2-command-context.mjs";
 import { currentJobs } from "../jobs/model.mjs";
+import { requestKey } from "../jobs/request-identity.mjs";
 import { createScheduler } from "../scheduler.mjs";
 
 let scheduler = null;
@@ -22,21 +25,46 @@ function projectFor(ctx, schedule) {
     ?? (ctx.config?.projects ?? []).find((project) => project.id === projectId);
 }
 
-function jobFromText(text) {
-  const match = /\b([0-9a-f]{24})\b/i.exec(String(text ?? ""));
-  return match?.[1] ?? null;
-}
-
-function latestScheduledJob(store, requesterId) {
-  let latest = null;
-  for (const { record } of store.read("jobs")) {
-    if (record?.kind === "job.created" && record.job?.callerId === requesterId) latest = record.job;
+function currentOwner(ctx, caller) {
+  const authority = currentCaller(ctx.config, caller);
+  if (!authority || authority.role !== ROLES[0]
+    || authority.userId === undefined || authority.userId === null
+    || !String(authority.userId).trim()) {
+    throw new ClawError("SCHEDULE_OWNER_UNAVAILABLE");
   }
-  return latest ?? Object.values(currentJobs(store))
-    .findLast((job) => job.callerId === requesterId) ?? null;
+  return { userId: String(authority.userId), channel: authority.channel, role: authority.role };
 }
 
-async function showApprovalCard(ctx, service, job, approval) {
+function scheduleRequest({ ctx, schedule, slot, project, caller }) {
+  if (typeof slot?.key !== "string" || !slot.key) throw new ClawError("SCHEDULE_SLOT_INVALID");
+  const generalChat = ctx.config?.channels?.telegram?.generalChat;
+  return {
+    adapter: SCHEDULE_REQUEST_ADAPTER,
+    updateId: `schedule:${schedule.id}:${slot.key}`,
+    type: "skill",
+    projectId: project.id,
+    callerId: caller.userId,
+    chatId: generalChat?.chatId ?? null,
+    threadId: generalChat?.topicId ?? null,
+    parentId: null,
+  };
+}
+
+function preparedSlotJob({ store, prepared, request, skill }) {
+  if (!prepared || typeof prepared.jobId !== "string" || !prepared.jobId
+    || typeof prepared.state !== "string" || !prepared.state) {
+    throw new ClawError("SCHEDULE_SKILL_JOB_MISSING");
+  }
+  const job = currentJobs(store)[prepared.jobId];
+  if (!job) throw new ClawError("SCHEDULE_SKILL_JOB_MISSING");
+  if (requestKey(job) !== requestKey(request) || job.skill !== skill || job.state !== prepared.state
+    || Object.hasOwn(job, "runtime") || Object.hasOwn(job, "provider")) {
+    throw new ClawError("SCHEDULE_SKILL_JOB_MISMATCH");
+  }
+  return job;
+}
+
+async function showApprovalCard({ ctx, service, job, approval }) {
   const card = await service.buildApprovalCard({ job, project: projectFor(ctx, { project: job.projectId }), approval });
   if (!card?.text || !ctx.channel) return false;
   await ctx.channel.send({
@@ -48,61 +76,68 @@ async function showApprovalCard(ctx, service, job, approval) {
   return true;
 }
 
-async function dispatch(schedule, _slot, ctx) {
-  if (schedule.kind === "digest") {
-    const data = await collectDigest({
-      store: ctx.store,
-      config: ctx.config,
-      mcp: ctx.mcp,
-      now: ctx.now ?? Date.now,
-      timeZone: ctx.config.timezone,
-    });
-    const rendered = renderDigest(data, { secrets: ctx.secrets });
-    await sendDigest({
-      store: ctx.store,
-      channel: ctx.channel,
-      config: ctx.config,
-      data,
-      secrets: ctx.secrets,
-      now: ctx.now ?? Date.now,
-      rendered,
-    });
-    return;
-  }
+async function dispatchDigest(ctx) {
+  const data = await collectDigest({
+    store: ctx.store,
+    config: ctx.config,
+    mcp: ctx.mcp,
+    now: ctx.now ?? Date.now,
+    timeZone: ctx.config.timezone,
+  });
+  const rendered = renderDigest(data, { secrets: ctx.secrets });
+  await sendDigest({
+    store: ctx.store,
+    channel: ctx.channel,
+    config: ctx.config,
+    data,
+    secrets: ctx.secrets,
+    now: ctx.now ?? Date.now,
+    rendered,
+  });
+}
+
+async function dispatchSkill(schedule, slot, ctx) {
   if (schedule.kind !== "skill") throw new ClawError("SCHEDULE_KIND_INVALID");
 
   const project = projectFor(ctx, schedule);
-  const generalChat = ctx.config?.channels?.telegram?.generalChat;
   if (!project) throw new ClawError("SCHEDULE_PROJECT_MISSING");
   if (typeof schedule.skill !== "string" || !schedule.skill.trim()) {
     throw new ClawError("SCHEDULE_SKILL_MISSING");
   }
-  const requesterId = `scheduler:${schedule.id}`;
-  const result = await prepareSkill({
+  const owner = (ctx.config?.allowlist ?? []).find((entry) => entry.role === ROLES[0]);
+  const caller = currentOwner(ctx, owner);
+  const request = scheduleRequest({ ctx, schedule, slot, project, caller });
+  const prepared = await prepareSkill({
     store: ctx.store,
     mcp: { call: (tool, args) => ctx.mcp.call(project.id, tool, args) },
     project,
-    caller: { userId: requesterId, role: "owner" },
-    chatId: generalChat?.chatId ?? null,
-    threadId: generalChat?.topicId ?? null,
+    caller,
+    chatId: request.chatId,
+    threadId: request.threadId,
+    config: ctx.config,
+    getConfig: () => ctx.config,
+    secrets: ctx.secrets,
+    lanes: ctx.lanes,
+    now: ctx.now ?? Date.now,
+    adapter: request.adapter,
+    updateId: request.updateId,
   }, { args: [schedule.skill] });
-  let jobId = jobFromText(result?.text);
-  let job = jobId ? currentJobs(ctx.store)[jobId] : null;
-  if (!job) {
-    job = latestScheduledJob(ctx.store, requesterId);
-    jobId = job?.id ?? null;
-  }
-  if (!job) throw new ClawError("SCHEDULE_SKILL_JOB_MISSING");
+  currentOwner(ctx, caller);
+  const job = preparedSlotJob({ store: ctx.store, prepared, request, skill: schedule.skill });
   if (job.state !== "awaiting-approval" || schedule.preApproved !== true) return;
+  await preapproveSkill({ ctx, schedule, job, caller });
+}
 
-  const owner = (ctx.config?.allowlist ?? []).find((entry) => entry.role === "owner");
-  if (!owner || job.chatId === undefined || job.chatId === null) {
+async function preapproveSkill({ ctx, schedule, job, caller }) {
+  const jobId = job.id;
+  const owner = currentOwner(ctx, caller);
+  if (job.chatId === undefined || job.chatId === null || !String(job.chatId).trim()) {
     appendAudit(ctx, {
       v: 1,
       kind: "schedule.preapproved-fallback",
       scheduleId: schedule.id,
       jobId,
-      reason: !owner ? "owner-unavailable" : "general-chat-unavailable",
+      reason: "general-chat-unavailable",
     });
     return;
   }
@@ -117,14 +152,14 @@ async function dispatch(schedule, _slot, ctx) {
     jobId,
     chatId: job.chatId,
     threadId: job.threadId,
-    requesterId,
+    requesterId: job.callerId,
     now: ctx.now ?? Date.now,
   });
   approvalService.issue(job, { approval });
   const approverId = String(owner.userId);
   const decision = await approvalService.decide({
     payload: approval.approve.slice(2),
-    caller: { role: "owner", userId: approverId },
+    caller: owner,
     chatId: job.chatId,
     threadId: job.threadId,
   });
@@ -146,7 +181,7 @@ async function dispatch(schedule, _slot, ctx) {
     reason: decision.reason ?? "approval-decision-failed",
   });
   try {
-    await showApprovalCard(ctx, approvalService, job, approval);
+    await showApprovalCard({ ctx, service: approvalService, job, approval });
   } catch (error) {
     appendAudit(ctx, {
       v: 1,
@@ -156,6 +191,11 @@ async function dispatch(schedule, _slot, ctx) {
       reason: typeof error?.code === "string" ? error.code : "CHANNEL_SEND_FAILED",
     });
   }
+}
+
+async function dispatch(schedule, slot, ctx) {
+  if (schedule.kind === "digest") return dispatchDigest(ctx);
+  return dispatchSkill(schedule, slot, ctx);
 }
 
 export default {

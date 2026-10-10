@@ -363,6 +363,48 @@ describe("Kubernetes YAML subset parser", () => {
 });
 
 describe("Kubernetes dispatcher manifests", () => {
+  it("ships no catch-all external egress allowance in the portable base", () => {
+    const policies = parseYamlSubset(readFileSync(path.join(BASE_ROOT, "networkpolicy-jobs.yaml"), "utf8"));
+    const externalCidrs = policies.flatMap(({ spec }) => (spec.egress ?? [])
+      .flatMap(({ to = [] }) => to.flatMap(({ ipBlock }) => ipBlock ? [ipBlock.cidr] : [])));
+    expect(externalCidrs).not.toContain("0.0.0.0/0");
+    expect(externalCidrs).not.toContain("::/0");
+  });
+
+  it("holds the exact namespace-scoped D12 verb matrix, not only a permissive subset", () => {
+    const role = parseYamlSubset(readFileSync(path.join(BASE_ROOT, "role.yaml"), "utf8"))[0];
+    const actual = Object.fromEntries(role.rules.flatMap((rule) => rule.apiGroups.flatMap((group) =>
+      rule.resources.map((resource) => [`${group}/${resource}`, [...rule.verbs].sort()]))));
+    expect(actual).toEqual({
+      "batch/jobs": ["create", "delete", "get", "list", "watch"],
+      "/pods": ["get", "list", "watch"], "/pods/log": ["get", "list", "watch"],
+    });
+    expect(role.metadata.namespace).toBe("pforge-claw");
+  });
+
+  it("applies the actual worker selectors to the egress denial probe", () => {
+    const probe = parseYamlSubset(readFileSync(path.join(K8S_ROOT, "overlays", "dev", "egress-probe-job.yaml"), "utf8"))[0];
+    const policies = parseYamlSubset(readFileSync(path.join(BASE_ROOT, "networkpolicy-jobs.yaml"), "utf8"));
+    for (const policy of policies) {
+      expect(probe.spec.template.metadata.labels).toMatchObject(policy.spec.podSelector.matchLabels);
+    }
+  });
+
+  it("pins the primary dev fixture's mutation placement to the K8s Job lane", () => {
+    const config = JSON.parse(readFileSync(path.join(K8S_ROOT, "overlays", "dev", "config.json"), "utf8"));
+    expect(config.projects[0].placement.prefer).toEqual(["k8s-dev"]);
+    expect(config.projects[0].homeLane).toBe("local");
+    expect(config.lanes.find((lane) => lane.id === "k8s-dev").kind).toBe("k8s");
+  });
+
+  it("does not present a local offline rig as the deployed Kubernetes gate", () => {
+    for (const script of ["e2e-k8s.ps1", "e2e-k8s.sh"]) {
+      const source = readFileSync(path.join(PACKAGE_ROOT, "scripts", script), "utf8");
+      expect(source).not.toContain("away-from-desk.test.mjs");
+      expect(source).not.toMatch(/apply.+["']-k["'].+overlays[\\/]+dev.+["']-n["']/);
+    }
+  });
+
   it("parses every YAML file and gives every resource document required metadata", () => {
     const files = walkYaml(K8S_ROOT);
     expect(files.length).toBeGreaterThan(0);
@@ -400,7 +442,7 @@ describe("Kubernetes dispatcher manifests", () => {
     expect([...base.resources].sort()).toEqual(manifests);
   });
 
-  it("selects job pods with deny-by-default, core-only and public HTTPS policies", () => {
+  it("selects job pods with deny-by-default and core-only policies, requiring configured external targets", () => {
     const base = parseYamlSubset(readFileSync(BASE_KUSTOMIZATION, "utf8"))[0];
     expect(base.resources.filter((resource) => resource === "networkpolicy-jobs.yaml"))
       .toHaveLength(1);
@@ -408,7 +450,9 @@ describe("Kubernetes dispatcher manifests", () => {
     const policies = parseYamlSubset(readFileSync(path.join(BASE_ROOT, "networkpolicy-jobs.yaml"), "utf8"));
     const deny = policies.find(({ metadata }) => metadata.name === "pforge-claw-jobs-default-deny");
     const core = policies.find(({ metadata }) => metadata.name === "pforge-claw-jobs-allow-core");
-    const https = policies.find(({ metadata }) => metadata.name === "pforge-claw-jobs-allow-https-public");
+    expect(policies.map(({ metadata }) => metadata.name)).toEqual([
+      "pforge-claw-jobs-default-deny", "pforge-claw-jobs-allow-core",
+    ]);
     expect(deny.spec).toMatchObject({
       policyTypes: ["Ingress", "Egress"],
       ingress: [],
@@ -429,12 +473,6 @@ describe("Kubernetes dispatcher manifests", () => {
     expect(dispatcherRule.to).toEqual([{
       podSelector: { matchLabels: { app: "pforge-claw", component: "dispatcher" } },
     }]);
-    const httpsRule = https.spec.egress[0];
-    expect(httpsRule.ports).toEqual([{ protocol: "TCP", port: 443 }]);
-    expect(httpsRule.to[0].ipBlock).toMatchObject({
-      cidr: "0.0.0.0/0",
-      except: ["10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16", "169.254.0.0/16", "100.64.0.0/10"],
-    });
     for (const policy of policies) {
       for (const rule of policy.spec.egress ?? []) expect(rule.ports).toBeDefined();
     }
@@ -469,6 +507,8 @@ describe("Kubernetes dispatcher manifests", () => {
     expect(comments).toContain("never hostnames");
     expect(comments).toContain("rules:");
     expect(comments).toContain("dns:");
+    expect(comments).toContain("scripts/render-egress.ps1");
+    expect(comments).toContain("scripts/render-egress.sh");
   });
 
   it("keeps service, deployment, storage, service account and RBAC references aligned", () => {

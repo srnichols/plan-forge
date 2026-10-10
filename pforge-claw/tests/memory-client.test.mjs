@@ -1,8 +1,8 @@
 import { createHash } from "node:crypto";
 import { EventEmitter } from "node:events";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
-import os from "node:os";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { createStore } from "../src/state/store.mjs";
 import { createDirectClient } from "../src/memory/openbrain-direct.mjs";
@@ -29,10 +29,11 @@ import confirmCallback from "../src/callbacks/c.mjs";
 import { JOBS_STREAM } from "../src/jobs/model.mjs";
 
 const directories = [];
+const TEST_DIRECTORY = path.dirname(fileURLToPath(import.meta.url));
 const TEST_NOW = 1_800_000_000_000;
 
 async function makeStore() {
-  const directory = await mkdtemp(path.join(os.tmpdir(), "pforge-claw-memory-"));
+  const directory = await mkdtemp(path.join(TEST_DIRECTORY, ".capture-memory-client-"));
   directories.push(directory);
   const store = createStore(directory);
   store.directory = directory;
@@ -54,7 +55,7 @@ function config(projectOverrides = {}, memory = {}) {
   };
   return {
     instanceId: "instance-a",
-    allowlist: [{ userId: "12345678", alias: "srnichols", username: "private-name" }],
+    allowlist: [{ userId: "12345678", role: "owner", alias: "srnichols", username: "private-name" }],
     projects: [project],
     memory,
   };
@@ -104,6 +105,12 @@ describe("memory client created_by / source format", () => {
   it("normalizes bounded tags and marks untrusted material", () => {
     expect(normalizeTags(["My Tag", "A".repeat(50)], "untrusted")).toEqual([
       "mytag", "a".repeat(40), "pforge-claw", "untrusted",
+    ]);
+  });
+
+  it("emits only the verified project-MCP tag alphabet", () => {
+    expect(normalizeTags(["capture_note", "context.source", "scope:project"], "untrusted")).toEqual([
+      "capturenote", "contextsource", "scope:project", "pforge-claw", "untrusted",
     ]);
   });
 });

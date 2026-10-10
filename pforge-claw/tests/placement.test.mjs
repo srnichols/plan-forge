@@ -1,5 +1,4 @@
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
-import os from "node:os";
+import { rmSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import {
@@ -10,11 +9,12 @@ import {
   setLaneOptIn,
 } from "../src/placement.mjs";
 import { createStore } from "../src/state/store.mjs";
+import { g1DirectorySync } from "./g1-runner-fixture.mjs";
 
 const directories = [];
 
 function makeStore() {
-  const directory = mkdtempSync(path.join(os.tmpdir(), "claw-placement-"));
+  const directory = g1DirectorySync("g1-placement-");
   directories.push(directory);
   return { directory, store: createStore(directory) };
 }

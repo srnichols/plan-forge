@@ -17,6 +17,19 @@
     },
     "role": { "type": "string", "enum": ["owner", "approver", "viewer"] },
     "visibility": { "type": "string", "enum": ["normal", "restricted"] },
+    "runtime": {
+      "type": "string",
+      "enum": ["copilot-sdk", "anthropic", "openai", "azure", "byok:anthropic", "byok:openai", "byok:azure"]
+    },
+    "bootstrap": {
+      "type": "object",
+      "properties": {
+        "copy": { "type": "array", "items": { "type": "string" } },
+        "env": { "type": "array", "items": { "$ref": "#/$defs/secretName" } },
+        "install": { "type": "string", "enum": ["link", "ci", "npm-ci", "none"] }
+      },
+      "x-known": true
+    },
     "channelRef": {
       "type": "object",
       "properties": {
@@ -45,11 +58,14 @@
         "labels": { "type": "array", "items": { "type": "string" } },
         "enabled": { "type": "boolean" },
         "optIn": { "type": "boolean" },
+        "runtime": { "$ref": "#/$defs/runtime" },
         "k8s": {
           "type": "object",
           "properties": {
             "namespace": { "type": "string" },
             "defaultImage": { "type": "string" },
+            "deadlineSeconds": { "type": "integer", "minimum": 1 },
+            "ttlSecondsAfterFinished": { "type": "integer", "minimum": 0 },
             "laneSecret": { "$ref": "#/$defs/laneSecretName" }
           },
           "x-known": true
@@ -119,6 +135,8 @@
           "properties": { "chat": { "type": "string" }, "work": { "type": "string" } },
           "x-known": true
         },
+        "runtime": { "$ref": "#/$defs/runtime" },
+        "bootstrap": { "$ref": "#/$defs/bootstrap" },
         "homeLane": { "type": "string" },
         "keepAlive": { "type": "boolean" },
         "budget": { "$ref": "#/$defs/budget" },
@@ -181,13 +199,13 @@
     "runtimes": {
       "type": "object",
       "properties": {
-        "default": { "type": "string" },
+        "default": { "$ref": "#/$defs/runtime" },
         "nonOwnerRuntime": { "type": "string", "default": "byok-only" },
         "byok": {
           "type": "object",
           "properties": {
-            "anthropic": { "type": "object", "properties": { "keySecret": { "$ref": "#/$defs/secretName" } }, "x-known": true },
-            "openai": { "type": "object", "properties": { "keySecret": { "$ref": "#/$defs/secretName" } }, "x-known": true },
+            "anthropic": { "type": "object", "properties": { "keySecret": { "$ref": "#/$defs/secretName" }, "endpoint": { "type": "string", "minLength": 1 } }, "x-known": true },
+            "openai": { "type": "object", "properties": { "keySecret": { "$ref": "#/$defs/secretName" }, "endpoint": { "type": "string", "minLength": 1 } }, "x-known": true },
             "azure": {
               "type": "object",
               "properties": {
@@ -215,15 +233,7 @@
       },
       "x-known": true
     },
-    "bootstrap": {
-      "type": "object",
-      "properties": {
-        "copy": { "type": "array", "items": { "type": "string" } },
-        "env": { "type": "array", "items": { "type": "string" } },
-        "install": { "type": "string", "enum": ["link", "npm-ci"] }
-      },
-      "x-known": true
-    },
+    "bootstrap": { "$ref": "#/$defs/bootstrap" },
     "mcp": {
       "type": "object",
       "properties": {
@@ -242,7 +252,9 @@
           "properties": {
             "enabled": { "type": "boolean", "default": false },
             "provider": { "type": "string" },
-            "keySecret": { "$ref": "#/$defs/secretName" }
+            "keySecret": { "$ref": "#/$defs/secretName" },
+            "endpoint": { "type": "string", "minLength": 1 },
+            "model": { "type": "string" }
           },
           "x-known": true
         }

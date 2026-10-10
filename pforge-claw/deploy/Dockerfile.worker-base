@@ -5,12 +5,14 @@ COPY package.json ./
 RUN npm install --omit=dev --ignore-scripts
 COPY cli.mjs config.schema.json ./
 COPY src/ ./src/
+COPY deploy/worker-entrypoint.mjs ./deploy/
 
 FROM node:${NODE_VERSION}-slim
 ARG TARGETARCH
 ARG PWSH_VERSION=7.4.6
 ARG COPILOT_CLI_VERSION=latest
 LABEL io.pforge.claw.d4="container-copilot-auth=supported; runtime token PFORGE_CLAW_COPILOT_TOKEN -> COPILOT_GITHUB_TOKEN; absent => BYOK-only"
+LABEL com.azure.containerizationassist.createdby="containerization-assist"
 
 RUN apt-get update \
     && apt-get install -y --no-install-recommends bash ca-certificates curl git gnupg libicu-dev \
@@ -54,17 +56,14 @@ RUN groupadd --gid 10001 claw \
 COPY --from=build /app /app
 RUN printf '%s\n' \
       '#!/bin/sh' \
-      'if [ -n "${PFORGE_CLAW_COPILOT_TOKEN:-}" ]; then export COPILOT_GITHUB_TOKEN="$PFORGE_CLAW_COPILOT_TOKEN"; fi' \
-      'if [ -n "${PFORGE_CLAW_GH_TOKEN:-}" ]; then export GH_TOKEN="$PFORGE_CLAW_GH_TOKEN"; fi' \
-      'if [ "$1" = claw ]; then shift; exec node /app/cli.mjs "$@"; fi' \
-      'if [ -x ./pforge.sh ]; then exec ./pforge.sh "$@"; fi' \
-      'echo "pforge: not found" >&2; exit 127' \
+      'exec node /app/deploy/worker-entrypoint.mjs "$@"' \
       > /usr/local/bin/pforge \
     && chmod 0755 /usr/local/bin/pforge
 
-ENV PFORGE_CLAW_HOME=/data NODE_ENV=production HOME=/var/lib/claw
+ENV PFORGE_CLAW_HOME=/work/claw NODE_ENV=production HOME=/work/home
 WORKDIR /work
 USER 10001:10001
+HEALTHCHECK NONE
 # Kubernetes Secrets provide PFORGE_CLAW_GH_TOKEN and PFORGE_CLAW_COPILOT_TOKEN at runtime; never pass credentials as build arguments.
-# Slice 22 adds worker one-shot support; keep this entrypoint aligned with that contract.
+# One-shot workers have no listener; Job status and authenticated LaneEvents are their health contract.
 ENTRYPOINT ["pforge","claw","worker","--one-shot"]

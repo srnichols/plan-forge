@@ -1,4 +1,5 @@
 import { ClawError } from "../errors.mjs";
+import { disconnectSdkSession, stopSdkClient } from "./session-lifecycle.mjs";
 
 const MAX_PROGRESS_LENGTH = 2000;
 
@@ -45,39 +46,49 @@ function usageField(data, field) {
   return typeof value === "number" ? value : null;
 }
 
+function mapToolEvent(ev) {
+  const data = eventData(ev);
+  const mapped = {
+    tool: data.toolName ?? data.tool ?? data.mcpToolName ?? null,
+    phase: ev.type === "tool.execution_start" ? "start" : "complete",
+  };
+  if (ev.type === "tool.execution_complete") mapped.success = data.success ?? null;
+  return { type: "log", data: mapped };
+}
+
+function mapUsageEvent(ev) {
+  const data = eventData(ev);
+  return {
+    type: "cost",
+    data: { tokensIn: usageField(data, "tokensIn"), tokensOut: usageField(data, "tokensOut"), model: data.model ?? null },
+  };
+}
+
+function mapInputEvent(ev) {
+  return { type: "needs-input", data: { kind: eventData(ev).kind ?? ev.type } };
+}
+
+function mapProgressEvent(ev) {
+  return { type: "progress", data: { text: progressText(eventData(ev)) } };
+}
+
+const SDK_EVENT_MAPPERS = Object.freeze({
+  "assistant.message_delta": mapProgressEvent,
+  "assistant.message": mapProgressEvent,
+  "tool.execution_start": mapToolEvent,
+  "tool.execution_complete": mapToolEvent,
+  "assistant.usage": mapUsageEvent,
+  "user_input.requested": mapInputEvent,
+  "session.error": (ev) => {
+    const data = eventData(ev);
+    return { type: "log", data: { level: "error", code: data.code ?? data.errorCode ?? data.errorType ?? null } };
+  },
+});
+
 export function mapSdkEvent(ev) {
   if (!ev || typeof ev.type !== "string") return null;
-  const data = eventData(ev);
-  if (ev.type === "assistant.message_delta" || ev.type === "assistant.message") {
-    return { type: "progress", data: { text: progressText(data) } };
-  }
-  if (ev.type === "tool.execution_start" || ev.type === "tool.execution_complete") {
-    const mapped = {
-      tool: data.toolName ?? data.tool ?? data.mcpToolName ?? null,
-      phase: ev.type === "tool.execution_start" ? "start" : "complete",
-    };
-    if (ev.type === "tool.execution_complete") mapped.success = data.success ?? null;
-    return { type: "log", data: mapped };
-  }
-  if (ev.type === "assistant.usage") {
-    return {
-      type: "cost",
-      data: {
-        tokensIn: usageField(data, "tokensIn"),
-        tokensOut: usageField(data, "tokensOut"),
-        model: data.model ?? null,
-      },
-    };
-  }
-  if (ev.type === "user_input.requested" || ev.type.startsWith("elicitation.")) {
-    return { type: "needs-input", data: { kind: data.kind ?? ev.type } };
-  }
-  if (ev.type === "session.error") {
-    return {
-      type: "log",
-      data: { level: "error", code: data.code ?? data.errorCode ?? data.errorType ?? null },
-    };
-  }
+  if (Object.hasOwn(SDK_EVENT_MAPPERS, ev.type)) return SDK_EVENT_MAPPERS[ev.type](ev);
+  if (ev.type.startsWith("elicitation.")) return mapInputEvent(ev);
   return null;
 }
 
@@ -101,7 +112,7 @@ export function createUsageAccumulator() {
   };
 }
 
-async function defaultCreateSession({ clientOptions, sessionConfig }) {
+async function defaultCreateSession({ clientOptions, sessionConfig, onCleanupFailure }) {
   let sdk;
   try {
     sdk = await import("@github/copilot-sdk");
@@ -109,8 +120,96 @@ async function defaultCreateSession({ clientOptions, sessionConfig }) {
     throw new ClawError("SDK_IMPORT_FAILED");
   }
   const client = new sdk.CopilotClient(clientOptions);
-  const session = await client.createSession(sessionConfig);
-  return { client, session };
+  try {
+    const session = await client.createSession(sessionConfig);
+    return { client, session };
+  } catch (error) {
+    await stopSdkClient({ client, onCleanupFailure });
+    throw error;
+  }
+}
+
+function clientOptionsFor({ turn, provider, secrets }) {
+  const options = { workingDirectory: turn.cwd };
+  if (turn.env !== undefined) options.env = { ...turn.env };
+  if (!provider) {
+    const token = secrets?.get(COPILOT_TOKEN_SECRET);
+    if (token) options.gitHubToken = token;
+    else options.useLoggedInUser = true;
+  }
+  return options;
+}
+
+function sessionConfigFor({ turn, provider, usage }) {
+  return {
+    model: turn.model,
+    workingDirectory: turn.cwd,
+    mcpServers: turn.mcpServers,
+    onPermissionRequest: turn.onPermissionRequest ?? denyAllPermissions,
+    onEvent: (ev) => {
+      usage.add(ev);
+      const mapped = mapSdkEvent(ev);
+      if (mapped) turn.emit?.(mapped.type, mapped.data);
+    },
+    ...(provider ? { provider } : {}),
+  };
+}
+
+function turnResult({ turn, aborted, usage, error }) {
+  if (turn.signal?.aborted || aborted) return { ok: false, status: "cancelled", usage: usage.result() };
+  if (error) return {
+    ok: false, status: "failed", error: error instanceof ClawError ? error.code : "RUNTIME_FAILED", usage: usage.result(),
+  };
+  return { ok: true, status: "succeeded", usage: usage.result() };
+}
+
+function validateTurn(turn) {
+  if (!turn?.model) throw new ClawError("MODEL_MISSING");
+  if (!turn.mcpServers || Object.keys(turn.mcpServers).length === 0) throw new ClawError("MCP_ENTRY_MISSING");
+}
+
+async function runTurn({ turn, createSession, provider, secrets, timeoutMs }) {
+  const usage = createUsageAccumulator();
+  if (turn?.signal?.aborted) return { ok: false, status: "cancelled", usage: usage.result() };
+  validateTurn(turn);
+  let client;
+  let session;
+  let aborted = false;
+  let outcome;
+  const cleanupErrors = [];
+  const onCleanupFailure = (code) => {
+    cleanupErrors.push(code);
+    try {
+      turn.emit?.("log", { level: "error", code });
+    } catch {
+      if (!cleanupErrors.includes("SDK_CLEANUP_REPORT_FAILED")) cleanupErrors.push("SDK_CLEANUP_REPORT_FAILED");
+    }
+  };
+  const onAbort = () => {
+    aborted = true;
+    session?.abort?.();
+  };
+  try {
+    turn.signal?.addEventListener("abort", onAbort, { once: true });
+    ({ client, session } = await createSession({
+      clientOptions: clientOptionsFor({ turn, provider, secrets }),
+      sessionConfig: sessionConfigFor({ turn, provider, usage }),
+      onCleanupFailure,
+    }));
+    if (turn.signal?.aborted || aborted) onAbort();
+    else await session.sendAndWait({ prompt: turn.prompt }, turn.timeoutMs ?? timeoutMs);
+    outcome = turnResult({ turn, aborted, usage });
+  } catch (error) {
+    outcome = turnResult({ turn, aborted, usage, error });
+  } finally {
+    turn.signal?.removeEventListener("abort", onAbort);
+    await disconnectSdkSession({ session, onCleanupFailure });
+    const stopped = await stopSdkClient({ client, onCleanupFailure });
+    if (!stopped && outcome?.ok) outcome = {
+      ok: false, status: "failed", error: "SDK_CLEANUP_FAILED", usage: usage.result(),
+    };
+  }
+  return cleanupErrors.length ? { ...outcome, cleanupErrors } : outcome;
 }
 
 export function createCopilotRuntime({
@@ -121,79 +220,6 @@ export function createCopilotRuntime({
 } = {}) {
   return {
     id: provider?.type ?? "copilot-sdk",
-    async run(turn) {
-      const usage = createUsageAccumulator();
-      if (turn?.signal?.aborted) {
-        return { ok: false, status: "cancelled", usage: usage.result() };
-      }
-      if (!turn?.model) throw new ClawError("MODEL_MISSING");
-      if (!turn?.mcpServers || Object.keys(turn.mcpServers).length === 0) {
-        throw new ClawError("MCP_ENTRY_MISSING");
-      }
-
-      let client;
-      let session;
-      let aborted = false;
-      const onAbort = () => {
-        aborted = true;
-        session?.abort?.();
-      };
-      try {
-        const clientOptions = { workingDirectory: turn.cwd };
-        if (!provider) {
-          const token = secrets?.get(COPILOT_TOKEN_SECRET);
-          if (token) clientOptions.gitHubToken = token;
-          else clientOptions.useLoggedInUser = true;
-        }
-        const sessionConfig = {
-          model: turn.model,
-          workingDirectory: turn.cwd,
-          mcpServers: turn.mcpServers,
-          onPermissionRequest: turn.onPermissionRequest ?? denyAllPermissions,
-          onEvent: (ev) => {
-            usage.add(ev);
-            const mapped = mapSdkEvent(ev);
-            if (mapped) turn.emit?.(mapped.type, mapped.data);
-          },
-          ...(provider ? { provider } : {}),
-        };
-        turn.signal?.addEventListener("abort", onAbort, { once: true });
-        ({ client, session } = await createSession({ clientOptions, sessionConfig }));
-        if (turn.signal?.aborted || aborted) {
-          onAbort();
-          return { ok: false, status: "cancelled", usage: usage.result() };
-        }
-        await session.sendAndWait({ prompt: turn.prompt }, turn.timeoutMs ?? timeoutMs);
-        return turn.signal?.aborted
-          ? { ok: false, status: "cancelled", usage: usage.result() }
-          : { ok: true, status: "succeeded", usage: usage.result() };
-      } catch (error) {
-        if (turn.signal?.aborted || aborted) {
-          return { ok: false, status: "cancelled", usage: usage.result() };
-        }
-        return {
-          ok: false,
-          status: "failed",
-          error: error instanceof ClawError ? error.code : "RUNTIME_FAILED",
-          usage: usage.result(),
-        };
-      } finally {
-        turn.signal?.removeEventListener("abort", onAbort);
-        try {
-          await session?.disconnect?.();
-        } catch (cleanupError) {
-          void cleanupError;
-        }
-        try {
-          await client?.stop();
-        } catch {
-          try {
-            await client?.forceStop?.();
-          } catch (cleanupError) {
-            void cleanupError;
-          }
-        }
-      }
-    },
+    run: (turn) => runTurn({ turn, createSession, provider, secrets, timeoutMs }),
   };
 }

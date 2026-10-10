@@ -123,6 +123,13 @@ jobs:
 
       - uses: docker/setup-buildx-action@v3
 
+      - name: Build disposable Kubernetes fixture images
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker build --platform linux/amd64 --file pforge-claw/deploy/Dockerfile.k8s-fixtures --target dispatcher --tag pforge-claw-k8s-fixture-dispatcher:ci .
+          docker build --platform linux/amd64 --file pforge-claw/deploy/Dockerfile.k8s-fixtures --target worker --tag pforge-claw-k8s-fixture-worker:ci .
+
       - name: Write kind configuration
         shell: bash
         run: |
@@ -167,8 +174,13 @@ jobs:
         shell: bash
         run: |
           set -o pipefail
-          bash pforge-claw/scripts/e2e-k8s.sh 2>&1 | tee "$RUNNER_TEMP/e2e-k8s.log"
+          bash pforge-claw/scripts/e2e-k8s.sh \
+            --namespace pforge-claw-e2e-ci --context kind-kind \
+            --dispatcher-fixture-image pforge-claw-k8s-fixture-dispatcher:ci \
+            --worker-fixture-image pforge-claw-k8s-fixture-worker:ci \
+            2>&1 | tee "$RUNNER_TEMP/e2e-k8s.log"
           if grep -q '^SKIPPED:' "$RUNNER_TEMP/e2e-k8s.log"; then echo "::error::e2e-k8s skipped in CI"; exit 1; fi
+          node -e 'const fs=require("node:fs");const gate=JSON.parse(fs.readFileSync(process.argv[1],"utf8"));const proof=gate.scenarioEvidence;if(gate.status!=="passed"||typeof proof?.jobId!=="string"||!proof.jobId||proof.approvalConsumed!==true||proof.leaseGrantVerified!==true||proof.oneShot!==true||proof.applicationAck?.ok!==true||!Number.isInteger(proof.canonicalL2FileCount)||proof.canonicalL2FileCount<1||proof.cleanedUp!==true)throw new Error("Real Kubernetes fixture evidence missing; blocked/dry-run/SKIPPED are not acceptance");fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY,`### Verified Kubernetes fixture lane\n\n- Job: ${proof.jobId}\n- Canonical files: ${proof.canonicalL2FileCount}\n- Signed lease/application ACK/cleanup: passed\n`);' "$RUNNER_TEMP/e2e-k8s.log"
 
       - name: Collect Kubernetes diagnostics
         if: failure()
@@ -180,7 +192,7 @@ jobs:
             while read -r namespace pod; do
               [ -n "$pod" ] || continue
               echo "### Failed pod: $namespace/$pod"
-              kubectl describe pod "$pod" -n "$namespace" 2>&1 | head -500
+              kubectl get pod "$pod" -n "$namespace" -o json | node pforge-claw/scripts/k8s-diagnostics.mjs
             done
 
       - name: Delete kind cluster

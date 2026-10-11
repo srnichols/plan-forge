@@ -14,6 +14,7 @@
 - [ ] Regenerate the shipped-guidance index after the last change to any instruction, prompt, agent, skill, hook, preset, template or runbook file: `node scripts\build-shipped-guidance-hashes.mjs`, then `node scripts\build-shipped-guidance-hashes.mjs --check`. Commit `pforge-mcp/shipped-guidance-hashes.json`. `pforge update` treats a project file whose content is not in this index as customized and keeps it, so a stale index makes the next update report unmodified files as `KEEP`.
 - [ ] Working tree clean OR all staged changes belong to this release.
 - [ ] Audit both the root workspace lock and the standalone `pforge-mcp` lock. Run a fresh standalone install when either changes; root-workspace success alone does not validate the dependency set consumers install. Review findings rather than treating `npm install` exit 0 as a clean security audit.
+- [ ] When runtime dependency floors or locks change, run `node node_modules\vitest\vitest.mjs run pforge-mcp\tests\runtime-dependency-floor.test.mjs pforge-mcp\tests\runtime-dependency-floor-coverage.test.mjs --configLoader runner` after the install. It checks the shipped manifests, both applicable locks and each workspace's actual package resolution; stale Master/Claw copies must fail even when MCP is patched. Report full-root and runtime-only audit results separately; a clean production dependency graph does not erase development-tool advisories.
 
 ---
 

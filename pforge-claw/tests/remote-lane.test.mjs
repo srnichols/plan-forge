@@ -1,8 +1,10 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { EventEmitter } from "node:events";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { WebSocket } from "ws";
+import { JOB_STATES, LANE_EVENT_TYPES } from "../src/enums.mjs";
 import { assertLane } from "../src/lanes/lane.mjs";
 import { createLocalLane } from "../src/lanes/local-lane.mjs";
 import { createRemoteLane } from "../src/lanes/remote-lane.mjs";
@@ -13,14 +15,30 @@ import { createWorkerRegistry } from "../src/protocol/worker-registry.mjs";
 import { createL2Receiver } from "../src/protocol/l2-receiver.mjs";
 import { computeDelta, snapshotForge } from "../src/memory/l2-sync.mjs";
 import { createWorkerServer } from "../src/protocol/ws-server.mjs";
+import { LEASE_GRANT_INVALID } from "../src/protocol/lease-grant.mjs";
 import { createSecrets } from "../src/secrets.mjs";
 import workersFeature from "../src/features/workers.mjs";
 import { buildLanes, createLaneDirectory } from "../src/lanes/directory.mjs";
-import { decode, encode, PUBLICATION_ERRORS } from "../src/protocol/messages.mjs";
+import { decode, encode, L2_ACK_ERRORS, PUBLICATION_ERRORS, READ_ERRORS } from "../src/protocol/messages.mjs";
 
 const directories = [];
 const cleanups = [];
 const TEST_DIRECTORY = path.dirname(fileURLToPath(import.meta.url));
+const REPLAY_EVENT_LIMIT = 8;
+const REPLAY_LIFECYCLE_LIMIT = 32;
+const REPLAY_PAYLOAD_LIMIT = 8192;
+const REPLAY_OBSERVED_MESSAGES = Object.freeze(["ready", "lease", "ack", "event"]);
+const REPLAY_PHASES = Object.freeze([
+  ...REPLAY_OBSERVED_MESSAGES, "socket-open", "socket-close", "frame-rejected",
+  "runtime-start", "runtime-resume", "runtime-abort", "terminate-release",
+]);
+const REPLAY_SCALAR_FIELDS = Object.freeze(["connection", "attempt", "lastSeq", "seq", "ageMs", "closeCode"]);
+const REPLAY_SAFE_CODES = Object.freeze([
+  ...Object.values(PUBLICATION_ERRORS), ...Object.values(L2_ACK_ERRORS), ...Object.values(READ_ERRORS),
+  LEASE_GRANT_INVALID, "JOB_CANCELLED", "JOB_BAD_FIELD", "JOB_DUPLICATE", "LANE_BAD_EVENT",
+  "RUNTIME_BAD_CONTRACT", "RUNTIME_FAILED", "WORKER_FAILED", "WORKER_JOB_MODE_DENIED",
+  "PROTO_BAD_MESSAGE", "PROTO_VERSION_MISMATCH", "PROTOCOL_FRAME_TOO_LARGE", "LEASE_LOST", "SERVER_CLOSED",
+]);
 const workerCapabilities = {
   os: "linux", arch: "x64", macos: false, toolchains: ["node"], projects: ["p1"],
 };
@@ -108,10 +126,286 @@ async function connectedSystem({
   return { agent, lane, localLane, registry, server, http, close };
 }
 
+function safeReplayScalars(fields) {
+  const scalars = {};
+  for (const key of REPLAY_SCALAR_FIELDS) {
+    if (Number.isSafeInteger(fields[key]) && fields[key] >= 0) scalars[key] = fields[key];
+  }
+  if (LANE_EVENT_TYPES.includes(fields.type)) scalars.type = fields.type;
+  return scalars;
+}
+
+function buildReplayDiagnostics(events, { lifecycle = [], lifecycleTruncated = false, observationFailed = false } = {}) {
+  const terminal = events.find((event) => event.type === "finished");
+  const diagnostics = {
+    events: events.slice(0, REPLAY_EVENT_LIMIT).map(({ seq, type }) => safeReplayScalars({ seq, type })),
+    eventCount: events.length,
+    eventsTruncated: events.length > REPLAY_EVENT_LIMIT,
+    lifecycle: lifecycle.slice(0, REPLAY_LIFECYCLE_LIMIT)
+      .filter(({ phase }) => REPLAY_PHASES.includes(phase))
+      .map(({ phase, ...fields }) => ({ phase, ...safeReplayScalars(fields) })),
+    lifecycleTruncated: lifecycleTruncated || lifecycle.length > REPLAY_LIFECYCLE_LIMIT,
+    observationFailed: observationFailed === true,
+    terminalCodePresent: Object.hasOwn(terminal?.data ?? {}, "code"),
+    terminalErrorPresent: Object.hasOwn(terminal?.data ?? {}, "error"),
+  };
+  if (JOB_STATES.includes(terminal?.data?.status)) diagnostics.terminalStatus = terminal.data.status;
+  if (REPLAY_SAFE_CODES.includes(terminal?.data?.code)) diagnostics.terminalCode = terminal.data.code;
+  if (REPLAY_SAFE_CODES.includes(terminal?.data?.error)) diagnostics.terminalErrorCode = terminal.data.error;
+  return diagnostics;
+}
+
+// Relative ages observe ordering only; the existing socket timing tolerance is unchanged.
+function createReplayLifecycle({ now = () => performance.now() } = {}) {
+  const started = now();
+  const lifecycle = [];
+  const observation = { failed: false };
+  let lifecycleTruncated = false;
+  function record(phase, fields = {}) {
+    if (!REPLAY_PHASES.includes(phase)) return;
+    if (lifecycle.length >= REPLAY_LIFECYCLE_LIMIT) {
+      lifecycleTruncated = true;
+      return;
+    }
+    const ageMs = Math.max(0, Math.round(now() - started));
+    lifecycle.push({ phase, ...safeReplayScalars({ ...fields, ageMs }) });
+  }
+  return {
+    record,
+    observation,
+    snapshot: () => ({ lifecycle: [...lifecycle], lifecycleTruncated, observationFailed: observation.failed }),
+  };
+}
+
+function createReplayWebSocket({ sockets, record, observation = { failed: false }, WebSocketImpl = WebSocket }) {
+  const connections = new WeakMap();
+  function recordSafely(phase, fields) {
+    try {
+      record(phase, fields);
+    } catch {
+      // Observation must not interrupt native frame handling or send's error/return path.
+      observation.failed = true;
+      return;
+    }
+  }
+  function observePacket(raw, isBinary, connection) {
+    let packet;
+    try {
+      packet = decode(raw, { isBinary });
+    } catch {
+      recordSafely("frame-rejected", { connection });
+      return;
+    }
+    if (!REPLAY_OBSERVED_MESSAGES.includes(packet.t)) return;
+    recordSafely(packet.t, safeReplayScalars({
+      connection, attempt: packet.attempt, lastSeq: packet.lastSeq,
+      seq: packet.event?.seq, type: packet.event?.type,
+    }));
+  }
+  return class CapturedWebSocket extends WebSocketImpl {
+    constructor(...args) {
+      super(...args);
+      const connection = sockets.length;
+      sockets.push(this);
+      connections.set(this, connection);
+      this.once("open", () => recordSafely("socket-open", { connection }));
+      this.once("close", (closeCode) => recordSafely("socket-close", { connection, closeCode }));
+      this.on("message", (raw, isBinary) => observePacket(raw, isBinary, connection));
+    }
+    send(...args) {
+      observePacket(args[0], false, connections.get(this));
+      return super.send(...args);
+    }
+  };
+}
+
 afterEach(async () => {
   await Promise.all(cleanups.splice(0).map((close) => close()));
   await Promise.all(directories.splice(0).map((directory) => rm(directory, { recursive: true, force: true })));
   vi.useRealTimers();
+});
+
+describe("replay diagnostic contract", () => {
+  const terminal = (data) => ({ seq: 3, type: "finished", data: { status: "failed", ...data } });
+
+  it("reports a recognized code-only failed terminal", () => {
+    const diagnostics = buildReplayDiagnostics([terminal({ code: "LEASE_LOST" })]);
+    expect(diagnostics).toMatchObject({
+      terminalStatus: "failed", terminalCode: "LEASE_LOST", terminalCodePresent: true, terminalErrorPresent: false,
+    });
+    expect(diagnostics).not.toHaveProperty("terminalErrorCode");
+  });
+
+  it("preserves the recognized error-only terminal path", () => {
+    const diagnostics = buildReplayDiagnostics([terminal({ error: PUBLICATION_ERRORS.TIMEOUT })]);
+    expect(diagnostics).toMatchObject({
+      terminalStatus: "failed", terminalErrorCode: PUBLICATION_ERRORS.TIMEOUT,
+      terminalCodePresent: false, terminalErrorPresent: true,
+    });
+    expect(diagnostics).not.toHaveProperty("terminalCode");
+  });
+
+  it("reports recognized code and error fields independently", () => {
+    expect(buildReplayDiagnostics([terminal({ code: "WORKER_FAILED", error: PUBLICATION_ERRORS.DENIED })]))
+      .toMatchObject({
+        terminalCode: "WORKER_FAILED", terminalErrorCode: PUBLICATION_ERRORS.DENIED,
+        terminalCodePresent: true, terminalErrorPresent: true,
+      });
+  });
+
+  it.each(["UNRECOGNIZED_PRIVATE_VALUE", "fixture raw error\nvalue", "X".repeat(200), 7, {}])(
+    "omits unrecognized or non-code terminal values",
+    (value) => {
+      const diagnostics = buildReplayDiagnostics([terminal({ code: value, error: value })]);
+      expect(diagnostics).toMatchObject({ terminalCodePresent: true, terminalErrorPresent: true });
+      expect(diagnostics).not.toHaveProperty("terminalCode");
+      expect(diagnostics).not.toHaveProperty("terminalErrorCode");
+    },
+  );
+
+  it("distinguishes absent terminal properties from present but omitted values", () => {
+    expect(buildReplayDiagnostics([terminal({})]))
+      .toMatchObject({ terminalCodePresent: false, terminalErrorPresent: false });
+    const diagnostics = buildReplayDiagnostics([terminal({ code: null, error: undefined })]);
+    expect(diagnostics).toMatchObject({ terminalCodePresent: true, terminalErrorPresent: true });
+    expect(diagnostics).not.toHaveProperty("terminalCode");
+    expect(diagnostics).not.toHaveProperty("terminalErrorCode");
+  });
+
+  it("bounds events and lifecycle while retaining a terminal beyond the event sample", () => {
+    const privateValue = "fixture-private-value";
+    const events = Array.from({ length: REPLAY_EVENT_LIMIT * 4 }, (_, index) => ({
+      seq: index + 1, type: "progress", jobId: privateValue, data: { text: privateValue },
+    }));
+    events.push(terminal({ code: "LEASE_LOST" }));
+    const lifecycle = Array.from({ length: REPLAY_LIFECYCLE_LIMIT * 4 }, (_, ageMs) => ({
+      phase: "event", ageMs, connection: Number.MAX_SAFE_INTEGER,
+      attempt: Number.MAX_SAFE_INTEGER, lastSeq: Number.MAX_SAFE_INTEGER,
+      seq: Number.MAX_SAFE_INTEGER, type: "artifact", jobId: privateValue, raw: privateValue,
+    }));
+    const diagnostics = buildReplayDiagnostics(events, { lifecycle, observationFailed: privateValue });
+    expect(diagnostics.events).toHaveLength(REPLAY_EVENT_LIMIT);
+    expect(diagnostics).toMatchObject({
+      eventCount: events.length, eventsTruncated: true, lifecycleTruncated: true, terminalCode: "LEASE_LOST",
+      observationFailed: false,
+    });
+    expect(diagnostics.lifecycle).toHaveLength(REPLAY_LIFECYCLE_LIMIT);
+    const payload = JSON.stringify(diagnostics);
+    expect(Buffer.byteLength(payload)).toBeLessThanOrEqual(REPLAY_PAYLOAD_LIMIT);
+    expect(payload).not.toContain(privateValue);
+  });
+
+  it("omits unrecognized labels, statuses and non-scalar event metadata", () => {
+    const privateValue = "fixture-private-value";
+    const diagnostics = buildReplayDiagnostics([
+      { seq: privateValue, type: privateValue },
+      terminal({ status: privateValue }),
+    ], {
+      lifecycle: [
+        { phase: privateValue, ageMs: 0, raw: privateValue },
+        { phase: "event", ageMs: 1, connection: privateValue, seq: Infinity, type: privateValue },
+      ],
+    });
+    expect(JSON.stringify(diagnostics)).not.toContain(privateValue);
+    expect(diagnostics.lifecycle).toEqual([{ phase: "event", ageMs: 1 }]);
+  });
+
+  it("records deterministic relative ages with a bounded lifecycle", () => {
+    let now = 100;
+    const observer = createReplayLifecycle({ now: () => now });
+    now = 125;
+    observer.record("runtime-start");
+    now = 150;
+    observer.record("runtime-resume");
+    for (let index = 0; index < REPLAY_LIFECYCLE_LIMIT * 4; index++) observer.record("event", { seq: index });
+    const snapshot = observer.snapshot();
+    expect(snapshot.lifecycle).toHaveLength(REPLAY_LIFECYCLE_LIMIT);
+    expect(snapshot.lifecycle.slice(0, 2)).toEqual([
+      { phase: "runtime-start", ageMs: 25 }, { phase: "runtime-resume", ageMs: 50 },
+    ]);
+    expect(snapshot.lifecycleTruncated).toBe(true);
+    expect(snapshot.observationFailed).toBe(false);
+  });
+
+  it("observes only allowlisted frame scalars and ignores heartbeat chatter", () => {
+    class SendProbe extends EventEmitter {}
+    SendProbe.prototype.send = vi.fn();
+    const record = vi.fn();
+    const CapturedWebSocket = createReplayWebSocket({ sockets: [], record, WebSocketImpl: SendProbe });
+    const socket = new CapturedWebSocket();
+    const privateValue = "fixture-private-value";
+    socket.send(encode({
+      v: 1, t: "event", leaseId: privateValue, attempt: 2,
+      event: { v: 1, jobId: privateValue, seq: 3, ts: "2000-01-01T00:00:00.000Z",
+        type: "progress", data: { text: privateValue } },
+    }));
+    for (let index = 0; index < REPLAY_LIFECYCLE_LIMIT * 4; index++) {
+      socket.emit("message", encode({ v: 1, t: "heartbeat", ts: 0, leases: [] }), false);
+    }
+    expect(record.mock.calls).toEqual([["event", { connection: 0, attempt: 2, seq: 3, type: "progress" }]]);
+    expect(JSON.stringify(record.mock.calls)).not.toContain(privateValue);
+  });
+
+  it("attests actual observer exceptions without leaking them or interrupting delivery", () => {
+    class SendProbe extends EventEmitter {}
+    const returned = {};
+    const nativeSend = vi.fn(() => returned);
+    SendProbe.prototype.send = nativeSend;
+    const observer = createReplayLifecycle({ now: () => 0 });
+    const privateValue = "fixture-hidden-observer-failure";
+    const record = vi.fn(() => { throw new Error(privateValue); });
+    const CapturedWebSocket = createReplayWebSocket({
+      sockets: [], record, observation: observer.observation, WebSocketImpl: SendProbe,
+    });
+    const socket = new CapturedWebSocket();
+    const consumer = vi.fn();
+    socket.on("message", consumer);
+    const raw = encode({ v: 1, t: "ack", leaseId: "fixture-lease", attempt: 1 });
+    socket.emit("message", raw, false);
+    expect(record).toHaveBeenCalledWith("ack", { connection: 0, attempt: 1 });
+    expect(consumer).toHaveBeenCalledWith(raw, false);
+    const callback = vi.fn();
+    expect(socket.send(raw, callback)).toBe(returned);
+    expect(nativeSend.mock.calls[0][0]).toBe(raw);
+    expect(nativeSend.mock.calls[0][1]).toBe(callback);
+    expect(nativeSend.mock.contexts[0]).toBe(socket);
+    expect(callback).not.toHaveBeenCalled();
+    const snapshot = observer.snapshot();
+    expect(snapshot.observationFailed).toBe(true);
+    const diagnostics = buildReplayDiagnostics([terminal({ code: "LEASE_LOST" })], snapshot);
+    expect(diagnostics.observationFailed).toBe(true);
+    expect(JSON.stringify(diagnostics)).not.toContain(privateValue);
+  });
+
+  it("preserves literal send arguments, callbacks, return, receiver and native errors", () => {
+    class SendProbe extends EventEmitter {}
+    const returned = {};
+    const nativeSend = vi.fn(() => returned);
+    SendProbe.prototype.send = nativeSend;
+    const record = vi.fn(() => { throw new Error("fixture observation failure"); });
+    const CapturedWebSocket = createReplayWebSocket({ sockets: [], record, WebSocketImpl: SendProbe });
+    const socket = new CapturedWebSocket();
+    const raw = Buffer.from("fixture malformed frame");
+    const options = { binary: true };
+    const callback = vi.fn();
+    expect(socket.send(raw, options, callback)).toBe(returned);
+    expect(nativeSend.mock.calls[0][0]).toBe(raw);
+    expect(nativeSend.mock.calls[0][1]).toBe(options);
+    expect(nativeSend.mock.calls[0][2]).toBe(callback);
+    expect(nativeSend.mock.contexts[0]).toBe(socket);
+    expect(socket.send(raw, callback)).toBe(returned);
+    expect(nativeSend.mock.calls[1][1]).toBe(callback);
+    expect(callback).not.toHaveBeenCalled();
+    const failure = new Error("fixture native send failure");
+    nativeSend.mockImplementationOnce(() => { throw failure; });
+    let caught;
+    try {
+      socket.send(raw, callback);
+    } catch (error) {
+      caught = error;
+    }
+    expect(caught).toBe(failure);
+  });
 });
 
 describe("remote lane contract and transport", () => {
@@ -418,18 +712,20 @@ describe("remote lane contract and transport", () => {
     let releaseRuntime;
     const runtimeGate = new Promise((resolve) => { releaseRuntime = resolve; });
     const sockets = [];
-    class CapturedWebSocket extends WebSocket {
-      constructor(...args) {
-        super(...args);
-        sockets.push(this);
-      }
-    }
+    const observer = createReplayLifecycle();
+    const context = (events = []) => JSON.stringify(buildReplayDiagnostics(events, observer.snapshot()));
+    const CapturedWebSocket = createReplayWebSocket({
+      sockets, record: observer.record, observation: observer.observation,
+    });
     const system = await connectedSystem({
       WebSocketImpl: CapturedWebSocket,
       runtime: {
-        async run({ emit }) {
+        async run({ emit, signal }) {
+          observer.record("runtime-start");
+          signal.addEventListener("abort", () => observer.record("runtime-abort"), { once: true });
           emit("progress", { step: 1 });
           await runtimeGate;
+          observer.record("runtime-resume");
           emit("progress", { step: 2 });
           return { status: "succeeded" };
         },
@@ -454,34 +750,26 @@ describe("remote lane contract and transport", () => {
         }
       };
       const first = await nextWithin();
-      if (!first) throw new Error(JSON.stringify({ phase: "first-event", snapshot: system.registry.snapshot() }));
+      if (!first) expect(first, context()).not.toBeNull();
       expect(first.value.type).toBe("started");
       const second = await nextWithin();
-      if (!second) throw new Error(JSON.stringify({ phase: "second-event", snapshot: system.registry.snapshot() }));
+      if (!second) expect(second, context([first.value])).not.toBeNull();
       expect(second.value.type).toBe("progress");
+      observer.record("terminate-release");
       sockets[0].terminate();
       releaseRuntime();
       await eventually(() => expect(sockets.length).toBeGreaterThan(1), 3000);
       const events = [first.value, second.value];
       while (true) {
         const next = await nextWithin();
-        if (!next) throw new Error(JSON.stringify({
-          phase: "replay-event", snapshot: system.registry.snapshot(), connections: sockets.length,
-          leases: system.agent.activeLeases,
-        }));
+        if (!next) expect(next, context(events)).not.toBeNull();
         if (next.done) break;
         events.push(next.value);
         if (next.value.type === "finished") break;
       }
-      const terminal = events.find((event) => event.type === "finished");
-      const diagnostics = {
-        events: events.map(({ seq, type }) => ({ seq, type })),
-        terminalStatus: terminal?.data?.status,
-        ...(typeof terminal?.data?.error === "string" && /^[A-Z][A-Z0-9_]{0,79}$/.test(terminal.data.error)
-          ? { terminalErrorCode: terminal.data.error } : {}),
-      };
+      const diagnostics = buildReplayDiagnostics(events, observer.snapshot());
       expect(events.map((event) => event.seq), JSON.stringify(diagnostics)).toEqual([1, 2, 3, 4]);
-      expect(new Set(events.map((event) => event.seq)).size).toBe(events.length);
+      expect(new Set(events.map((event) => event.seq)).size, JSON.stringify(diagnostics)).toBe(events.length);
       await stream.return?.();
     } finally {
       releaseRuntime();

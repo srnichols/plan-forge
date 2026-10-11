@@ -528,8 +528,34 @@ all 62 new exact contexts are reviewed, with no confirmed credentials or
 pending contexts. The nine-file lint and test-smell delta has no new findings.
 The Windows jscpd wrapper's invalid lint-row output is recorded in #349;
 direct invocation of the installed detector produced 45 genuine clone pairs.
-Current-head CI, native macOS, development-tool release disposition, the clean
+Actual required CI `38178351389` at `6f47e847` passes all Windows/Linux
+floor/LTS jobs and real kind, including the exact canonical-history application
+ACK and cleanup. Overall CI still fails macOS: Node 24 has 52 native-dependent
+failures; Node 22.12 has 53, including a separate in-memory remote replay
+failure tracked in #352. That extra failure is not attributed to native
+ownership absence. A bounded controlled close/abort/authenticated-resume
+witness and ten immediate-release copies did not reproduce its missing event
+or failed terminal; the original terminal code and cause remain unknown.
+Diagnostic-only safe terminal-code and bounded lifecycle capture may improve
+the next meaningful current-head evidence, but does not authorize changing
+transport behavior, cancellation, assertions or original clocks. Native macOS,
+the independent replay defect, development-tool release disposition, the clean
 stable-release rehearsal and authenticated operator acceptance remain open.
+
+The stopped replay diagnostic test now records allowlisted code/error values,
+separate field-presence flags and a sticky observer-failure flag. It samples
+eight events and at most 32 lifecycle entries within the tested 8,192-byte
+payload bound; raw frames, credentials, arbitrary error text and heartbeat
+chatter are excluded. Actual diagnostic omission regressions failed before
+repair (seven initial failures, then twelve attestation failures). All 35 owned
+transport/diagnostic cases pass on Windows and physical Linux Node 22.12/24.
+The original immediate terminate/release order, sequence/uniqueness assertions,
+socket bounds and production cancellation/publication logic remain unchanged.
+An auxiliary Linux LTS PowerShell version probe failed after the 35 passing
+tests because private scratch was mounted `noexec`; that failure is retained,
+and only the isolated floor fixture's executable scratch mount was corrected.
+This is diagnostic readiness, not recovery of the original Mac failure code
+or cause. The next exact committed-head CI remains a separate required gate.
 
 _Original decisions were resolved at hardening on 2026-10-07; verification evidence is in Assumptions. D29 and D30 are the operator-approved review/release-preparation extensions from 2026-10-08 and 2026-10-10._
 

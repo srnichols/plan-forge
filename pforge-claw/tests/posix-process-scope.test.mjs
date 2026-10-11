@@ -285,6 +285,15 @@ describe.skipIf(process.platform !== "linux")("Linux native subreaper ownership"
     expect(await isLive(leafPid)).toBe(false);
   });
 
+  it("does not starve private start IPC behind the held stream on a bounded native worker pool", async () => {
+    const resource = await held({
+      ...process.env, DOTNET_ThreadPool_ForceMinWorkerThreads: "1", DOTNET_ThreadPool_ForceMaxWorkerThreads: "1",
+    });
+    expect(await execute(resource, "process.stdout.write('native-start-complete')")).toEqual({ code: 0 });
+    await stop(resource);
+    expect(resource.stdout).toBe("native-start-complete");
+  });
+
   it("does not block or kill an independent survivor whose creator vanished between observations", async () => {
     const resource = await held();
     const independent = await independentLeaf();

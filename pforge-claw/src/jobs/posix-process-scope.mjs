@@ -43,7 +43,6 @@ using System.Runtime.InteropServices;
 using System.Text;
 using System.Text.Json;
 using System.Threading;
-using System.Threading.Tasks;
 using Microsoft.Win32.SafeHandles;
 
 public sealed class ScopeFault : Exception {
@@ -201,6 +200,10 @@ public sealed class ClawPosixRoot {
     void SendOuter(object frame) {
         lock (outputLock) outerWriter.WriteLine(JsonSerializer.Serialize(frame));
     }
+    static void StartReader(ThreadStart read) {
+        // A held IPC read must not occupy the pool that would otherwise deliver its START.
+        new Thread(read) { IsBackground = true }.Start();
+    }
     void StartSupervisor(JsonElement config) {
         var pair = new int[2];
         if (socketpair(UnixDomain, StreamSocket | SocketCloseOnExec, 0, pair) != 0)
@@ -235,7 +238,7 @@ public sealed class ClawPosixRoot {
         var stream = new NetworkStream(new Socket(new SafeSocketHandle((IntPtr)pair[0], true)), true);
         innerWriter = ClawPosixNative.Writer(stream);
         var reader = new StreamReader(stream, Encoding.UTF8, false, 4096, true);
-        Task.Run(() => Relay(reader));
+        StartReader(() => Relay(reader));
     }
     void Relay(StreamReader reader) {
         try {
@@ -379,7 +382,7 @@ public sealed class ClawPosixRoot {
             listener.Bind(new UnixDomainSocketEndPoint("\0pforge-claw-posix-" + root.rootPid + "-" + root.rootBirth));
             listener.Listen(1);
             root.StartSupervisor(config.RootElement);
-            Task.Run(() => root.ReadParent());
+            StartReader(root.ReadParent);
             root.Control(listener);
             root.StopChildren();
             ClawPosixNative._exit(1);

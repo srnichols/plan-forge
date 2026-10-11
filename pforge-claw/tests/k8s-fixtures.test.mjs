@@ -1,7 +1,7 @@
 import { spawnSync } from "node:child_process";
 import { createHash, X509Certificate } from "node:crypto";
 import { EventEmitter } from "node:events";
-import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { access, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { PassThrough } from "node:stream";
 import { fileURLToPath, pathToFileURL } from "node:url";
@@ -74,6 +74,26 @@ describe("Guard: Kubernetes fixture uses the real composition and protocol", () 
       expect(source).not.toContain("approve" + "All");
     },
   );
+
+  it("ships the exact external Git helper required by both fixture entrypoints", async () => {
+    const image = await readFile(path.join(PACKAGE_ROOT, "deploy", "Dockerfile.k8s-fixtures"), "utf8");
+    const edge = await readFile(path.join(PACKAGE_ROOT, "tests", "helpers", "k8s-process-edge.mjs"), "utf8");
+    expect(edge).toContain('from "./publication-git-fixture.mjs"');
+    expect(image).toMatch(/COPY[^\n]*pforge-claw\/tests\/helpers\/publication-git-fixture\.mjs[^\n]*\.\/tests\/helpers\//);
+  });
+
+  it("reports the missing publication helper as an explicit preflight contract, not a runnable fixture", async () => {
+    const pending = await missingFixtureContracts({
+      dispatcherImage: DISPATCHER_IMAGE, workerImage: WORKER_IMAGE,
+      exists: async (target) => {
+        if (path.basename(target) === "publication-git-fixture.mjs") {
+          throw Object.assign(new Error("missing owned fixture helper"), { code: "ENOENT" });
+        }
+        return access(target);
+      },
+    });
+    expect(pending).toContain(path.join("tests", "helpers", "publication-git-fixture.mjs"));
+  });
 
   it("materializes safe usable fixture paths, identities, runtime and worker references", async () => {
     const original = await template();

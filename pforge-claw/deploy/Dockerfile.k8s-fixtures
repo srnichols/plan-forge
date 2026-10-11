@@ -22,7 +22,7 @@ COPY pforge-claw/examples/ ./examples/
 COPY pforge-claw/deploy/k8s/ ./deploy/k8s/
 COPY pforge-claw/scripts/k8s-e2e-overlay.mjs ./scripts/
 COPY pforge-claw/tests/helpers/k8s-*.mjs ./tests/helpers/
-COPY pforge-claw/tests/helpers/fake-telegram.mjs pforge-claw/tests/helpers/fake-project-mcp.mjs ./tests/helpers/
+COPY pforge-claw/tests/helpers/fake-telegram.mjs pforge-claw/tests/helpers/fake-project-mcp.mjs pforge-claw/tests/helpers/publication-git-fixture.mjs ./tests/helpers/
 COPY pforge-claw/deploy/install-powershell.mjs /usr/local/share/pforge-claw/install-powershell.mjs
 RUN apt-get update \
     && apt-get install -y --no-install-recommends ca-certificates libicu-dev \

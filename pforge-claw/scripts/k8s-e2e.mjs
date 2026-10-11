@@ -57,6 +57,7 @@ const FIXTURE_SOURCES = Object.freeze([
   path.join("tests", "helpers", "k8s-dispatcher.mjs"),
   path.join("tests", "helpers", "k8s-worker.mjs"),
   path.join("tests", "helpers", "k8s-scenario.mjs"),
+  path.join("tests", "helpers", "publication-git-fixture.mjs"),
   path.join("deploy", "Dockerfile.k8s-fixtures"),
 ]);
 const PROOF_PATH = "/data/k8s-e2e-result.json";

@@ -196,6 +196,17 @@ describe("runtime-installed policy with SDK 1.0.16 request shapes", () => {
     }))).resolves.toEqual(allowed);
   });
 
+  it.each(process.platform === "win32"
+    ? ["C:\\foreign\\file.txt"]
+    : ["C:\\foreign\\file.txt", "\\\\foreign\\share\\file.txt"])(
+    "rejects foreign Windows paths rather than treating them as a native worktree path: %s",
+    async (foreignPath) => {
+      await expect(installedDecision(sdkShell("npm test", {
+        possiblePaths: [foreignPath], resolvedWorkingDirectory: worktree,
+      }))).resolves.toMatchObject(denied);
+    },
+  );
+
   it.each([
     ["read", { path: "inside/file.txt" }, true],
     ["read", { path: "../outside/file.txt" }, false],

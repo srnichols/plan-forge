@@ -54,7 +54,8 @@ async function pathsInside(worktree, paths) {
   try {
     for (const requestedPath of paths) {
       if (typeof requestedPath !== "string" || !requestedPath || requestedPath.startsWith("~")) return false;
-      if (process.platform !== "win32" && path.win32.isAbsolute(requestedPath)) return false;
+      if (process.platform !== "win32" && path.win32.isAbsolute(requestedPath)
+        && !path.posix.isAbsolute(requestedPath)) return false;
       const target = await realpathNearest(path.resolve(worktree, requestedPath));
       if (!(await isInside(worktree, target))) return false;
     }

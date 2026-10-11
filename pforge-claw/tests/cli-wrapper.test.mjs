@@ -1,5 +1,5 @@
 import { spawnSync } from "node:child_process";
-import { copyFileSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { copyFileSync, mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -57,7 +57,7 @@ function readProbe(child) {
 }
 
 beforeAll(() => {
-  fixtureRoot = mkdtempSync(path.join(os.tmpdir(), "claw-wrapper-"));
+  fixtureRoot = realpathSync(mkdtempSync(path.join(os.tmpdir(), "claw-wrapper-")));
   const directories = [".git", "pforge-claw", "pforge-mcp", path.join("docs", "plans")];
   for (const directory of directories) mkdirSync(path.join(fixtureRoot, directory), { recursive: true });
   for (const wrapper of WRAPPERS) copyFileSync(path.join(REPO_ROOT, wrapper.file), path.join(fixtureRoot, wrapper.file));

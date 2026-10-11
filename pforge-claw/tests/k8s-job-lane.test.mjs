@@ -1337,10 +1337,11 @@ describe("pod-side clone and bootstrap", () => {
     expect(calls.map(({ command, args }) => [path.basename(command), args.at(-1)])).toEqual([
       ["git", repoDir],
       ["git", "claw/pod-job"],
-      ["node.exe", "ci"],
+      [process.platform === "win32" ? path.basename(process.execPath) : "npm", "ci"],
       ["pforge", "smith"],
     ]);
-    expect(calls[2].args[0]).toContain("npm-cli.js");
+    if (process.platform === "win32") expect(calls[2].args[0]).toContain("npm-cli.js");
+    else expect(calls[2].args).toEqual(["ci"]);
     expect(calls[0].args).toEqual(["clone", "--depth", "1", "--branch", "main", "--", "https://example.com/repo.git", repoDir]);
   });
 

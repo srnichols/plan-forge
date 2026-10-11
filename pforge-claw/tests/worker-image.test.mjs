@@ -185,9 +185,12 @@ describe("image build scripts", () => {
     const normalizeArguments = (argumentsList) => argumentsList.map((argument) => argument
       .replace(/^.*[\\/]pforge-claw(?=[\\/]|$)/, "<context>")
       .replace(/\\/g, "/"));
-    const bashDockerArguments = normalizeArguments(
-      bashRun.stdout.split(/\r?\n/).filter((line) => line.startsWith("  ")).map((line) => line.trim()),
-    );
+    const bashRawArguments = process.platform === "win32"
+      ? bashRun.stdout.split(/\r?\n/).filter((line) => line.startsWith("  ")).map((line) => line.trim())
+      : readFileSync(argsFile, "utf8").trim().split(/\r?\n/);
+    const bashDockerArguments = normalizeArguments(bashRawArguments);
+    expect(bashDockerArguments.length).toBeGreaterThan(0);
+    if (process.platform !== "win32") writeFileSync(argsFile, "");
 
     const quotePowerShell = (value) => `'${value.replaceAll("'", "''")}'`;
     const powershellOptions = options.map((argument) => argument.startsWith("--")

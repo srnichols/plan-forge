@@ -51,6 +51,17 @@ jobs:
           node-version: ${{ matrix.node }}
           cache: npm
 
+      - uses: azure/setup-kubectl@v4
+        with:
+          version: 'v1.32.2'
+
+      - name: Install supported Bash on macOS
+        if: runner.os == 'macOS'
+        shell: bash
+        run: |
+          brew list --versions bash >/dev/null || brew install bash
+          printf '%s/bin\n' "$(brew --prefix bash)" >> "$GITHUB_PATH"
+
       - name: Install dependencies
         run: npm ci --no-audit --no-fund
 

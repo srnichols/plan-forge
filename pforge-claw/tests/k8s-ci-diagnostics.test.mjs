@@ -6,6 +6,22 @@ import { describe, expect, it } from "vitest";
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const WORKFLOW = path.join(REPO_ROOT, ".github", "workflows", "pforge-claw.yml");
 
+describe("Guard: cross-platform CI installs required offline toolchains", () => {
+  it("provides the pinned Kubernetes client before boundary and unit tests", () => {
+    const source = readFileSync(WORKFLOW, "utf8");
+    expect(source).toMatch(/uses:\s*azure\/setup-kubectl@v4\s+with:\s+version:\s*['"]v1\.32\.2['"]/);
+    expect(source.indexOf("azure/setup-kubectl")).toBeLessThan(source.indexOf("name: Run dependency boundary guards"));
+  });
+
+  it("selects supported Bash on macOS instead of running Bash 4 scripts with the system Bash 3", () => {
+    const source = readFileSync(WORKFLOW, "utf8");
+    expect(source).toContain("name: Install supported Bash on macOS");
+    expect(source).toContain("if: runner.os == 'macOS'");
+    expect(source).toContain("brew --prefix bash");
+    expect(source).toContain("GITHUB_PATH");
+  });
+});
+
 describe("Guard: Kubernetes CI diagnostics cannot print job credentials", () => {
   it("never describes pods with their literal secret-bearing environment", () => {
     expect(/kubectl\s+describe\s+pod\b/.test(readFileSync(WORKFLOW, "utf8"))).toBe(false);

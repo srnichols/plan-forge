@@ -259,10 +259,11 @@ public tool contract.
 
 Maintainers must validate the complete unit and offline end-to-end suites,
 unchanged source-quality rules, public tool inventory and documentation before
-preparing a release. Release/version synchronization and the consumer ship
-allowlist must include Claw; that release-tooling follow-up remains separate from
-the current review repairs. No release version has been selected here, and no
-image publication or deployment is implied.
+preparing a release. The version synchronizer includes Claw's manifest and its
+root workspace lock entry when present, and the release commit allowlist permits
+that manifest, not arbitrary Claw source changes. The SDK retains its independent
+version. These metadata safeguards do not install or start Claw. No release
+version has been selected here, and no image publication or deployment is implied.
 
 Cross-platform CI at Node 22.12 and 24, an actual disposable Kubernetes/CNI run,
 and authenticated Telegram, GitHub Copilot/BYOK and memory checks remain distinct

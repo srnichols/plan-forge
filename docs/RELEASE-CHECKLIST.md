@@ -145,6 +145,7 @@ These MUST agree at the tagged commit. Mismatch broke `pforge self-update` for w
 | `VERSION` | `2.82.1` (no leading `v`, no trailing newline, no `-dev`) | Tag verification, `release-guard.yml` workflow |
 | `pforge-mcp/package.json` | `"version": "2.82.1"` | npm/MCP server |
 | `pforge-master/package.json`, root `package.json` | `"version": "2.82.1"` | Forge-Master package (ships to consumers), workspace root |
+| `pforge-claw/package.json` (when present) | `"version": "2.82.1"` | Experimental opt-in Claw package in the framework source |
 | `package-lock.json`, `pforge-mcp/package-lock.json` | workspace entries `"version": "2.82.1"` | npm lockfiles |
 | `CHANGELOG.md` | `## [2.82.1] — YYYY-MM-DD — title` | User-visible release notes |
 
@@ -182,7 +183,7 @@ Verify:
 node scripts/sync-versions.mjs --check  # → All package versions match 2.82.1
 ```
 
-The script changes only version values, so key order, indentation and line endings stay as they are. `pforge-sdk/package.json` is versioned independently (`0.x`) and is left alone. `pforge-mcp/tests/version-sync.test.mjs` fails when any of these disagree with `VERSION`.
+The script changes only version values, so key order, indentation and line endings stay as they are. It also updates `package-lock.json#packages["pforge-claw"].version` when present. `pforge-sdk/package.json` is versioned independently (`0.x`) and is left alone. Checkouts without Claw are still supported; adding it to version synchronization does not install or start it. `pforge-mcp/tests/version-sync.test.mjs` fails when any of these disagree with `VERSION`.
 
 ---
 
@@ -228,7 +229,7 @@ node scripts/sync-versions.mjs 3.6.2
 ### Step 3 — Release commit
 
 ```pwsh
-git add VERSION package.json package-lock.json pforge-mcp/package.json pforge-mcp/package-lock.json pforge-master/package.json CHANGELOG.md
+git add VERSION package.json package-lock.json pforge-mcp/package.json pforge-mcp/package-lock.json pforge-master/package.json pforge-claw/package.json CHANGELOG.md
 git commit -m "chore(release): vX.Y.Z" -m "<short summary, bullets per fix>"
 ```
 
@@ -320,7 +321,7 @@ The bump-back is always to the **next likely** release of the same kind. If the 
 # Example: just shipped 3.6.2 (PATCH). Bump to 3.6.3-dev.
 node scripts/sync-versions.mjs 3.6.3-dev
 
-git add VERSION package.json package-lock.json pforge-mcp/package.json pforge-mcp/package-lock.json pforge-master/package.json
+git add VERSION package.json package-lock.json pforge-mcp/package.json pforge-mcp/package-lock.json pforge-master/package.json pforge-claw/package.json
 git commit -m "chore: bump VERSION to 3.6.3-dev"
 git push origin master
 ```
@@ -408,7 +409,7 @@ Fix it BEFORE starting §3 (do not just override in §3 step 2 — also correct 
 # Example: VERSION says 3.7.0-dev, but next release is a hotfix from 3.6.1 → reset to 3.6.2-dev.
 node scripts/sync-versions.mjs 3.6.2-dev
 
-git add VERSION package.json package-lock.json pforge-mcp/package.json pforge-mcp/package-lock.json pforge-master/package.json
+git add VERSION package.json package-lock.json pforge-mcp/package.json pforge-mcp/package-lock.json pforge-master/package.json pforge-claw/package.json
 git commit -m "chore: reset VERSION to 3.6.2-dev (next release is a hotfix, not a minor)"
 git push origin master
 ```

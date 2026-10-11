@@ -5,7 +5,7 @@ import { ClawError } from "../src/errors.mjs";
 import { createRunners } from "../src/jobs/runners.mjs";
 import { NATIVE_SCOPE_ERRORS } from "../src/jobs/native-command-supervisor.mjs";
 import { PUBLICATION_ERRORS } from "../src/protocol/messages.mjs";
-import { publicationCalls, runnerFixture } from "./g1-runner-fixture.mjs";
+import { createG1ProjectClients, publicationCalls, runnerFixture } from "./g1-runner-fixture.mjs";
 
 const fixtures = [];
 
@@ -158,6 +158,48 @@ describe("FRC-02 physically unconfirmed execution is not finalizable history", (
     expect(completed).toMatchObject({ status: "failed", error: "RUNTIME_FAILED", settlementConfirmed: false });
     expect(receive).not.toHaveBeenCalled();
     expect(await historyMarker(value)).toMatchObject({ l2Pending: true });
+  });
+
+  it("FRC-02-A preserves native uncertainty when cancellation occurs during an optional failure push", async () => {
+    const value = await fixture();
+    value.config.jobs.pushOnFailure = true;
+    value.ctx.runtime.run.mockRejectedValue(new ClawError("RUNTIME_FAILED"));
+    const controller = new AbortController();
+    const receive = vi.spyOn(value.ctx.l2Receiver, "receive");
+    const original = value.ctx.runner;
+    value.ctx.runner = async (command, args, options) => {
+      const completed = await original(command, args, options);
+      if (!args.includes("push")) return completed;
+      controller.abort();
+      return { ...completed, settlementConfirmed: false };
+    };
+    const completed = await createRunners(value.ctx).runJob(value.job, { signal: controller.signal });
+    expect(completed).toMatchObject({ status: "cancelled", error: "JOB_CANCELLED", settlementConfirmed: false });
+    expect(receive).not.toHaveBeenCalled();
+    expect(await historyMarker(value)).toMatchObject({ l2Pending: true });
+  });
+
+  it("FRC-02-B preserves failed-close uncertainty in the actual pool during cancelled acquisition", async () => {
+    const value = await fixture();
+    value.config.jobs.pushOnFailure = true;
+    const controller = new AbortController();
+    const close = vi.fn().mockRejectedValue(new Error("inert acquired-client closure"));
+    const receive = vi.spyOn(value.ctx.l2Receiver, "receive");
+    value.ctx.projectClients = createG1ProjectClients({
+      config: value.config, env: value.ctx.env, secrets: value.ctx.secrets,
+      connect: async () => {
+        controller.abort();
+        return { call: async () => ({}), close };
+      },
+    });
+    const completed = await createRunners(value.ctx).runJob(value.job, { signal: controller.signal });
+    expect(completed).toMatchObject({ status: "cancelled", error: "JOB_CANCELLED", settlementConfirmed: false });
+    expect(close).toHaveBeenCalledOnce();
+    expect(value.ctx.runtime.run).not.toHaveBeenCalled();
+    expect(publicationCalls(value)).toEqual([]);
+    expect(receive).not.toHaveBeenCalled();
+    expect(await historyMarker(value)).toMatchObject({ l2Pending: true });
+    close.mockResolvedValue(undefined);
   });
 });
 

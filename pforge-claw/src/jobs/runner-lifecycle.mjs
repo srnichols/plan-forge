@@ -254,7 +254,7 @@ async function pushFailure({ ctx, job, handle, env, signal }) {
       });
     });
   } catch (error) {
-    if (isCancelled(error, signal)) return;
+    if (isCancelled(error, signal)) return { settlementConfirmed: !hasUnconfirmedSettlement(error) };
     warnJobFailure({
       ctx, job, message: "Failed worktree push failed", code: "FAILURE_PUSH_FAILED", logCode: failureReason(error),
     });

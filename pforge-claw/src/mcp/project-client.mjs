@@ -3,7 +3,7 @@ import { createHash } from "node:crypto";
 import path from "node:path";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
-import { ClawError } from "../errors.mjs";
+import { ClawError, withClawErrorDetails } from "../errors.mjs";
 import { resolveMcpLaunch } from "../registry.mjs";
 import { prepareJobEnvironment } from "../jobs/runner-environment.mjs";
 import { HOME_PLAN_RESOLVE_TOOL } from "../enums.mjs";
@@ -386,8 +386,13 @@ export function createProjectClients({
     };
     workspaceClients.add(owned);
     if (closed || signal?.aborted) {
-      await owned.close();
-      throw new ClawError(closed ? "MCP_TRANSPORT_CLOSED" : "JOB_CANCELLED");
+      const failure = new ClawError(closed ? "MCP_TRANSPORT_CLOSED" : "JOB_CANCELLED");
+      try {
+        await owned.close();
+      } catch {
+        throw withClawErrorDetails(failure, failure.code, { settlementConfirmed: false });
+      }
+      throw failure;
     }
     return owned;
   }

@@ -1,4 +1,5 @@
 import { writeFile } from "node:fs/promises";
+import { on } from "node:events";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { getBudgetService } from "../../src/budget.mjs";
@@ -59,6 +60,12 @@ async function waitForRunning(job) {
     const audit = (await rig.auditRows()).filter((record) => record.kind?.startsWith("budget-"))
       .map(({ kind, reason }) => ({ kind, reason }));
     throw new Error(`${error.message}; state=${current?.state}; budgetAudit=${JSON.stringify(audit)}`);
+  }
+}
+
+async function waitForFinishedLaneJob(job) {
+  for await (const [event] of on(rig.handles.ctx.bus, "lane.event")) {
+    if (event.jobId === job.id && event.type === "finished") return event;
   }
 }
 
@@ -138,13 +145,18 @@ describe("scenario concurrent job isolation", () => {
     await rig.waitForJob(fourth.id, "leased");
     expect(rig.handles.lanes.get("local").health()).toMatchObject({ queued: 1, running: 3 });
     expect(probe.active.has(fourth.id)).toBe(false);
+    const terminalEvents = new Map([first, second, third, fourth]
+      .map((job) => [job.id, waitForFinishedLaneJob(job)]));
     copilot.release(first.id);
+    // The follow-up startup window begins after native publication and history settlement, not SDK return.
+    expect((await terminalEvents.get(first.id)).data.status).toBe("succeeded");
     await waitForRunning(fourth);
     await probe.entered(fourth.id);
     expect(probe.active.has(first.id)).toBe(false);
     expect(probe.peakActive).toBe(3);
     expect([...probe.projectPeaks.values()]).toEqual([1, 1, 1]);
     for (const job of [second, third, fourth]) copilot.release(job.id);
+    for (const event of await Promise.all(terminalEvents.values())) expect(event.data.status).toBe("succeeded");
     const completed = await Promise.all([first, second, third, fourth]
       .map((job) => rig.waitForJob(job.id, "succeeded")));
 

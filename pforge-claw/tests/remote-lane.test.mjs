@@ -473,7 +473,14 @@ describe("remote lane contract and transport", () => {
         events.push(next.value);
         if (next.value.type === "finished") break;
       }
-      expect(events.map((event) => event.seq)).toEqual([1, 2, 3, 4]);
+      const terminal = events.find((event) => event.type === "finished");
+      const diagnostics = {
+        events: events.map(({ seq, type }) => ({ seq, type })),
+        terminalStatus: terminal?.data?.status,
+        ...(typeof terminal?.data?.error === "string" && /^[A-Z][A-Z0-9_]{0,79}$/.test(terminal.data.error)
+          ? { terminalErrorCode: terminal.data.error } : {}),
+      };
+      expect(events.map((event) => event.seq), JSON.stringify(diagnostics)).toEqual([1, 2, 3, 4]);
       expect(new Set(events.map((event) => event.seq)).size).toBe(events.length);
       await stream.return?.();
     } finally {

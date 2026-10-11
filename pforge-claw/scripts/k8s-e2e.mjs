@@ -15,6 +15,33 @@ import { buildJobEgressPolicy } from "../src/k8s/egress-policy.mjs";
 
 const MAX_COMMAND_BYTES = 1_048_576;
 const COMMAND_TIMEOUT_MS = 180_000;
+const MAX_DIAGNOSTIC_STDERR_BYTES = 4096;
+const MAX_DIAGNOSTIC_ARGUMENTS = 16;
+const MAX_COMMAND_EXIT_CODE = 0xffff_ffff;
+const DIAGNOSTIC_COMMANDS = new Set(["kubectl", "kind", "k3d"]);
+const DIAGNOSTIC_OPERATIONS = new Set(["get", "create", "apply", "rollout", "patch", "wait", "exec", "delete", "load", "image"]);
+const DIAGNOSTIC_ARGUMENTS = new Set([
+  ...DIAGNOSTIC_OPERATIONS, "--context", "namespace", "--ignore-not-found", "-o", "name",
+  "-k", "status", "-n", "--timeout=90s", "job", "--type=merge", "-p",
+  "--for=condition=complete", "--for=delete", "--", "node", "--input-type=module", "-e",
+  "json", "--ignore-not-found=true", "--wait=true", "docker-image", "--name", "import", "--cluster",
+  "deployment/pforge-claw-dispatcher", "deployment/pforge-claw-egress-target",
+  "pforge-claw-egress-control", "pforge-claw-egress-probe",
+  "job/pforge-claw-egress-control", "job/pforge-claw-egress-probe",
+]);
+const DIAGNOSTIC_SIGNALS = new Set(["SIGTERM", "SIGKILL", "SIGINT", "SIGABRT", "SIGSEGV"]);
+const STDERR_HINTS = Object.freeze([
+  { hint: "IMAGE_NOT_LOCAL", pattern: /image[^\r\n]*not present locally/i },
+  { hint: "IMAGE_IMPORT_FAILED", pattern: /failed to (?:import|load|export)[^\r\n]*image|failed to get reader for content digest/i },
+  { hint: "CLUSTER_NOT_FOUND", pattern: /no (?:kind )?nodes found|no nodes found for cluster/i },
+  { hint: "CONTEXT_NOT_FOUND", pattern: /context[^\r\n]*(?:does not exist|not found)|no context exists/i },
+  { hint: "API_ACCESS_DENIED", pattern: /error from server \((?:Forbidden|Unauthorized)\)/i },
+  { hint: "API_RESOURCE_REJECTED", pattern: /error from server \((?:Invalid|BadRequest)\)|error validating|strict decoding error/i },
+  { hint: "KUSTOMIZE_FAILED", pattern: /accumulating resources|failed to find unique target|may not add resource|namespace transformation produces id conflict/i },
+  { hint: "TLS_TRUST_FAILED", pattern: /x509:|certificate signed by unknown authority|tls:/i },
+  { hint: "CONNECTION_FAILED", pattern: /connection refused|i\/o timeout|unable to connect to the server/i },
+]);
+const SPAWN_HINTS = Object.freeze({ ENOENT: "COMMAND_NOT_FOUND", EACCES: "COMMAND_NOT_EXECUTABLE" });
 const MAX_PROOF_EVENTS = 1000;
 const MAX_PROOF_FILES = 128;
 const MIN_PROOF_EVENTS = 3;
@@ -111,7 +138,12 @@ function execute(command, args) {
     const child = spawn(command, args, { cwd: PACKAGE_ROOT, stdio: ["ignore", "pipe", "pipe"], windowsHide: true });
     let stdout = "";
     let bytes = 0;
+    let stderrSample = Buffer.alloc(0);
+    let stderrBytes = 0;
     let settled = false;
+    const failure = (code, details = {}) => new K8sE2eCommandError(code, {
+      command, args, stderrSample, stderrBytes, ...details,
+    });
     const finish = (error, output) => {
       if (settled) return;
       settled = true;
@@ -121,19 +153,76 @@ function execute(command, args) {
     };
     const timer = setTimeout(() => {
       child.kill();
-      finish(new Error("K8S_E2E_COMMAND_TIMEOUT"));
+      finish(failure("K8S_E2E_COMMAND_TIMEOUT"));
     }, COMMAND_TIMEOUT_MS);
     child.stdout.on("data", (chunk) => {
       bytes += chunk.length;
       if (bytes > MAX_COMMAND_BYTES) {
         child.kill();
-        finish(new Error("K8S_E2E_OUTPUT_LIMIT"));
+        finish(failure("K8S_E2E_OUTPUT_LIMIT"));
       } else stdout += chunk.toString("utf8");
     });
-    child.stderr.resume();
-    child.once("error", () => finish(new Error("K8S_E2E_COMMAND_UNAVAILABLE")));
-    child.once("close", (code) => finish(code === 0 ? null : new Error("K8S_E2E_COMMAND_FAILED"), stdout));
+    child.stderr.on("data", (chunk) => {
+      stderrBytes += chunk.length;
+      const remaining = MAX_DIAGNOSTIC_STDERR_BYTES - stderrSample.length;
+      if (remaining > 0) stderrSample = Buffer.concat([stderrSample, chunk.subarray(0, remaining)]);
+    });
+    child.once("error", (error) => finish(failure("K8S_E2E_COMMAND_UNAVAILABLE", { spawnErrorCode: error.code })));
+    child.once("close", (exitCode, signal) => finish(
+      exitCode === 0 ? null : failure("K8S_E2E_COMMAND_FAILED", { exitCode, signal }), stdout,
+    ));
   });
+}
+
+function commandIdentity(command, args) {
+  const operation = args[args[0] === "--context" ? 2 : 0];
+  return {
+    command: DIAGNOSTIC_COMMANDS.has(command) ? command : "unknown",
+    operation: DIAGNOSTIC_OPERATIONS.has(operation) ? operation : "unknown",
+    args: args.slice(0, MAX_DIAGNOSTIC_ARGUMENTS).map((argument) =>
+      DIAGNOSTIC_ARGUMENTS.has(argument) ? argument : "<redacted>"),
+    argsTruncated: args.length > MAX_DIAGNOSTIC_ARGUMENTS,
+  };
+}
+
+function stderrHint({ stderrSample, spawnErrorCode }) {
+  if (spawnErrorCode) return Object.hasOwn(SPAWN_HINTS, spawnErrorCode) ? SPAWN_HINTS[spawnErrorCode] : "SPAWN_FAILED";
+  const sample = stderrSample.toString("utf8");
+  return STDERR_HINTS.find(({ pattern }) => pattern.test(sample))?.hint ?? "STDERR_SUPPRESSED";
+}
+
+class K8sE2eCommandError extends Error {
+  constructor(code, { command, args, exitCode = null, signal = null, stderrSample, stderrBytes, spawnErrorCode }) {
+    super(code);
+    this.name = "K8sE2eCommandError";
+    this.commandFailure = {
+      ...commandIdentity(command, args),
+      exitCode: Number.isSafeInteger(exitCode) && exitCode >= 0 && exitCode <= MAX_COMMAND_EXIT_CODE ? exitCode : null,
+      signal: DIAGNOSTIC_SIGNALS.has(signal) ? signal : null,
+      stderrHint: stderrHint({ stderrSample, spawnErrorCode }),
+      stderrTruncated: stderrBytes > MAX_DIAGNOSTIC_STDERR_BYTES,
+    };
+  }
+}
+
+async function cleanupRun({ kubectl, namespace, ownsNamespace, directory, primaryFailure }) {
+  let cleanupFailure;
+  try {
+    if (ownsNamespace) await kubectl(["delete", "namespace", namespace, "--ignore-not-found=true", "--wait=true"]);
+  } catch (error) {
+    cleanupFailure = error;
+  }
+  try {
+    await rm(directory, { recursive: true, force: true });
+  } catch (error) {
+    cleanupFailure ??= error;
+  }
+  if (!cleanupFailure) return;
+  if (!primaryFailure) throw cleanupFailure;
+  if (primaryFailure instanceof K8sE2eCommandError) {
+    primaryFailure.cleanupCommandFailure = cleanupFailure instanceof K8sE2eCommandError
+      ? cleanupFailure.commandFailure : { stderrHint: "OVERLAY_CLEANUP_FAILED" };
+  }
 }
 
 /**
@@ -322,6 +411,8 @@ async function runDeployedScenario({ kubectl, namespace, workerImage, config }) 
 
 /**
  * Run only against an explicitly named kind/k3d context with complete prebuilt fixture images.
+ * Native failures expose bounded command/exit metadata and whitelisted stderr hints, never command payloads.
+ * Cleanup is attempted after a failure without replacing the first failing command.
  * @param {object} options
  * @param {{runner?: Function}} dependencies
  * @returns {Promise<object>}
@@ -337,6 +428,7 @@ export async function runK8sE2e(options, { runner = execute, exists = access } =
   if (existing.trim()) throw new Error("K8S_E2E_NAMESPACE_ALREADY_EXISTS");
   const directory = await mkdtemp(path.join(PACKAGE_ROOT, "scripts", ".k8s-e2e-"));
   let ownsNamespace = false;
+  let primaryFailure;
   try {
     await writeDevOverlay({ ...options, config, destination: directory });
     const images = [options.dispatcherImage, options.workerImage];
@@ -353,12 +445,11 @@ export async function runK8sE2e(options, { runner = execute, exists = access } =
     await resumeProbe({ kubectl, namespace: options.namespace, name: "pforge-claw-egress-probe" });
     const scenarioEvidence = await runDeployedScenario({ kubectl, namespace: options.namespace, workerImage: options.workerImage, config });
     return { status: "passed", namespace: options.namespace, context: options.context, scenarioEvidence };
+  } catch (error) {
+    primaryFailure = error;
+    throw error;
   } finally {
-    try {
-      if (ownsNamespace) await kubectl(["delete", "namespace", options.namespace, "--ignore-not-found=true", "--wait=true"]);
-    } finally {
-      await rm(directory, { recursive: true, force: true });
-    }
+    await cleanupRun({ kubectl, namespace: options.namespace, ownsNamespace, directory, primaryFailure });
   }
 }
 
@@ -370,6 +461,13 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
   } catch (error) {
     const code = /^K8S_E2E_[A-Z0-9_]+$/.test(error?.message ?? "") ? error.message : "K8S_E2E_FAILED";
     process.stderr.write(`e2e-k8s: ${code}\n`);
+    if (error instanceof K8sE2eCommandError) {
+      const diagnostic = {
+        ...error.commandFailure,
+        ...(error.cleanupCommandFailure ? { cleanupFailure: error.cleanupCommandFailure } : {}),
+      };
+      process.stderr.write(JSON.stringify(diagnostic) + "\n");
+    }
     process.exitCode = 1;
   }
 }

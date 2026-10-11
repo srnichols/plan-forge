@@ -17,6 +17,12 @@ export const FIXTURE_TLS_KEY_ENV = "PFORGE_CLAW_FIXTURE_TLS_KEY";
 const DEV_OVERLAY = path.join(PACKAGE_ROOT, "deploy", "k8s", "overlays", "dev");
 const BASE_NAMESPACE = "pforge-claw";
 const DISPATCHER_NAME = "pforge-claw-dispatcher";
+const EGRESS_CONTROL_NAME = "pforge-claw-egress-control";
+const EGRESS_PROBE_NAME = "pforge-claw-egress-probe";
+const EGRESS_TARGET_NAME = "pforge-claw-egress-target";
+const PROBE_TIMEOUT_MS = 5000;
+const MIN_SUCCESS_STATUS = 200;
+const MAX_SUCCESS_STATUS = 300;
 const E2E_NAMESPACE = /^pforge-claw-e2e-[a-z0-9]([-a-z0-9]{0,45}[a-z0-9])?$/;
 const NAMESPACE_MAX_LENGTH = 63;
 export const FIXTURE_HTTP_PORT = 3190;
@@ -53,8 +59,11 @@ function imageOverride(name, image) {
   return { name, newName: image.slice(0, tagIndex), newTag };
 }
 
+function fixtureSecretEnv(name) {
+  return { name, valueFrom: { secretKeyRef: { name: FIXTURE_SECRET_NAME, key: name } } };
+}
+
 function dispatcherFixturePatch({ namespace, context }) {
-  const secretEnv = (name) => ({ name, valueFrom: { secretKeyRef: { name: FIXTURE_SECRET_NAME, key: name } } });
   return {
     target: { group: "apps", version: "v1", kind: "Deployment", name: DISPATCHER_NAME },
     patch: JSON.stringify([
@@ -63,7 +72,7 @@ function dispatcherFixturePatch({ namespace, context }) {
         { name: "PFORGE_CLAW_HOME", value: "/data" },
         { name: FIXTURE_NAMESPACE_ENV, value: namespace },
         { name: FIXTURE_CONTEXT_ENV, value: context },
-        secretEnv(FIXTURE_TLS_CERT_ENV), secretEnv(FIXTURE_TLS_KEY_ENV),
+        fixtureSecretEnv(FIXTURE_TLS_CERT_ENV), fixtureSecretEnv(FIXTURE_TLS_KEY_ENV),
       ] },
       { op: "add", path: "/spec/template/spec/containers/0/livenessProbe/httpGet/scheme", value: "HTTPS" },
       { op: "add", path: "/spec/template/spec/containers/0/readinessProbe/httpGet/scheme", value: "HTTPS" },
@@ -73,8 +82,33 @@ function dispatcherFixturePatch({ namespace, context }) {
   };
 }
 
+function dispatcherProbePatch({ namespace }) {
+  const dispatcherUrl = `https://${DISPATCHER_NAME}.${namespace}.svc:${FIXTURE_HTTP_PORT}/healthz`;
+  const negativeUrl = `http://${EGRESS_TARGET_NAME}:${FIXTURE_HTTP_PORT}/healthz`;
+  const code = [
+    'import { get } from "node:https"; import { lookup } from "node:dns/promises";',
+    `const ca = process.env.${FIXTURE_CA_ENV};`,
+    'if (!ca) throw new Error("fixture CA is required");',
+    `const signal = () => AbortSignal.timeout(${PROBE_TIMEOUT_MS});`,
+    `const status = await new Promise((resolve, reject) => { const request = get(${JSON.stringify(dispatcherUrl)}, { ca, signal: signal() }, (response) => { response.resume(); resolve(response.statusCode); }); request.once("error", reject); });`,
+    `if (!(status >= ${MIN_SUCCESS_STATUS} && status < ${MAX_SUCCESS_STATUS})) throw new Error("allowed dispatcher unavailable");`,
+    `await lookup(${JSON.stringify(EGRESS_TARGET_NAME)}); let denied = false;`,
+    `try { await fetch(${JSON.stringify(negativeUrl)}, { signal: signal() }); } catch { denied = true; }`,
+    'if (!denied) throw new Error("worker policy unexpectedly allowed the negative target");',
+    'console.log("worker policy allowed dispatcher and DNS; negative target denied");',
+  ].join(" ");
+  return {
+    target: { group: "batch", version: "v1", kind: "Job", name: EGRESS_PROBE_NAME },
+    patch: JSON.stringify([
+      { op: "replace", path: "/spec/template/spec/containers/0/command", value: ["node", "--input-type=module", "-e", code] },
+      { op: "add", path: "/spec/template/spec/containers/0/env", value: [fixtureSecretEnv(FIXTURE_CA_ENV)] },
+    ]),
+  };
+}
+
 /**
  * Pin Namespace, namespaced resources, RBAC subjects and fixture images in one Kustomize overlay.
+ * The disposable worker probe verifies dispatcher HTTPS with its fixture CA; the negative target stays HTTP.
  * @param {{namespace: string, destination: string, dispatcherImage: string, workerImage: string}} options
  * @returns {object}
  */
@@ -98,11 +132,12 @@ export function buildDevOverlay({ namespace, destination, dispatcherImage, worke
         target: { group: "rbac.authorization.k8s.io", version: "v1", kind: "RoleBinding", name: DISPATCHER_NAME },
         patch: JSON.stringify([{ op: "replace", path: "/subjects/0/namespace", value: namespace }]),
       },
-      ...["pforge-claw-egress-control", "pforge-claw-egress-probe"].map((name) => ({
+      ...[EGRESS_CONTROL_NAME, EGRESS_PROBE_NAME].map((name) => ({
         target: { group: "batch", version: "v1", kind: "Job", name },
         patch: JSON.stringify([{ op: "add", path: "/spec/suspend", value: true }]),
       })),
       dispatcherFixturePatch({ namespace, context }),
+      dispatcherProbePatch({ namespace }),
     ],
     configMapGenerator: [{ name: "pforge-claw-config", behavior: "replace", files: ["config.json"] }],
   };

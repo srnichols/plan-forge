@@ -1,16 +1,20 @@
-import { spawnSync } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { existsSync } from "node:fs";
 import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { createServer as createHttpServer } from "node:http";
+import { createServer as createHttpsServer } from "node:https";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { canonical } from "../src/protocol/lease-grant.mjs";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   buildDevOverlay, materializeDevConfig, validateE2eNamespace, writeDevOverlay,
+  FIXTURE_CA_ENV, FIXTURE_SECRET_NAME, FIXTURE_TLS_CERT_ENV, FIXTURE_TLS_KEY_ENV,
 } from "../scripts/k8s-e2e-overlay.mjs";
 import { missingFixtureContracts, runK8sE2e, verifyScenarioEvidence } from "../scripts/k8s-e2e.mjs";
 import { buildJobSpec } from "../src/lanes/k8s-job-lane.mjs";
+import { fixtureSystemEnvironment } from "./helpers/k8s-worker.mjs";
 
 const PACKAGE_ROOT = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 const TEST_ROOT = path.join(PACKAGE_ROOT, "tests");
@@ -18,7 +22,16 @@ const NAMESPACE = "pforge-claw-e2e-fixture";
 const DISPATCHER_IMAGE = "registry.example/claw/dispatcher:test";
 const WORKER_IMAGE = "registry.example/claw/worker:test";
 const PROCESS_TIMEOUT_MS = 30_000;
+const MAX_CLI_DIAGNOSTIC_BYTES = 2048;
+const COMMAND_OUTPUT_LIMIT_BYTES = 1_048_576;
+const CI_NAMESPACE = "pforge-claw-e2e-ci";
+const CI_CONTEXT = "kind-kind";
+const CI_DISPATCHER_IMAGE = "pforge-claw-k8s-fixture-dispatcher:ci";
+const CI_WORKER_IMAGE = "pforge-claw-k8s-fixture-worker:ci";
+const DISPATCHER_HOST = `pforge-claw-dispatcher.${CI_NAMESPACE}.svc`;
+const NEGATIVE_HOST = "pforge-claw-egress-target";
 const directories = [];
+const servers = [];
 
 function deployedFixture() {
   const identity = { jobId: "j1", projectId: "fixture-1", deltaId: "j1:final", sha256Total: createHash("sha256").update("fixture transfer").digest("hex") };
@@ -64,8 +77,368 @@ async function workspace() {
   return directory;
 }
 
+function renderedResource(render, kind, name) {
+  const document = render.split(/^---\s*$/m).find((entry) =>
+    entry.split("\n").includes(`kind: ${kind}`) && entry.split("\n").includes(`  name: ${name}`));
+  if (!document) throw new Error(`Rendered fixture resource missing: ${kind}/${name}`);
+  return document;
+}
+
+function renderedCommand(document) {
+  const lines = document.split("\n");
+  const start = lines.findIndex((line) => line.trim() === "- command:");
+  if (start === -1) throw new Error("Rendered fixture command missing");
+  const indent = lines[start].indexOf("-") + 2;
+  const argv = [];
+  for (const line of lines.slice(start + 1)) {
+    if (line.startsWith(" ".repeat(indent) + "- ")) argv.push(line.trim().slice(2));
+    else if (line.startsWith(" ".repeat(indent + 2))) argv[argv.length - 1] += " " + line.trim();
+    else break;
+  }
+  return argv.map((value) => {
+    if (value.startsWith("'")) return value.slice(1, -1).replace(/''/g, "'");
+    return value.startsWith('"') ? JSON.parse(value) : value;
+  });
+}
+
+function renderedSecretValue(document, key) {
+  const prefix = `  ${key}: `;
+  const lines = document.split("\n");
+  const index = lines.findIndex((entry) => entry.startsWith(prefix));
+  if (index === -1) throw new Error(`Rendered fixture Secret field missing: ${key}`);
+  let encoded = lines[index].slice(prefix.length);
+  if (/^[|>]/.test(encoded)) {
+    const chunks = [];
+    for (const line of lines.slice(index + 1)) {
+      if (!line.startsWith("    ")) break;
+      chunks.push(line.trim());
+    }
+    encoded = chunks.join("");
+  }
+  return Buffer.from(encoded, "base64").toString("utf8");
+}
+
+async function renderCiOverlay() {
+  const destination = await workspace();
+  await writeDevOverlay({
+    namespace: CI_NAMESPACE, context: CI_CONTEXT, destination,
+    dispatcherImage: CI_DISPATCHER_IMAGE, workerImage: CI_WORKER_IMAGE,
+  });
+  const render = spawnSync("kubectl", ["kustomize", destination], { encoding: "utf8", timeout: PROCESS_TIMEOUT_MS });
+  expect(render.error).toBeUndefined();
+  expect(render.status).toBe(0);
+  return render.stdout;
+}
+
+async function controlledProbeEdge(render, status = 200) {
+  const secret = renderedResource(render, "Secret", FIXTURE_SECRET_NAME);
+  const requests = { secure: 0, plain: 0 };
+  const secure = createHttpsServer({
+    cert: renderedSecretValue(secret, FIXTURE_TLS_CERT_ENV),
+    key: renderedSecretValue(secret, FIXTURE_TLS_KEY_ENV),
+  }, (_request, response) => {
+    requests.secure++;
+    response.writeHead(status);
+    response.end("trusted fixture dispatcher");
+  });
+  const plain = createHttpServer((_request, response) => {
+    requests.plain++;
+    response.writeHead(200);
+    response.end("HTTP negative-control target");
+  });
+  for (const server of [secure, plain]) {
+    servers.push(server);
+    await new Promise((resolve, reject) => {
+      server.once("error", reject);
+      server.listen(0, "127.0.0.1", resolve);
+    });
+  }
+  return {
+    ca: renderedSecretValue(secret, FIXTURE_CA_ENV), requests,
+    securePort: secure.address().port, plainPort: plain.address().port,
+  };
+}
+
+async function runRenderedCommand({ command, edge, ca, denyNegative = true }) {
+  expect(command.slice(0, 3)).toEqual(["node", "--input-type=module", "-e"]);
+  const directory = await workspace();
+  const preload = path.join(directory, "probe-network-edge.cjs");
+  await writeFile(preload, `
+const https = require("node:https");
+const dns = require("node:dns/promises");
+const { syncBuiltinESMExports } = require("node:module");
+const nativeGet = https.get;
+const nativeFetch = global.fetch;
+https.get = (url, options, callback) => {
+  const target = new URL(url);
+  if (target.protocol !== "https:" || target.hostname !== ${JSON.stringify(DISPATCHER_HOST)} || target.pathname !== "/healthz") throw new Error("Unexpected fixture HTTPS endpoint");
+  target.port = ${JSON.stringify(String(edge.securePort))};
+  return nativeGet(target, { ...options, lookup: (_host, options, callback) =>
+    options.all ? callback(null, [{ address: "127.0.0.1", family: 4 }]) : callback(null, "127.0.0.1", 4)
+  }, callback);
+};
+dns.lookup = async (host) => {
+  if (host !== ${JSON.stringify(NEGATIVE_HOST)}) throw new Error("Unexpected fixture DNS endpoint");
+  return { address: "127.0.0.1", family: 4 };
+};
+global.fetch = (url, options) => {
+  const target = new URL(url);
+  if (target.protocol !== "http:" || target.pathname !== "/healthz") throw new Error("Unexpected fixture HTTP endpoint");
+  if (target.hostname === ${JSON.stringify(NEGATIVE_HOST)}) {
+    if (${JSON.stringify(denyNegative)}) return Promise.reject(new Error("Controlled negative-target denial"));
+    target.port = ${JSON.stringify(String(edge.plainPort))};
+  } else if (["pforge-claw-dispatcher", ${JSON.stringify(DISPATCHER_HOST)}].includes(target.hostname)) {
+    target.port = ${JSON.stringify(String(edge.securePort))};
+  } else throw new Error("Unexpected fixture HTTP host");
+  target.hostname = "127.0.0.1";
+  return nativeFetch(target, options);
+};
+syncBuiltinESMExports();
+`, { mode: 0o600 });
+  const env = { ...fixtureSystemEnvironment(), NODE_OPTIONS: `--require ${JSON.stringify(preload)}` };
+  if (ca !== undefined) env[FIXTURE_CA_ENV] = ca;
+  return new Promise((resolve, reject) => {
+    const child = spawn(process.execPath, command.slice(1), {
+      cwd: PACKAGE_ROOT, env, stdio: ["ignore", "pipe", "pipe"], timeout: PROCESS_TIMEOUT_MS, windowsHide: true,
+    });
+    let stdout = "";
+    let stderr = "";
+    child.stdout.on("data", (chunk) => { stdout += chunk.toString("utf8"); });
+    child.stderr.on("data", (chunk) => { stderr += chunk.toString("utf8"); });
+    child.once("error", reject);
+    child.once("close", (status) => resolve({ status, stdout, stderr }));
+  });
+}
+
+async function failedNativeCli(failures) {
+  const directory = await workspace();
+  const preload = path.join(directory, "native-command-edge.cjs");
+  const trace = path.join(directory, "commands.jsonl");
+  await writeFile(preload, `
+const childProcess = require("node:child_process");
+const { syncBuiltinESMExports } = require("node:module");
+const { appendFileSync, writeFileSync } = require("node:fs");
+const { join } = require("node:path");
+const nativeSpawn = childProcess.spawn;
+const failures = ${JSON.stringify(failures)};
+childProcess.spawn = (command, args, options) => {
+  const offset = args[0] === "--context" ? 2 : 0;
+  const operation = command === "kind" ? "image-load" : ({
+    "get namespace": "namespace-check", "create namespace": "namespace-create",
+    "apply -k": "overlay-apply", "delete namespace": "namespace-cleanup",
+  })[args.slice(offset, offset + 2).join(" ")];
+  if (!operation || !["kubectl", "kind"].includes(command)) throw new Error("Unexpected native command");
+  appendFileSync(${JSON.stringify(trace)}, JSON.stringify(operation) + "\\n");
+  const reply = failures[operation] ?? { code: 0, stdout: "", stderr: "" };
+  if (reply.missingExecutable) return nativeSpawn(${JSON.stringify(path.join(directory, "fixture-missing-native-credential-canary"))}, [], options);
+  const replyFile = join(${JSON.stringify(directory)}, operation + ".json");
+  writeFileSync(replyFile, JSON.stringify(reply), { mode: 0o600 });
+  return nativeSpawn(process.execPath, ["-e",
+    "const reply = JSON.parse(require('node:fs').readFileSync(process.argv[1], 'utf8')); process.stdout.write(reply.stdout); process.stderr.write(reply.stderr); process.exitCode = reply.code;",
+    replyFile,
+  ], { ...options, env: { ...process.env, NODE_OPTIONS: "" } });
+};
+syncBuiltinESMExports();
+`);
+  const execution = spawnSync(process.execPath, [
+    path.join(PACKAGE_ROOT, "scripts", "k8s-e2e.mjs"),
+    "--namespace", CI_NAMESPACE, "--context", CI_CONTEXT,
+    "--dispatcher-fixture-image", CI_DISPATCHER_IMAGE,
+    "--worker-fixture-image", CI_WORKER_IMAGE,
+  ], {
+    cwd: PACKAGE_ROOT, encoding: "utf8", timeout: PROCESS_TIMEOUT_MS,
+    env: { ...process.env, NODE_OPTIONS: `--require ${JSON.stringify(preload)}` },
+  });
+  expect(execution.error).toBeUndefined();
+  expect(execution.status).toBe(1);
+  expect(execution.stdout).toBe("");
+  return {
+    stderr: execution.stderr,
+    commands: (await readFile(trace, "utf8")).trim().split("\n").map((line) => JSON.parse(line)),
+  };
+}
+
 afterEach(async () => {
+  await Promise.all(servers.splice(0).map((server) => {
+    server.closeAllConnections();
+    return new Promise((resolve) => server.close(resolve));
+  }));
   await Promise.all(directories.splice(0).map((directory) => rm(directory, { recursive: true, force: true })));
+});
+
+describe("generated Kubernetes probe trusted HTTPS contract", () => {
+  it("renders CA-trusted dispatcher HTTPS while preserving the HTTP control and default deny", async () => {
+    const render = await renderCiOverlay();
+    const probe = renderedResource(render, "Job", "pforge-claw-egress-probe");
+    const control = renderedResource(render, "Job", "pforge-claw-egress-control");
+    const dispatcher = renderedResource(render, "Deployment", "pforge-claw-dispatcher");
+    const deny = renderedResource(render, "NetworkPolicy", "pforge-claw-jobs-default-deny");
+    const code = renderedCommand(probe).at(-1);
+    expect(dispatcher).toContain("scheme: HTTPS");
+    expect(code).toContain(`https://${DISPATCHER_HOST}:3190/healthz`);
+    expect(code).toContain(FIXTURE_CA_ENV);
+    expect(probe).toMatch(new RegExp(`- name: ${FIXTURE_CA_ENV}\\n\\s+valueFrom:\\n\\s+secretKeyRef:\\n\\s+key: ${FIXTURE_CA_ENV}\\n\\s+name: ${FIXTURE_SECRET_NAME}`));
+    expect(Boolean(renderedSecretValue(renderedResource(render, "Secret", FIXTURE_SECRET_NAME), FIXTURE_CA_ENV))).toBe(true);
+    expect(code).toContain(`http://${NEGATIVE_HOST}:3190/healthz`);
+    expect(renderedCommand(control).at(-1)).toContain(`http://${NEGATIVE_HOST}:3190/healthz`);
+    expect(control).not.toContain("pforge-claw/role: job");
+    expect(deny).toMatch(/egress:\s*\[\]/);
+    expect(deny).toMatch(/ingress:\s*\[\]/);
+    expect(probe).toContain("pforge-claw/role: job");
+    expect(code).not.toMatch(/NODE_TLS_REJECT_UNAUTHORIZED|NODE_EXTRA_CA_CERTS|rejectUnauthorized:\s*false/);
+  });
+
+  it("executes the rendered control over HTTP and the rendered probe over genuinely trusted TLS", async () => {
+    const render = await renderCiOverlay();
+    const edge = await controlledProbeEdge(render);
+    const control = await runRenderedCommand({
+      command: renderedCommand(renderedResource(render, "Job", "pforge-claw-egress-control")),
+      edge, denyNegative: false,
+    });
+    expect(control.status).toBe(0);
+    expect(edge.requests.plain).toBe(1);
+    const probe = await runRenderedCommand({
+      command: renderedCommand(renderedResource(render, "Job", "pforge-claw-egress-probe")),
+      edge, ca: edge.ca,
+    });
+    expect(probe.status).toBe(0);
+    expect(edge.requests).toEqual({ secure: 1, plain: 1 });
+    expect(probe.stdout).toContain("negative target denied");
+  });
+
+  it.each(["missing", "wrong"])("fails closed with %s CA rather than counting TLS failure as denial", async (kind) => {
+    const render = await renderCiOverlay();
+    const edge = await controlledProbeEdge(render);
+    const { generateFixtureTls } = await import("./helpers/k8s-fixture-tls.mjs");
+    const ca = kind === "wrong" ? (await generateFixtureTls(CI_NAMESPACE)).ca : undefined;
+    const probe = await runRenderedCommand({
+      command: renderedCommand(renderedResource(render, "Job", "pforge-claw-egress-probe")), edge, ca,
+    });
+    expect(probe.status).not.toBe(0);
+    expect(probe.stdout).toBe("");
+    expect(edge.requests).toEqual({ secure: 0, plain: 0 });
+  });
+
+  it("rejects a reachable HTTP negative target after verified dispatcher TLS", async () => {
+    const render = await renderCiOverlay();
+    const edge = await controlledProbeEdge(render);
+    const probe = await runRenderedCommand({
+      command: renderedCommand(renderedResource(render, "Job", "pforge-claw-egress-probe")),
+      edge, ca: edge.ca, denyNegative: false,
+    });
+    expect(probe.status).not.toBe(0);
+    expect(probe.stdout).toBe("");
+    expect(edge.requests).toEqual({ secure: 1, plain: 1 });
+  });
+
+  it("rejects an unavailable HTTPS dispatcher before the negative-target check", async () => {
+    const render = await renderCiOverlay();
+    const edge = await controlledProbeEdge(render, 503);
+    const probe = await runRenderedCommand({
+      command: renderedCommand(renderedResource(render, "Job", "pforge-claw-egress-probe")), edge, ca: edge.ca,
+    });
+    expect(probe.status).not.toBe(0);
+    expect(probe.stdout).toBe("");
+    expect(edge.requests).toEqual({ secure: 1, plain: 0 });
+  });
+});
+
+describe("hosted Kubernetes command failure diagnostics", () => {
+  const canary = "fixture-native-command-credential-canary";
+  const applyFailure = {
+    code: 23, stdout: canary,
+    stderr: `Error from server (Invalid): error when creating generated Secret: {"data":{"token":"${canary}"}}\n`,
+  };
+
+  it("identifies the failing kind image-load command and exit without exposing native output", async () => {
+    const execution = await failedNativeCli({
+      "image-load": {
+        code: 17, stdout: canary,
+        stderr: `ERROR: image: "${canary}" not present locally\n`,
+      },
+    });
+    expect(execution.commands).toEqual(["namespace-check", "image-load"]);
+    expect(execution.stderr).toContain("e2e-k8s: K8S_E2E_COMMAND_FAILED\n");
+    expect(execution.stderr).toContain('"command":"kind"');
+    expect(execution.stderr).not.toContain(canary);
+    const diagnostic = JSON.parse(execution.stderr.trim().split("\n").at(-1));
+    expect(diagnostic).toMatchObject({
+      command: "kind", operation: "load", exitCode: 17, signal: null, stderrHint: "IMAGE_NOT_LOCAL",
+      args: ["load", "docker-image", "<redacted>", "<redacted>", "--name", "<redacted>"],
+    });
+    expect(diagnostic).not.toHaveProperty("stderr");
+  });
+
+  it("identifies failed kubectl apply without printing the generated Secret body", async () => {
+    const execution = await failedNativeCli({ "overlay-apply": applyFailure });
+    expect(execution.commands).toEqual([
+      "namespace-check", "image-load", "namespace-create", "overlay-apply", "namespace-cleanup",
+    ]);
+    expect(execution.stderr).toContain('"command":"kubectl"');
+    expect(execution.stderr).not.toContain(canary);
+    expect(execution.stderr).not.toContain('"data"');
+    const diagnostic = JSON.parse(execution.stderr.trim().split("\n").at(-1));
+    expect(diagnostic).toMatchObject({
+      command: "kubectl", operation: "apply", exitCode: 23, signal: null, stderrHint: "API_RESOURCE_REJECTED",
+      args: ["--context", "<redacted>", "apply", "-k", "<redacted>"],
+    });
+    expect(Buffer.byteLength(execution.stderr)).toBeLessThanOrEqual(MAX_CLI_DIAGNOSTIC_BYTES);
+  });
+
+  it("preserves the first apply failure when namespace cleanup also fails", async () => {
+    const execution = await failedNativeCli({
+      "overlay-apply": applyFailure,
+      "namespace-cleanup": {
+        code: 31, stdout: canary, stderr: `Error from server (Forbidden): ${canary}\n`,
+      },
+    });
+    expect(execution.commands.at(-1)).toBe("namespace-cleanup");
+    expect(execution.stderr).toContain('"operation":"apply"');
+    expect(execution.stderr).not.toContain(canary);
+    const diagnostic = JSON.parse(execution.stderr.trim().split("\n").at(-1));
+    expect(diagnostic).toMatchObject({
+      command: "kubectl", operation: "apply", exitCode: 23,
+      cleanupFailure: { command: "kubectl", operation: "delete", exitCode: 31, stderrHint: "API_ACCESS_DENIED" },
+    });
+    expect(Buffer.byteLength(execution.stderr)).toBeLessThanOrEqual(MAX_CLI_DIAGNOSTIC_BYTES);
+  });
+
+  it("bounds and suppresses unrecognized native stderr instead of echoing credential text", async () => {
+    const execution = await failedNativeCli({
+      "image-load": { code: 17, stdout: canary, stderr: `${canary}\n`.repeat(500) },
+    });
+    expect(execution.stderr).not.toContain(canary);
+    const diagnostic = JSON.parse(execution.stderr.trim().split("\n").at(-1));
+    expect(diagnostic).toMatchObject({
+      command: "kind", exitCode: 17, stderrHint: "STDERR_SUPPRESSED", stderrTruncated: true,
+    });
+    expect(diagnostic).not.toHaveProperty("stderr");
+    expect(Buffer.byteLength(execution.stderr)).toBeLessThanOrEqual(MAX_CLI_DIAGNOSTIC_BYTES);
+  });
+
+  it("reports an output-limit failure without exposing stdout or inventing a native exit code", async () => {
+    const execution = await failedNativeCli({
+      "image-load": { code: 17, stdout: canary + "x".repeat(COMMAND_OUTPUT_LIMIT_BYTES), stderr: "" },
+    });
+    expect(execution.stderr).toContain("e2e-k8s: K8S_E2E_OUTPUT_LIMIT\n");
+    expect(execution.stderr).not.toContain(canary);
+    const diagnostic = JSON.parse(execution.stderr.trim().split("\n").at(-1));
+    expect(diagnostic).toMatchObject({ command: "kind", operation: "load", exitCode: null, signal: null });
+    expect(diagnostic).not.toHaveProperty("stdout");
+    expect(Buffer.byteLength(execution.stderr)).toBeLessThanOrEqual(MAX_CLI_DIAGNOSTIC_BYTES);
+  });
+
+  it("identifies an unavailable native executable without leaking its host path", async () => {
+    const execution = await failedNativeCli({ "namespace-check": { missingExecutable: true } });
+    expect(execution.commands).toEqual(["namespace-check"]);
+    expect(execution.stderr).toContain("e2e-k8s: K8S_E2E_COMMAND_UNAVAILABLE\n");
+    expect(execution.stderr).not.toContain("fixture-missing-native-credential-canary");
+    const diagnostic = JSON.parse(execution.stderr.trim().split("\n").at(-1));
+    expect(diagnostic).toMatchObject({
+      command: "kubectl", operation: "get", exitCode: null, signal: null, stderrHint: "COMMAND_NOT_FOUND",
+    });
+    expect(Buffer.byteLength(execution.stderr)).toBeLessThanOrEqual(MAX_CLI_DIAGNOSTIC_BYTES);
+  });
 });
 
 describe("isolated Kubernetes gate rendering", () => {

@@ -411,8 +411,9 @@ describe("native owned process settlement", () => {
       independentActorStillAlive: await nativeAlive(actorPid),
       code: completed.code, settlement: completed.settlement,
     };
-    await writeFile(path.resolve("..", ".forge", "audit", "pforge-claw-native-scope-independent-actor.json"),
-      JSON.stringify(evidence, null, 2));
+    const evidenceFile = path.resolve("..", ".forge", "audit", "pforge-claw-native-scope-independent-actor.json");
+    await mkdir(path.dirname(evidenceFile), { recursive: true });
+    await writeFile(evidenceFile, JSON.stringify(evidence, null, 2));
     expect(completed.code).toBe(0);
     expect(completed.stdout).toBe("owned complete");
     expect(completed.settlementConfirmed, JSON.stringify(completed.settlement)).toBe(true);

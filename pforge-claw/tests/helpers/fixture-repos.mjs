@@ -6,7 +6,9 @@ import { createFakeGh } from "./fake-pforge.mjs";
 import { createExecutionHome } from "./execution-evidence.mjs";
 
 const HELPER_DIR = path.dirname(fileURLToPath(import.meta.url));
-const FAKE_MCP = path.join(HELPER_DIR, "fake-project-mcp.mjs");
+const FAKE_MCP = new URL("./fake-project-mcp.mjs", import.meta.url).href;
+const FIXTURE_MCP_ENTRY = "fixture-project-mcp.mjs";
+const FIXTURE_MCP_LOG = "fixture-mcp-calls.jsonl";
 
 async function removeWithRetry(target) {
   for (let attempt = 0; ; attempt += 1) {
@@ -70,7 +72,7 @@ export async function createFixtureRepos(count = 3, {
       const id = `fixture-${index}`;
       const originPath = path.join(root, `${id}-origin.git`);
       const repoPath = path.join(root, id);
-      const logPath = path.join(root, `${id}-mcp-calls.jsonl`);
+      const logPath = path.join(repoPath, ".forge", FIXTURE_MCP_LOG);
       ownedPaths.push(originPath, repoPath, logPath);
       await runGit(["init", "--bare", "--initial-branch=main", originPath]);
       await runGit(["clone", originPath, repoPath]);
@@ -79,13 +81,15 @@ export async function createFixtureRepos(count = 3, {
       await runGit(["config", "user.email", `fixture-${index}@example.com`], { cwd: repoPath });
       await mkdir(path.join(repoPath, "docs", "plans"), { recursive: true });
       await mkdir(path.join(repoPath, ".vscode"), { recursive: true });
+      await mkdir(path.join(repoPath, ".forge"), { recursive: true });
+      await writeFile(path.join(repoPath, FIXTURE_MCP_ENTRY), `import ${JSON.stringify(FAKE_MCP)};\n`);
       await writeFile(path.join(repoPath, "docs", "plans", "Phase-1-DEMO-PLAN.md"),
         `# Fixture plan ${index}\n\n## Slices\n\n### Slice 1 - Fixture source\n\nWrite the deterministic project source.\n`);
       await writeFile(path.join(repoPath, ".vscode", "mcp.json"), JSON.stringify({
         servers: {
           "plan-forge": {
             command: process.execPath,
-            args: [FAKE_MCP, "--log", logPath],
+            args: [`./${FIXTURE_MCP_ENTRY}`, "--log", `\${workspaceFolder}/.forge/${FIXTURE_MCP_LOG}`],
           },
         },
       }, null, 2));
@@ -97,7 +101,7 @@ export async function createFixtureRepos(count = 3, {
         await writeFile(path.join(repoPath, "docs", "plans", "Phase-2-FIXTURE-PLAN.md"),
           "# Fixture plan\n\n## Slices\n\n### Slice 1 - Fixture validation\n\nVerify the fixture repository.\n");
       }
-      await runGit(["add", "docs/plans/Phase-1-DEMO-PLAN.md", ".vscode/mcp.json"], { cwd: repoPath });
+      await runGit(["add", "docs/plans/Phase-1-DEMO-PLAN.md", ".vscode/mcp.json", FIXTURE_MCP_ENTRY], { cwd: repoPath });
       if (withForge) {
         await runGit(["add", ".gitignore", ".forge.json", ".forge/fm-prefs.json", "docs/plans/Phase-2-FIXTURE-PLAN.md"], { cwd: repoPath });
       }

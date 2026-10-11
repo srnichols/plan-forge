@@ -5,19 +5,30 @@ import { addWorktree, removeWorktree, run } from "./worktree.mjs";
 import { applyCopySet, bootstrapWorktree, collectCopySet } from "./bootstrap.mjs";
 import { computeDelta, snapshotForge } from "../memory/l2-sync.mjs";
 
-export function createLeaseJobSource(job) {
+/**
+ * Lease-local state never authorizes a stale attempt when trusted authority is supplied.
+ * @param {object} job Verified leased job.
+ * @param {{currentLease?: () => object | null, isCurrent?: () => boolean}} options
+ */
+export function createLeaseJobSource(job, { currentLease = () => job, isCurrent = () => true } = {}) {
   let current = {
     ...job, state: "leased",
     readOnly: job.type === "skill" && job.mutating === false,
     description: job.prompt ?? job.description,
     planPath: job.plan ?? job.planPath,
   };
+  const scopedJob = () => {
+    const lease = currentLease();
+    return lease && isCurrent() ? { ...current, leaseGrant: lease.leaseGrant } : null;
+  };
   return {
-    get: (id) => id === current.id ? current : null,
+    get: (id) => id === current.id ? scopedJob() : null,
     append(expected, state, meta = {}) {
       if (expected.id !== current.id) throw new ClawError("JOB_UNKNOWN");
+      const scoped = scopedJob();
+      if (!scoped) throw new ClawError("JOB_CANCELLED");
       if (expected.state !== current.state) throw new ClawError("JOB_REPLAY_MISMATCH");
-      const updated = transition(current, state, meta);
+      const updated = transition(scoped, state, meta);
       current = updated.job;
       return updated;
     },

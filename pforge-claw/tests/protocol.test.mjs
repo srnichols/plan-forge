@@ -8,12 +8,16 @@ import { WebSocket } from "ws";
 import { ClawError } from "../src/errors.mjs";
 import { assertTransport, backoffDelay, connectForever, mac, verifyMac } from "../src/protocol/auth.mjs";
 import { createEnrollment } from "../src/protocol/enrollment.mjs";
-import { decode, encode, MAX_FRAME_BYTES, message } from "../src/protocol/messages.mjs";
+import { decode, encode, MAX_FRAME_BYTES, message, PUBLICATION_FENCE_VERSION } from "../src/protocol/messages.mjs";
 import { createWorkerRegistry } from "../src/protocol/worker-registry.mjs";
 import { createWorkerServer } from "../src/protocol/ws-server.mjs";
 import { createHttpServer } from "../src/http.mjs";
-import { buildLeaseGrant, signGrant, verifyGrant } from "../src/protocol/lease-grant.mjs";
+import { signGrant, verifyGrant } from "../src/protocol/lease-grant.mjs";
+import { parseMcpBootstrap } from "../src/jobs/bootstrap-mcp.mjs";
 import { createSecrets } from "../src/secrets.mjs";
+import {
+  authenticateWorkerFixture, createWorkerFixtureTransport, prepareWorkerFixtureJob, writeWorkerFixtureMcp,
+} from "./worker-authority-fixture.mjs";
 
 const temps = [];
 const TEST_DIRECTORY = path.dirname(fileURLToPath(import.meta.url));
@@ -113,6 +117,22 @@ describe("worker protocol codecs", () => {
     ]) {
       expect(() => message("lease", { ...lease, ...changed }))
         .toThrowError(expect.objectContaining({ code: "PROTO_BAD_MESSAGE" }));
+    }
+  });
+
+  it("rejects mistyped publication negotiation instead of treating truthy values as authority", () => {
+    for (const packet of [
+      { mode: "auth", workerId: "w1", laneId: "remote", capabilities },
+      { mode: "job", laneId: "pods", jobId: "j1" },
+    ]) {
+      expect(message("hello", { ...packet, publicationFence: PUBLICATION_FENCE_VERSION }).publicationFence)
+        .toBe(PUBLICATION_FENCE_VERSION);
+      for (const publicationFence of [true, false, null, 0, 2, "1", {}, []]) {
+        expect(() => message("hello", { ...packet, publicationFence }))
+          .toThrowError(expect.objectContaining({ code: "PROTO_BAD_MESSAGE" }));
+        expect(() => message("ready", { leaseMs: 60_000, heartbeatMs: 15_000, publicationFence }))
+          .toThrowError(expect.objectContaining({ code: "PROTO_BAD_MESSAGE" }));
+      }
     }
   });
 });
@@ -375,35 +395,112 @@ describe("worker WebSocket handshake", () => {
 });
 
 describe("job-scope lease boundaries", () => {
-  it("job-scoped workers are never given read leases", () => {
-    const sent = [];
+  it("job-scoped workers are never given read leases", async () => {
+    const root = await tempDirectory();
+    const key = "fixture-job-scope-key";
     const registry = createWorkerRegistry({ now: () => 0 });
+    const transport = await createWorkerFixtureTransport({
+      root, registry, jobLanes: ["pods"], jobKeyFor: () => key,
+    });
     registry.registerPending("pods", "j1", { deadlineMs: 60_000 });
-    registry.connect("job:j1", { laneId: "pods", jobScope: { laneId: "pods", jobId: "j1" }, send: (packet) => sent.push(packet) });
-    registry.enqueue("pods", { kind: "read", request: { tool: "claw.bootstrap.copySet", args: {} } });
-    registry.enqueue("pods", { kind: "job", job: { id: "j2", projectId: "p1" } });
-    expect(sent).toEqual([]);
-    registry.close();
+    const peer = await authenticateWorkerFixture({
+      url: transport.url, workerId: "job:j1", laneId: "pods", jobId: "j1", key,
+    });
+    try {
+      await expect.poll(() => registry.snapshot().byLane.pods?.publicationCapable).toBe(1);
+      expect(peer.received.find((packet) => packet.t === "ready").publicationFence).toBe(PUBLICATION_FENCE_VERSION);
+      registry.enqueue("pods", { kind: "read", request: { tool: "claw.bootstrap.copySet", args: {} } });
+      registry.enqueue("pods", { kind: "job", job: { id: "j2", projectId: "p1" } });
+      expect(peer.received.filter((packet) => packet.t === "lease")).toEqual([]);
+    } finally {
+      peer.client.close();
+      await transport.close();
+    }
   });
-  it("lease grants are signed per subject on each reconnect", () => {
-    const sent = [];
+
+  function fixtureConfig(root) {
+    return {
+      allowlist: [{ channel: "telegram", userId: "owner", role: "owner" }],
+      lanes: [{ id: "canonical", kind: "local" }, { id: "remote", kind: "remote" }],
+      projects: [{ id: "p1", homeLane: "canonical", repo: { path: root } }],
+    };
+  }
+
+  it("lease grants are signed per subject on each reconnect", async () => {
+    const root = await tempDirectory();
+    await writeWorkerFixtureMcp(root);
+    const config = fixtureConfig(root);
     const key = "fixture-subject-key";
-    const job = { id: "j1", projectId: "p1", type: "skill", mutating: false };
-    const grant = buildLeaseGrant({ leaseJob: job, laneId: "remote", now: 0, proof: { kind: "read-only", ref: null, decidedAt: null } });
+    const job = await prepareWorkerFixtureJob({
+      root, config, laneId: "remote",
+      job: { id: "j1", projectId: "p1", type: "skill", skill: "check", mutating: false },
+    });
     const registry = createWorkerRegistry({
       now: () => 0, signLease: ({ worker, grant: unsigned }) => signGrant({ grant: unsigned, subject: worker.id, key }),
     });
-    registry.connect("w1", { laneId: "remote", capabilities, send: (packet) => sent.push(packet) });
-    registry.enqueue("remote", { kind: "job", job: { ...job, leaseGrant: grant } });
-    registry.connect("w2", { laneId: "remote", capabilities, send: (packet) => sent.push(packet) });
-    registry.disconnect("w1");
-    const leases = sent.filter((packet) => packet.t === "lease");
-    expect(leases.map((lease) => lease.grant.subject)).toEqual(["w1", "w2"]);
-    for (const lease of leases) {
-      expect(lease.job).not.toHaveProperty("leaseGrant");
-      expect(verifyGrant({ grant: lease.grant, job: lease.job, subject: lease.grant.subject, laneId: "remote", key, now: 1 })).toBe(true);
+    const transport = await createWorkerFixtureTransport({ root, registry, lanes: ["remote"] });
+    const peers = [];
+    try {
+      for (const workerId of ["w1", "w2"]) {
+        await transport.enrollment.register({ workerId, laneId: "remote", secret: key });
+        peers.push(await authenticateWorkerFixture({ url: transport.url, workerId, laneId: "remote", key, capabilities }));
+        if (workerId === "w1") registry.enqueue("remote", { kind: "job", job });
+      }
+      await expect.poll(() => peers[0].received.filter((packet) => packet.t === "lease").length).toBe(1);
+      peers[0].client.close();
+      await expect.poll(() => peers[1].received.filter((packet) => packet.t === "lease").length).toBe(1);
+      const leases = peers.flatMap((peer) => peer.received.filter((packet) => packet.t === "lease"));
+      expect(leases.map((lease) => lease.grant.subject)).toEqual(["w1", "w2"]);
+      expect(leases.map((lease) => lease.attempt)).toEqual([1, 2]);
+      for (const lease of leases) {
+        expect(lease.job).not.toHaveProperty("leaseGrant");
+        expect(lease.grant).toMatchObject({ leaseId: lease.leaseId, attempt: lease.attempt });
+        expect(parseMcpBootstrap(lease.job.mcpBootstrap)).toEqual(job.mcpBootstrap);
+        expect(verifyGrant({ grant: lease.grant, job: lease.job, subject: lease.grant.subject, laneId: "remote", key, now: 1 })).toBe(true);
+        expect(() => verifyGrant({
+          grant: lease.grant, job: { ...lease.job, mcpBootstrap: { ...lease.job.mcpBootstrap, args: ["changed.mjs"] } },
+          subject: lease.grant.subject, laneId: "remote", key, now: 1,
+        })).toThrowError(expect.objectContaining({ code: "LEASE_GRANT_INVALID" }));
+        for (const changed of [{ args: "entry.mjs" }, { env: null }, { v: true }]) {
+          expect(() => parseMcpBootstrap({ ...lease.job.mcpBootstrap, ...changed }))
+            .toThrowError(expect.objectContaining({ code: "MCP_BOOTSTRAP_INVALID" }));
+        }
+      }
+    } finally {
+      for (const peer of peers) peer.client.close();
+      await transport.close();
     }
-    registry.close();
+  });
+
+  it("keeps authenticated legacy workers read-only even with a valid signed job queued", async () => {
+    const root = await tempDirectory();
+    await writeWorkerFixtureMcp(root);
+    const config = fixtureConfig(root);
+    const key = "fixture-legacy-key";
+    const job = await prepareWorkerFixtureJob({
+      root, config, laneId: "remote",
+      job: { id: "j1", projectId: "p1", type: "skill", skill: "check", mutating: false },
+    });
+    const registry = createWorkerRegistry({
+      signLease: ({ worker, grant }) => signGrant({ grant, subject: worker.id, key }),
+    });
+    const transport = await createWorkerFixtureTransport({ root, registry, lanes: ["remote"] });
+    await transport.enrollment.register({ workerId: "legacy", laneId: "remote", secret: key });
+    const peer = await authenticateWorkerFixture({
+      url: transport.url, workerId: "legacy", laneId: "remote", key, capabilities, legacy: true,
+    });
+    try {
+      await expect.poll(() => registry.snapshot().byLane.remote?.connected).toBe(1);
+      expect(peer.received.find((packet) => packet.t === "ready")).not.toHaveProperty("publicationFence");
+      registry.enqueue("remote", { kind: "read", request: { tool: "forge_search", args: {} } });
+      registry.enqueue("remote", { kind: "job", job });
+      await expect.poll(() => peer.received.filter((packet) => packet.t === "lease").length).toBe(1);
+      expect(peer.received.filter((packet) => packet.t === "lease").map((packet) => packet.kind)).toEqual(["read"]);
+      expect(registry.snapshot().byLane.remote.publicationCapable).toBe(0);
+    } finally {
+      peer.client.close();
+      await transport.close();
+    }
   });
   it("bounds outbound frames and rejects a grant on a read lease", () => {
     expect(() => encode(message("lease", {

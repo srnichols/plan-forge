@@ -20,6 +20,7 @@ import { createRouter } from "../src/router.mjs";
 import { resolveRuntimeId } from "../src/runtime/agent-runtime.mjs";
 import { createSecrets } from "../src/secrets.mjs";
 import { createStore } from "../src/state/store.mjs";
+import { CANONICAL_MCP_BOOTSTRAP, seedCanonicalMcpConfig } from "./helpers/canonical-mcp-bootstrap-fixture.mjs";
 
 const PARENT_ID = "abcdef0123456789abcdef01";
 const FIXTURE_TIME = "2026-10-10T17:00:00.000Z";
@@ -46,6 +47,7 @@ async function recoveryFixture({
   await mkdir(root, { recursive: true });
   const fixture = { root, servicesToStop: [], unbinders: [] };
   fixtures.push(fixture);
+  await seedCanonicalMcpConfig(root);
   const caller = { channel: "telegram", userId: "fixture-caller", role };
   const project = {
     id: "fixture-project", homeLane: "fixture-lane", runtime,
@@ -495,6 +497,7 @@ describe("retry/recovery current-contract governance", () => {
       chatId: recovered.job.chatId, threadId: recovered.job.threadId,
     })).toMatchObject({ ok: true, jobId: recovered.jobId });
     const prepared = await prepareLease(currentJobs(f.store)[recovered.jobId]);
+    expect(prepared.mcpBootstrap).toEqual(CANONICAL_MCP_BOOTSTRAP);
     expect(prepared).toMatchObject({
       quorum: "power", resumeFrom: 3, runtime: "copilot-sdk",
       project: { models: { work: "fixture-approved-model" } },

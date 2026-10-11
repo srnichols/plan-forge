@@ -1,19 +1,19 @@
-import { spawn } from "node:child_process";
 import { readFile, readdir, stat } from "node:fs/promises";
 import { createHash } from "node:crypto";
 import path from "node:path";
 import { ClawError } from "../errors.mjs";
 import { QUORUM_MODES } from "./approval-proof.mjs";
-import { isInside, resolveCommand, resolvePforgeCommand } from "./worktree.mjs";
+import { isInside, resolveCommand, resolvePforgeCommand, run } from "./worktree.mjs";
 import { assertJobActive, PLAN_ACTUALS_UNCONFIRMED, PLAN_RUN_ID } from "./runner-lifecycle.mjs";
 import { createPlanProgress, PLAN_PROGRESS_ERRORS } from "./plan-progress.mjs";
+import { NATIVE_SCOPE_ERRORS } from "./native-command-supervisor.mjs";
 
-const OUTPUT_LIMIT = 8 * 1024;
+const OUTPUT_LIMIT = 8192;
 const ABORT_TIMEOUT_MS = 5_000;
 const POLL_TIMEOUT_MS = 10_000;
 const POLL_INTERVAL_MS = 1_000;
 const MAX_RUN_SUMMARIES = 256;
-const MAX_SUMMARY_BYTES = 256 * 1024;
+const MAX_SUMMARY_BYTES = 262144;
 
 export const PLAN_ACTUALS_ERRORS = Object.freeze({
   UNCONFIRMED: PLAN_ACTUALS_UNCONFIRMED,
@@ -25,14 +25,6 @@ export const PLAN_ACTUALS_ERRORS = Object.freeze({
 function safeText(value, secrets) {
   const text = String(value ?? "").slice(0, OUTPUT_LIMIT);
   return typeof secrets?.redact === "function" ? secrets.redact(text) : text;
-}
-
-function appendOutput(current, chunk, other) {
-  const remaining = OUTPUT_LIMIT - Buffer.byteLength(current) - Buffer.byteLength(other);
-  if (remaining <= 0) return current;
-  let bytes = Buffer.from(chunk).subarray(0, remaining);
-  while (bytes.length && Buffer.byteLength(bytes.toString("utf8")) > remaining) bytes = bytes.subarray(0, bytes.length - 1);
-  return current + bytes.toString("utf8");
 }
 
 async function relativePlan(worktree, input) {
@@ -129,18 +121,6 @@ async function drainPlanProgress({ client, worktree, signal, emit, progress }) {
   } catch {
     if (!signal?.aborted) emit?.("log", { level: "warn", code: PLAN_PROGRESS_ERRORS.UNAVAILABLE });
   }
-}
-
-function monitorChild(child, secrets) {
-  let stdout = "";
-  let stderr = "";
-  const completion = new Promise((resolve) => {
-    child.once("error", () => resolve({ code: -1, spawned: false }));
-    child.once("close", (code) => resolve({ code: code ?? -1, spawned: true }));
-  });
-  child.stdout?.on("data", (chunk) => { stdout = appendOutput(stdout, safeText(chunk.toString("utf8"), secrets), stderr); });
-  child.stderr?.on("data", (chunk) => { stderr = appendOutput(stderr, safeText(chunk.toString("utf8"), secrets), stdout); });
-  return { completion, output: () => ({ stdout, stderr }) };
 }
 
 async function readSummary(worktree, runId) {
@@ -260,7 +240,45 @@ export async function collectPlanActuals({ job, worktree, relativePlan, runSnaps
   } };
 }
 
-/** The shipped foreground wrapper is awaited; abort RPC and polling settle before returning. */
+async function abortForegroundPlan({ client, worktree, emit }) {
+  try {
+    await boundedCall(Promise.resolve().then(() => client.call("forge_abort", { path: worktree })), {
+      timeoutMs: ABORT_TIMEOUT_MS, code: "MCP_CALL_TIMEOUT",
+    });
+  } catch {
+    emit?.("log", { level: "error", code: "PLAN_ABORT_FAILED" });
+  }
+}
+
+async function requireForegroundTermination(abortRequest) {
+  if (!abortRequest) return;
+  const terminationError = await abortRequest;
+  if (terminationError) throw terminationError;
+}
+
+async function foregroundActuals({ ctx, job, signal, client, worktree, relative, runSnapshot, progress, completed, emit }) {
+  if (completed.code === 0) await drainPlanProgress({ client, worktree, signal, emit, progress });
+  assertJobActive({ ctx, job, signal });
+  const actuals = await collectPlanActuals({ job, worktree, relativePlan: relative, runSnapshot, client, signal });
+  assertJobActive({ ctx, job, signal });
+  if (completed.code !== 0) throw new ClawError(completed.spawned ? "PLAN_RUN_FAILED" : "PLAN_SPAWN_FAILED", {
+    exitCode: completed.code, ...actuals,
+  });
+  return actuals;
+}
+
+function requirePlanSettlement(outcome) {
+  if (outcome.settlementConfirmed === true) return;
+  const code = outcome.error instanceof ClawError ? outcome.error.code : NATIVE_SCOPE_ERRORS.UNCONFIRMED;
+  throw new ClawError(code, Number.isInteger(outcome.code) ? { exitCode: outcome.code } : {});
+}
+
+function emitNativeOutput({ outcome, emit, secrets }) {
+  if (outcome.stdout) emit?.("progress", { text: safeText(outcome.stdout, secrets) });
+  if (outcome.stderr) emit?.("log", { level: "warn", text: safeText(outcome.stderr, secrets) });
+}
+
+/** Await the owned foreground execution tree; a separate MCP abort is not settlement proof. */
 export async function runForegroundPlan({ ctx, job, worktree, env, signal, emit, client }) {
   const relative = await relativePlan(worktree, job.planPath ?? job.plan ?? job.description);
   const runSnapshot = await snapshotRunSummaries(worktree).catch(() => null);
@@ -269,37 +287,32 @@ export async function runForegroundPlan({ ctx, job, worktree, env, signal, emit,
   const args = [...prefix, ...wrapper.slice(1), "run-plan", relative, "--foreground", ...planChoices(job)];
   assertJobActive({ ctx, job, signal });
   const progress = createPlanProgress({ worktree, relativePlan: relative, startedAt: Date.now() });
-  const child = spawn(executable, args, { cwd: worktree, env, shell: false, windowsHide: true });
-  const monitored = monitorChild(child, ctx.secrets);
   const pollingController = new AbortController();
   const polling = pollProgress({ client, worktree, signal: pollingController.signal, emit, progress });
   let abortRequest;
   const onAbort = () => {
     pollingController.abort();
-    abortRequest ??= boundedCall(client.call("forge_abort", { path: worktree }), {
-      timeoutMs: ABORT_TIMEOUT_MS, code: "MCP_CALL_TIMEOUT",
-    }).catch(() => emit?.("log", { level: "error", code: "PLAN_ABORT_FAILED" }))
-      .finally(() => child.kill());
+    abortRequest ??= abortForegroundPlan({ client, worktree, emit }).then(
+      () => null, (error) => error,
+    );
   };
   signal?.addEventListener("abort", onAbort, { once: true });
   if (signal?.aborted) onAbort();
   try {
-    const completed = await monitored.completion;
-    if (abortRequest) await abortRequest;
+    const outcome = await (ctx.planRunner ?? run)(executable, args, {
+      cwd: worktree, env, signal, requireSettlement: true, maxOutput: OUTPUT_LIMIT,
+    });
+    const completed = { ...outcome, spawned: !["ENOENT", "EACCES"].includes(outcome.error?.code) };
+    await requireForegroundTermination(abortRequest);
     assertJobActive({ ctx, job, signal });
+    requirePlanSettlement(outcome);
     pollingController.abort();
     await polling;
     assertJobActive({ ctx, job, signal });
-    if (completed.code === 0) await drainPlanProgress({ client, worktree, signal, emit, progress });
-    assertJobActive({ ctx, job, signal });
-    const actuals = await collectPlanActuals({ job, worktree, relativePlan: relative, runSnapshot, client, signal });
-    assertJobActive({ ctx, job, signal });
-    if (completed.code !== 0) throw new ClawError(completed.spawned ? "PLAN_RUN_FAILED" : "PLAN_SPAWN_FAILED", {
-      exitCode: completed.code, ...actuals,
+    const actuals = await foregroundActuals({
+      ctx, job, signal, client, worktree, relative, runSnapshot, progress, completed, emit,
     });
-    const { stdout, stderr } = monitored.output();
-    if (stdout) emit?.("progress", { text: safeText(stdout, ctx.secrets) });
-    if (stderr) emit?.("log", { level: "warn", text: safeText(stderr, ctx.secrets) });
+    emitNativeOutput({ outcome, emit, secrets: ctx.secrets });
     return { status: "succeeded", ...actuals };
   } finally {
     signal?.removeEventListener("abort", onAbort);

@@ -7,8 +7,10 @@ import { createWorkerRegistry } from "../src/protocol/worker-registry.mjs";
 import { createWorkerServer } from "../src/protocol/ws-server.mjs";
 import { createHttpServer } from "../src/http.mjs";
 import { mac } from "../src/protocol/auth.mjs";
-import { decode, encode, message } from "../src/protocol/messages.mjs";
+import { decode, encode, message, PUBLICATION_FENCE_VERSION } from "../src/protocol/messages.mjs";
 import { buildLeaseGrant, deriveJobKey, signGrant, verifyGrant } from "../src/protocol/lease-grant.mjs";
+import { createEnrollment, SECRET_PREFIX } from "../src/protocol/enrollment.mjs";
+import { collectLeaseMcpBootstrap } from "../src/jobs/bootstrap-mcp.mjs";
 import { createLeasePreparer, proofFor, wrapPreparedLane } from "../src/jobs/lease-payload.mjs";
 import { createDispatcher } from "../src/dispatcher.mjs";
 import { createLaneDirectory } from "../src/lanes/directory.mjs";
@@ -21,7 +23,13 @@ import { createApprovalService } from "../src/approvals.mjs";
 import { createBudgetService } from "../src/budget.mjs";
 import { onChildTerminal, onParentApproved, onParentTerminal, prepareFanout } from "../src/crossproject.mjs";
 import { createLocalLane } from "../src/lanes/local-lane.mjs";
+import { createProjectClients } from "../src/mcp/project-client.mjs";
+import { createRegistry } from "../src/registry.mjs";
+import { createSecrets } from "../src/secrets.mjs";
 import { ROLES } from "../src/enums.mjs";
+import {
+  CANONICAL_MCP_BOOTSTRAP, expectCanonicalMcpReads, seedCanonicalMcpConfig,
+} from "./helpers/canonical-mcp-bootstrap-fixture.mjs";
 
 const cleanup = [];
 const laneSecret = "fixture-lane-secret";
@@ -37,6 +45,17 @@ afterEach(async () => {
 });
 
 async function system(jobLanes = ["pods"]) {
+  const root = await g1Directory("g1-remote-dispatch-auth-");
+  cleanup.push(() => rm(root, { recursive: true, force: true }));
+  await seedCanonicalMcpConfig(root);
+  const homeConfig = {
+    lanes: [{ id: "canonical-home", kind: "local" }],
+    projects: [{ id: "p1", homeLane: "canonical-home", repo: { path: root } }],
+  };
+  const mcpBootstrap = await collectLeaseMcpBootstrap({ project: homeConfig.projects[0], config: homeConfig });
+  const store = createStore(path.join(root, "state"));
+  store.append("enrollment", { v: 1, op: "registered", workerId: "w_remote", laneId: "remote" });
+  const secrets = await createSecrets({ env: { [`${SECRET_PREFIX}w_remote`]: workerSecret } });
   const registry = createWorkerRegistry({
     signLease: ({ worker, grant }) => signGrant({
       grant, subject: worker.id,
@@ -46,19 +65,18 @@ async function system(jobLanes = ["pods"]) {
   const http = createHttpServer({ bind: "127.0.0.1", port: 0 });
   const server = createWorkerServer({
     registry,
-    enrollment: {
-      status: (id) => id === "w_remote" ? "active" : "unknown",
-      worker: (id) => id === "w_remote" ? { status: "active", laneId: "remote" } : null,
-    },
-    secrets: { get: () => workerSecret }, allowedLanes: ["remote"], jobLanes, jobKeyFor: keyFor,
+    enrollment: createEnrollment({ store, secrets }),
+    secrets, allowedLanes: ["remote"], jobLanes, jobKeyFor: keyFor,
   });
   server.attach(http);
   const { port } = await http.listen();
   cleanup.push(async () => { server.close(); registry.close(); await http.close(); });
-  return { registry, url: `ws://127.0.0.1:${port}/claw/workers` };
+  return { registry, url: `ws://127.0.0.1:${port}/claw/workers`, mcpBootstrap };
 }
 
-async function authenticate(url, { jobId = "j1", laneId = "pods", claimId = jobId, key = keyFor(laneId, jobId) } = {}) {
+async function authenticate(url, {
+  jobId = "j1", laneId = "pods", claimId = jobId, key = keyFor(laneId, jobId), publicationFence,
+} = {}) {
   const socket = new WebSocket(url);
   const messages = [];
   const waiters = [];
@@ -71,7 +89,9 @@ async function authenticate(url, { jobId = "j1", laneId = "pods", claimId = jobI
   const closed = once(socket, "close");
   cleanup.push(() => { socket.terminate(); });
   await once(socket, "open");
-  socket.send(encode(message("hello", { mode: "job", laneId, jobId })));
+  socket.send(encode(message("hello", {
+    mode: "job", laneId, jobId, ...(publicationFence === undefined ? {} : { publicationFence }),
+  })));
   const challenge = await next();
   socket.send(encode(message("auth", { workerId: `job:${claimId}`, mac: mac(key, challenge.nonce, `job:${claimId}`) })));
   return { socket, next, closed };
@@ -99,18 +119,20 @@ describe("job-scoped remote dispatch", () => {
     expect(await client.next()).toMatchObject({ reason: "WORKER_JOB_UNKNOWN" });
   });
   it("lets two job-scoped workers run in parallel and settles each exactly once", async () => {
-    const { registry, url } = await system();
+    const { registry, url, mcpBootstrap } = await system();
     const streams = [];
     for (const id of ["j1", "j2"]) {
-      const payload = job(id);
+      const payload = { ...job(id), mcpBootstrap };
       registry.registerPending("pods", id, { deadlineMs: Date.now() + 60_000 });
       streams.push(registry.enqueue("pods", { kind: "job", job: { ...payload, leaseGrant: grantFor(payload) } }).iterator);
     }
     const leases = [];
     for (const id of ["j1", "j2"]) {
-      const client = await authenticate(url, { jobId: id });
+      const client = await authenticate(url, { jobId: id, publicationFence: PUBLICATION_FENCE_VERSION });
       expect(await client.next()).toMatchObject({ t: "ready" });
+      expect(registry.snapshot().byLane.pods.publicationCapable).toBe(leases.length + 1);
       const lease = await client.next();
+      expect(lease.job.mcpBootstrap).toEqual(CANONICAL_MCP_BOOTSTRAP);
       verifyGrant({ grant: lease.grant, job: lease.job, subject: `job:${id}`, laneId: "pods", key: keyFor("pods", id) });
       leases.push(lease);
       client.socket.send(encode(message("event", {
@@ -137,6 +159,7 @@ describe("job-scoped remote dispatch", () => {
     await writeFile(path.join(root, ".forge.json"), "{}");
     await writeFile(path.join(root, ".forge", "fm-prefs.json"), "{}");
     await writeFile(path.join(root, ".forge", "secrets.json"), "fixture-private-secret");
+    await seedCanonicalMcpConfig(root);
     const store = createStore(path.join(root, "state"));
     const unlock = store.lock();
     cleanup.push(unlock);
@@ -157,6 +180,7 @@ describe("job-scoped remote dispatch", () => {
     store.append("jobs", { ...created.event, job: stored });
     const original = { ...stored, channel: { chatId: 1 } };
     const payload = await prepare(original);
+    expect(payload.mcpBootstrap).toEqual(CANONICAL_MCP_BOOTSTRAP);
     expect(payload.bootstrapFiles.map((file) => file.path)).toEqual([".forge.json", ".forge/fm-prefs.json"]);
     for (const field of ["callerId", "chatId", "threadId", "channel"]) expect(payload).not.toHaveProperty(field);
     expect(JSON.stringify(payload)).not.toContain("fixture-private-secret");
@@ -203,6 +227,7 @@ describe("job-scoped remote dispatch", () => {
     async (kind) => {
       const root = await g1Directory("g1-proof-parity-");
       cleanup.push(() => rm(root, { recursive: true, force: true }));
+      await seedCanonicalMcpConfig(root);
       const store = createStore(root);
       const config = {
         lanes: [{ id: "remote", kind: "remote" }],
@@ -249,12 +274,21 @@ describe("job-scoped remote dispatch", () => {
       else expect(proofFor(ctx, currentJobs(store)[jobId]).kind).toBe(kind);
       const { registry, url } = await system();
       const received = [];
+      const mcpReads = [];
+      const homeClients = createProjectClients({
+        config, registry: createRegistry(config), currentLaneId: "remote", env: {},
+      });
+      cleanup.push(() => homeClients.closeAll());
       const agent = createWorkerAgent({
         url, workerId: "w_remote", secret: workerSecret, laneId: "remote",
         capabilities: { os: "linux", arch: "x64", macos: false, toolchains: [], projects: ["p1"] },
         verifyLease: (leased) => {
           const { leaseGrant, ...plain } = leased;
           verifyGrant({ grant: leaseGrant, job: plain, subject: "w_remote", laneId: "remote", key: workerSecret });
+        },
+        readHandler(request, options) {
+          mcpReads.push(request);
+          return homeClients.call(request.projectId, request.tool, request.args, options);
         },
         localLane: createLocalLane({
           runtime: { run: async (leased) => {
@@ -263,9 +297,10 @@ describe("job-scoped remote dispatch", () => {
           } },
         }),
       });
-      cleanup.push(() => agent.stop());
+      cleanup.push(async () => { agent.stop(); await agent.drain(); });
       agent.start();
       await expect.poll(() => registry.snapshot().byLane.remote?.connected).toBe(1);
+      await expect.poll(() => registry.snapshot().byLane.remote?.publicationCapable).toBe(1);
       const directory = createLaneDirectory();
       directory.configure(config.lanes);
       directory.register(wrapPreparedLane(createRemoteLane({ id: "remote", registry }),
@@ -276,10 +311,13 @@ describe("job-scoped remote dispatch", () => {
       if (kind === "missing") {
         expect(currentJobs(store)[jobId].state).toBe("approved");
         expect(received).toEqual([]);
+        expect(mcpReads).toEqual([]);
       } else {
         await expect.poll(() => currentJobs(store)[jobId].state).toBe("succeeded");
         expect(received).toHaveLength(1);
         expect(received[0].leaseGrant.approval.kind).toBe(kind);
+        expect(received[0].mcpBootstrap).toEqual(CANONICAL_MCP_BOOTSTRAP);
+        expectCanonicalMcpReads({ reads: mcpReads, projectId: "p1" });
         expect(received[0]).not.toHaveProperty("callerId");
         const transitions = [...store.read("jobs")].filter(({ record }) => record.to === "succeeded");
         expect(transitions.filter(({ record }) => record.jobId === jobId)).toHaveLength(1);

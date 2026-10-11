@@ -2,7 +2,7 @@ import { EventEmitter } from "node:events";
 import { access, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { createLeaseExecution, leasedJob } from "../src/cli/worker.mjs";
 import { buildLeaseGrant, signGrant } from "../src/protocol/lease-grant.mjs";
 import { createSecrets } from "../src/secrets.mjs";
@@ -10,6 +10,13 @@ import { createAgentRuntime } from "../src/runtime/agent-runtime.mjs";
 import { encodeDeltaChunks } from "../src/memory/l2-sync.mjs";
 import { createL2Receiver } from "../src/protocol/l2-receiver.mjs";
 import { createG1ProjectClients } from "./g1-runner-fixture.mjs";
+import { createLocalLane } from "../src/lanes/local-lane.mjs";
+import { createWorkerAgent } from "../src/protocol/worker-agent.mjs";
+import { createWorkerRegistry } from "../src/protocol/worker-registry.mjs";
+import { createWorkerServer } from "../src/protocol/ws-server.mjs";
+import { createHttpServer } from "../src/http.mjs";
+import { createStore } from "../src/state/store.mjs";
+import { createEnrollment } from "../src/protocol/enrollment.mjs";
 
 const TEST_DIRECTORY = path.dirname(fileURLToPath(import.meta.url));
 const key = "signed-worker-fixture-key";
@@ -39,8 +46,8 @@ async function fixture() {
   const calls = [];
   const runner = async (command, args, options = {}) => {
     calls.push({ command, args, options });
-    if (args.includes("--show-toplevel")) return { code: 0, stdout: repoPath, stderr: "" };
-    if (args.includes("show-ref")) return { code: 1, stdout: "", stderr: "" };
+    if (args.includes("--show-toplevel")) return { code: 0, stdout: repoPath, stderr: "", settlementConfirmed: true };
+    if (args.includes("show-ref")) return { code: 1, stdout: "", stderr: "", settlementConfirmed: true };
     if (args.includes("worktree") && args.includes("add")) {
       const worktree = args.at(-2);
       await mkdir(path.join(worktree, ".vscode"), { recursive: true });
@@ -49,7 +56,8 @@ async function fixture() {
       }));
     }
     if (args.includes("worktree") && args.includes("remove")) await rm(args.at(-1), { recursive: true });
-    return { code: 0, stdout: args.includes("--count") ? "0" : "", stderr: "" };
+    return { code: 0, stdout: args.includes("rev-parse") ? "a".repeat(40) : args.includes("--count") ? "0" : "",
+      stderr: "", settlementConfirmed: true };
   };
   const env = { LANE_BOOTSTRAP_KEY: "bootstrap-lane-canary", APPROVED_PROVIDER_KEY: "provider-lane-canary" };
   const secrets = await createSecrets({ env, trackNames: Object.keys(env) });
@@ -82,6 +90,55 @@ function fixtureClients(ctx) {
   return clients;
 }
 
+async function runRegisteredWorker({ ctx, execution, job, beforeRun }) {
+  const secretFile = path.join(ctx.home, "protocol-secrets.json");
+  const protocolSecrets = await createSecrets({ env: {}, file: secretFile });
+  const enrollment = createEnrollment({
+    store: createStore(path.join(ctx.home, "protocol-state")), secretFile, secrets: protocolSecrets,
+  });
+  await enrollment.register({ workerId: "w1", laneId: "remote", secret: key });
+  const registry = createWorkerRegistry({
+    signLease: ({ worker, grant }) => signGrant({ grant, subject: worker.id, key }),
+  });
+  const http = createHttpServer({ bind: "127.0.0.1", port: 0 });
+  const server = createWorkerServer({ registry, enrollment, secrets: protocolSecrets, allowedLanes: ["remote"] });
+  server.attach(http);
+  const { port } = await http.listen();
+  let outcome;
+  const localLane = createLocalLane({
+    id: "remote", runtimeFor: async (leased) => {
+      const runtime = await execution.runtimeFor(leased);
+      beforeRun?.();
+      return { run: async (input) => { outcome = await runtime.run(input); return outcome; } };
+    },
+  });
+  const agent = createWorkerAgent({
+    url: `ws://127.0.0.1:${port}/claw/workers`, workerId: "w1", secret: key, laneId: "remote",
+    capabilities: { os: "linux", arch: "x64", macos: false, toolchains: [], projects: ["p1"] },
+    localLane, verifyLease: (received) => {
+      const verified = execution.verifyLease(received);
+      job.leaseGrant = verified.leaseGrant;
+      return verified;
+    },
+    logger: { warn() {}, error() {} },
+  });
+  ctx.withPublication = (...args) => agent.withPublication(...args);
+  ctx.isCurrentLease = (leased) => agent.isCurrentLease(leased);
+  cleanups.push(async () => {
+    agent.stop();
+    await agent.drain();
+    server.close();
+    registry.close();
+    await http.close();
+  });
+  agent.start();
+  await vi.waitFor(() => expect(registry.snapshot().byLane.remote?.publicationCapable).toBe(1));
+  registry.enqueue("remote", { kind: "job", job });
+  await vi.waitFor(() => expect(outcome).toBeDefined());
+  await agent.drain();
+  return outcome;
+}
+
 describe("Guard: only verified worker composition owns external history delivery", () => {
   it("uses the verified home-worker lane without synthesizing a local canonical home", async () => {
     const source = await readFile(path.join(TEST_DIRECTORY, "..", "src", "cli", "worker.mjs"), "utf8");
@@ -97,7 +154,8 @@ describe("Guard: only verified worker composition owns external history delivery
     const composition = source.slice(source.indexOf("export function createLeaseExecution"), source.indexOf("function createWorkerLogger"));
     const execution = composition.slice(composition.indexOf("runtimeFor: (job)"));
     expect(execution).toMatch(/const verified = leasedJob\([\s\S]*?ctx: \{ \.\.\.executionCtx, externalHistoryDelivery: true \}/);
-    expect(composition).toContain("const executionCtx = { ...ctx, projectClients: clients }");
+    expect(composition).toMatch(/const executionCtx = \{\s*\.\.\.ctx, projectClients: clients,/);
+    expect(composition).toContain("ctx.withPublication({ ...options, job: current }, publish)");
     expect(execution).toContain("executor.runtimeFor(verified)");
     expect(composition).not.toMatch(/(?:job|config|env)\.externalHistoryDelivery/);
   });
@@ -105,9 +163,25 @@ describe("Guard: only verified worker composition owns external history delivery
   it("constructs the one-shot executor's literal trusted flag only after grant verification", async () => {
     const source = await readFile(path.join(TEST_DIRECTORY, "..", "src", "cli", "worker.mjs"), "utf8");
     const execution = source.slice(source.indexOf("async function runPodLease"), source.indexOf("const agent = createWorkerAgent", source.indexOf("async function runPodLease")));
-    expect(execution).toMatch(/const verified = leasedJob\([\s\S]*?ctx: \{[^\n]*externalHistoryDelivery: true/);
+    expect(execution).toMatch(/const verified = leasedJob\([\s\S]*?ctx: \{[\s\S]*?externalHistoryDelivery: true/);
+    expect(execution).toContain("agent.withPublication({ ...authority, job: currentPodJob }, publish)");
     expect(execution).toContain("executor.runtimeFor(verified)");
     expect(execution).not.toMatch(/(?:job|config|env)\.externalHistoryDelivery/);
+  });
+
+  it("does not replace the publication scope's cancellation signal with the pod runtime signal", async () => {
+    const source = await readFile(path.join(TEST_DIRECTORY, "..", "src", "cli", "worker.mjs"), "utf8");
+    const podRunner = source.slice(source.indexOf("const podRunner ="), source.indexOf("const boot =", source.indexOf("const podRunner =")));
+    expect(podRunner).toContain("commandOptions.signal ?? signal");
+    expect(podRunner).toMatch(/runner\(command, args, \{[\s\S]*signal: commandSignal/);
+  });
+
+  it("launches pod workspaces through the real workspace client without a synthetic canonical home", async () => {
+    const source = await readFile(path.join(TEST_DIRECTORY, "..", "src", "cli", "worker.mjs"), "utf8");
+    const pod = source.slice(source.indexOf("function podExecutionConfig"), source.indexOf("async function run(argv"));
+    expect(pod).not.toMatch(/homeLane: ["']local["']/);
+    expect(pod).not.toMatch(/resolveLaunch:[\s\S]*?buildLaunch\(/);
+    expect(pod).toContain("projectClients: clients");
   });
 });
 
@@ -170,9 +244,9 @@ describe("signed worker execution configuration", () => {
       }),
     });
 
-    const runtime = await execution.runtimeFor(job);
-    env.APPROVED_PROVIDER_KEY = "rotated-provider-canary";
-    const outcome = await runtime.run(job);
+    const outcome = await runRegisteredWorker({
+      ctx, execution, job, beforeRun: () => { env.APPROVED_PROVIDER_KEY = "rotated-provider-canary"; },
+    });
     expect(outcome.status).toBe("succeeded");
     const worktree = calls.find((call) => call.args.includes("worktree") && call.args.includes("add")).args.at(-2);
     expect(await readFile(path.join(worktree, "approved.txt"), "utf8")).toBe("approved-choice");
@@ -207,8 +281,7 @@ describe("signed worker execution configuration", () => {
       ctx, clients: fixtureClients(ctx), subject: "w1", laneId: "remote", key,
       runtimeFactory: ({ id }) => ({ id, run: async () => ({ status: "succeeded" }) }),
     });
-    const runtime = await execution.runtimeFor(job);
-    const outcome = await runtime.run(job);
+    const outcome = await runRegisteredWorker({ ctx, execution, job });
     expect(outcome.status).toBe("succeeded");
     const worktree = calls.find((call) => call.args.includes("worktree") && call.args.includes("add")).args.at(-2);
     await execution.afterJob({ job, event: { data: { status: "succeeded" } } });
@@ -222,7 +295,7 @@ describe("signed worker execution configuration", () => {
       ctx, clients: fixtureClients(ctx), subject: "w1", laneId: "remote", key,
       runtimeFactory: ({ id }) => ({ id, run: async () => ({ status: "succeeded" }) }),
     });
-    const outcome = await (await execution.runtimeFor(job)).run(job);
+    const outcome = await runRegisteredWorker({ ctx, execution, job });
     expect(outcome.error).toBeUndefined();
     expect(outcome).toMatchObject({ status: "succeeded" });
     const worktree = calls.find((call) => call.args.includes("worktree") && call.args.includes("add")).args.at(-2);
@@ -263,7 +336,7 @@ describe("signed worker execution configuration", () => {
         return { status: "succeeded" };
       } }),
     });
-    const outcome = await (await execution.runtimeFor(job)).run(job);
+    const outcome = await runRegisteredWorker({ ctx, execution, job });
     expect(outcome.error).toBeUndefined();
     expect(outcome).toMatchObject({ status: "succeeded" });
     const worktree = calls.find((call) => call.args.includes("worktree") && call.args.includes("add")).args.at(-2);

@@ -104,6 +104,7 @@ export async function validateProjects(config, { isGitRepo: checkGit = isGitRepo
 }
 
 async function commandExists(command, env, platform) {
+  if (command === "node") command = process.execPath;
   if (path.isAbsolute(command) || command.includes(path.sep)) {
     try {
       await access(command);

@@ -4,7 +4,7 @@ import path from "node:path";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import { createRunners } from "../src/jobs/runners.mjs";
-import { runnerFixture } from "./g1-runner-fixture.mjs";
+import { registerModeledPlanProcess, runnerFixture } from "./g1-runner-fixture.mjs";
 
 const spawn = vi.hoisted(() => vi.fn());
 vi.mock("node:child_process", async (original) => ({ ...await original(), spawn }));
@@ -13,7 +13,12 @@ const NOW = "2026-10-10T18:30:00.000Z";
 const TRACE_ID = "0123456789abcdef0123456789abcdef";
 const PLAN = path.join("docs", "plans", "Phase-1-PLAN.md");
 
-function nativeEvent(type, data, ts = new Date().toISOString()) {
+function nativeTimestamp() {
+  // planRun/progress policy establish the vi.useFakeTimers/vi.setSystemTime clock before every call.
+  return new Date().toISOString();
+}
+
+function nativeEvent(type, data, ts = nativeTimestamp()) {
   return { ts, type, data, source: null, security_risk: null };
 }
 
@@ -27,7 +32,7 @@ function nativeWatch(events, overrides = {}) {
 }
 
 function nativeStarted(worktree, overrides = {}) {
-  const startedAt = new Date().toISOString();
+  const startedAt = nativeTimestamp();
   return nativeEvent("run-started", {
     plan: path.join(worktree, PLAN), traceId: TRACE_ID, startTime: startedAt,
     model: "configured-work-model", mode: "auto", quorumMode: "power", quorumPreset: "power",
@@ -46,7 +51,7 @@ async function planRun(watchFor, {
     type: "plan", changes: false, fields,
   });
   fixtures.push(fixture);
-  const child = new EventEmitter();
+  const child = registerModeledPlanProcess(new EventEmitter());
   child.stdout = new EventEmitter();
   child.stderr = new EventEmitter();
   child.kill = vi.fn(() => { queueMicrotask(() => child.emit("close", null)); return true; });
@@ -186,12 +191,15 @@ async function writeFastNativeCompletion(fixture) {
     nativeEvent("slice-started", { sliceId: "1", title: "Actual fixture slice" }),
     passedSlice("1"),
     nativeEvent("run-completed", {
-      plan: started.data.plan, startTime: started.data.startTime, endTime: new Date().toISOString(),
+      plan: started.data.plan, startTime: started.data.startTime, endTime: nativeTimestamp(),
       sliceCount: 1, status: "completed", results: { passed: 1, failed: 0, skipped: 0, total: 1 },
     }),
   ];
   const eventsPath = path.join(fixture.worktree, ".forge", "runs", "fast-native-run", "events.log");
   await mkdir(path.dirname(eventsPath), { recursive: true });
+  await writeFile(path.join(path.dirname(eventsPath), "run.json"), JSON.stringify({
+    id: "fast-native-run", plan: started.data.plan, status: "completed",
+  }));
   await writeFile(eventsPath, events.map(({ ts, type, data }) => `[${ts}] ${type}: ${JSON.stringify(data)}\n`).join(""));
 }
 
@@ -255,7 +263,12 @@ describe("fast native foreground completion measurement", () => {
     for (let index = 0; index < 20; index += 1) await Promise.resolve();
     expect(run.updates.some(({ data }) => Number.isFinite(data.percent))).toBe(false);
     expect(run.fixture.calls.some(({ args }) => args.includes("push") || args.includes("remove"))).toBe(false);
-    expect(JSON.parse(await readFile(path.join(run.fixture.worktree, ".claw-job.json"), "utf8")).l2Pending).toBe(true);
+    expect(JSON.parse(await readFile(path.join(run.fixture.worktree, ".claw-job.json"), "utf8"))).toMatchObject({
+      l2Pending: false,
+      applicationAck: { jobId: run.fixture.job.id, projectId: run.fixture.job.projectId, ok: true },
+    });
+    expect(await readFile(path.join(run.fixture.repo, ".forge", "runs", "fast-native-run", "run.json"), "utf8"))
+      .toBe(await readFile(path.join(run.fixture.worktree, ".forge", "runs", "fast-native-run", "run.json"), "utf8"));
   });
 
   it("deduplicates final replay against measurements already emitted by the active poll", async () => {

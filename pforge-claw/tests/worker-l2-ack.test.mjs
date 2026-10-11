@@ -6,7 +6,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { createLocalLane } from "../src/lanes/local-lane.mjs";
 import { createWorkerAgent } from "../src/protocol/worker-agent.mjs";
 import { createWorkerRegistry } from "../src/protocol/worker-registry.mjs";
-import { decode, encode, message } from "../src/protocol/messages.mjs";
+import { decode, encode, message, PUBLICATION_FENCE_VERSION } from "../src/protocol/messages.mjs";
 import { matchesLeaseAck } from "../src/protocol/l2-ack.mjs";
 import { createL2Receiver } from "../src/protocol/l2-receiver.mjs";
 import { snapshotForge, computeDelta, encodeDeltaChunks } from "../src/memory/l2-sync.mjs";
@@ -60,6 +60,11 @@ async function fixture({
   });
   agent.start();
   socket.emit("open");
+  const server = registry ?? createWorkerRegistry();
+  if (!registry) cleanups.push(() => server.close());
+  receive(message("ready", {
+    leaseMs: server.leaseMs, heartbeatMs: 15_000, publicationFence: server.publicationFence,
+  }));
   const job = {
     id: "j1", projectId: "p1", type: jobType,
     ...(jobType === "plan" ? { planPath: path.join("docs", "plans", "Phase-example-PLAN.md") } : {}),
@@ -69,11 +74,13 @@ async function fixture({
     const serverPackets = [];
     registry.connect("w1", {
       laneId: "remote", capabilities: { projects: ["p1"] },
+      publicationFence: sent.find((packet) => packet.t === "hello")?.publicationFence === PUBLICATION_FENCE_VERSION,
       send: (packet) => { serverPackets.push(packet); receive(packet); },
     });
     registry.enqueue("remote", { kind: "job", job });
     lease = serverPackets.find((packet) => packet.t === "lease");
   } else {
+    // A generous 60s deadline is not an elapsed-time assertion; readiness is proven by the actual artifact.
     lease = message("lease", {
       leaseId: "l1", attempt: 1, kind: "job", expiresAt: Date.now() + 60_000, job,
     });
@@ -348,7 +355,7 @@ describe("worker application acknowledgements", () => {
     const registry = createWorkerRegistry({ requireL2: true, onEvent: (event) => delivered.push(event) });
     cleanups.push(() => registry.close());
     registry.connect("w1", {
-      laneId: "remote", capabilities: { projects: ["p1"] }, send: (packet) => sent.push(packet),
+      laneId: "remote", capabilities: { projects: ["p1"] }, publicationFence: true, send: (packet) => sent.push(packet),
     });
     registry.enqueue("remote", { kind: "job", job: { id: "j1", projectId: "p1" } });
     const lease = sent[0];
@@ -367,7 +374,7 @@ describe("worker application acknowledgements", () => {
     const registry = createWorkerRegistry({ requireL2: true, applyL2: () => application.promise });
     cleanups.push(() => registry.close());
     registry.connect("w1", {
-      laneId: "remote", capabilities: { projects: ["p1"] }, send: (packet) => sent.push(packet),
+      laneId: "remote", capabilities: { projects: ["p1"] }, publicationFence: true, send: (packet) => sent.push(packet),
     });
     registry.enqueue("remote", { kind: "job", job: { id: "j1", projectId: "p1" } });
     const lease = sent[0];
@@ -395,7 +402,7 @@ describe("worker application acknowledgements", () => {
     });
     cleanups.push(() => registry.close());
     registry.connect("w1", {
-      laneId: "remote", capabilities: { projects: ["p1"] }, send: (packet) => sent.push(packet),
+      laneId: "remote", capabilities: { projects: ["p1"] }, publicationFence: true, send: (packet) => sent.push(packet),
     });
     registry.enqueue("remote", { kind: "job", job: { id: "j1", projectId: "p1" } });
     const waiting = registry.waitForCompletion({ jobId: "j1" });

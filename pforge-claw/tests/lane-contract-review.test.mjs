@@ -16,6 +16,7 @@ import { createL2Receiver, L2_APPLY_READ } from "../src/protocol/l2-receiver.mjs
 import { signGrant, verifyGrant } from "../src/protocol/lease-grant.mjs";
 import { message } from "../src/protocol/messages.mjs";
 import { createStore } from "../src/state/store.mjs";
+import { CANONICAL_MCP_BOOTSTRAP, seedCanonicalMcpConfig } from "./helpers/canonical-mcp-bootstrap-fixture.mjs";
 
 const WIRE_IDENTIFIER_PATTERN = "^[A-Za-z0-9][A-Za-z0-9._-]{0,80}$";
 const NOW = 2_000_000_000_000;
@@ -67,6 +68,7 @@ function configuration({
 async function approvedFixture(options = {}) {
   const directory = await fixtureDirectory();
   const config = configuration({ ...options, repoPath: directory });
+  await seedCanonicalMcpConfig(directory);
   const store = createStore(path.join(directory, "state"));
   const approvals = createApprovalService({ store, config, bus: new EventEmitter(), now: () => NOW });
   const created = createJob({ id: "a1000001", type: "plan", projectId: config.projects[0].id });
@@ -251,6 +253,7 @@ describe("FR-10 configuration and signed lane identity contract", () => {
       leaseGrant: { laneId, approval: proofFor({ config: fixture.config, store: fixture.store }, leased.job) },
     });
     expect(payload.project.repo).not.toHaveProperty("path");
+    expect(payload.mcpBootstrap).toEqual(CANONICAL_MCP_BOOTSTRAP);
     expect(Object.isFrozen(payload)).toBe(true);
     const signature = signedPayload(payload, laneId);
     expect(verifyGrant(signature)).toBe(true);

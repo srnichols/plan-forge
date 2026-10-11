@@ -55,11 +55,13 @@ with `origin: "untrusted"` and must remain data rather than instructions.
   [#333](https://github.com/srnichols/plan-forge/issues/333) and
   [#335](https://github.com/srnichols/plan-forge/issues/335) remain acceptance
   references until the quiescent whole-suite and live evidence are recorded.
-- Dispatcher workspace, authenticated home routing and application-ACK wiring
-  and current-authority retry recovery pass the final integrated offline and
-  fresh-committed-source gates. This does not prove live provider or reference
-  topology behavior; [#332](https://github.com/srnichols/plan-forge/issues/332)
-  remains a live acceptance reference.
+- Dispatcher workspace, authenticated home routing, application-ACK wiring
+  and current-authority retry recovery passed the earlier integrated offline
+  and fresh-committed-source candidate gates. Later review/native-ownership
+  changes require their own complete current-source, platform and fresh-source
+  acceptance; the earlier results are not validation of those changes.
+  [#332](https://github.com/srnichols/plan-forge/issues/332) remains a live
+  provider/reference-topology acceptance reference.
 - Callback traffic is not covered by the inbound message rate limiter; callback
   spam remains a residual denial-of-service vector.
 - The default inbound rate limit has no discoverable config key. The router
@@ -71,6 +73,20 @@ with `origin: "untrusted"` and must remain data rather than instructions.
 - Git worktrees are not an OS sandbox. A worker with process execution and
   mounted credentials can exceed repository-only boundaries if its runtime
   policy or deployment is misconfigured.
+- D31 native lifecycle control uses a private Windows Job Object or a live
+  Linux subreaper/pidfd scope before launching literal command arguments.
+  Success requires native zero-owned-child evidence and root-exit identity;
+  global process-list inference is not accepted. Missing proof retains the
+  publication/workspace fence. This is not containment of arbitrary external
+  services or hostile interference by the OS account.
+- Authoritative macOS descendant ownership is not yet verified. Its mutating
+  execution fails explicitly before command launch; native macOS acceptance
+  remains a release blocker, not an inferred pass or a removed platform.
+- Signed project-MCP descriptors contain launch choices and credential
+  references, never resolved provider keys. Executing lanes resolve their own
+  references. Publication reservations bind the current authenticated lease
+  and cover the complete Git/PR operation; their completion acknowledgement
+  is distinct from canonical-history application acknowledgement.
 - Memory poisoning coverage exercises Claw persistence and prompt assembly
   using a fake memory backend. End-to-end Forge-Master behavior is separately
   covered by the companion package's recall-fencing tests.

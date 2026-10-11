@@ -144,7 +144,7 @@ export function createRunners(ctx = {}, { jobs = createStoredJobs(ctx), workspac
     return lifecycle.withWorktree(job, async (prepared) => {
       const client = await openRunnerMcp({
         ctx: dependencies, project: prepared.project, worktree: prepared.worktree.path,
-        env: prepared.env, signal,
+        env: prepared.env, signal, mcpBootstrap: prepared.job.mcpBootstrap,
       });
       let completed;
       let failure;

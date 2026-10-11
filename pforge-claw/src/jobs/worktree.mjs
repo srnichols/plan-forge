@@ -13,6 +13,7 @@ import { ClawError } from "../errors.mjs";
 import { TERMINAL } from "./model.mjs";
 import { applicationIdentity, matchesApplicationAck } from "../protocol/l2-ack.mjs";
 import { assertInside, isInside, realpathNearest } from "../path-safety.mjs";
+import { runOwnedProcess } from "./native-owned-process.mjs";
 
 export { assertInside, isInside, realpathNearest };
 
@@ -117,6 +118,18 @@ export function resolvePforgeCommand({ config = {}, cwd, platform = process.plat
 
 export function run(cmd, args = [], options = {}) {
   const { cwd, env, signal, timeoutMs, maxOutput = MAX_OUTPUT } = options;
+  if (options.requireSettlement === true) {
+    const unconfirmed = (error) => ({ code: -1, stdout: "", stderr: "", error, settlementConfirmed: false });
+    try {
+      if (signal?.aborted) return Promise.resolve(unconfirmed(new ClawError("JOB_CANCELLED")));
+      const [executable, ...prefix] = resolveCommand(cmd, options);
+      return runOwnedProcess(executable, [...prefix, ...args], {
+        cwd, env, signal, timeoutMs, maxOutput, appendOutput: appendBounded, onRootReady: options.onRootReady,
+      }).catch(unconfirmed);
+    } catch (error) {
+      return Promise.resolve(unconfirmed(error));
+    }
+  }
   return new Promise((resolve) => {
     let child;
     let stdout = "";
@@ -222,10 +235,28 @@ export async function addWorktree({ home, project, job, runner = run, env, signa
   return { path: target, branch };
 }
 
+async function worktreeRemovalAnchor({ repoPath, worktreePath, runner, env, signal }) {
+  if (!(await isInside(worktreePath, repoPath))) return { args: ["-C", repoPath] };
+  const common = await runner("git", [
+    "-C", repoPath, "rev-parse", "--path-format=absolute", "--git-common-dir",
+  ], { env, signal });
+  const directory = typeof common.stdout === "string" ? common.stdout.trim() : "";
+  if (common.code !== 0 || !path.isAbsolute(directory) || /[\0\r\n]/.test(directory)
+    || await isInside(worktreePath, directory)) {
+    throw new ClawError("WORKTREE_REMOVE_FAILED", "Cannot resolve a surviving Git directory for worktree removal");
+  }
+  const cwd = path.resolve(directory);
+  return { args: ["--git-dir", cwd], cwd };
+}
+
 export async function removeWorktree({ repoPath, path: worktreePath, runner = run, env, signal } = {}) {
   try {
     signal?.throwIfAborted();
-    const result = await runner("git", ["-C", repoPath, "worktree", "remove", "--force", worktreePath], { env, signal });
+    const anchor = await worktreeRemovalAnchor({ repoPath, worktreePath, runner, env, signal });
+    signal?.throwIfAborted();
+    const result = await runner("git", [...anchor.args, "worktree", "remove", "--force", worktreePath], {
+      env, signal, ...(anchor.cwd ? { cwd: anchor.cwd } : {}),
+    });
     return result.code === 0
       ? { ok: true }
       : { ok: false, code: "WORKTREE_REMOVE_FAILED" };

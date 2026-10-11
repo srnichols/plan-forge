@@ -16,6 +16,7 @@ import { createWorkerServer } from "../src/protocol/ws-server.mjs";
 import { createSecrets } from "../src/secrets.mjs";
 import workersFeature from "../src/features/workers.mjs";
 import { buildLanes, createLaneDirectory } from "../src/lanes/directory.mjs";
+import { decode, encode, PUBLICATION_ERRORS } from "../src/protocol/messages.mjs";
 
 const directories = [];
 const cleanups = [];
@@ -31,6 +32,7 @@ async function tempDirectory() {
 }
 
 async function eventually(assertion, timeoutMs = 5000) {
+  // Generous polling tolerance accommodates Windows scheduling; assert observable state, not elapsed time.
   const started = Date.now();
   while (Date.now() - started < timeoutMs) {
     try {
@@ -94,7 +96,7 @@ async function connectedSystem({
   const lane = createRemoteLane({ id: "remote", registry });
   agent.start();
   await eventually(() => {
-    expect(lane.health().ok).toBe(true);
+    expect(registry.snapshot().byLane.remote?.connected).toBe(1);
   });
   const close = async () => {
     agent.stop();
@@ -113,6 +115,28 @@ afterEach(async () => {
 });
 
 describe("remote lane contract and transport", () => {
+  it("withholds job placement capacity from an authenticated legacy home worker while retaining its reads", async () => {
+    class LegacyWebSocket extends WebSocket {
+      send(raw, ...options) {
+        const packet = decode(raw);
+        if (packet.t === "hello" && packet.mode === "auth") delete packet.publicationFence;
+        return super.send(encode(packet), ...options);
+      }
+    }
+    const runtime = { run: vi.fn(async () => ({ status: "succeeded" })) };
+    const system = await connectedSystem({
+      WebSocketImpl: LegacyWebSocket, runtime,
+      readHandler: async () => ({ legacyHome: true }),
+    });
+    expect(system.registry.snapshot().byLane.remote).toMatchObject({ connected: 1, publicationCapable: 0 });
+    expect(await system.lane.read({ projectId: "p1", tool: "forge_search", args: { query: "history" } }))
+      .toEqual({ legacyHome: true });
+    expect(runtime.run).not.toHaveBeenCalled();
+    expect(system.lane.health()).toMatchObject({
+      ok: false, readAvailable: true, publicationCapable: 0, workers: 1, code: PUBLICATION_ERRORS.DENIED,
+    });
+  });
+
   it("refuses an already-aborted remote read without enqueueing or serializing its signal", async () => {
     vi.useFakeTimers();
     vi.setSystemTime(0);
@@ -296,13 +320,13 @@ describe("remote lane contract and transport", () => {
     const { lane } = await connectedSystem({ readHandler: async () => ({ ok: true }) });
     await lane.read({ projectId: "p1", tool: "forge_search", args: {} });
     const durations = [];
+    // Existing Windows +50ms latency tolerance accommodates local socket scheduling variance.
     for (let index = 0; index < 5; index += 1) {
       const started = performance.now();
       await lane.read({ projectId: "p1", tool: "forge_search", args: { index } });
       durations.push(performance.now() - started);
     }
     durations.sort((left, right) => left - right);
-    // The additional 50 ms on Windows accommodates local socket scheduling variance.
     expect(durations[2]).toBeLessThan(process.platform === "win32" ? 300 : 250);
   });
 
@@ -417,6 +441,7 @@ describe("remote lane contract and transport", () => {
         id: "replay-job", projectId: "p1", type: "task", prompt: "continue",
       })[Symbol.asyncIterator]();
       const nextWithin = async () => {
+        // Generous delivery tolerance bounds a real socket operation without asserting scheduler precision.
         const next = stream.next();
         let timer;
         try {
@@ -460,7 +485,7 @@ describe("remote lane contract and transport", () => {
     const registry = createWorkerRegistry();
     const lane = createRemoteLane({ id: "remote", registry });
     expect(lane.health()).toMatchObject({ ok: false, code: "NO_WORKER" });
-    registry.connect("w1", { laneId: "remote", capabilities: workerCapabilities, send: () => {} });
+    registry.connect("w1", { laneId: "remote", capabilities: workerCapabilities, publicationFence: true, send: () => {} });
     expect(lane.health()).toMatchObject({ ok: true, workers: 1 });
     registry.close();
   });
@@ -486,7 +511,7 @@ describe("lease recovery and fencing", () => {
   it.each([false, true])("fails closed without dropping prior artifacts when an unread event buffer fills (subscribed: %s)", async (subscribed) => {
     const sent = [];
     const registry = createWorkerRegistry({ maxReplay: 2 });
-    registry.connect("w1", { laneId: "remote", capabilities: workerCapabilities, send: (packet) => sent.push(packet) });
+    registry.connect("w1", { laneId: "remote", capabilities: workerCapabilities, publicationFence: true, send: (packet) => sent.push(packet) });
     const { iterator } = registry.enqueue("remote", {
       kind: "job", job: { id: "buffer-job", projectId: "p1" },
     });
@@ -554,8 +579,8 @@ describe("lease recovery and fencing", () => {
       now: clock.now, setTimeoutFn: clock.setTimeoutFn, clearTimeoutFn: clock.clearTimeoutFn,
       ackMs: 10_000, leaseMs: 60_000, maxAttempts: 2,
     });
-    registry.connect("A", { laneId: "remote", capabilities: workerCapabilities, send: (packet) => messagesA.push(packet) });
-    registry.connect("B", { laneId: "remote", capabilities: workerCapabilities, send: (packet) => messagesB.push(packet) });
+    registry.connect("A", { laneId: "remote", capabilities: workerCapabilities, publicationFence: true, send: (packet) => messagesA.push(packet) });
+    registry.connect("B", { laneId: "remote", capabilities: workerCapabilities, publicationFence: true, send: (packet) => messagesB.push(packet) });
     const { iterator } = registry.enqueue("remote", {
       kind: "job", job: { id: "retry-job", projectId: "p1" },
     });
@@ -580,7 +605,7 @@ describe("lease recovery and fencing", () => {
   it("drops duplicate sequence numbers and routes cancellation", async () => {
     const sent = [];
     const registry = createWorkerRegistry();
-    registry.connect("w1", { laneId: "remote", capabilities: workerCapabilities, send: (packet) => sent.push(packet) });
+    registry.connect("w1", { laneId: "remote", capabilities: workerCapabilities, publicationFence: true, send: (packet) => sent.push(packet) });
     const { jobId } = registry.enqueue("remote", {
       kind: "job", job: { id: "cancel-me", projectId: "p1" },
     });

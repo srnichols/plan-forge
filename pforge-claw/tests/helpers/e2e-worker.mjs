@@ -104,6 +104,11 @@ export async function startE2EWorker({
     v: 1, workerId: joined.workerId, laneId,
   }));
   const worker = ctx && config ? await workerContext({ ctx, config, workerHome, logger, clients, laneId }) : null;
+  let agent;
+  if (worker) {
+    worker.ctx.withPublication = (...args) => agent.withPublication(...args);
+    worker.ctx.isCurrentLease = (job) => agent.isCurrentLease(job);
+  }
   const execution = worker ? createLeaseExecution({
     ctx: worker.ctx, clients: worker.clients, subject: joined.workerId, laneId, key: joined.secret, runtimeFactory,
   }) : null;
@@ -116,7 +121,7 @@ export async function startE2EWorker({
   const appliedReads = [];
   const afterJobs = new Map();
   const afterJobWaiters = new Map();
-  const agent = createWorkerAgent({
+  agent = createWorkerAgent({
     url, workerId: joined.workerId, secret: joined.secret, laneId, capabilities, localLane,
     logger, WebSocketImpl: tracked.WebSocketImpl,
     ...(timers ? {

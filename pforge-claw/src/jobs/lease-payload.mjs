@@ -2,6 +2,7 @@ import { ClawError } from "../errors.mjs";
 import { buildLeaseGrant } from "../protocol/lease-grant.mjs";
 import { MAX_FRAME_BYTES } from "../protocol/messages.mjs";
 import { collectCopySet, COPYSET_MAX_BYTES } from "./bootstrap.mjs";
+import { collectLeaseMcpBootstrap } from "./bootstrap-mcp.mjs";
 import { resolveJobRuntime } from "../runtime/agent-runtime.mjs";
 import { byokProviderReference } from "../runtime/byok.mjs";
 import { planExecutionChoices, projectExecutionChoices, snapshotExecutionChoices } from "./execution-choices.mjs";
@@ -103,6 +104,7 @@ export function createLeasePreparer({ ctx, laneConfig, directory, now = Date.now
     const provider = byokProviderReference({ type: payload.runtime, config });
     if (provider) payload.provider = provider;
     payload.project = projectExecutionChoices({ config, project, lane });
+    payload.mcpBootstrap = await collectLeaseMcpBootstrap({ project, config, directory, signal });
     const proof = authorization.proof;
     if (lane.kind === "k8s") payload.bootstrapFiles = await bootstrapFilesFor({
       config, project, paths: payload.project.bootstrap.copy, directory, signal,

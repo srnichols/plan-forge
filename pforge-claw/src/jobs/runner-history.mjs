@@ -51,6 +51,20 @@ async function waitForApplication(operation, { timeoutMs, signal }) {
   }
 }
 
+function requireApplicationAck(identity, received) {
+  if (!matchesApplicationAck(identity, received)) {
+    throw new ClawError(L2_ACK_ERRORS.UNCONFIRMED, { reason: L2_SYNC_INCOMPLETE });
+  }
+  if (!received.ok) throw new ClawError(received.code, { reason: L2_SYNC_INCOMPLETE });
+  return { ...identity, ok: true };
+}
+
+function requireHistoryReceiver(receiver) {
+  if (typeof receiver?.receive !== "function") {
+    throw new ClawError(L2_ACK_ERRORS.HOME_UNAVAILABLE, { reason: L2_SYNC_INCOMPLETE });
+  }
+}
+
 /**
  * Success requires the receiver's exact positive application identity, even for an empty delta.
  * @param {{job: object, worktree: string, snapshot: object, receiver: object, signal?: AbortSignal, timeoutMs?: number}} options
@@ -60,22 +74,18 @@ export async function synchronizeJobHistory({
   job, worktree, snapshot, receiver, signal, timeoutMs = DEFAULT_HISTORY_TIMEOUT_MS,
 }) {
   if (signal?.aborted) throw new ClawError("JOB_CANCELLED");
-  if (typeof receiver?.receive !== "function") {
-    throw new ClawError(L2_ACK_ERRORS.HOME_UNAVAILABLE, { reason: L2_SYNC_INCOMPLETE });
-  }
+  requireHistoryReceiver(receiver);
   const delta = await computeDelta({ forgeDir: path.join(worktree, ".forge"), snapshot }) ?? EMPTY_L2_DELTA;
   const chunks = encodeDeltaChunks({ delta, deltaId: job.id });
   const identity = applicationIdentity({
     jobId: job.id, projectId: job.projectId, deltaId: chunks[0].deltaId, sha256Total: chunks[0].sha256Total,
   });
   if (signal?.aborted) throw new ClawError("JOB_CANCELLED");
-  const received = await waitForApplication(receiver.receive({ ...identity, chunks }, { signal }), { timeoutMs, signal });
+  const received = await waitForApplication(
+    Promise.resolve().then(() => receiver.receive({ ...identity, chunks }, { signal })), { timeoutMs, signal },
+  );
   if (signal?.aborted) throw new ClawError("JOB_CANCELLED");
-  if (!matchesApplicationAck(identity, received)) {
-    throw new ClawError(L2_ACK_ERRORS.UNCONFIRMED, { reason: L2_SYNC_INCOMPLETE });
-  }
-  if (!received.ok) throw new ClawError(received.code, { reason: L2_SYNC_INCOMPLETE });
-  const applicationAck = { ...identity, ok: true };
+  const applicationAck = requireApplicationAck(identity, received);
   await updateMarker({ job, worktree, pending: false, applicationAck });
   if (signal?.aborted) throw new ClawError("JOB_CANCELLED");
   return { identity, applicationAck };

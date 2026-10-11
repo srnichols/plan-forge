@@ -10,6 +10,8 @@ COPY pforge-sdk/package.json ./pforge-sdk/
 RUN npm ci --workspace=pforge-claw --include-workspace-root=false --omit=dev --ignore-scripts --no-audit --no-fund
 
 FROM ${NODE_IMAGE} AS fixture-base
+ARG TARGETARCH
+ARG PWSH_VERSION=7.4.6
 LABEL com.azure.containerizationassist.createdby="containerization-assist"
 LABEL io.pforge.claw.fixture="disposable-k8s-only; external-runtime-git-pr-edges; not-production"
 WORKDIR /app
@@ -21,6 +23,13 @@ COPY pforge-claw/deploy/k8s/ ./deploy/k8s/
 COPY pforge-claw/scripts/k8s-e2e-overlay.mjs ./scripts/
 COPY pforge-claw/tests/helpers/k8s-*.mjs ./tests/helpers/
 COPY pforge-claw/tests/helpers/fake-telegram.mjs pforge-claw/tests/helpers/fake-project-mcp.mjs ./tests/helpers/
+COPY pforge-claw/deploy/install-powershell.mjs /usr/local/share/pforge-claw/install-powershell.mjs
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends ca-certificates libicu-dev \
+    && rm -rf /var/lib/apt/lists/* \
+    && node /usr/local/share/pforge-claw/install-powershell.mjs "$PWSH_VERSION" "$TARGETARCH" /opt/microsoft/powershell/7 \
+    && ln -s /opt/microsoft/powershell/7/pwsh /usr/local/bin/pwsh \
+    && pwsh -v
 RUN groupadd --gid 10001 claw \
     && useradd --uid 10001 --gid 10001 --no-create-home claw \
     && mkdir -p /data /work \

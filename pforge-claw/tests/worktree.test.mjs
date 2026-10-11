@@ -169,7 +169,9 @@ describe("worktree helpers", () => {
       store,
       now: () => Date.now() + 10 * 24 * 60 * 60 * 1000,
       keepHours: 1,
-      runner: async () => ({ code: 0 }),
+      runner: async (_command, args) => ({
+        code: 0, stdout: args.includes("--git-common-dir") ? `${path.join(root, "repository", ".git")}\n` : "",
+      }),
     });
     expect(removed).toEqual([failedPath]);
     expect((await readFile(path.join(runningPath, ".claw-job.json"), "utf8"))).toContain("running");

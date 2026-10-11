@@ -550,6 +550,7 @@ describe("Kubernetes Job lane lifecycle", () => {
     const applied = Promise.withResolvers();
     registry.connect(workerId, {
       laneId: "jobs", jobScope: { jobId: job.id }, capabilities: { projects: ["project-one"] },
+      publicationFence: true,
       send: (packet) => {
         if (packet.t === "lease") leased.resolve(packet);
         if (packet.t === L2_APPLIED_MESSAGE) applied.resolve(packet);

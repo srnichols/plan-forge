@@ -3,9 +3,18 @@ import { ClawError } from "../errors.mjs";
 
 export const PROTOCOL_VERSION = 1;
 export const MAX_FRAME_BYTES = 1_048_576;
+export const PUBLICATION_MESSAGE = "publication";
+export const PUBLICATION_ACK_MESSAGE = "publication-ack";
+export const PUBLICATION_FENCE_VERSION = 1;
+export const PUBLICATION_OPERATIONS = Object.freeze({ BEGIN: "begin", END: "end" });
+export const PUBLICATION_ERRORS = Object.freeze({
+  DENIED: "LEASE_PUBLICATION_DENIED",
+  TIMEOUT: "LEASE_PUBLICATION_TIMEOUT",
+  CANCELLED: "LEASE_PUBLICATION_CANCELLED",
+});
 export const MESSAGE_TYPES = Object.freeze([
   "hello", "challenge", "auth", "enroll-auth", "ready", "lease", "ack", "event",
-  "cancel", "heartbeat", "bye", "l2-applied",
+  "cancel", "heartbeat", "bye", "l2-applied", PUBLICATION_MESSAGE, PUBLICATION_ACK_MESSAGE,
 ]);
 export const LEASE_KINDS = Object.freeze(["job", "read"]);
 export const L2_PACKET_KIND = "l2-delta";
@@ -41,6 +50,20 @@ const exact = (object, required, optional = []) => isObject(object)
   && Object.keys(object).every((key) => required.includes(key) || optional.includes(key));
 const stringArray = (value) => Array.isArray(value) && value.every(isString);
 const isIdentifier = (value) => typeof value === "string" && /^[A-Za-z0-9][A-Za-z0-9._-]{0,80}$/.test(value);
+const PUBLICATION_FIELDS = Object.freeze(["v", "t", "operation", "leaseId", "attempt", "jobId", "requestId"]);
+const isErrorCode = (value) => typeof value === "string" && /^[A-Z0-9_]{1,64}$/.test(value);
+
+function validatePublicationIdentity(packet) {
+  return Object.values(PUBLICATION_OPERATIONS).includes(packet.operation)
+    && isString(packet.leaseId) && isPositiveInt(packet.attempt)
+    && isIdentifier(packet.jobId) && isIdentifier(packet.requestId);
+}
+
+function validatePublicationAck(packet) {
+  return exact(packet, [...PUBLICATION_FIELDS, "ok"], ["code"])
+    && validatePublicationIdentity(packet) && typeof packet.ok === "boolean"
+    && (packet.ok ? packet.code === undefined : isErrorCode(packet.code));
+}
 
 function validateCapabilities(value) {
   return exact(value, ["os", "arch", "macos", "toolchains", "projects"])
@@ -78,21 +101,42 @@ function validateLease(lease) {
     && Number.isFinite(lease.expiresAt) && validateLeaseResume(lease) && validateLeasePayload(lease);
 }
 
+function validPublicationFence(packet) {
+  return !Object.hasOwn(packet, "publicationFence") || packet.publicationFence === PUBLICATION_FENCE_VERSION;
+}
+
+function validateAuthHello(packet) {
+  return exact(packet, ["v", "t", "mode", "workerId", "laneId", "capabilities"], ["publicationFence"])
+    && packet.mode === "auth" && isString(packet.workerId) && isString(packet.laneId)
+    && validateCapabilities(packet.capabilities) && validPublicationFence(packet);
+}
+
+function validateJobHello(packet) {
+  return exact(packet, ["v", "t", "mode", "laneId", "jobId"], ["publicationFence"])
+    && packet.mode === "job" && isIdentifier(packet.laneId) && isIdentifier(packet.jobId)
+    && validPublicationFence(packet);
+}
+
+function validateEnrollmentHello(packet) {
+  return exact(packet, ["v", "t", "mode", "laneId", "codeId", "pub"])
+    && packet.mode === "enroll" && isString(packet.laneId)
+    && /^[0-9a-f]{8}$/.test(packet.codeId) && isString(packet.pub);
+}
+
+function validateReady(packet) {
+  return (exact(packet, ["v", "t", "leaseMs", "heartbeatMs"], ["publicationFence"])
+    && isPositiveInt(packet.leaseMs) && isPositiveInt(packet.heartbeatMs) && validPublicationFence(packet))
+    || (exact(packet, ["v", "t", "workerId", "pub", "mac"])
+      && isString(packet.workerId) && isString(packet.pub) && isHex64(packet.mac));
+}
+
 const validators = {
-  hello: (m) => (exact(m, ["v", "t", "mode", "workerId", "laneId", "capabilities"])
-    && m.mode === "auth" && isString(m.workerId) && isString(m.laneId) && validateCapabilities(m.capabilities))
-    || (exact(m, ["v", "t", "mode", "laneId", "jobId"])
-      && m.mode === "job" && isIdentifier(m.laneId) && isIdentifier(m.jobId))
-    || (exact(m, ["v", "t", "mode", "laneId", "codeId", "pub"])
-      && m.mode === "enroll" && isString(m.laneId) && /^[0-9a-f]{8}$/.test(m.codeId) && isString(m.pub)),
+  hello: (m) => validateAuthHello(m) || validateJobHello(m) || validateEnrollmentHello(m),
   challenge: (m) => exact(m, ["v", "t", "nonce"]) && isHex64(m.nonce),
   auth: (m) => exact(m, ["v", "t", "workerId", "mac"])
     && typeof m.workerId === "string" && isHex64(m.mac),
   "enroll-auth": (m) => exact(m, ["v", "t", "mac"]) && isHex64(m.mac),
-  ready: (m) => (exact(m, ["v", "t", "leaseMs", "heartbeatMs"])
-    && isPositiveInt(m.leaseMs) && isPositiveInt(m.heartbeatMs))
-    || (exact(m, ["v", "t", "workerId", "pub", "mac"])
-      && isString(m.workerId) && isString(m.pub) && isHex64(m.mac)),
+  ready: validateReady,
   lease: validateLease,
   ack: (m) => exact(m, ["v", "t", "leaseId", "attempt"], ["seqBase"])
     && isString(m.leaseId) && isPositiveInt(m.attempt)
@@ -112,6 +156,8 @@ const validators = {
     && isIdentifier(m.projectId) && isString(m.deltaId) && isHex64(m.sha256Total)
     && typeof m.ok === "boolean" && (m.ok
       ? m.code === undefined : typeof m.code === "string" && /^[A-Z0-9_]{1,64}$/.test(m.code)),
+  [PUBLICATION_MESSAGE]: (m) => exact(m, PUBLICATION_FIELDS) && validatePublicationIdentity(m),
+  [PUBLICATION_ACK_MESSAGE]: validatePublicationAck,
 };
 
 function fail(field, type) {

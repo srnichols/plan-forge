@@ -2,10 +2,19 @@ import { diffieHellman, generateKeyPairSync, hkdfSync, randomBytes, createPublic
 import { WebSocketServer } from "ws";
 import { ClawError } from "../errors.mjs";
 import { challenge, enrollmentMac, verifyEnrollmentMac, verifyMac } from "./auth.mjs";
-import { CLOSE_CODES, decode, encode, MAX_FRAME_BYTES, message } from "./messages.mjs";
+import {
+  CLOSE_CODES, decode, encode, MAX_FRAME_BYTES, message,
+  PUBLICATION_MESSAGE, PUBLICATION_OPERATIONS, PUBLICATION_FENCE_VERSION,
+} from "./messages.mjs";
 import { SECRET_PREFIX } from "./enrollment.mjs";
 
 const HANDSHAKE_STATES = Object.freeze({ HELLO: "AWAIT_HELLO", AUTH: "AWAIT_AUTH", READY: "READY" });
+
+function publicationSupport(registry, context) {
+  return context.hello?.publicationFence === PUBLICATION_FENCE_VERSION
+    && registry.publicationFence === PUBLICATION_FENCE_VERSION
+    && typeof registry.onPublication === "function";
+}
 
 function deriveSecret(privateKey, publicKey, codeHash, workerId) {
   const shared = diffieHellman({ privateKey, publicKey });
@@ -84,6 +93,7 @@ export function createWorkerServer({
     const context = {
       socket, state: HANDSHAKE_STATES.HELLO, nonce: null, mode: null,
       laneId: null, workerId: null, capabilities: null, hello: null, timer: null,
+      publicationFence: false,
     };
     contexts.add(context);
     const timeout = () => {
@@ -175,15 +185,40 @@ export function createWorkerServer({
       context.nonce = null;
       context.state = HANDSHAKE_STATES.READY;
       clearTimeout(context.timer);
-      send(message("ready", { leaseMs: registry.leaseMs ?? 60_000, heartbeatMs }));
+      context.publicationFence = publicationSupport(registry, context);
+      send(message("ready", {
+        leaseMs: registry.leaseMs ?? 60_000, heartbeatMs,
+        ...(context.publicationFence ? { publicationFence: PUBLICATION_FENCE_VERSION } : {}),
+      }));
       registry.connect(workerId, {
         laneId: context.laneId,
         capabilities: context.capabilities,
         send,
         jobScope: context.jobScope,
         connection: context,
+        publicationFence: context.publicationFence,
       });
       audit(logger, "WORKER_AUTHENTICATED");
+    }
+
+    function routeReadyPacket(packet) {
+      if (packet.t === PUBLICATION_MESSAGE && packet.operation === PUBLICATION_OPERATIONS.END) {
+        send(registry.onPublication({ ...packet, workerId: context.workerId }));
+        return;
+      }
+      if (registry.current(context.workerId) !== context) return;
+      if (packet.t === PUBLICATION_MESSAGE) {
+        send(registry.onPublication({ ...packet, workerId: context.workerId }));
+      } else if (packet.t === "ack") {
+        registry.onAck({ ...packet, workerId: context.workerId });
+      } else if (packet.t === "event") {
+        registry.onEvent({ ...packet, workerId: context.workerId });
+      } else if (packet.t === "heartbeat") {
+        const reports = registry.onHeartbeat({ workerId: context.workerId, leases: packet.leases });
+        send(message("heartbeat", { ts: Date.now(), leases: reports }));
+      } else if (packet.t === "bye") {
+        socket.close(1000, packet.reason);
+      } else failHandshake("WORKER_UNEXPECTED_MESSAGE", CLOSE_CODES.BAD_MESSAGE);
     }
 
     socket.on("message", (raw, isBinary) => {
@@ -218,17 +253,7 @@ export function createWorkerServer({
         return;
       }
       if (context.state !== HANDSHAKE_STATES.READY) return failHandshake("WORKER_BAD_STATE");
-      if (registry.current(context.workerId) !== context) return;
-      if (packet.t === "ack") {
-        registry.onAck({ ...packet, workerId: context.workerId });
-      } else if (packet.t === "event") {
-        registry.onEvent({ ...packet, workerId: context.workerId });
-      } else if (packet.t === "heartbeat") {
-        const reports = registry.onHeartbeat({ workerId: context.workerId, leases: packet.leases });
-        send(message("heartbeat", { ts: Date.now(), leases: reports }));
-      } else if (packet.t === "bye") {
-        socket.close(1000, packet.reason);
-      } else failHandshake("WORKER_UNEXPECTED_MESSAGE", CLOSE_CODES.BAD_MESSAGE);
+      routeReadyPacket(packet);
     });
 
     socket.on("close", () => {

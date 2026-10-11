@@ -1,6 +1,6 @@
 import { ClawError } from "../errors.mjs";
 import { assertLane } from "./lane.mjs";
-import { READ_ERRORS } from "../protocol/messages.mjs";
+import { READ_ERRORS, PUBLICATION_ERRORS } from "../protocol/messages.mjs";
 
 export function createRemoteLane({ id, registry, capabilities = {} } = {}) {
   if (typeof id !== "string" || !id || !registry) throw new ClawError("LANE_BAD_CONFIG");
@@ -66,10 +66,12 @@ export function createRemoteLane({ id, registry, capabilities = {} } = {}) {
 
   function health() {
     const lane = registry.snapshot().byLane[id] ?? { connected: 0, pending: 0, active: 0 };
-    const { connected, pending, active } = lane;
+    const { connected, pending, active, publicationCapable = 0 } = lane;
+    const readAvailable = connected > 0;
+    const ok = publicationCapable > 0;
     return {
-      ok: connected > 0, kind: "remote", id, workers: connected, pending, active,
-      ...(connected ? {} : { code: "NO_WORKER" }),
+      ok, readAvailable, publicationCapable, kind: "remote", id, workers: connected, pending, active,
+      ...(ok ? {} : { code: readAvailable ? PUBLICATION_ERRORS.DENIED : "NO_WORKER" }),
     };
   }
 

@@ -83,6 +83,7 @@ describe("single-host Forge-Claw smoke", () => {
         models: { work: "configured-work-model" },
       }],
       http: { bind: "127.0.0.1", port: 0 },
+      bootstrap: { copy: [], install: "none" },
     };
     const secrets = await createSecrets({
       env: fixtureEnv,

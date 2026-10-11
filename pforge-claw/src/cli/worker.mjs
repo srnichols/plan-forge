@@ -22,7 +22,7 @@ import { writeSecret } from "../protocol/secret-file.mjs";
 import { enrollWorker, createWorkerAgent, createL2Receiver, detectCapabilities } from "../protocol/worker-agent.mjs";
 import { ClawError } from "../errors.mjs";
 import { deltaApplicationIdentity, matchesApplicationAck, matchesLeaseAck } from "../protocol/l2-ack.mjs";
-import { L2_ACK_ERRORS } from "../protocol/messages.mjs";
+import { L2_ACK_ERRORS, PUBLICATION_ERRORS } from "../protocol/messages.mjs";
 
 const USAGE = [
   "Usage: pforge claw worker [enroll --lane <id> [--rotate] | join --code <code> [--url <ws(s)>] | revoke <workerId> | --one-shot --job <id> | [--home <dir>]]",
@@ -185,7 +185,14 @@ function hasCleanupProof({ entry, job, event, applicationAck }) {
 export function createLeaseExecution({ ctx, clients, subject, laneId, key, runtimeFactory } = {}) {
   const workspaces = new Map();
   const verifiedJobs = new Map();
-  const executionCtx = { ...ctx, projectClients: clients };
+  const executionCtx = {
+    ...ctx, projectClients: clients,
+    withPublication: (options, publish) => {
+      const current = verifiedJobs.get(options.job.id);
+      if (!current || typeof ctx.withPublication !== "function") throw new ClawError(PUBLICATION_ERRORS.DENIED);
+      return ctx.withPublication({ ...options, job: current }, publish);
+    },
+  };
   let executor;
   function recordVerifiedLease(verified) {
     const previous = verifiedJobs.get(verified.id);
@@ -223,7 +230,11 @@ export function createLeaseExecution({ ctx, clients, subject, laneId, key, runti
       recordVerifiedLease(verified);
       executor ??= createJobExecutor({
         ctx: { ...executionCtx, externalHistoryDelivery: true }, clients, runtimeFactory,
-        jobsFor: createLeaseJobSource, workspaceFor,
+        jobsFor: (job) => createLeaseJobSource(job, {
+          currentLease: () => verifiedJobs.get(job.id),
+          isCurrent: () => typeof ctx.isCurrentLease === "function" && ctx.isCurrentLease(verifiedJobs.get(job.id)),
+        }),
+        workspaceFor,
       });
       return executor.runtimeFor(verified);
     },
@@ -280,11 +291,17 @@ async function runWorker({ home, config }) {
     registry,
     logger,
     currentLaneId: laneId,
+    secrets,
     resolveLaunch: (project, currentConfig, options) => buildLaunch(
       project, currentConfig, { ...options, currentLaneId: laneId },
     ),
   });
-  const ctx = { home, config, secrets, registry, logger, bus: new EventEmitter(), features: [] };
+  let agent;
+  const ctx = {
+    home, config, secrets, registry, logger, bus: new EventEmitter(), features: [],
+    withPublication: (...args) => agent.withPublication(...args),
+    isCurrentLease: (job) => agent.isCurrentLease(job),
+  };
   const execution = createLeaseExecution({ ctx, clients, subject: identity.workerId, laneId, key: secret });
   const historyReceiver = createL2Receiver({ config, currentLaneId: laneId });
   const localLane = createLocalLane({
@@ -293,7 +310,7 @@ async function runWorker({ home, config }) {
     runtimeFor: execution.runtimeFor,
   });
   const capabilities = await detectCapabilities({ config, laneId });
-  const agent = createWorkerAgent({
+  agent = createWorkerAgent({
     url, workerId: identity.workerId, secret, laneId, capabilities, localLane,
     verifyLease: execution.verifyLease, l2: execution.l2, afterJob: execution.afterJob,
     readHandler: async (request, { signal } = {}) => {
@@ -363,7 +380,7 @@ function podExecutionConfig(job, repoDir, local = {}) {
     config: {
       ...local,
       projects: [{
-        id: job.projectId, homeLane: "local", models: local.models,
+        id: job.projectId, models: local.models,
         repo: { ...job.project.repo, path: repoDir, baseBranch: job.project.repo.defaultBranch ?? job.project.repo.baseBranch },
       }],
     },
@@ -383,6 +400,7 @@ export async function runOneShot(env = process.env, {
   let snapshot;
   let resolveDone;
   let terminal;
+  let currentPodJob;
   const done = new Promise((resolve) => { resolveDone = resolve; });
   const localLane = createLocalLane({
     id: laneId,
@@ -395,8 +413,9 @@ export async function runOneShot(env = process.env, {
     const signal = input.signal;
     let jobEnv = { ...env };
     const podRunner = (command, args, commandOptions = {}) => {
-      signal?.throwIfAborted();
-      return runner(command, args, { ...commandOptions, env: commandOptions.env ?? jobEnv, signal });
+      const commandSignal = commandOptions.signal ?? signal;
+      commandSignal?.throwIfAborted();
+      return runner(command, args, { ...commandOptions, env: commandOptions.env ?? jobEnv, signal: commandSignal });
     };
     const boot = await runPodJob({
       job: verified, project: verified.project, config: bootstrapConfig,
@@ -409,15 +428,17 @@ export async function runOneShot(env = process.env, {
     forgeDir = path.join(boot.repoDir, ".forge");
     snapshot = await snapshotForge({ forgeDir });
     const registry = { ...createRegistry(config), resolveMcpLaunch };
-    clients = clientsFactory({
-      config, registry, logger, env: jobEnv,
-      resolveLaunch: (project, currentConfig, launchOptions) => buildLaunch(
-        { ...project, homeLane: "local" }, currentConfig, { ...launchOptions, env: jobEnv },
-      ),
-    });
+    clients = clientsFactory({ config, registry, logger, env: jobEnv, secrets });
     const executor = createJobExecutor({
-      ctx: { config, secrets, registry, logger, env: jobEnv, bus: new EventEmitter(), features: [], runner: podRunner, projectClients: clients, externalHistoryDelivery: true },
-      clients, runtimeFactory, jobsFor: createLeaseJobSource,
+      ctx: {
+        config, secrets, registry, logger, env: jobEnv, bus: new EventEmitter(), features: [], runner: podRunner,
+        projectClients: clients, externalHistoryDelivery: true,
+        withPublication: (authority, publish) => agent.withPublication({ ...authority, job: currentPodJob }, publish),
+      },
+      clients, runtimeFactory,
+      jobsFor: (leased) => createLeaseJobSource(leased, {
+        currentLease: () => currentPodJob, isCurrent: () => agent.isCurrentLease(currentPodJob),
+      }),
       workspaceFor: () => clonedWorkspace({ repoDir: boot.repoDir, env: boot.env, jobId }),
     });
     const runtime = await executor.runtimeFor(verified);
@@ -434,7 +455,10 @@ export async function runOneShot(env = process.env, {
   const agent = createWorkerAgent({
     url, workerId: subject, secret: key, laneId, jobScope: { jobId },
     localLane, logger,
-    verifyLease: (job) => leasedJob(job, { subject, laneId, key, expectJobId: jobId }),
+    verifyLease: (job) => {
+      currentPodJob = leasedJob(job, { subject, laneId, key, expectJobId: jobId });
+      return currentPodJob;
+    },
     l2: {
       forgeDirFor: () => forgeDir, snapshot: async () => null,
       collect: async () => snapshot ? computeDelta({ forgeDir, snapshot }) : null,

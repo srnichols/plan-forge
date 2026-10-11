@@ -12,6 +12,29 @@ The Telegram `ChannelAdapter` receives messages and renders replies, progress, a
 
 All platforms require Node.js 22.12 or newer, a Plan Forge framework checkout, an explicit Telegram bot token stored outside committed config, and at least one allowlisted operator. GHCP work requires the seat holder's authenticated Copilot runtime; BYOK is available where configured. Keep `PFORGE_CLAW_HOME` host-level, outside project repositories.
 
+Execution hosts also need the supported native process-ownership runtime,
+including PowerShell 7 for the own-source OS bindings. No TypeScript compilation
+or additional npm package is introduced. `doctor` verifies a local native scope
+with a fixed read-only command and requires actual zero-owned-process evidence;
+command availability alone is not proof. Missing or unsupported native
+capabilities fail local execution explicitly, never fall back to process-list
+guesses or broader permissions. A dispatcher using only remote execution lanes
+does not need to control those remote processes locally.
+
+The current adapters use a private, nonbreakaway Job Object on Windows and a
+held child subreaper with pidfd identity/exit checks on Linux. Linux requires
+accessible procfs and the corresponding kernel syscalls under the execution
+account; containers do not need privileged mode or added capabilities.
+`doctor` tests these facilities instead of inferring them from an OS version.
+Native ownership is lifecycle control, not an OS sandbox.
+
+**macOS execution is a current release blocker.** An authoritative native
+descendant scope has not yet been verified there. Local mutating execution
+returns `PLAN_PROCESS_NATIVE_UNAVAILABLE` before running the command. A macOS
+dispatcher configured for remote-only execution can still use supported worker
+hosts, but that does not satisfy the promised native macOS worker acceptance.
+The cross-platform requirement has not been removed or replaced with a skip.
+
 ### macOS
 
 Install the supported Node.js version, authenticate the operator's Copilot seat if using GHCP, then initialize an example and review its configuration:
@@ -257,6 +280,28 @@ valid approval.
 The [Forge-Claw threat model on GitHub](https://github.com/srnichols/plan-forge/blob/planning/main/docs/PFORGE-CLAW-THREAT-MODEL.md) describes trust boundaries, abuse cases, mitigations, and known gaps. Allowlist identity and single-use approvals govern chat-triggered work; forwarded content is untrusted data; secrets stay outside configuration; each mutating job uses an isolated worktree or clone; workers connect outbound over authenticated TLS.
 
 Git worktrees are **not OS sandboxes**. They isolate repository changes, not processes, credentials, network access, or kernel privileges. Use a dedicated account or container boundary for stronger isolation. Preserve the threat model's blocked and pending caveats; do not infer safety guarantees from offline tests.
+
+Isolated jobs receive a bounded projection of their configured home MCP server,
+not a copy of the editor's ignored configuration or a secrets file. Approved
+launch choices are signed for remote and pod jobs; credential values are
+resolved only on the executing lane. Move literal MCP credential settings into
+that lane's secret store or environment using the same reference names, and
+provision the required framework runtime there. Explicit empty credential
+settings remain empty. Missing configuration, references or runtime provisioning
+fail before execution rather than silently selecting a different server.
+
+Workers and dispatchers negotiate publication-fence support before issuing job
+leases. An older authenticated worker can still serve read requests, but cannot
+receive job execution authority until upgraded. Publication reservations cover
+the entire Git/PR operation and are separate from canonical-history application
+ACKs; a timeout alone does not authorize a replacement to publish concurrently.
+
+Cancellation and publication commands require measured native settlement:
+zero owned descendants and a birth-qualified root exit. An exit code, elapsed
+deadline, transport receipt, or global process-list snapshot cannot supply that
+proof. Failed or cancelled jobs preserve their primary outcome and retain
+workspace/history ownership until canonical application acknowledgement and
+the required cleanup evidence are available.
 
 ## Experimental release readiness
 

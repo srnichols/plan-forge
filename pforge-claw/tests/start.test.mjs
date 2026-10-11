@@ -1,17 +1,24 @@
-import { mkdir, readFile, rm } from "node:fs/promises";
+import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { EventEmitter } from "node:events";
 import path from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { getPlacementService, bindPlacementService } from "../src/placement.mjs";
 import { bootDispatcher } from "../src/cli/start.mjs";
 import { createStore } from "../src/state/store.mjs";
-import { createSecrets } from "../src/secrets.mjs";
 import { createL2Receiver } from "../src/protocol/l2-receiver.mjs";
 import { createWorkerRegistry } from "../src/protocol/worker-registry.mjs";
+import { createWorkerAgent } from "../src/protocol/worker-agent.mjs";
+import { signGrant, verifyGrant } from "../src/protocol/lease-grant.mjs";
 import { createRemoteLane } from "../src/lanes/remote-lane.mjs";
-import { applicationIdentity } from "../src/protocol/l2-ack.mjs";
-import { encodeDeltaChunks } from "../src/memory/l2-sync.mjs";
+import { createLocalLane } from "../src/lanes/local-lane.mjs";
+import { createLeasePreparer } from "../src/jobs/lease-payload.mjs";
+import { HOME_MCP_BOOTSTRAP_TOOL } from "../src/jobs/bootstrap-mcp.mjs";
+import { createProjectClients } from "../src/mcp/project-client.mjs";
+import { createRegistry } from "../src/registry.mjs";
 import { drain, g1Directory } from "./g1-runner-fixture.mjs";
+import {
+  createWorkerFixtureTransport, observeWorkerFixtureSocket, prepareWorkerFixtureJob, writeWorkerFixtureMcp,
+} from "./worker-authority-fixture.mjs";
 
 const directories = [];
 
@@ -152,6 +159,7 @@ describe("dispatcher composition root", () => {
     const root = await makeHome();
     const checkout = path.join(root, "canonical-checkout");
     await mkdir(checkout);
+    await writeWorkerFixtureMcp(checkout);
     const homeId = remoteHome ? "remote-home" : "desktop-home";
     const current = {
       ...config(),
@@ -161,46 +169,52 @@ describe("dispatcher composition root", () => {
         { id: "execution-worker", kind: "remote", enabled: true },
       ],
     };
-    const workers = createWorkerRegistry({ requireL2: true });
+    const jobId = "a3000001";
+    const key = "start-history-worker-fixture";
+    const workers = createWorkerRegistry({
+      requireL2: true, signLease: ({ worker, grant }) => signGrant({ grant, subject: worker.id, key }),
+    });
     const homeReceiver = createL2Receiver({ config: current, currentLaneId: homeId });
     const bus = new EventEmitter();
-    const secrets = await createSecrets({ env: {} });
+    const transport = await createWorkerFixtureTransport({
+      root, registry: workers, lanes: ["execution-worker", ...(remoteHome ? [homeId] : [])],
+    });
+    const secrets = transport.secrets;
     const app = { start: async () => {}, stop: async () => {}, doctor: async () => [] };
     let handles;
-    workers.connect("history-worker", {
-      laneId: "execution-worker", capabilities: { projects: ["project"] },
-      send(packet) {
-        if (packet.t === "lease") queueMicrotask(() => {
-          workers.onAck({ leaseId: packet.leaseId, attempt: packet.attempt, workerId: "history-worker" });
-          const chunks = encodeDeltaChunks({
-            delta: { files: [], jsonl: { "openbrain-queue.jsonl": ['{"id":"history","text":"canonical bytes"}\n'] }, maps: {} },
-            deltaId: "history-job",
-          });
-          for (const [index, chunk] of chunks.entries()) workers.onEvent({
-            leaseId: packet.leaseId, attempt: packet.attempt, workerId: "history-worker",
-            event: { v: 1, jobId: "history-job", seq: index + 1, ts: new Date(0).toISOString(),
-              type: "artifact", data: { ...chunk, jobId: "history-job", projectId: "project" } },
-          });
-        });
-        if (packet.t === "l2-applied") queueMicrotask(() => workers.onEvent({
-          leaseId: packet.leaseId, attempt: packet.attempt, workerId: "history-worker",
-          event: { v: 1, jobId: "history-job", seq: 2, ts: new Date(0).toISOString(),
-            type: "finished", data: { status: "succeeded", l2: { ...applicationIdentity(packet), ok: packet.ok } } },
-        }));
-      },
+    const observed = observeWorkerFixtureSocket({ hold: (packet) => packet.t === "l2-applied" });
+    const sourceHome = path.join(root, "execution-checkout", ".forge");
+    const historyAgent = createWorkerAgent({
+      url: transport.url, workerId: "history-worker", secret: key, laneId: "execution-worker",
+      capabilities: { os: "linux", arch: "x64", macos: false, toolchains: ["node"], projects: ["project"] },
+      WebSocketImpl: observed.WebSocketImpl,
+      verifyLease: (job) => verifyGrant({
+        grant: job.leaseGrant, job, subject: "history-worker", laneId: "execution-worker", key,
+      }),
+      localLane: createLocalLane({ runtime: { run: async () => {
+        await mkdir(sourceHome, { recursive: true });
+        await writeFile(path.join(sourceHome, "openbrain-queue.jsonl"), '{"id":"history","text":"canonical bytes"}\n');
+        return { status: "succeeded" };
+      } } }),
+      l2: { forgeDirFor: () => sourceHome },
     });
-    if (remoteHome) workers.connect("canonical-worker", {
-      laneId: homeId, capabilities: { projects: ["project"] },
-      send(packet) {
-        if (packet.t !== "lease") return;
-        void homeReceiver.read(packet.request).then((ack) => workers.onEvent({
-          leaseId: packet.leaseId, attempt: packet.attempt, workerId: "canonical-worker",
-          event: { v: 1, jobId: packet.request.requestId, seq: 1, ts: new Date(0).toISOString(),
-            type: "finished", data: { status: "ok", result: ack } },
-        }));
-      },
+    const homeClients = createProjectClients({
+      config: current, registry: createRegistry(current), secrets, env: {}, currentLaneId: homeId,
     });
+    const homeAgent = remoteHome ? createWorkerAgent({
+      url: transport.url, workerId: "canonical-worker", secret: key, laneId: homeId,
+      capabilities: { os: "linux", arch: "x64", macos: false, toolchains: ["node"], projects: ["project"] },
+      readHandler: (request, options) => request.tool === HOME_MCP_BOOTSTRAP_TOOL
+        ? homeClients.call(request.projectId, request.tool, request.args, options)
+        : homeReceiver.read(request, options),
+    }) : null;
     try {
+      await transport.enrollment.register({ workerId: "history-worker", laneId: "execution-worker", secret: key });
+      if (homeAgent) await transport.enrollment.register({ workerId: "canonical-worker", laneId: homeId, secret: key });
+      historyAgent.start();
+      homeAgent?.start();
+      await expect.poll(() => workers.snapshot().byLane["execution-worker"]?.publicationCapable).toBe(1);
+      if (homeAgent) await expect.poll(() => workers.snapshot().byLane[homeId]?.connected).toBe(1);
       handles = await bootDispatcher({
         home: path.join(root, "claw-home"), loadedConfig: { ok: true, config: current },
         validateConfig: async () => ({ ok: true }), env: {}, secrets,
@@ -209,23 +223,38 @@ describe("dispatcher composition root", () => {
         workers: {
           registry: () => workers,
           getLane: (id) => createRemoteLane({ id, registry: workers }),
-          preparerFor: () => async (job) => job,
+          preparerFor: (laneConfig, directory) => (job, options) => createLeasePreparer({
+            ctx: handles.ctx, laneConfig, directory,
+          })(job, options),
         },
       });
-      const stream = workers.enqueue("execution-worker", {
-        kind: "job", job: { id: "history-job", projectId: "project", type: "task" },
-      }).iterator;
-      const events = await drain(stream);
+      const job = await prepareWorkerFixtureJob({
+        root, config: current, laneId: "execution-worker", directory: handles.ctx.lanes,
+        job: { id: jobId, projectId: "project", type: "task", mutating: true },
+      });
+      const stream = workers.enqueue("execution-worker", { kind: "job", job }).iterator;
+      const completion = drain(stream);
+      await expect.poll(() => observed.held.some((packet) => packet.t === "l2-applied")).toBe(true);
+      expect(observed.sent.some((packet) => packet.event?.type === "finished")).toBe(false);
+      expect(await readFile(path.join(checkout, ".forge", "openbrain-queue.jsonl"), "utf8"))
+        .toBe('{"id":"history","text":"canonical bytes"}\n');
+      observed.receive(observed.held.find((packet) => packet.t === "l2-applied"));
+      const events = await completion;
       expect(events.at(-1).data.status).toBe("succeeded");
-      expect(workers.completion("history-job")).toMatchObject({
-        ok: true, applicationAck: { jobId: "history-job", projectId: "project", ok: true },
+      expect(workers.completion(jobId)).toMatchObject({
+        ok: true, applicationAck: { jobId, projectId: "project", ok: true },
       });
       expect(await readFile(path.join(checkout, ".forge", "openbrain-queue.jsonl"), "utf8"))
         .toBe('{"id":"history","text":"canonical bytes"}\n');
       expect(handles.ctx.l2Receiver).toBeTruthy();
       expect(handles.ctx.projectClients).toBe(handles.clients);
     } finally {
-      workers.close();
+      historyAgent.stop();
+      homeAgent?.stop();
+      await historyAgent.drain();
+      await homeAgent?.drain();
+      await homeClients.closeAll();
+      await transport.close();
       await handles?.stop();
     }
   });

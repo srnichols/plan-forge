@@ -104,6 +104,15 @@ scalars, and complex inline flow values are not supported.
 
 ## One-shot Job credentials and execution
 
+Worker images include PowerShell 7 for the own-source Linux lifecycle adapter.
+The production worker and disposable fixture images share a checksum-verified
+installer with explicit amd64/arm64 selection; it accepts the upstream binary
+checksum marker and refuses mismatched archives before extraction. The adapter
+requires procfs, child-subreaper and pidfd facilities under UID 10001. No
+privileged pod, added capability or relaxed seccomp policy is supplied as a
+fallback. Unsupported facilities fail before command execution, and a real
+native probe is separate from image availability or cluster health.
+
 Stop the dispatcher and run `pforge claw worker enroll --lane <k8s-lane>`.
 This creates a 256-bit lane secret in the dispatcher's restricted
 `<home>/secrets.json` under `k8s.laneSecret` (default

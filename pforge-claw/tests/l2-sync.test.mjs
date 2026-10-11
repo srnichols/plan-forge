@@ -36,8 +36,11 @@ import { createStore } from "../src/state/store.mjs";
 import { createL2Receiver } from "../src/protocol/l2-receiver.mjs";
 import { applicationIdentity, matchesApplicationAck } from "../src/protocol/l2-ack.mjs";
 import { createLocalLane } from "../src/lanes/local-lane.mjs";
-import { buildLeaseGrant, signGrant, verifyGrant } from "../src/protocol/lease-grant.mjs";
+import { signGrant, verifyGrant } from "../src/protocol/lease-grant.mjs";
 import { g1Directory } from "./g1-runner-fixture.mjs";
+import {
+  createWorkerFixtureTransport, observeWorkerFixtureSocket, prepareWorkerFixtureJob, writeWorkerFixtureMcp,
+} from "./worker-authority-fixture.mjs";
 
 const directories = [];
 const cleanups = [];
@@ -244,11 +247,13 @@ describe("L2 synchronization contracts", () => {
     const worktree = path.join(directory, "worker-checkout");
     await mkdir(checkout);
     await mkdir(worktree);
+    await writeWorkerFixtureMcp(checkout);
     const config = {
-      lanes: [{ id: "remote", kind: "remote" }],
-      projects: [{ id: "p1", homeLane: "remote", repo: { path: checkout } }],
+      allowlist: [{ channel: "telegram", userId: "owner", role: "owner" }],
+      lanes: [{ id: "remote", kind: "remote" }, { id: "canonical", kind: "local" }],
+      projects: [{ id: "p1", homeLane: "canonical", repo: { path: checkout } }],
     };
-    const receiver = createL2Receiver({ config, currentLaneId: "remote" });
+    const receiver = createL2Receiver({ config, currentLaneId: "canonical" });
     const store = createStore(path.join(directory, "state"));
     const unlock = store.lock();
     const secrets = await createSecrets({ env: {}, file: path.join(directory, "secrets.json") });
@@ -295,11 +300,11 @@ describe("L2 synchronization contracts", () => {
     });
     await expect.poll(() => registry.snapshot().byLane.remote?.connected ?? 0).toBe(1);
     const jobEvents = [];
-    const job = { id: "job-l2", projectId: "p1", type: "task", mutating: true, runtime: "copilot-sdk" };
-    const leaseGrant = buildLeaseGrant({
-      leaseJob: job, laneId: "remote", proof: { kind: "consumed", ref: "fixture-proof", decidedAt: 0 },
+    const job = await prepareWorkerFixtureJob({
+      root: directory, config, laneId: "remote",
+      job: { id: "a2000000", projectId: "p1", type: "task", mutating: true },
     });
-    for await (const event of lane.submit({ ...job, leaseGrant })) jobEvents.push(event);
+    for await (const event of lane.submit(job)) jobEvents.push(event);
     expect(jobEvents.map((event) => event.type)).toEqual(["started", "artifact", "finished"]);
     expect(jobEvents.map((event) => event.seq)).toEqual([1, 2, 3]);
     expect(jobEvents.at(-1).data.status).toBe("succeeded");
@@ -475,26 +480,30 @@ describe("L2 synchronization contracts", () => {
         const checkout = path.join(root, "canonical");
         await mkdir(worktree);
         await mkdir(checkout);
-        const receiver = createL2Receiver({
-          config: { lanes: [{ id: "remote", kind: "remote" }],
-            projects: [{ id: "p1", homeLane: "remote", repo: { path: checkout } }] },
-          currentLaneId: "remote",
+        await writeWorkerFixtureMcp(checkout);
+        const config = {
+          allowlist: [{ channel: "telegram", userId: "owner", role: "owner" }],
+          lanes: [{ id: "remote", kind: "remote" }, { id: "canonical", kind: "local" }],
+          projects: [{ id: "p1", homeLane: "canonical", repo: { path: checkout } }],
+        };
+        const receiver = createL2Receiver({ config, currentLaneId: "canonical" });
+        const secret = "terminal-worker-fixture";
+        const registry = createWorkerRegistry({
+          requireL2: true, applyL2: receiver.receive,
+          signLease: ({ worker, grant }) => signGrant({ grant, subject: worker.id, key: secret }),
         });
-        let socket;
-        const sent = [];
+        const transport = await createWorkerFixtureTransport({ root, registry, lanes: ["remote"] });
+        await transport.enrollment.register({ workerId: "w1", laneId: "remote", secret });
+        const observed = observeWorkerFixtureSocket({
+          hold: (packet) => packet.t === "l2-applied" || packet.t === "heartbeat",
+        });
         const hooks = [];
-        class FakeSocket extends EventEmitter {
-          OPEN = 1;
-          readyState = 1;
-          constructor() { super(); socket = this; }
-          send(raw) { sent.push(JSON.parse(raw)); }
-          close() { this.readyState = 3; }
-        }
         const acked = vi.fn(() => hooks.push("acked"));
         const agent = createWorkerAgent({
-          url: "ws://127.0.0.1/claw/workers", workerId: "w1", secret: "fixture",
+          url: transport.url, workerId: "w1", secret,
           laneId: "remote", capabilities: { os: "linux", arch: "x64", macos: false, toolchains: [], projects: ["p1"] },
-          WebSocketImpl: FakeSocket,
+          WebSocketImpl: observed.WebSocketImpl,
+          verifyLease: (job) => verifyGrant({ grant: job.leaseGrant, job, subject: "w1", laneId: "remote", key: secret }),
           localLane: createLocalLane({ runtime: { run: async () => {
             await writeForgeFile(path.join(worktree, ".forge"), invalidHistory ? "cost-history.json" : "openbrain-queue.jsonl",
               invalidHistory ? "invalid JSON" : '{"id":"terminal-history"}\n');
@@ -508,13 +517,19 @@ describe("L2 synchronization contracts", () => {
           },
           onLeaseAcked: acked,
         });
+        cleanups.push(async () => {
+          agent.stop();
+          await agent.drain();
+          await transport.close();
+        });
         agent.start();
-        cleanups.push(() => agent.stop());
-        socket.emit("open");
-        const receive = (packet) => socket.emit("message", Buffer.from(encode(packet)), false);
-        receive(message("lease", { leaseId: "l1", attempt: 1, kind: "job", expiresAt: 60_000,
-          job: { id: "j1", projectId: "p1", type: "task" } }));
-        return { receive, sent, hooks, acked, receiver, checkout };
+        await vi.waitFor(() => expect(registry.snapshot().byLane.remote?.publicationCapable).toBe(1));
+        const job = await prepareWorkerFixtureJob({
+          root, config, laneId: "remote",
+          job: { id: "a2000001", projectId: "p1", type: "task", mutating: true },
+        });
+        registry.enqueue("remote", { kind: "job", job });
+        return { ...observed, hooks, acked, receiver, checkout, job };
       }
       it("afterJob runs only after real application ACK and terminal receipt fires exactly once", async () => {
         const fixture = await agentFixture();
@@ -522,16 +537,27 @@ describe("L2 synchronization contracts", () => {
         expect(fixture.hooks).toEqual([]);
         const chunks = fixture.sent.filter((packet) => packet.event?.type === "artifact").map((packet) => packet.event.data);
         const ack = await fixture.receiver.receive({
-          jobId: "j1", projectId: "p1", deltaId: chunks[0].deltaId, sha256Total: chunks[0].sha256Total, chunks,
+          jobId: fixture.job.id, projectId: "p1", deltaId: chunks[0].deltaId, sha256Total: chunks[0].sha256Total, chunks,
         });
         expect(ack.ok).toBe(true);
         expect(await readFile(path.join(fixture.checkout, ".forge", "openbrain-queue.jsonl"), "utf8")).toContain("terminal-history");
-        fixture.receive(message("l2-applied", { leaseId: "l1", attempt: 1, ...ack }));
+        await vi.waitFor(() => expect(fixture.held.some((packet) => packet.t === "l2-applied")).toBe(true));
+        const applicationAck = fixture.held.find((packet) => packet.t === "l2-applied");
+        const lease = fixture.received.find((packet) => packet.t === "lease");
+        expect(applicationAck).toMatchObject({ leaseId: lease.leaseId, attempt: lease.attempt });
+        expect(matchesApplicationAck(ack, applicationAck)).toBe(true);
+        expect(fixture.sent.find((packet) => packet.t === "hello").publicationFence).toBe(1);
+        expect(fixture.received.find((packet) => packet.t === "ready").publicationFence).toBe(1);
+        fixture.receive(applicationAck);
         await vi.waitFor(() => expect(fixture.hooks).toEqual(["after"]));
         const events = fixture.sent.filter((packet) => packet.t === "event").map((packet) => packet.event);
         expect(events.map((event) => event.type)).toEqual(["started", "artifact", "finished"]);
-        const receipt = message("heartbeat", { ts: 1, leases: [{ leaseId: "l1", attempt: 1, lastSeq: 3 }] });
-        fixture.receive(message("heartbeat", { ts: 1, leases: [{ leaseId: "l1", attempt: 2, lastSeq: 3 }] }));
+        await vi.waitFor(() => expect(fixture.held.some((packet) => packet.t === "heartbeat"
+          && packet.leases.some((item) => item.leaseId === lease.leaseId && item.lastSeq === 3))).toBe(true));
+        const receipt = fixture.held.find((packet) => packet.t === "heartbeat"
+          && packet.leases.some((item) => item.leaseId === lease.leaseId && item.lastSeq === 3));
+        fixture.receive(message("heartbeat", { ...receipt,
+          leases: receipt.leases.map((item) => ({ ...item, attempt: item.attempt + 1 })) }));
         expect(fixture.acked).not.toHaveBeenCalled();
         fixture.receive(receipt);
         fixture.receive(receipt);

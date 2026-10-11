@@ -11,11 +11,19 @@ import { createSecrets } from "../src/secrets.mjs";
 import { createL2Receiver } from "../src/protocol/l2-receiver.mjs";
 import { createG1ProjectClients } from "./g1-runner-fixture.mjs";
 import { buildWorktreeLaunch } from "../src/mcp/project-client.mjs";
+import { collectLeaseMcpBootstrap } from "../src/jobs/bootstrap-mcp.mjs";
+import { createLocalLane } from "../src/lanes/local-lane.mjs";
+import { createWorkerAgent } from "../src/protocol/worker-agent.mjs";
+import { createWorkerRegistry } from "../src/protocol/worker-registry.mjs";
+import { decode, encode, message, PUBLICATION_MESSAGE, PUBLICATION_FENCE_VERSION } from "../src/protocol/messages.mjs";
 
 const TEST_DIRECTORY = path.dirname(fileURLToPath(import.meta.url));
+const SIGNING_KEY = "fixture-signing-key";
+const HEARTBEAT_MS = 15_000;
 let root;
 let ctx;
 let sessions;
+let authority;
 
 beforeEach(async () => {
   root = await mkdtemp(path.join(TEST_DIRECTORY, ".claw-executor-"));
@@ -41,22 +49,93 @@ beforeEach(async () => {
     }),
     features: [],
     bus: new EventEmitter(),
-    runner: async (_command, args) => {
-      if (args.includes("status")) return { code: 0, stdout: "", stderr: "" };
-      if (args.includes("rev-list")) return { code: 0, stdout: "0", stderr: "" };
+    runner: async (_command, args, options = {}) => {
+      const completed = { code: 0, stdout: "", stderr: "",
+        ...(options.requireSettlement === true ? { settlementConfirmed: true } : {}) };
+      if (args.includes("status")) return completed;
+      if (args.includes("rev-list")) return { ...completed, stdout: "0" };
       throw new Error("Unexpected external command");
     },
   };
   ctx.projectClients = createG1ProjectClients({ config: ctx.config, env: {}, secrets: ctx.secrets });
   ctx.l2Receiver = createL2Receiver({ config: ctx.config, currentLaneId: "fixture-home" });
+  authority = createLeaseAuthority();
+  ctx.withPublication = authority.withPublication;
 });
 
 afterEach(async () => {
+  await authority.close();
   await ctx.projectClients.closeAll();
   await rm(root, { recursive: true, force: true });
 });
 
-function lease(overrides = {}) {
+function createLeaseAuthority() {
+  const held = new Map();
+  const registry = createWorkerRegistry({
+    requireL2: true, applyL2: ctx.l2Receiver.receive,
+    signLease: ({ worker, grant }) => signGrant({ grant, subject: worker.id, key: SIGNING_KEY }),
+  });
+  const capabilities = {
+    os: process.platform, arch: process.arch, macos: process.platform === "darwin", toolchains: [], projects: ["p1"],
+  };
+  let socket;
+  const receive = (packet) => socket.emit("message", Buffer.from(encode(packet)), false);
+  class Socket extends EventEmitter {
+    OPEN = 1;
+    readyState = 1;
+    constructor() { super(); socket = this; }
+    send(raw) {
+      const packet = decode(raw);
+      if (packet.t === "ack") registry.onAck({ ...packet, workerId: "worker1" });
+      if (packet.t === "event") registry.onEvent({ ...packet, workerId: "worker1" });
+      if (packet.t === PUBLICATION_MESSAGE) receive(registry.onPublication({ ...packet, workerId: "worker1" }));
+      if (packet.t === "heartbeat") receive(message("heartbeat", {
+        ts: 1, leases: registry.onHeartbeat({ ...packet, workerId: "worker1" }),
+      }));
+    }
+    close() { this.readyState = 3; this.emit("close", 1000); }
+  }
+  const localLane = createLocalLane({
+    id: "remote1", maxHeavy: 2,
+    runtimeFor: async (job) => {
+      const lease = held.get(job.id);
+      lease.ready.resolve(structuredClone(job));
+      return { run: () => lease.release.promise };
+    },
+  });
+  const agent = createWorkerAgent({
+    url: "ws://127.0.0.1/claw/workers", workerId: "worker1", laneId: "remote1", secret: SIGNING_KEY,
+    capabilities, localLane, WebSocketImpl: Socket, rand: () => 0,
+    verifyLease: (job) => verifyGrant({
+      grant: job.leaseGrant, job, subject: "worker1", laneId: "remote1", key: SIGNING_KEY,
+    }),
+  });
+  agent.start();
+  socket.emit("open");
+  receive(message("ready", { leaseMs: registry.leaseMs, heartbeatMs: HEARTBEAT_MS, publicationFence: PUBLICATION_FENCE_VERSION }));
+  registry.connect("worker1", { laneId: "remote1", capabilities, publicationFence: true, send: receive });
+  return {
+    withPublication: agent.withPublication.bind(agent),
+    async accept(job) {
+      const lease = { ready: Promise.withResolvers(), release: Promise.withResolvers() };
+      held.set(job.id, lease);
+      registry.enqueue("remote1", { kind: "job", job });
+      return lease.ready.promise;
+    },
+    async release(jobId) {
+      held.get(jobId).release.resolve({ ok: false, status: "cancelled" });
+      await agent.drain();
+    },
+    async close() {
+      agent.stop();
+      for (const lease of held.values()) lease.release.resolve({ ok: false, status: "cancelled" });
+      await agent.drain();
+      registry.close();
+    },
+  };
+}
+
+async function lease(overrides = {}) {
   const payload = {
     id: "j1", projectId: "p1", type: "task", mutating: true, prompt: "approved prompt",
     runtime: "openai",
@@ -67,18 +146,19 @@ function lease(overrides = {}) {
     },
     ...overrides,
   };
+  payload.mcpBootstrap = await collectLeaseMcpBootstrap({ project: ctx.config.projects[0], config: ctx.config });
   payload.leaseGrant = signGrant({
     grant: buildLeaseGrant({
-      leaseJob: payload, laneId: "remote1", now: () => 0,
+      leaseJob: payload, laneId: "remote1",
       proof: { kind: "consumed", ref: "a1", decidedAt: 0 },
     }),
-    subject: "worker1", key: "fixture-signing-key",
+    subject: "worker1", key: SIGNING_KEY,
   });
   verifyGrant({
     grant: payload.leaseGrant, job: payload, subject: "worker1",
-    laneId: "remote1", key: "fixture-signing-key", now: () => 1,
+    laneId: "remote1", key: SIGNING_KEY,
   });
-  return payload;
+  return authority.accept(payload);
 }
 
 function executor() {
@@ -143,7 +223,7 @@ describe("verified lease execution configuration", () => {
   });
 
   it("uses signed project models and provider secret references rather than stale worker config", async () => {
-    const job = lease();
+    const job = await lease();
     const before = JSON.stringify(job);
     const runtime = await executor().runtimeFor(job);
     const result = await runtime.run({ ...job });
@@ -161,12 +241,13 @@ describe("verified lease execution configuration", () => {
 
   it("does not reuse a cached provider across distinct signed execution choices", async () => {
     const run = executor();
-    const first = lease();
-    const second = lease({
+    const first = await lease();
+    const firstResult = await (await run.runtimeFor(first)).run(first);
+    await authority.release(first.id);
+    const second = await lease({
       id: "j2", provider: { type: "openai", endpoint: "https://second.example", keySecret: "SECOND_KEY" },
       project: { id: "p1", models: { work: "second-work-model" } },
     });
-    const firstResult = await (await run.runtimeFor(first)).run(first);
     const secondResult = await (await run.runtimeFor(second)).run(second);
     expect(firstResult.status, firstResult.reason ?? firstResult.error).toBe("succeeded");
     expect(secondResult.status, secondResult.reason ?? secondResult.error).toBe("succeeded");
@@ -179,7 +260,7 @@ describe("verified lease execution configuration", () => {
   });
 
   it("retains an immutable verified job snapshot across runtime handoff", async () => {
-    const job = lease();
+    const job = await lease();
     const runtime = await executor().runtimeFor(job);
     job.prompt = "changed after verification";
     job.provider.endpoint = "https://changed.example";
@@ -192,7 +273,7 @@ describe("verified lease execution configuration", () => {
 
   it("refuses unsigned explicit runtime choices rather than relying on a cached runtime", async () => {
     const run = executor();
-    await run.runtimeFor(lease());
+    await run.runtimeFor(await lease());
     await expect(run.runtimeFor({ id: "unsigned", projectId: "p1", runtime: "openai" }))
       .rejects.toMatchObject({ code: "RUNTIME_POLICY_DENIED" });
   });

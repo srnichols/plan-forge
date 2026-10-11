@@ -2,16 +2,22 @@ import { readFile } from "node:fs/promises";
 import { ClawError } from "../errors.mjs";
 import path from "node:path";
 import { matchesApplicationAck } from "../protocol/l2-ack.mjs";
+import { PUBLICATION_ERRORS } from "../protocol/messages.mjs";
 import { TERMINAL } from "./model.mjs";
 import { prepareJobEnvironment } from "./runner-environment.mjs";
 import { beginJobHistory, synchronizeJobHistory } from "./runner-history.mjs";
 import { resolveGhCommand } from "./worktree.mjs";
 
 const ERROR_CODE = /^[A-Z0-9_]{1,64}$/;
-const EVENT_TEXT_LIMIT = 8 * 1024;
+const EVENT_TEXT_LIMIT = 8192;
 const ACTIVE_STATES = Object.freeze(["leased", "running", "needs-input"]);
 const PLAN_USAGE_FIELDS = Object.freeze(["costUSD", "premiumRequests"]);
 const ISO_INSTANT = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,3})?(?:Z|[+-]\d{2}:\d{2})$/;
+const GIT_OBJECT_ID = /^(?:[a-f0-9]{40}|[a-f0-9]{64})$/i;
+const GIT_HEAD = "HEAD";
+const GIT_PUBLICATION_ERRORS = Object.freeze({
+  UNAVAILABLE: "GIT_BRANCH_UNAVAILABLE", DIVERGED: "GIT_BRANCH_DIVERGED",
+});
 export const PLAN_ACTUALS_UNCONFIRMED = "PLAN_ACTUALS_UNCONFIRMED";
 export const PLAN_RUN_ID = /^[A-Za-z0-9][A-Za-z0-9._-]{0,159}$/;
 
@@ -93,12 +99,78 @@ function emitFinished({ ctx, job, state, reason, execution }) {
   });
 }
 
-async function publicationCommand({ ctx, job, signal, env, cwd, command, args, code = "COMMAND_FAILED" }) {
+async function runPublicationCommand({ ctx, command, args, cwd, env, signal, publicationSettlement }) {
+  if (publicationSettlement) publicationSettlement.pending += 1;
+  try {
+    const completed = await ctx.runner(command, args, { cwd, env, signal, requireSettlement: true });
+    if (publicationSettlement && completed?.settlementConfirmed !== true) {
+      publicationSettlement.allConfirmed = false;
+      throw new ClawError(PUBLICATION_ERRORS.DENIED);
+    }
+    if (publicationSettlement && completed.code !== 0) publicationSettlement.allConfirmed = false;
+    return completed;
+  } catch (error) {
+    if (publicationSettlement) publicationSettlement.allConfirmed = false;
+    throw error;
+  } finally {
+    if (publicationSettlement) publicationSettlement.pending -= 1;
+  }
+}
+
+async function publicationCommand(options) {
+  const { ctx, job, signal, code = "COMMAND_FAILED" } = options;
   assertJobActive({ ctx, job, signal });
-  const completed = await ctx.runner(command, args, { cwd, env, signal });
+  const completed = await runPublicationCommand(options);
   assertJobActive({ ctx, job, signal });
   if (completed.code !== 0) throw new ClawError(code);
   return completed;
+}
+
+async function withPublication(options, operation) {
+  const { ctx, job, signal } = options;
+  if (typeof ctx.withPublication === "function") {
+    return ctx.withPublication({ job, signal }, async ({ signal: ownerSignal, confirmSettled }) => {
+      const publicationSettlement = { pending: 0, allConfirmed: true };
+      try {
+        if (!(ownerSignal instanceof AbortSignal)) throw new ClawError(PUBLICATION_ERRORS.DENIED);
+        const publicationSignal = signal ? AbortSignal.any([signal, ownerSignal]) : ownerSignal;
+        assertJobActive({ ctx, job, signal: publicationSignal });
+        return await operation({ ...options, signal: publicationSignal, publicationSettlement });
+      } finally {
+        if (publicationSettlement.pending === 0 && publicationSettlement.allConfirmed
+          && typeof confirmSettled === "function") confirmSettled();
+      }
+    });
+  }
+  if (job.leaseGrant) throw new ClawError(PUBLICATION_ERRORS.DENIED);
+  return operation(options);
+}
+
+async function readPublicationCommit(options, reference) {
+  const completed = await publicationCommand({
+    ...options, command: "git", args: ["-C", options.cwd, "rev-parse", "--verify", reference],
+    code: GIT_PUBLICATION_ERRORS.UNAVAILABLE,
+  });
+  const commit = completed.stdout.trim();
+  if (!GIT_OBJECT_ID.test(commit)) throw new ClawError(GIT_PUBLICATION_ERRORS.UNAVAILABLE);
+  return commit;
+}
+
+async function reconcilePublicationBranch(options) {
+  const branch = `claw/${options.job.id}`;
+  const reference = `refs/heads/${branch}`;
+  const expected = await readPublicationCommit(options, reference);
+  const executedHead = await readPublicationCommit(options, GIT_HEAD);
+  await publicationCommand({
+    ...options, command: "git", args: ["-C", options.cwd, "merge-base", "--is-ancestor", expected, executedHead],
+    code: GIT_PUBLICATION_ERRORS.DIVERGED,
+  });
+  // Preserve native kept-on-branch policy; only fast-forward the approved ref with compare-and-swap.
+  await publicationCommand({
+    ...options, command: "git", args: ["-C", options.cwd, "update-ref", reference, executedHead, expected],
+    code: GIT_PUBLICATION_ERRORS.DIVERGED,
+  });
+  return branch;
 }
 
 async function hasChanges(options) {
@@ -107,6 +179,13 @@ async function hasChanges(options) {
   });
   return completed.stdout.split(/\r?\n/).some((line) =>
     line.trim().length > 0 && line.slice(3).trim() !== ".claw-job.json");
+}
+
+async function hasStagedChanges(options) {
+  const completed = await publicationCommand({
+    ...options, command: "git", args: ["-C", options.cwd, "diff", "--cached", "--name-only"], code: "GIT_DIFF_FAILED",
+  });
+  return completed.stdout.trim().length > 0;
 }
 
 async function pullRequestBody({ job, project, worktree, summary }) {
@@ -119,24 +198,26 @@ async function pullRequestBody({ job, project, worktree, summary }) {
   }
 }
 
-async function publishWorktree({ ctx, job, project, handle, env, signal }) {
+async function publishWorktree({ ctx, job, project, handle, env, signal, publicationSettlement }) {
   const cwd = handle.path;
   const baseBranch = project.repo.baseBranch ?? "main";
   const summary = job.summary ?? job.description ?? `${job.type} ${job.id}`;
-  const options = { ctx, job, env, signal, cwd };
+  const options = { ctx, job, env, signal, cwd, publicationSettlement };
   if (await hasChanges(options)) {
     await publicationCommand({
       ...options, command: "git", args: ["-C", cwd, "add", "-A", "--", ".", ":(exclude).claw-job.json"],
     });
-    await publicationCommand({
-      ...options, command: "git", args: ["-C", cwd, "commit", "-m", `[claw] ${summary} (job ${job.id})`],
-    });
+    if (await hasStagedChanges(options)) {
+      await publicationCommand({
+        ...options, command: "git", args: ["-C", cwd, "commit", "-m", `[claw] ${summary} (job ${job.id})`],
+      });
+    }
   }
   const ahead = await publicationCommand({
-    ...options, command: "git", args: ["-C", cwd, "rev-list", "--count", `${baseBranch}..HEAD`], code: "GIT_LOG_FAILED",
+    ...options, command: "git", args: ["-C", cwd, "rev-list", "--count", `${baseBranch}..${GIT_HEAD}`], code: "GIT_LOG_FAILED",
   });
   if (!(Number.parseInt(ahead.stdout.trim(), 10) > 0)) return { pr: false };
-  const branch = `claw/${job.id}`;
+  const branch = await reconcilePublicationBranch(options);
   await publicationCommand({ ...options, command: "git", args: ["-C", cwd, "push", "-u", "origin", branch] });
   const body = await pullRequestBody({ job, project, worktree: cwd, summary });
   const gh = resolveGhCommand({ config: ctx.config });
@@ -155,9 +236,11 @@ function isCancelled(error, signal) {
 async function pushFailure({ ctx, job, handle, env, signal }) {
   if (!handle?.path || !ctx.config?.jobs?.pushOnFailure || signal?.aborted) return;
   try {
-    await publicationCommand({
-      ctx, job, signal, env, cwd: handle.path, command: "git",
-      args: ["-C", handle.path, "push", "-u", "origin", `claw/${job.id}`],
+    await withPublication({ ctx, job, signal, env, cwd: handle.path }, async (options) => {
+      const branch = await reconcilePublicationBranch(options);
+      return publicationCommand({
+        ...options, command: "git", args: ["-C", handle.path, "push", "-u", "origin", branch],
+      });
     });
   } catch (error) {
     if (isCancelled(error, signal)) return;
@@ -199,6 +282,7 @@ async function publishOrFail(options) {
   try {
     return await publishWorktree(options);
   } catch (error) {
+    if (failureReason(error) === PUBLICATION_ERRORS.DENIED) throw error;
     if (isCancelled(error, options.signal)) throw new ClawError("JOB_CANCELLED");
     throw new ClawError("PUBLISH_FAILED", { reason: "publish", code: failureReason(error) });
   }
@@ -217,23 +301,60 @@ async function prepareWorkspace({ ctx, job, project, signal, state }) {
   if (!state.handle?.path) throw new ClawError("WORKSPACE_BAD_CONTRACT");
   state.env = { ...state.env, ...prepared.env };
   assertJobActive({ ctx, job, signal });
-  return beginJobHistory({ job, worktree: state.handle.path });
+  state.snapshot = await beginJobHistory({ job, worktree: state.handle.path });
 }
 
-async function completeWorkspace({ ctx, job, project, state, snapshot, returned, signal, emit }) {
+async function finalizeJobHistory({ ctx, job, state, signal }) {
+  if (!state.executionStarted || state.externalHistoryDelivery || state.historyAttempted) return state.history;
+  state.historyAttempted = true;
+  try {
+    state.history = await synchronizeJobHistory({
+      job, worktree: state.handle.path, snapshot: state.snapshot,
+      receiver: ctx.l2Receiver, signal, timeoutMs: ctx.l2AckTimeoutMs,
+    });
+  } catch (error) {
+    state.historyError = error;
+    throw error;
+  }
+  ctx.store?.append?.("audit", {
+    v: 1, kind: "job.history-applied", applicationAck: state.history.applicationAck,
+  });
+  return state.history;
+}
+
+function historyOutcome(state) {
+  if (state.history) return { l2: state.history.applicationAck };
+  return state.historyError ? { l2Error: failureReason(state.historyError) } : {};
+}
+
+async function finalizeFailedHistory({ ctx, job, state }) {
+  try {
+    // Execution has settled. Cancellation must not suppress its bounded canonical history delivery.
+    await finalizeJobHistory({ ctx, job, state });
+  } catch (error) {
+    const code = failureReason(error);
+    ctx.logger?.warn?.("Job history delivery failed; source retained", { code });
+    ctx.bus?.emit("job.warning", { jobId: job.id, code });
+  }
+}
+
+async function failWorkspace({ ctx, job, state, error, signal }) {
+  state.handle ??= error?.worktreeHandle ?? null;
+  if (!isCancelled(error, signal)) await pushFailure({ ctx, job, handle: state.handle, env: state.env, signal });
+  await finalizeFailedHistory({ ctx, job, state });
+  return { ...settleFailure({ ctx, job, error, signal, execution: state.execution }), ...historyOutcome(state) };
+}
+
+async function completeWorkspace({ ctx, job, project, state, returned, signal, emit }) {
   assertJobActive({ ctx, job, signal });
-  const published = await publishOrFail({ ctx, job, project, handle: state.handle, env: state.env, signal });
+  const published = await withPublication({
+    ctx, job, project, handle: state.handle, env: state.env, signal,
+  }, publishOrFail);
   assertJobActive({ ctx, job, signal });
   if (published.prUrl) emit?.("artifact", { kind: "pr", url: published.prUrl, branch: published.branch });
-  const history = state.externalHistoryDelivery ? null : await synchronizeJobHistory({
-    job, worktree: state.handle.path, snapshot, receiver: ctx.l2Receiver, signal, timeoutMs: ctx.l2AckTimeoutMs,
-  });
+  const history = await finalizeJobHistory({ ctx, job, state, signal });
   assertJobActive({ ctx, job, signal });
   if (history) {
-    ctx.store?.append?.("audit", {
-      v: 1, kind: "job.history-applied", applicationAck: history.applicationAck,
-    });
-    assertJobActive({ ctx, job, signal });
     await ctx.workspace.release(state.handle, { success: true, signal, env: state.env, ...history });
     assertJobActive({ ctx, job, signal });
   }
@@ -249,25 +370,32 @@ async function completeWorkspace({ ctx, job, project, state, snapshot, returned,
   };
 }
 
-/** Compose execution, publication, canonical application, and cancellation fences in order. */
+/**
+ * Compose execution, publication, canonical application, and cancellation fences in order.
+ * ctx.withPublication is a trusted lease-owner port; its callback must await physical command settlement.
+ * ctx.externalHistoryDelivery is trusted worker composition only, never a job/config/environment flag.
+ */
 export function createRunnerLifecycle(ctx) {
   async function withWorktree(inputJob, execute, { signal, emit } = {}) {
     const job = ctx.jobs.get(inputJob.id);
     if (!job || job.state !== "leased") throw new ClawError("JOB_NOT_LEASED");
     const project = ctx.config?.projects?.find((entry) => entry.id === job.projectId);
     if (!project?.repo?.path) throw new ClawError("PROJECT_UNAVAILABLE");
-    const state = { handle: null, env: undefined, execution: null, externalHistoryDelivery: ctx.externalHistoryDelivery === true };
+    const state = {
+      handle: null, env: undefined, execution: null, snapshot: null, executionStarted: false,
+      history: null, historyError: null, historyAttempted: false,
+      externalHistoryDelivery: ctx.externalHistoryDelivery === true,
+    };
     try {
       assertJobActive({ ctx, job, signal });
       persistTransition({ ctx, job, state: "running" });
-      const snapshot = await prepareWorkspace({ ctx, job, project, signal, state });
+      await prepareWorkspace({ ctx, job, project, signal, state });
+      state.executionStarted = true;
       const returned = await execute({ job, project, worktree: state.handle, env: state.env, signal });
       state.execution = returned;
-      return await completeWorkspace({ ctx, job, project, state, snapshot, returned, signal, emit });
+      return await completeWorkspace({ ctx, job, project, state, returned, signal, emit });
     } catch (error) {
-      state.handle ??= error?.worktreeHandle ?? null;
-      if (!isCancelled(error, signal)) await pushFailure({ ctx, job, handle: state.handle, env: state.env, signal });
-      return settleFailure({ ctx, job, error, signal, execution: state.execution });
+      return failWorkspace({ ctx, job, state, error, signal });
     }
   }
   return { withWorktree };

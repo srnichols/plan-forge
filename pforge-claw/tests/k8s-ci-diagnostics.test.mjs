@@ -20,6 +20,17 @@ describe("Guard: cross-platform CI installs required offline toolchains", () => 
     expect(source).toContain("brew --prefix bash");
     expect(source).toContain("GITHUB_PATH");
   });
+
+  it("measures the native macOS capability before the unmodified execution gates", () => {
+    const source = readFileSync(WORKFLOW, "utf8");
+    const step = source.match(/- name: Measure native process ownership on macOS[\s\S]*?(?=\n\s+- name:)/)?.[0];
+    expect(step).toContain("if: runner.os == 'macOS'");
+    expect(step).toContain("working-directory: pforge-claw");
+    expect(step).toContain('tests/posix-process-scope.test.mjs -t "macOS native capability measurement"');
+    expect(step).not.toContain("continue-on-error");
+    expect(source.indexOf("name: Measure native process ownership on macOS"))
+      .toBeLessThan(source.indexOf("name: Run unit tests"));
+  });
 });
 
 describe("Guard: Kubernetes CI diagnostics cannot print job credentials", () => {

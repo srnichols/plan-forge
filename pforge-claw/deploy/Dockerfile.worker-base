@@ -26,24 +26,10 @@ RUN install -d -m 0755 /etc/apt/keyrings \
     && apt-get install -y --no-install-recommends gh \
     && rm -rf /var/lib/apt/lists/*
 
-RUN case "$TARGETARCH" in \
-      amd64) pwsh_arch=x64 ;; \
-      arm64) pwsh_arch=arm64 ;; \
-      *) echo "Unsupported PowerShell target architecture: $TARGETARCH" >&2; exit 1 ;; \
-    esac \
-    && pwsh_archive="powershell-${PWSH_VERSION}-linux-${pwsh_arch}.tar.gz" \
-    && pwsh_release="https://github.com/PowerShell/PowerShell/releases/download/v${PWSH_VERSION}" \
-    && curl -fsSL "${pwsh_release}/hashes.sha256" -o /tmp/pwsh-hashes.sha256 \
-    && grep " ${pwsh_archive}\$" /tmp/pwsh-hashes.sha256 > /tmp/pwsh.sha256 \
-    && test -s /tmp/pwsh.sha256 \
-    && curl -fsSL "${pwsh_release}/${pwsh_archive}" -o "/tmp/${pwsh_archive}" \
-    && (cd /tmp && sha256sum -c pwsh.sha256) \
-    && mkdir -p /opt/microsoft/powershell/7 \
-    && tar -xzf "/tmp/${pwsh_archive}" -C /opt/microsoft/powershell/7 \
-    && chmod 755 /opt/microsoft/powershell/7/pwsh \
+COPY deploy/install-powershell.mjs /usr/local/share/pforge-claw/install-powershell.mjs
+RUN node /usr/local/share/pforge-claw/install-powershell.mjs "$PWSH_VERSION" "$TARGETARCH" /opt/microsoft/powershell/7 \
     && ln -s /opt/microsoft/powershell/7/pwsh /usr/local/bin/pwsh \
-    && rm -f /tmp/pwsh-hashes.sha256 /tmp/pwsh.sha256 "/tmp/${pwsh_archive}"
-RUN pwsh -v
+    && pwsh -v
 
 RUN npm install --global "@github/copilot@${COPILOT_CLI_VERSION}" \
     && npm cache clean --force

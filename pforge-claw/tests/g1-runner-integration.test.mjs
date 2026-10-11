@@ -1,4 +1,5 @@
 import { EventEmitter } from "node:events";
+import { ChildProcess } from "node:child_process";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -12,7 +13,7 @@ import { createLocalLane } from "../src/lanes/local-lane.mjs";
 import { createWorkerRegistry } from "../src/protocol/worker-registry.mjs";
 import { L2_ACK_ERRORS } from "../src/protocol/messages.mjs";
 import { buildWorktreeLaunch } from "../src/mcp/project-client.mjs";
-import { drain, g1Deferred, publicationCalls, runnerFixture } from "./g1-runner-fixture.mjs";
+import { drain, g1Deferred, publicationCalls, registerModeledPlanProcess, runnerFixture } from "./g1-runner-fixture.mjs";
 
 const spawn = vi.hoisted(() => vi.fn());
 vi.mock("node:child_process", async (original) => ({ ...await original(), spawn }));
@@ -27,7 +28,7 @@ async function fixture(options) {
 }
 
 function childProcess({ code = 0, immediate = true } = {}) {
-  const child = new EventEmitter();
+  const child = registerModeledPlanProcess(new EventEmitter());
   child.stdout = new EventEmitter();
   child.stderr = new EventEmitter();
   child.kill = vi.fn(() => { queueMicrotask(() => child.emit("close", null)); return true; });
@@ -76,6 +77,13 @@ afterEach(async () => {
 });
 
 describe("G1 runner completion integration", () => {
+  it("never registers an actual native child as synthetic settlement evidence", () => {
+    expect(() => registerModeledPlanProcess(new ChildProcess())).toThrow(TypeError);
+    const nativeLooking = new EventEmitter();
+    nativeLooking.pid = 100;
+    expect(() => registerModeledPlanProcess(nativeLooking)).toThrow(TypeError);
+  });
+
   it("uses a validated relative plan, foreground, approved quorum/resume and the prepared environment", async () => {
     const f = await fixture({ type: "plan", fields: { quorum: "power", resumeFrom: 4 }, changes: false });
     childProcess();

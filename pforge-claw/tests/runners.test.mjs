@@ -1,7 +1,7 @@
 import { EventEmitter } from "node:events";
 import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { ClawError } from "../src/errors.mjs";
 import { createJob, currentJobs, JOBS_STREAM, transition } from "../src/jobs/model.mjs";
 import { createRunners, resolvePlan } from "../src/jobs/runners.mjs";
@@ -11,6 +11,8 @@ import { createL2Receiver } from "../src/protocol/l2-receiver.mjs";
 import { g1Directory } from "./g1-runner-fixture.mjs";
 
 const directories = [];
+// +60000ms covers real Git publication and owned native root proof under Windows CI scheduling.
+const NATIVE_RUNNER_TOLERANCE_MS = 60_000;
 async function tempDir() {
   const directory = await g1Directory("g1-runners-git-");
   directories.push(directory);
@@ -47,6 +49,10 @@ async function makeFixture({
   await command("git", ["config", "user.email", "test@local"], { cwd: repo });
   await command("git", ["config", "user.name", "Test"], { cwd: repo });
   await writeFile(path.join(repo, "README.md"), "base\n");
+  await mkdir(path.join(repo, ".vscode"), { recursive: true });
+  await writeFile(path.join(repo, ".vscode", "mcp.json"), JSON.stringify({
+    servers: { "plan-forge": { command: "node", args: ["entry.mjs"] } },
+  }));
   if (type === "plan") {
     await mkdir(path.join(repo, "docs", "plans"), { recursive: true });
     await writeFile(path.join(repo, "docs", "plans", "Phase-1-PLAN.md"), "# Plan\n");
@@ -107,7 +113,7 @@ async function makeFixture({
       lanes: [{ id: "local", kind: "local" }],
       projects: [{ id: "p1", homeLane: "local", repo: { path: repo, baseBranch: "main" }, models: { work: "configured-work-model" } }],
       runtimes: { pforgeCommand: [process.execPath, "fake-pforge.mjs"] },
-      bootstrap: { install: "none" },
+      bootstrap: { copy: [], install: "none" },
     },
     store,
     bus: events,
@@ -127,7 +133,7 @@ afterEach(async () => {
     rm(directory, { recursive: true, force: true })));
 });
 
-describe("job runners", () => {
+describe("job runners", { timeout: NATIVE_RUNNER_TOLERANCE_MS }, () => {
   it("refuses to run before stored approval", async () => {
     const f = await makeFixture({ state: "queued" });
     const runners = createRunners(f.context);
@@ -299,9 +305,10 @@ describe("job runners", () => {
     f.context.config.runtimes.pforgeCommand = [process.execPath, script];
     const controller = new AbortController();
     const running = createRunners(f.context).plan(f.job, { signal: controller.signal });
-    while (!f.mcpCalls.some(({ name }) => name === "forge_watch_live")) {
-      await new Promise((resolve) => setTimeout(resolve, 10));
-    }
+    // +15000ms accommodates actual Git/bootstrap/native-process startup on Windows CI.
+    await vi.waitFor(() => expect(f.mcpCalls.some(({ name }) => name === "forge_watch_live")).toBe(true), {
+      timeout: 15_000, interval: 50,
+    });
     controller.abort();
     const result = await running;
     expect(result.status).toBe("cancelled");

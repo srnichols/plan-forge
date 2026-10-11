@@ -2,15 +2,30 @@ import { mkdtemp, mkdir, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { createHttpServer } from "../src/http.mjs";
+import { collectCopySet } from "../src/jobs/bootstrap.mjs";
+import { HOME_MCP_BOOTSTRAP_TOOL } from "../src/jobs/bootstrap-mcp.mjs";
 import { createLeasePreparer, wrapPreparedLane } from "../src/jobs/lease-payload.mjs";
+import { createLaneDirectory } from "../src/lanes/directory.mjs";
+import { createRemoteLane } from "../src/lanes/remote-lane.mjs";
+import { createProjectClients } from "../src/mcp/project-client.mjs";
 import { createStore } from "../src/state/store.mjs";
 import { canonical, signGrant, verifyGrant } from "../src/protocol/lease-grant.mjs";
+import { createEnrollment, SECRET_PREFIX } from "../src/protocol/enrollment.mjs";
+import { createWorkerAgent } from "../src/protocol/worker-agent.mjs";
+import { createWorkerRegistry } from "../src/protocol/worker-registry.mjs";
+import { createWorkerServer } from "../src/protocol/ws-server.mjs";
+import { createRegistry } from "../src/registry.mjs";
 import { createSecrets } from "../src/secrets.mjs";
 import { createApprovalService, issueApproval } from "../src/approvals.mjs";
 import { createJob, currentJobs, JOBS_STREAM, transition } from "../src/jobs/model.mjs";
 import { fanoutDeclarationDigest } from "../src/jobs/approval-proof.mjs";
+import {
+  CANONICAL_MCP_BOOTSTRAP, expectCanonicalMcpReads, seedCanonicalMcpConfig,
+} from "./helpers/canonical-mcp-bootstrap-fixture.mjs";
 
 const TEST_DIRECTORY = path.dirname(fileURLToPath(import.meta.url));
+const homeClosers = [];
 let root;
 let ctx;
 let job;
@@ -21,6 +36,7 @@ beforeEach(async () => {
   await mkdir(path.join(repoPath, ".forge"), { recursive: true });
   await writeFile(path.join(repoPath, ".forge.json"), '{"fixture":true}');
   await writeFile(path.join(repoPath, ".forge", "fm-prefs.json"), '{"fixture":true}');
+  await seedCanonicalMcpConfig(repoPath);
   ctx = {
     store: createStore(path.join(root, "state"), { now: () => new Date(0) }),
     secrets: await createSecrets({ env: { APPROVED_OPENAI_KEY: "not-a-wire-value" } }),
@@ -51,7 +67,60 @@ beforeEach(async () => {
   job = await approveStoredJob(job, "speed");
 });
 
-afterEach(async () => rm(root, { recursive: true, force: true }));
+afterEach(async () => {
+  try {
+    for (const close of homeClosers.splice(0).reverse()) await close();
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+async function remoteHomeDirectory(onRead) {
+  const laneId = ctx.config.projects[0].homeLane;
+  const projectRegistry = createRegistry(ctx.config);
+  const homeClients = createProjectClients({
+    config: ctx.config, registry: projectRegistry, currentLaneId: laneId, env: {},
+  });
+  const workerId = "canonical-home-reader";
+  const secret = "fixture-home-reader-key";
+  const store = createStore(path.join(root, "home-worker-state"));
+  store.append("enrollment", { v: 1, op: "registered", workerId, laneId });
+  const secrets = await createSecrets({ env: { [`${SECRET_PREFIX}${workerId}`]: secret } });
+  const mcpWorkers = createWorkerRegistry();
+  const http = createHttpServer({ bind: "127.0.0.1", port: 0 });
+  const server = createWorkerServer({
+    registry: mcpWorkers, enrollment: createEnrollment({ store, secrets }), secrets, allowedLanes: [laneId],
+  });
+  server.attach(http);
+  const { port } = await http.listen();
+  const agent = createWorkerAgent({
+    url: `ws://127.0.0.1:${port}/claw/workers`, workerId, secret, laneId,
+    capabilities: { os: process.platform, arch: process.arch, macos: false, toolchains: [], projects: ["p1"] },
+    async readHandler(request, options) {
+      onRead(request);
+      if (request.tool === "claw.bootstrap.copySet") {
+        return collectCopySet({
+          repoPath: projectRegistry.byId(request.projectId).repo.path, paths: request.args.paths,
+        });
+      }
+      return homeClients.call(request.projectId, request.tool, request.args, options);
+    },
+  });
+  homeClosers.push(async () => {
+    agent.stop();
+    await agent.drain();
+    await homeClients.closeAll();
+    server.close();
+    mcpWorkers.close();
+    await http.close();
+  });
+  agent.start();
+  await expect.poll(() => mcpWorkers.snapshot().byLane[laneId]?.connected).toBe(1);
+  const directory = createLaneDirectory();
+  directory.configure(ctx.config.lanes);
+  directory.register(createRemoteLane({ id: laneId, registry: mcpWorkers }));
+  return directory;
+}
 
 function prepare(laneConfig = { id: "remote1", kind: "remote" }) {
   return createLeasePreparer({ ctx, laneConfig, directory: null, now: () => 0 });
@@ -135,6 +204,7 @@ describe("signed dispatch execution choices", () => {
     });
     expect(payload.prompt).toBe(job.description);
     expect(payload.plan).toBe(job.planPath);
+    expect(payload.mcpBootstrap).toEqual(CANONICAL_MCP_BOOTSTRAP);
     expect(verify(signed(payload))).toBe(true);
     expect(JSON.stringify(payload)).not.toMatch(/private-chat|private-topic|owner1|not-a-wire-value/);
   });
@@ -178,23 +248,32 @@ describe("signed dispatch execution choices", () => {
 
   it("routes a remote home even if its configured ID is local", async () => {
     ctx.config.lanes = [{ id: "local", kind: "remote" }];
+    ctx.config.bootstrap.copy = [".forge.json"];
     const reads = [];
+    const mcpReads = [];
     const bootstrapFiles = [{ path: ".forge.json", content: Buffer.from('{"remote":true}').toString("base64") }];
+    await writeFile(path.join(ctx.config.projects[0].repo.path, ".forge.json"), '{"remote":true}');
+    const directory = await remoteHomeDirectory((request) => {
+      if (request.tool === HOME_MCP_BOOTSTRAP_TOOL) mcpReads.push(request);
+      else reads.push({ id: ctx.config.projects[0].homeLane, request });
+    });
     const preparer = createLeasePreparer({
       ctx, laneConfig: { id: "pods", kind: "k8s", runtime: "openai" }, now: () => 0,
-      directory: { get(id) { return { async read(request) { reads.push({ id, request }); return bootstrapFiles; } }; } },
+      directory,
     });
     const payload = await preparer(job);
     expect(reads).toHaveLength(1);
     expect(reads[0]).toMatchObject({ id: "local", request: { projectId: "p1", tool: "claw.bootstrap.copySet" } });
     expect(payload.bootstrapFiles).toEqual(bootstrapFiles);
+    expectCanonicalMcpReads({ reads: mcpReads, projectId: "p1" });
+    expect(payload.mcpBootstrap).toEqual(CANONICAL_MCP_BOOTSTRAP);
     expect(verify(signed(payload))).toBe(true);
   });
 
   it("refuses bootstrap when the canonical home lane is not configured", async () => {
     ctx.config.lanes = [];
     await expect(prepare({ id: "pods", kind: "k8s", runtime: "openai" })(job))
-      .rejects.toMatchObject({ code: "BOOTSTRAP_HOME_UNAVAILABLE" });
+      .rejects.toMatchObject({ code: "HOME_LANE_UNKNOWN" });
   });
 
   it("takes an immutable detached snapshot without changing approval, job, or config records", async () => {
@@ -239,6 +318,7 @@ describe("signed dispatch execution choices", () => {
       { project: { ...payload.project, bootstrap: { env: ["OTHER_KEY"] } } },
       { provider: { ...payload.provider, endpoint: "https://other.example" } },
       { provider: { ...payload.provider, keySecret: "OTHER_KEY" } },
+      { mcpBootstrap: { ...payload.mcpBootstrap, args: [...payload.mcpBootstrap.args, "--tampered"] } },
     ]) {
       expect(() => verify({ ...payload, ...change })).toThrowError(
         expect.objectContaining({ code: "LEASE_GRANT_INVALID", details: { reason: "DIGEST" } }),

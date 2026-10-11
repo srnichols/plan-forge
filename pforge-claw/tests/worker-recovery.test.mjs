@@ -4,7 +4,7 @@ import { createLocalLane } from "../src/lanes/local-lane.mjs";
 import { createWorkerAgent } from "../src/protocol/worker-agent.mjs";
 import { createWorkerRegistry } from "../src/protocol/worker-registry.mjs";
 import { buildLeaseGrant, signGrant, verifyGrant } from "../src/protocol/lease-grant.mjs";
-import { encode, message } from "../src/protocol/messages.mjs";
+import { encode, message, PUBLICATION_FENCE_VERSION } from "../src/protocol/messages.mjs";
 import { encodeDeltaChunks } from "../src/memory/l2-sync.mjs";
 
 const key = "worker-recovery-fixture-key";
@@ -46,10 +46,17 @@ function workerPipe({ registry, workerId, runtime, verifyLease, readHandler, job
   });
   agent.start();
   socket.emit("open");
-  const connect = () => registry.connect(workerId, {
-    laneId: "remote", capabilities,
-    send: (packet) => socket.emit("message", Buffer.from(encode(packet)), false),
-  });
+  const connect = () => {
+    const hello = outbound.find((packet) => packet.t === "hello");
+    socket.emit("message", Buffer.from(encode(message("ready", {
+      leaseMs: registry.leaseMs, heartbeatMs: 15_000, publicationFence: registry.publicationFence,
+    }))), false);
+    return registry.connect(workerId, {
+      laneId: "remote", capabilities,
+      publicationFence: Object.hasOwn(hello, "publicationFence") && hello.publicationFence === PUBLICATION_FENCE_VERSION,
+      send: (packet) => socket.emit("message", Buffer.from(encode(packet)), false),
+    });
+  };
   connect();
   cleanups.push(async () => { agent.stop(); await agent.drain(); });
   return {
@@ -200,8 +207,8 @@ describe("worker replacement and continuation", () => {
       signLease: ({ worker, grant }) => signGrant({ grant, subject: worker.id, key }),
     });
     cleanups.push(() => registry.close());
-    registry.connect("A", { laneId: "remote", capabilities, send: (packet) => sentA.push(packet) });
-    registry.connect("B", { laneId: "remote", capabilities, send: (packet) => sentB.push(packet) });
+    registry.connect("A", { laneId: "remote", capabilities, publicationFence: true, send: (packet) => sentA.push(packet) });
+    registry.connect("B", { laneId: "remote", capabilities, publicationFence: true, send: (packet) => sentB.push(packet) });
     registry.enqueue("remote", { kind: "job", job: { ...job, leaseGrant } });
     vi.setSystemTime(310_000);
     registry.disconnect("A");
@@ -265,7 +272,7 @@ describe("worker replacement and continuation", () => {
     const sent = [];
     const registry = createWorkerRegistry();
     cleanups.push(() => registry.close());
-    registry.connect("A", { laneId: "remote", capabilities, send: (packet) => sent.push(packet) });
+    registry.connect("A", { laneId: "remote", capabilities, publicationFence: true, send: (packet) => sent.push(packet) });
     registry.enqueue("remote", { kind: "job", job: { id: "j1", projectId: "p1" } });
     const lease = sent[0];
     const receive = (workerId, attempt, item) => registry.onEvent({
@@ -285,7 +292,7 @@ describe("worker replacement and continuation", () => {
     const received = [];
     const registry = createWorkerRegistry({ onEvent: (item) => received.push(item) });
     cleanups.push(() => registry.close());
-    registry.connect("A", { laneId: "remote", capabilities, send: (packet) => sent.push(packet) });
+    registry.connect("A", { laneId: "remote", capabilities, publicationFence: true, send: (packet) => sent.push(packet) });
     registry.enqueue("remote", { kind: "job", job: { id: "j1", projectId: "p1" } });
     const lease = sent[0];
     registry.cancel("j1");

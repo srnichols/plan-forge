@@ -25,7 +25,8 @@ const HEX_DIGEST = /^[0-9a-f]{64}$/;
 const IDENTIFIER = /^[A-Za-z0-9][A-Za-z0-9._-]{0,80}$/;
 export const FIXTURE_PLAN_PATH = "docs/plans/fixture-plan.md";
 export const FIXTURE_RECEIPT_FILE = ".k8s-fixture-worker-receipt.json";
-const CHECKOUT_FILES = Object.freeze(["README.md", ".vscode/mcp.json", "pforge-mcp/server.mjs", FIXTURE_PLAN_PATH]);
+const FIXTURE_STDIO_MCP = "fixture-project-mcp.mjs";
+const CHECKOUT_FILES = Object.freeze(["README.md", ".vscode/mcp.json", "pforge-mcp/server.mjs", FIXTURE_STDIO_MCP, FIXTURE_PLAN_PATH]);
 
 /** Validate the fixture's disposable namespace and explicit local-cluster context. */
 export function validateFixtureScope({ namespace, context }) {
@@ -138,8 +139,9 @@ export async function prepareFixtureProject(project) {
     "README.md": `Disposable Kubernetes fixture ${project.id}.\n`,
     [FIXTURE_PLAN_PATH]: "# Disposable fixture plan\n\n## Slice 1\nFixture only.\n\n## Slice 2\nFixture only.\n",
     ".vscode/mcp.json": JSON.stringify({ servers: {
-      "plan-forge": { command: process.execPath, args: [path.join(HELPER_ROOT, "fake-project-mcp.mjs")] },
+      "plan-forge": { command: process.execPath, args: [`./${FIXTURE_STDIO_MCP}`] },
     } }),
+    [FIXTURE_STDIO_MCP]: `import ${JSON.stringify(new URL("./fake-project-mcp.mjs", import.meta.url).href)};\n`,
     "pforge-mcp/server.mjs": [
       `import { startFixtureProjectHttp } from ${JSON.stringify(new URL("./k8s-project-http.mjs", import.meta.url).href)};`,
       "await startFixtureProjectHttp();",

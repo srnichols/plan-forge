@@ -36,6 +36,15 @@ afterEach(async () => {
 });
 
 describe("project registry", () => {
+  it("resolves the canonical node launch to the executing binary even when a sealed environment has no PATH", async () => {
+    const repo = await tmpDir();
+    const result = await resolveMcpLaunch(repo, "plan-forge", {
+      env: {},
+      readFile: async () => JSON.stringify({ servers: { "plan-forge": { command: "node", args: [] } } }),
+    });
+    expect(result).toMatchObject({ ok: true, command: "node", args: [], cwd: repo });
+  });
+
   it("looks up projects by id and normalized chat/topic identifiers", () => {
     const registry = createRegistry(config());
     expect(registry.byId("one").id).toBe("one");

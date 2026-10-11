@@ -8,26 +8,14 @@ import { resolveMcpLaunch } from "../registry.mjs";
 import { prepareJobEnvironment } from "../jobs/runner-environment.mjs";
 import { HOME_PLAN_RESOLVE_TOOL } from "../enums.mjs";
 import { parsePlanResolveRequest, resolvePlan } from "../jobs/plan-resolution.mjs";
+import {
+  collectMcpBootstrap, expandMcpTemplate, HOME_MCP_BOOTSTRAP_TOOL, parseMcpBootstrap, parseMcpBootstrapRequest,
+  mcpHomeLane as configuredHome, readWorkspaceMcpBootstrap, registeredMcpHome, workspaceMcpLaunchOptions,
+} from "../jobs/bootstrap-mcp.mjs";
 
 const DEFAULT_SERVER_NAME = "plan-forge";
 const DEFAULT_IDLE_MINUTES = 5;
 const STDERR_LIMIT_BYTES = 4096;
-
-function expand(value, repoPath, env) {
-  let unresolved = false;
-  const expanded = String(value).replace(/\$\{(workspaceFolder|env:([A-Za-z_][A-Za-z0-9_]*))\}/g, (_match, token, name) => {
-    if (token === "workspaceFolder") return repoPath;
-    if (!Object.hasOwn(env, name) || env[name] === undefined) {
-      unresolved = true;
-      return "";
-    }
-    return String(env[name]);
-  });
-  if (unresolved || /\$\{[^}]+\}/.test(expanded)) {
-    throw new ClawError("MCP_UNRESOLVED_VAR", { hint: "Set the missing MCP environment variable." });
-  }
-  return expanded;
-}
 
 async function readServerExtras(repoPath, serverName, env, read) {
   let config;
@@ -45,19 +33,12 @@ async function readServerExtras(repoPath, serverName, env, read) {
   const serverEnv = {};
   for (const [key, value] of Object.entries(server.env ?? {})) {
     if (typeof value !== "string") throw new ClawError("MCP_CONFIG_PARSE", { hint: "MCP environment values must be strings." });
-    serverEnv[key] = expand(value, repoPath, env);
+    serverEnv[key] = expandMcpTemplate(value, repoPath, env);
   }
   const cwd = typeof server.cwd === "string" && server.cwd
-    ? path.resolve(repoPath, expand(server.cwd, repoPath, env))
+    ? path.resolve(repoPath, expandMcpTemplate(server.cwd, repoPath, env))
     : repoPath;
   return { env: serverEnv, cwd };
-}
-
-function configuredHome(project, config) {
-  const lane = config?.lanes?.find((entry) => entry.id === project?.homeLane);
-  if (!lane) throw new ClawError("HOME_LANE_UNKNOWN");
-  if (lane.kind !== "local" && lane.kind !== "remote") throw new ClawError("HOME_LANE_INVALID");
-  return lane;
 }
 
 function isolatedPort(args) {
@@ -113,9 +94,18 @@ export async function buildLaunch(project, config, options = {}) {
 }
 
 /** Executing jobs explicitly launch their isolated workspace, not the canonical home. */
-export async function buildWorktreeLaunch({ project, config, cwd, env, registry, ...options }) {
+export async function buildWorktreeLaunch({
+  project, config, cwd, env = process.env, registry, mcpBootstrap, secrets, currentLaneId, mcpRuntimeRoot, ...options
+}) {
   if (typeof cwd !== "string" || !path.isAbsolute(cwd)) throw new ClawError("PROJECT_PATH_MISSING");
-  return localLaunch({ ...project, repo: { ...project.repo, path: cwd } }, config, { env, registry, ...options });
+  const descriptor = mcpBootstrap !== undefined
+    ? parseMcpBootstrap(mcpBootstrap) : await readWorkspaceMcpBootstrap({ cwd, ...options });
+  const launchOptions = descriptor ? await workspaceMcpLaunchOptions({
+    descriptor, project, config, cwd, env, secrets, currentLaneId, mcpRuntimeRoot, signal: options.signal,
+  }) : { config, env };
+  return localLaunch({ ...project, repo: { ...project.repo, path: cwd } }, launchOptions.config, {
+    registry, ...options, ...launchOptions,
+  });
 }
 
 function appendStderr(ring, chunk) {
@@ -200,6 +190,7 @@ export function createProjectClients({
   env = process.env,
   secrets,
   currentLaneId = null,
+  mcpRuntimeRoot,
 } = {}) {
   const entries = new Map();
   const workspaceClients = new Set();
@@ -225,13 +216,14 @@ export function createProjectClients({
     return home.kind === "remote" && home.id !== currentLaneId;
   }
 
+  function homeProjectFor(projectId) {
+    return registeredMcpHome({ projectId, config }).project;
+  }
+
   async function resolveHomePlan(projectId, args, options) {
     options.signal?.throwIfAborted();
     const request = parsePlanResolveRequest(args);
-    const project = config.projects?.find((entry) => entry.id === projectId);
-    if (!project) throw new ClawError("PROJECT_NOT_FOUND");
-    const home = configuredHome(project, config);
-    if (home.enabled === false) throw new ClawError("HOME_LANE_UNAVAILABLE");
+    const project = homeProjectFor(projectId);
     if (needsRemoteRead(project)) return remoteClient(project).call(HOME_PLAN_RESOLVE_TOOL, request, options);
     const resolved = await resolvePlan({
       root: project.repo?.path, input: request.input, exact: request.exact, limit: request.limit, signal: options.signal,
@@ -239,6 +231,21 @@ export function createProjectClients({
     options.signal?.throwIfAborted();
     if (closed) throw new ClawError("MCP_TRANSPORT_CLOSED");
     return resolved;
+  }
+
+  async function homeMcpBootstrap(projectId, args, options) {
+    options.signal?.throwIfAborted();
+    const request = parseMcpBootstrapRequest(args);
+    const project = homeProjectFor(projectId);
+    const { serverName, toolProfile } = config.mcp ?? {};
+    const descriptor = needsRemoteRead(project)
+      ? await remoteClient(project).call(HOME_MCP_BOOTSTRAP_TOOL, request, options)
+      : await collectMcpBootstrap({
+        repoPath: project.repo.path, serverName, toolProfile, signal: options.signal,
+      });
+    options.signal?.throwIfAborted();
+    if (closed) throw new ClawError("MCP_TRANSPORT_CLOSED");
+    return parseMcpBootstrap(descriptor);
   }
 
   function entryKey(projectId, preparedEnv) {
@@ -340,6 +347,7 @@ export function createProjectClients({
   async function call(projectId, tool, args = {}, options = {}) {
     const project = projectFor(projectId);
     if (tool === HOME_PLAN_RESOLVE_TOOL) return resolveHomePlan(projectId, args, options);
+    if (tool === HOME_MCP_BOOTSTRAP_TOOL) return homeMcpBootstrap(projectId, args, options);
     if (needsRemoteRead(project)) return remoteClient(project).call(tool, args, options);
     const entry = ensureEntry(projectId, options);
     entry.inFlight += 1;
@@ -360,10 +368,12 @@ export function createProjectClients({
     }
   }
 
-  async function forWorktree({ projectId, cwd, env: preparedEnv, signal }) {
+  async function forWorktree({ projectId, cwd, env: preparedEnv, signal, mcpBootstrap }) {
     const project = projectFor(projectId);
     signal?.throwIfAborted();
-    const launch = await buildWorktreeLaunch({ project, config, cwd, env: preparedEnv, registry });
+    const launch = await buildWorktreeLaunch({
+      project, config, cwd, env: preparedEnv, registry, secrets, currentLaneId, mcpRuntimeRoot, mcpBootstrap, signal,
+    });
     signal?.throwIfAborted();
     const client = await connect(launch, { redact: secrets?.redact });
     let closePromise;

@@ -6,9 +6,15 @@ import { createSecrets, checkSecretsFilePermissions } from "../secrets.mjs";
 import { isGitRepo, resolveMcpLaunch, validateProjects } from "../registry.mjs";
 import { runFeatureDoctorChecks } from "../doctor-checks.mjs";
 import { FEATURES } from "../features/index.mjs";
+import { LANE_KINDS } from "../enums.mjs";
+import { run as runProcess } from "../jobs/worktree.mjs";
+import { hasNativeSettlementProof, NATIVE_SCOPE_ERRORS } from "../jobs/native-command-supervisor.mjs";
 
 const MIN_NODE = [22, 12, 0];
 const USAGE = "Usage: pforge claw doctor [--json] [--home <dir>]";
+const NATIVE_PROBE_TIMEOUT_MS = 5000;
+const NATIVE_PROBE_OUTPUT = "native-scope-probe";
+const [LOCAL_LANE_KIND] = LANE_KINDS;
 
 function parseVersion(version) {
   const parts = String(version).replace(/^v/, "").split(".").map((part) => Number.parseInt(part, 10));
@@ -167,6 +173,46 @@ async function appendToolChecks(config, checks, { env, platform, which, redact }
     : { id: "tool.pforge", status: config ? "fail" : "skip", code: config ? "PFORGE_NOT_FOUND" : "CONFIG_UNAVAILABLE", message: config ? "The configured pforge runtime was not found on PATH." : "pforge runtime check requires a config.", hint: "Install the configured shell or executable and add it to PATH." }, redact);
 }
 
+function nativeProbeVerified(result) {
+  return result?.code === 0 && result.stdout === NATIVE_PROBE_OUTPUT && result.settlementConfirmed === true
+    && hasNativeSettlementProof(result.settlement);
+}
+
+async function appendNativeCheck(config, checks, { home, env, platform, processRunner, redact }) {
+  const localExecution = config?.lanes?.some((lane) => lane.kind === LOCAL_LANE_KIND && lane.enabled !== false);
+  if (!localExecution) {
+    record(checks, {
+      id: "process.ownership", status: "skip", code: "NATIVE_PROCESS_SCOPE_NOT_LOCAL",
+      message: "No enabled local execution lane requires a native process scope on this dispatcher.",
+      hint: "Execution workers verify their native ownership before starting commands.",
+    }, redact);
+    return;
+  }
+  if (platform !== process.platform) {
+    record(checks, {
+      id: "process.ownership", status: "skip", code: "NATIVE_PROCESS_PLATFORM_UNVERIFIED",
+      message: "Native ownership can only be verified on the current host platform.", hint: "Run doctor on the execution host.",
+    }, redact);
+    return;
+  }
+  let isVerified = false;
+  try {
+    isVerified = nativeProbeVerified(await processRunner(process.execPath, [
+      "-e", `process.stdout.write(${JSON.stringify(NATIVE_PROBE_OUTPUT)})`,
+    ], { cwd: home, env, timeoutMs: NATIVE_PROBE_TIMEOUT_MS, requireSettlement: true }));
+  } catch {
+    isVerified = false;
+  }
+  record(checks, isVerified ? {
+    id: "process.ownership", status: "ok", code: "NATIVE_PROCESS_SCOPE_OK",
+    message: "Native ownership and zero live owned processes were verified.", hint: "",
+  } : {
+    id: "process.ownership", status: "fail", code: NATIVE_SCOPE_ERRORS.UNAVAILABLE,
+    message: "Local execution could not establish and settle a native process scope.",
+    hint: "Provision the supported PowerShell/OS native runtime on this host and rerun doctor; no elevation is attempted.",
+  }, redact);
+}
+
 export async function runDoctor({
   home = resolveHome(),
   env = process.env,
@@ -177,6 +223,7 @@ export async function runDoctor({
   runIcacls,
   readFile,
   features = FEATURES,
+  processRunner = runProcess,
 } = {}) {
   const checks = [];
   const version = parseVersion(nodeVersion);
@@ -191,6 +238,7 @@ export async function runDoctor({
   await appendMcpChecks(config, checks, { env, platform, which, readFile });
   const redact = await appendSecretsChecks(config, checks, { home, env, platform, runIcacls });
   await appendToolChecks(config, checks, { env, platform, which, redact });
+  await appendNativeCheck(config, checks, { home, env, platform, processRunner, redact });
   if (config) checks.push(...await runFeatureDoctorChecks({ features, ctx: { config, live: false } }));
   for (const check of checks) {
     for (const key of ["id", "code", "message", "hint"]) check[key] = redact(check[key]);

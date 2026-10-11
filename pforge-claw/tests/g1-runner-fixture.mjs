@@ -1,4 +1,5 @@
 import { EventEmitter } from "node:events";
+import { ChildProcess, spawn } from "node:child_process";
 import { mkdirSync, mkdtempSync } from "node:fs";
 import { mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
@@ -10,6 +11,49 @@ import { createL2Receiver } from "../src/protocol/l2-receiver.mjs";
 import { createRegistry, resolveMcpLaunch } from "../src/registry.mjs";
 import { createProjectClients } from "../src/mcp/project-client.mjs";
 import { createSecrets } from "../src/secrets.mjs";
+import { createPublicationGitFixture } from "./helpers/publication-git-fixture.mjs";
+import { run as runCommand } from "../src/jobs/worktree.mjs";
+
+const modeledPlanProcesses = new WeakSet();
+
+function isModeledPlanProcess(child) {
+  return modeledPlanProcesses.has(child) && !(child instanceof ChildProcess) && child.pid === undefined;
+}
+
+/** Register a modeled external process; an absent PID alone is never settlement evidence. */
+export function registerModeledPlanProcess(child) {
+  if (child instanceof ChildProcess || child.pid !== undefined) throw new TypeError("A native child cannot be registered as a modeled process");
+  modeledPlanProcesses.add(child);
+  return child;
+}
+
+async function fixturePlanRunner(command, args, options) {
+  if (!vi.isMockFunction(spawn)) return runCommand(command, args, options);
+  const child = spawn(command, args, {
+    cwd: options.cwd, env: options.env, shell: false, windowsHide: true,
+  });
+  if (!isModeledPlanProcess(child)) throw new TypeError("The external plan-process edge was not explicitly modeled");
+  let stdout = "";
+  let stderr = "";
+  let failure;
+  child.stdout?.on("data", (chunk) => { stdout += chunk.toString("utf8"); });
+  child.stderr?.on("data", (chunk) => { stderr += chunk.toString("utf8"); });
+  const abort = () => child.kill();
+  options.signal?.addEventListener("abort", abort, { once: true });
+  if (options.signal?.aborted) abort();
+  try {
+    const code = await new Promise((resolve) => {
+      child.once("error", (error) => { failure = error; });
+      child.once("close", (value) => resolve(value ?? -1));
+    });
+    return {
+      code, stdout, stderr, ...(failure ? { error: failure } : {}),
+      settlementConfirmed: isModeledPlanProcess(child),
+    };
+  } finally {
+    options.signal?.removeEventListener("abort", abort);
+  }
+}
 
 export async function g1Directory(prefix = "g1-") {
   const fixtures = path.resolve("tests", ".g1-fixtures");
@@ -90,14 +134,27 @@ export async function runnerFixture({ type = "task", fields = {}, changes = true
   };
   fixture.approvals = createApprovalService({ store, bus, config });
   const calls = [];
+  const publicationGit = new Map();
   const runner = vi.fn(async (command, args, options = {}) => {
     calls.push({ command, args, options });
+    const complete = (reply) => ({
+      ...reply, ...(options.requireSettlement === true ? { settlementConfirmed: true } : {}),
+    });
     if (command === "git" && args.includes("--show-toplevel")) {
-      return { code: 0, stdout: `${repo}\n`, stderr: "" };
+      return complete({ code: 0, stdout: `${repo}\n`, stderr: "" });
     }
-    if (command === "git" && args.includes("show-ref")) return { code: 1, stdout: "", stderr: "" };
+    if (command === "git" && args.includes("show-ref")) return complete({ code: 1, stdout: "", stderr: "" });
+    if (command === "git") {
+      const verifiedRef = publicationGit.get(args[0] === "-C" ? args[1] : options.cwd)?.(
+        args[0] === "-C" ? args.slice(2) : args,
+      );
+      if (verifiedRef) return complete(verifiedRef);
+    }
     if (command === "git" && args.includes("worktree") && args.includes("add")) {
       const target = args.at(-2);
+      const branch = args[args.indexOf("-b") + 1];
+      if (!branch?.startsWith("claw/")) throw new Error("Fixture worktree branch is not a job ref");
+      publicationGit.set(target, createPublicationGitFixture({ jobId: branch.slice("claw/".length), hasChanges: changes }));
       await mkdir(path.join(target, "docs", "plans"), { recursive: true });
       await mkdir(path.join(target, ".vscode"), { recursive: true });
       await writeFile(path.join(target, "docs", "plans", "Phase-1-PLAN.md"), "# Fixture plan\n");
@@ -105,9 +162,10 @@ export async function runnerFixture({ type = "task", fields = {}, changes = true
         await readFile(path.join(repo, ".vscode", "mcp.json")));
     }
     const stdout = args.includes("--porcelain") ? changes ? "?? result.txt\n" : ""
+      : args.includes("diff") && args.includes("--cached") ? changes ? "result.txt\n" : ""
       : args.includes("rev-list") ? changes ? "1\n" : "0\n"
       : command === "fixture-gh" ? "https://example.test/pr/1\n" : "";
-    return { code: 0, stdout, stderr: "" };
+    return complete({ code: 0, stdout, stderr: "" });
   });
   const client = { call: vi.fn(async () => null), close: vi.fn(async () => {}) };
   const mcpInputs = [];
@@ -116,6 +174,7 @@ export async function runnerFixture({ type = "task", fields = {}, changes = true
   });
   const ctx = {
     home, config, store, bus, runner, features: [],
+    planRunner: fixturePlanRunner,
     env: { ...process.env, G1_BASE_VALUE: "base-value" },
     secrets,
     runtime: {

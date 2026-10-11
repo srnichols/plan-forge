@@ -1,6 +1,10 @@
 import { randomUUID } from "node:crypto";
 import { ClawError } from "../errors.mjs";
-import { message, L2_ACK_ERRORS, L2_APPLIED_MESSAGE, L2_PACKET_KIND, READ_ERRORS } from "./messages.mjs";
+import {
+  message, L2_ACK_ERRORS, L2_APPLIED_MESSAGE, L2_PACKET_KIND, READ_ERRORS,
+  PUBLICATION_MESSAGE, PUBLICATION_ACK_MESSAGE, PUBLICATION_ERRORS, PUBLICATION_OPERATIONS,
+  PUBLICATION_FENCE_VERSION,
+} from "./messages.mjs";
 import { renewGrant } from "./lease-grant.mjs";
 import { createLeaseStream, enqueueLeaseEvent } from "./registry-stream.mjs";
 import { createApplicationTransfer, collectApplicationChunk, matchesApplicationAck } from "./l2-ack.mjs";
@@ -25,6 +29,9 @@ class WorkerRegistry {
     this.workers = new Map();
     this.pending = new Map();
     this.leases = new Map();
+    this.publications = new Map();
+    this.retiredLeases = new Map();
+    this.settledPublications = new Map();
     this.recentLeases = new Map();
     this.jobs = new Map();
     this.jobScopes = new Map();
@@ -55,7 +62,15 @@ class WorkerRegistry {
       for (const wake of listener.waiters.splice(0)) wake({ value: undefined, done: true });
     }
     this.recordCompletion(entry, this.completionFor(entry, event));
-    for (const lease of [...this.leases.values()]) if (lease.entry === entry) this.removeLease(lease);
+    for (const lease of [...this.leases.values()]) {
+      if (lease.entry !== entry) continue;
+      lease.worker ??= this.workers.get(lease.workerId);
+      if (this.publications.has(entry.jobId)) {
+        this.retiredLeases.set(lease.leaseId, lease);
+        this.cancelLease(lease);
+      } else if (!["succeeded", "ok"].includes(event.data.status)) this.cancelLease(lease);
+      this.removeLease(lease);
+    }
     this.revokeScope(entry.jobId);
     const queue = this.queueFor(entry.laneId);
     const index = queue.indexOf(entry);
@@ -95,6 +110,7 @@ class WorkerRegistry {
 
   armLease(lease, duration) {
     this.clearTimeoutFn(lease.timer);
+    lease.expiresAt = this.now() + duration;
     lease.timer = this.setTimeoutFn(() => this.expire(lease), duration);
     lease.timer?.unref?.();
   }
@@ -111,15 +127,38 @@ class WorkerRegistry {
 
   eligible(worker, entry) {
     if (worker.laneId !== entry.laneId) return false;
+    if (entry.kind === "job" && worker.publicationFence !== true) return false;
     if (worker.jobScope) return entry.kind === "job" && entry.jobId === worker.jobScope.jobId
       && this.hasActiveJob(entry.laneId, entry.jobId);
     if (entry.kind === "read") return true;
     return worker.capabilities.projects.includes(entry.payload.projectId);
   }
 
-  expire(lease) {
+  expire(lease, departedWorker) {
     if (this.leases.get(lease.leaseId) !== lease) return;
     this.removeLease(lease);
+    lease.worker = departedWorker ?? this.workers.get(lease.workerId);
+    lease.entry.previousLease = lease;
+    if (this.publications.has(lease.entry.jobId)) {
+      this.retiredLeases.set(lease.leaseId, lease);
+      lease.settlementTimer = this.setTimeoutFn(() => {
+        if (!lease.entry.finished && this.retiredLeases.get(lease.leaseId) === lease) {
+          this.fail(lease.entry, { status: "failed", code: PUBLICATION_ERRORS.TIMEOUT });
+        }
+      }, this.leaseMs);
+      lease.settlementTimer?.unref?.();
+      this.cancelLease(lease);
+      return;
+    }
+    if (!departedWorker) this.cancelLease(lease);
+    this.requeueExpired(lease);
+  }
+
+  cancelLease(lease) {
+    if (lease.worker) this.send(lease.worker, message("cancel", { leaseId: lease.leaseId }));
+  }
+
+  requeueExpired(lease) {
     const entry = lease.entry;
     if (entry.finished) return;
     if (entry.cancelled) {
@@ -149,6 +188,7 @@ class WorkerRegistry {
 
   sendLease(worker, entry) {
     const resumed = entry.lastWorkerId === worker.workerId;
+    if (!resumed && entry.previousLease) this.cancelLease(entry.previousLease);
     const lease = {
       leaseId: randomUUID(), entry, workerId: worker.workerId, attempt: entry.attempt,
       seqBase: resumed ? entry.seqBase : entry.lastSeq, lastSeq: entry.lastSeq,
@@ -187,9 +227,10 @@ class WorkerRegistry {
         this.sendLease(available.find((worker) => this.eligible(worker, entry)), entry);
         continue;
       }
-      const busy = [...this.leases.values()].some((lease) => lease.entry.laneId === laneId
+      const busy = [...this.leases.values(), ...this.retiredLeases.values()].some((lease) => lease.entry.laneId === laneId
         && lease.entry.kind === "job" && !this.workers.get(lease.workerId)?.jobScope);
-      const eligible = (entry) => available.filter((worker) => this.eligible(worker, entry) && (!busy || worker.jobScope));
+      const eligible = (entry) => available.filter((worker) => this.eligible(worker, entry)
+        && !this.projectPublicationBlocked(entry) && (!busy || worker.jobScope));
       const index = queue.findIndex((entry) => entry.kind === "job" && eligible(entry).length);
       if (index < 0) return;
       const [entry] = queue.splice(index, 1);
@@ -199,12 +240,19 @@ class WorkerRegistry {
     }
   }
 
+  projectPublicationBlocked(entry) {
+    return [...this.publications.values()].some(
+      (publication) => publication.lease.entry.payload.projectId === entry.payload.projectId,
+    );
+  }
+
   connect(workerId, info = {}) {
     if (this.closed) throw new ClawError("WORKER_SERVER_CLOSED");
     this.disconnect(workerId, "RECONNECTED");
     const worker = {
       workerId, send: info.send, laneId: info.laneId, capabilities: info.capabilities ?? { projects: [] },
       jobScope: info.jobScope, connection: info.connection, lastSeen: this.now(), leases: new Set(),
+      publicationFence: info.publicationFence === true,
     };
     this.workers.set(workerId, worker);
     this.dispatch(worker.laneId);
@@ -217,7 +265,7 @@ class WorkerRegistry {
     this.workers.delete(workerId);
     for (const leaseId of [...worker.leases]) {
       const lease = this.leases.get(leaseId);
-      if (lease) this.expire(lease);
+      if (lease) this.expire(lease, worker);
     }
     return { disconnected: true, reason };
   }
@@ -250,7 +298,62 @@ class WorkerRegistry {
       this.stats.staleDropped += 1;
       return null;
     }
+    if (lease.expiresAt <= this.now()) {
+      this.expire(lease);
+      this.stats.staleDropped += 1;
+      return null;
+    }
     return lease;
+  }
+
+  publicationMatches(publication, packet, workerId) {
+    return Boolean(publication && publication.workerId === workerId
+      && ["jobId", "leaseId", "attempt", "requestId"].every((field) => publication[field] === packet[field]));
+  }
+
+  beginPublication(packet, workerId) {
+    const { leaseId, attempt, jobId, requestId } = packet;
+    const lease = this.currentLease({ leaseId, attempt, workerId });
+    if (this.closed || !lease?.acked || lease.entry.kind !== "job"
+      || lease.entry.jobId !== jobId || lease.entry.cancelled || lease.entry.finished) return false;
+    const existing = this.publications.get(jobId);
+    if (existing) return this.publicationMatches(existing, packet, workerId);
+    this.publications.set(jobId, { workerId, jobId, leaseId, attempt, requestId, lease });
+    return true;
+  }
+
+  endPublication(packet, workerId) {
+    const { jobId, leaseId, requestId } = packet;
+    const existing = this.publications.get(jobId);
+    if (!this.publicationMatches(existing, packet, workerId)) {
+      return this.publicationMatches(this.settledPublications.get(requestId), packet, workerId);
+    }
+    this.publications.delete(jobId);
+    const { lease: ownedLease, ...identity } = existing;
+    this.settledPublications.set(requestId, identity);
+    while (this.settledPublications.size > this.maxReplay) {
+      this.settledPublications.delete(this.settledPublications.keys().next().value);
+    }
+    const retired = this.retiredLeases.get(leaseId);
+    if (retired) {
+      this.clearTimeoutFn(retired.settlementTimer);
+      this.retiredLeases.delete(leaseId);
+      this.requeueExpired(retired);
+    }
+    for (const laneId of this.pending.keys()) this.dispatch(laneId);
+    return true;
+  }
+
+  onPublication({ workerId, ...fields }) {
+    const packet = message(PUBLICATION_MESSAGE, fields);
+    if (packet.t !== PUBLICATION_MESSAGE) throw new ClawError("PROTO_BAD_MESSAGE");
+    const { operation, leaseId, attempt, jobId, requestId } = packet;
+    const ok = operation === PUBLICATION_OPERATIONS.BEGIN
+      ? this.beginPublication(packet, workerId) : this.endPublication(packet, workerId);
+    return message(PUBLICATION_ACK_MESSAGE, {
+      operation, leaseId, attempt, jobId, requestId, ok,
+      ...(ok ? {} : { code: PUBLICATION_ERRORS.DENIED }),
+    });
   }
 
   onAck({ leaseId, attempt, workerId, seqBase }) {
@@ -401,7 +504,7 @@ class WorkerRegistry {
     if (!worker) return [];
     worker.lastSeen = this.now();
     return reports.flatMap((report) => {
-      const lease = this.leases.get(report.leaseId);
+      const lease = this.currentLease({ leaseId: report.leaseId, attempt: report.attempt, workerId });
       if (!lease || lease.attempt !== report.attempt || lease.workerId !== workerId) {
         const recent = this.recentLeases.get(report.leaseId);
         return recent?.attempt === report.attempt && recent.workerId === workerId ? [{
@@ -480,8 +583,10 @@ class WorkerRegistry {
     for (const laneId of this.pending.keys()) laneIds.add(laneId);
     for (const laneId of laneIds) byLane[laneId] = {
       connected: [...this.workers.values()].filter((worker) => worker.laneId === laneId).length,
+      publicationCapable: [...this.workers.values()].filter((worker) => worker.laneId === laneId && worker.publicationFence).length,
       pending: this.pending.get(laneId)?.length ?? 0,
-      active: [...this.leases.values()].filter((lease) => lease.entry.laneId === laneId).length,
+      active: [...this.leases.values(), ...this.retiredLeases.values()].filter((lease) => lease.entry.laneId === laneId).length,
+      publicationFences: [...this.publications.values()].filter((item) => item.lease.entry.laneId === laneId).length,
     };
     return { workers: this.workers.size, byLane, stats: { ...this.stats } };
   }
@@ -517,24 +622,34 @@ class WorkerRegistry {
     this.closed = true;
     for (const entry of this.jobs.values()) this.fail(entry, { status: "failed", code: "SERVER_CLOSED" });
     for (const lease of this.leases.values()) this.clearTimeoutFn(lease.timer);
+    for (const lease of this.retiredLeases.values()) this.clearTimeoutFn(lease.settlementTimer);
     this.leases.clear();
     this.workers.clear();
     this.pending.clear();
     this.recentLeases.clear();
+    this.publications.clear();
+    this.retiredLeases.clear();
+    this.settledPublications.clear();
     for (const jobId of this.jobScopes.keys()) this.revokeScope(jobId);
   }
 }
 
-/** Registry owns transport fencing; applyL2 is installed by the canonical-home composition root. */
+/**
+ * Registry owns lease and publication fencing; applyL2 is the canonical-home receiver.
+ * Only mutually negotiated publication-capable workers receive job leases.
+ * onPublication returns an exact ACK; uncertain retired reservations block project
+ * reassignment until the authenticated worker confirms real operation settlement.
+ */
 export function createWorkerRegistry(options = {}) {
   const registry = new WorkerRegistry(options);
   const ports = [
     "connect", "disconnect", "enqueue", "dispatch", "onAck", "onEvent", "onHeartbeat", "cancel", "revoke",
-    "close", "snapshot", "hasActiveJob", "registerPending", "waitForCompletion",
+    "close", "snapshot", "hasActiveJob", "registerPending", "waitForCompletion", "onPublication",
   ];
   return {
     ...Object.fromEntries(ports.map((name) => [name, registry[name].bind(registry)])),
     stats: registry.stats, leaseMs: registry.leaseMs, ackMs: registry.ackMs,
+    publicationFence: PUBLICATION_FENCE_VERSION,
     current: (id) => registry.workers.get(id)?.connection,
     completion: (id) => structuredClone(registry.completions.get(id) ?? null),
     setL2Receiver(receive) {

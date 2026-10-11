@@ -3,6 +3,7 @@ import path from "node:path";
 import { ClawError } from "../errors.mjs";
 import { isInside, realpathNearest, resolveCommand, resolvePforgeCommand, run } from "./worktree.mjs";
 import { prepareJobEnvironment } from "./runner-environment.mjs";
+import { bootstrapWorkspaceMcp } from "./bootstrap-mcp.mjs";
 
 const OUTPUT_LIMIT = 64 * 1024;
 const SECRET_RELATIVE = path.join(".forge", "secrets.json").toLowerCase();
@@ -188,7 +189,7 @@ async function installDependencies({ sourceRoot, worktreePath, config, runner, e
 function environmentForBootstrap({ job, config, secrets, env, signal }) {
   try {
     return { env: prepareJobEnvironment({
-      job, config, project: config.projects?.find((entry) => entry.id === job?.projectId),
+      job, config, project: bootstrapProject(job, config),
       secrets, env, signal,
     }) };
   } catch (error) {
@@ -198,9 +199,14 @@ function environmentForBootstrap({ job, config, secrets, env, signal }) {
   }
 }
 
+function bootstrapProject(job, config) {
+  return config.projects?.find((entry) => entry.id === job?.projectId);
+}
+
 function bootstrapConfig(job, config) {
-  const project = config.projects?.find((entry) => entry.id === job?.projectId);
-  return { ...config, bootstrap: { ...config.bootstrap, ...project?.bootstrap } };
+  const project = bootstrapProject(job, config);
+  const copy = project?.repo?.path ? DEFAULT_COPY_PATHS : [];
+  return { ...config, bootstrap: { copy, ...config.bootstrap, ...project?.bootstrap } };
 }
 
 function bootstrapError(error, signal) {
@@ -235,6 +241,10 @@ export async function bootstrapWorktree({
     const { env } = environment;
     const installed = await installDependencies({ sourceRoot, worktreePath, config: effectiveConfig, runner, env, signal, secrets });
     if (installed) return installed;
+    await bootstrapWorkspaceMcp({
+      job, project: bootstrapProject(job, effectiveConfig),
+      config: effectiveConfig, sourceRoot, cwd: worktreePath, signal,
+    });
     signal?.throwIfAborted();
     const pforge = resolvePforgeCommand({ config: effectiveConfig, cwd: worktreePath });
     const [command, ...prefix] = pforge;

@@ -326,6 +326,7 @@ describe("G1 dispatcher final authority and family integration", () => {
     };
     registry.connect("registered-executor", {
       laneId: remoteId, capabilities: { projects: ["project-1"] },
+      publicationFence: true,
       send(packet) {
         if (packet.t === "lease") queueMicrotask(() => {
           verifyGrant({ grant: packet.grant, job: packet.job, subject: "registered-executor", laneId: remoteId, key });

@@ -1,10 +1,30 @@
 import { createHash, randomBytes } from "node:crypto";
+import path from "node:path";
 import { writeSecret, deleteSecret } from "./secret-file.mjs";
 import { ClawError } from "../errors.mjs";
 
 const ENROLLMENT_TTL_MS = 15 * 60_000;
 const SECRET_PREFIX = "PFORGE_CLAW_WORKER_SECRET__";
 const CROCKFORD = "0123456789ABCDEFGHJKMNPQRSTVWXYZ";
+const secretUpdates = new Map();
+
+// Windows replacement must wait for the preceding resolver refresh to close its reader.
+async function serializeSecretUpdate(file, update) {
+  if (typeof file !== "string" || !file) return update();
+  const resolved = path.resolve(file);
+  const key = process.platform === "win32" ? resolved.toLowerCase() : resolved;
+  const previous = secretUpdates.get(key);
+  let release;
+  const completed = new Promise((resolve) => { release = resolve; });
+  secretUpdates.set(key, completed);
+  try {
+    await previous;
+    return await update();
+  } finally {
+    release();
+    if (secretUpdates.get(key) === completed) secretUpdates.delete(key);
+  }
+}
 
 function base32(bytes) {
   let bits = 0;
@@ -84,24 +104,28 @@ export function createEnrollment({
       throw new ClawError("WORKER_BAD_REGISTRATION");
     }
     const name = `${SECRET_PREFIX}${workerId}`;
-    try {
-      await writeSecret({ file: secretFile, name, value: secret });
-    } catch {
-      store.append("enrollment", { v: 1, op: "register-failed", workerId, laneId });
-      throw new ClawError("SECRET_WRITE_FAILED", { name });
-    }
-    store.append("enrollment", { v: 1, op: "registered", workerId, laneId });
-    await refreshSecrets();
-    return { workerId, laneId };
+    return serializeSecretUpdate(secretFile, async () => {
+      try {
+        await writeSecret({ file: secretFile, name, value: secret });
+      } catch {
+        store.append("enrollment", { v: 1, op: "register-failed", workerId, laneId });
+        throw new ClawError("SECRET_WRITE_FAILED", { name });
+      }
+      store.append("enrollment", { v: 1, op: "registered", workerId, laneId });
+      await refreshSecrets();
+      return { workerId, laneId };
+    });
   }
 
   async function revoke(workerId) {
     if (workerState(records(store), workerId) === "unknown") throw new ClawError("WORKER_UNKNOWN");
     const name = `${SECRET_PREFIX}${workerId}`;
-    store.append("enrollment", { v: 1, op: "revoked", workerId });
     try {
-      await deleteSecret({ file: secretFile, name });
-      await refreshSecrets();
+      await serializeSecretUpdate(secretFile, async () => {
+        store.append("enrollment", { v: 1, op: "revoked", workerId });
+        await deleteSecret({ file: secretFile, name });
+        await refreshSecrets();
+      });
     } finally {
       await onRevoke(workerId);
     }

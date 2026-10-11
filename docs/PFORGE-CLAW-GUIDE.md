@@ -63,6 +63,9 @@ returns `PLAN_PROCESS_NATIVE_UNAVAILABLE` before running the command. A macOS
 dispatcher configured for remote-only execution can still use supported worker
 hosts, but that does not satisfy the promised native macOS worker acceptance.
 The cross-platform requirement has not been removed or replaced with a skip.
+On macOS, `doctor` reports this unsupported native boundary explicitly;
+installing PowerShell alone does not enable native local or worker execution.
+Remote-only dispatch remains distinct from native macOS acceptance.
 
 ### macOS
 

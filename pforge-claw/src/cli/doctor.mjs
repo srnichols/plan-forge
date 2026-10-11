@@ -209,7 +209,9 @@ async function appendNativeCheck(config, checks, { home, env, platform, processR
   } : {
     id: "process.ownership", status: "fail", code: NATIVE_SCOPE_ERRORS.UNAVAILABLE,
     message: "Local execution could not establish and settle a native process scope.",
-    hint: "Provision the supported PowerShell/OS native runtime on this host and rerun doctor; no elevation is attempted.",
+    hint: platform === "darwin"
+      ? "Native macOS execution is currently unsupported; PowerShell installation alone cannot enable it. Remote-only dispatch requires supported execution workers and is not native macOS acceptance."
+      : "Provision the supported PowerShell/OS native runtime on this host and rerun doctor; no elevation is attempted.",
   }, redact);
 }
 

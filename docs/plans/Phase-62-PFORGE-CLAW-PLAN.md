@@ -103,7 +103,7 @@ Explicit non-metrics: this phase does not aim to be a general life assistant (em
 - **(i) `pforge claw` CLI subcommand** in **both** `pforge.ps1` and `pforge.sh`, registered in the CLI schema (`pforge-mcp/capabilities/schemas.mjs` → `cli-schema.json`), plus `pforge claw init` config generator, JSON Schema for the config, and example configs.
 - **(k) Portability**: everything in the Portability & Configurability Contract; cross-platform CI (ubuntu / windows / macos + kind); a Tested Platforms matrix the community can extend.
 - **(l) Memory (L2/L3) integration**: project-scoped captures through each project's MCP with provenance; optional direct OpenBrain client for cross-project reads and a bot namespace; automatic task-outcome capture; untrusted captures confirmed and tagged; restricted projects kept out of shared recall; worktree / remote / pod `.forge` history merged back to each project's canonical L2 home.
-- **(j) Docs and capabilities sweep after all code is built**: guide, threat model, architecture doc, README, `docs/capabilities.md` / `.html`, `forge_capabilities` surface, CLI guide, manual chapters, glossary, event catalog, CHANGELOG, ROADMAP (Slice 29).
+- **(j) Docs and capabilities sweep after all code is built**: operator guide (`docs/PFORGE-CLAW-GUIDE.md`), threat model, architecture doc, README, `docs/capabilities.md` / `.html`, `forge_capabilities` surface, CLI guide, manual chapters, glossary, event catalog, CHANGELOG, ROADMAP (Slice 29).
 - **(m) Owner-approved review remediation (D29)**: correct the root-only stale-dashboard ignore in `.gitignore` so required `pforge-claw/src/mcp/` source is tracked; include the workspace in `scripts/audit/eslint-clean-code.config.mjs` and `scripts/audit/run-eslint-clean-code.mjs`; enforce unchanged rules in the existing Claw CI workflow; add focused guard tests. The existing `pforge-mcp/tests/__baselines__/capabilities.snapshot.json` CLI-count update and `pforge-mcp/tests/forge-master.integration.test.mjs` companion-description assertion are permitted metadata regression support, not runtime/tool changes.
 - **(n) Owner-approved release preparation (D30)**: extend `scripts/sync-versions.mjs` for Claw's manifest/root-lock version fields and `scripts/release/ship.mjs` for its manifest-only release commit allowlist; add tests in the existing version-sync/release-ship suites and directly related documentation. Preserve the independently versioned SDK, checkouts without Claw and all source-quality gates. This is not a version bump, npm publication, production release or change to automatic installation/startup.
 - **(o) Native ownership remediation (D31)**: replace snapshot-only publication settlement with per-job OS-native ownership established before literal argv, using own source, the existing Node/PowerShell runtime and OS APIs. Add platform-scoped adapters, capability/error reporting, real detached-child/independent-process/concurrent regressions and directly related documentation. Preserve ordinary callers, authenticated current-lease publication, separate canonical-history ACKs, original deadlines and the no-TypeScript/no-new-third-party-dependency contract. No host elevation, global service/security/cgroup changes or unsupported-capability success fallback.
@@ -556,6 +556,22 @@ tests because private scratch was mounted `noexec`; that failure is retained,
 and only the isolated floor fixture's executable scratch mount was corrected.
 This is diagnostic readiness, not recovery of the original Mac failure code
 or cause. The next exact committed-head CI remains a separate required gate.
+
+**Actionable macOS diagnostics (#353):** a doctor regression reproduced a
+generic PowerShell-provisioning hint for the unsupported native macOS adapter
+before the displayed hint was corrected. The five existing native-doctor cases
+remain active; the combined doctor/CLI wrapper packet passes 22 cases on each
+Windows/Linux Node 22.12/24 cohort. Only that platform-specific hint changed:
+failure status, error code, probe and native settlement requirements retain
+their original ASTs. This is not a native adapter fix or a platform waiver.
+The owner's latest scope form again returned unavailable, not explicit approval
+to reduce platforms. Pinned XNU headers also reject kqueue automatic child
+tracking as unsupported. The bounded sandbox-label and tracing investigations
+also found no admissible proof: no supported current-user immutable membership
+label/readback contract was established, and automatic compulsory descendant
+trace capture was not established. These are source-derived necessary-condition
+results, not an exhaustive impossibility claim or physical macOS acceptance.
+No privileged or global host changes were made.
 
 _Original decisions were resolved at hardening on 2026-10-07; verification evidence is in Assumptions. D29 and D30 are the operator-approved review/release-preparation extensions from 2026-10-08 and 2026-10-10._
 

@@ -68,4 +68,26 @@ describe("doctor verifies local native ownership rather than command availabilit
     expect(processRunner).not.toHaveBeenCalled();
     expect(report.checks).toContainEqual(expect.objectContaining({ id: "process.ownership", status: "skip" }));
   });
+
+  it("does not suggest installing PowerShell enables unsupported native macOS execution", async () => {
+    const options = await fixture();
+    const descriptor = Object.getOwnPropertyDescriptor(process, "platform");
+    const processRunner = vi.fn(async () => ({
+      code: -1, stdout: "", settlementConfirmed: false,
+      error: { code: NATIVE_SCOPE_ERRORS.UNAVAILABLE },
+    }));
+    let report;
+    Object.defineProperty(process, "platform", { value: "darwin", configurable: true });
+    try {
+      report = await runDoctor({ ...options, platform: "darwin", processRunner });
+    } finally {
+      Object.defineProperty(process, "platform", descriptor);
+    }
+    const check = report.checks.find(({ id }) => id === "process.ownership");
+    expect(check).toMatchObject({ status: "fail", code: NATIVE_SCOPE_ERRORS.UNAVAILABLE });
+    expect(check.hint).toContain("Native macOS execution is currently unsupported");
+    expect(check.hint).toContain("PowerShell installation alone cannot enable it");
+    expect(check.hint).toContain("not native macOS acceptance");
+    expect(processRunner).toHaveBeenCalledOnce();
+  });
 });

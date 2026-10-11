@@ -6,7 +6,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import workerCommand, { createLeaseExecution, runOneShot } from "../src/cli/worker.mjs";
 import { createLocalLane } from "../src/lanes/local-lane.mjs";
 import { createRemoteLane } from "../src/lanes/remote-lane.mjs";
-import { createWorkerAgent } from "../src/protocol/worker-agent.mjs";
+import { createWorkerAgent, detectCapabilities } from "../src/protocol/worker-agent.mjs";
 import { createWorkerRegistry } from "../src/protocol/worker-registry.mjs";
 import { createL2Receiver } from "../src/protocol/l2-receiver.mjs";
 import { createLeasePreparer } from "../src/jobs/lease-payload.mjs";
@@ -23,11 +23,12 @@ import { createSecrets } from "../src/secrets.mjs";
 import { createProjectClients } from "../src/mcp/project-client.mjs";
 import { createRegistry, resolveMcpLaunch } from "../src/registry.mjs";
 import { createEnrollment } from "../src/protocol/enrollment.mjs";
+import { challenge, verifyMac } from "../src/protocol/auth.mjs";
 import { createWorkerServer } from "../src/protocol/ws-server.mjs";
 import { createHttpServer } from "../src/http.mjs";
 import { finalizePodJob } from "../src/lanes/k8s-job-lane.mjs";
 
-const edges = vi.hoisted(() => ({ sockets: [], launches: [], onSocket: null }));
+const edges = vi.hoisted(() => ({ sockets: [], launches: [], onSocket: null, scheduleOpen: null }));
 vi.mock("ws", async (original) => {
   const actual = await original();
   const { EventEmitter: Emitter } = await import("node:events");
@@ -39,7 +40,9 @@ vi.mock("ws", async (original) => {
       if (edges.nativeTransport) return new actual.WebSocket(url);
       edges.sockets.push(this);
       edges.onSocket?.(this);
-      queueMicrotask(() => this.emit("open"));
+      const open = () => this.emit("open");
+      if (edges.scheduleOpen) edges.scheduleOpen(open);
+      else queueMicrotask(open);
     }
     send(raw) { this.onSend?.(decode(raw)); }
     close() { this.readyState = 3; this.emit("close", 1000); }
@@ -77,6 +80,7 @@ afterEach(async () => {
   edges.launches.length = 0;
   edges.nativeTransport = false;
   edges.onSocket = null;
+  edges.scheduleOpen = null;
   vi.restoreAllMocks();
   vi.unstubAllEnvs();
   vi.useRealTimers();
@@ -738,6 +742,41 @@ describe("FR-02 current lease publication authority", () => {
   }, PROCESS_TIMEOUT_MS);
 });
 
+describe("worker capability startup", () => {
+  it("starts all independent executable probes before awaiting any one result", async () => {
+    const names = ["node", "git", "gh"];
+    const probes = new Map(names.map((name) => [name, Promise.withResolvers()]));
+    const execFileFn = vi.fn((name) => probes.get(name).promise);
+    const detecting = detectCapabilities({ config: { projects: [] }, laneId: "home", execFileFn });
+    try {
+      await Promise.resolve();
+      expect(execFileFn.mock.calls.map(([name]) => name)).toEqual(names);
+      for (const call of execFileFn.mock.calls) {
+        expect(call.slice(1)).toEqual([["--version"], { timeout: 5000, windowsHide: true }]);
+      }
+    } finally {
+      for (const probe of probes.values()) probe.resolve({});
+      await detecting;
+    }
+  });
+
+  it("keeps stable capability order and configured home scope when one executable is absent", async () => {
+    const missing = Object.assign(new Error("fixture executable missing"), { code: "ENOENT" });
+    const execFileFn = vi.fn(async (name) => {
+      if (name === "gh") throw missing;
+      return {};
+    });
+    const capabilities = await detectCapabilities({
+      config: { projects: [{ id: "here", homeLane: "home" }, { id: "elsewhere", homeLane: "other" }] },
+      laneId: "home", execFileFn,
+    });
+    expect(capabilities).toEqual({
+      os: process.platform, arch: process.arch, macos: process.platform === "darwin",
+      toolchains: ["node", "git"], projects: ["here"],
+    });
+  });
+});
+
 describe("FR-06 authenticated worker home credentials", () => {
   it("uses the worker-store-only BYOK reference in the actual command's home-read client pool", async () => {
     const { root, repoPath, config, canary } = await workerHomeFixture();
@@ -745,21 +784,45 @@ describe("FR-06 authenticated worker home credentials", () => {
     const registry = createWorkerRegistry();
     cleanups.push(() => registry.close());
     const connected = Promise.withResolvers();
-    edges.onSocket = connected.resolve;
+    const opened = Promise.withResolvers();
+    const nonce = challenge();
+    edges.scheduleOpen = setImmediate;
+    edges.onSocket = (socket) => {
+      socket.once("open", () => opened.resolve(socket));
+      socket.onSend = (packet) => {
+        packets.push(packet);
+        if (packet.t === "hello") {
+          queueMicrotask(() => socket.emit("message", Buffer.from(encode(message("challenge", { nonce }))), false));
+        }
+        if (packet.t === "auth") {
+          if (!verifyMac(KEY, nonce, "home-worker", packet.mac)) {
+            connected.reject(new Error("Fixture worker authentication failed"));
+            return;
+          }
+          queueMicrotask(() => {
+            socket.emit("message", Buffer.from(encode(message("ready", {
+              leaseMs: registry.leaseMs, heartbeatMs: HEARTBEAT_MS, publicationFence: PUBLICATION_FENCE_VERSION,
+            }))), false);
+            connected.resolve(socket);
+          });
+        }
+        if (packet.t === "ack") registry.onAck({ ...packet, workerId: "home-worker" });
+        if (packet.t === "event") registry.onEvent({ ...packet, workerId: "home-worker" });
+      };
+    };
     const running = workerCommand.run(["--home", root]);
-    cleanups.push(async () => { process.emit("SIGTERM"); await running; });
+    cleanups.push(async () => {
+      const socket = await Promise.race([opened.promise, running.then(() => null)]);
+      if (socket) process.emit("SIGTERM");
+      await running;
+    });
     const socket = await Promise.race([
       connected.promise,
-      running.then(() => { throw new Error("Worker ended before creating its transport"); }),
+      running.then(() => { throw new Error("Worker ended before authenticating its transport"); }),
     ]);
     edges.onSocket = null;
-    socket.onSend = (packet) => {
-      packets.push(packet);
-      if (packet.t === "ack") registry.onAck({ ...packet, workerId: "home-worker" });
-      if (packet.t === "event") registry.onEvent({ ...packet, workerId: "home-worker" });
-    };
     registry.connect("home-worker", {
-      laneId: "registered-home", capabilities: CAPABILITIES,
+      laneId: "registered-home", capabilities: CAPABILITIES, publicationFence: PUBLICATION_FENCE_VERSION,
       send: (packet) => socket.emit("message", Buffer.from(encode(packet)), false),
     });
     const lane = createRemoteLane({ id: "registered-home", registry });

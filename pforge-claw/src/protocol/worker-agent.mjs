@@ -650,20 +650,21 @@ export function createWorkerAgent({
 }
 
 export async function detectCapabilities({ config, laneId, execFileFn = execFileAsync } = {}) {
-  const toolchains = [];
-  for (const [name, args] of [["node", ["--version"]], ["git", ["--version"]], ["gh", ["--version"]]]) {
-    try {
-      await execFileFn(name, args, { timeout: 5000, windowsHide: true });
-      toolchains.push(name);
-    } catch {
-      continue;
-    }
-  }
+  const toolchains = await Promise.all(
+    [["node", ["--version"]], ["git", ["--version"]], ["gh", ["--version"]]].map(async ([name, args]) => {
+      try {
+        await execFileFn(name, args, { timeout: 5000, windowsHide: true });
+        return name;
+      } catch {
+        return null;
+      }
+    }),
+  );
   return {
     os: process.platform,
     arch: process.arch,
     macos: process.platform === "darwin",
-    toolchains,
+    toolchains: toolchains.filter((name) => name !== null),
     projects: (config?.projects ?? []).filter((project) => project.homeLane === laneId).map((project) => project.id),
   };
 }

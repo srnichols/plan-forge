@@ -397,8 +397,8 @@ Plan Forge is open source. Forge-Claw ships as a **generic, configurable** capab
 | D31 | Per-job native ownership | **Continuation directed 2026-10-10 (operator):** resolve the confirmed shared-OS snapshot ambiguity autonomously using scoped native ownership/authoritative lineage before command execution, rather than false proof or global test serialization. Own-source adapters may use existing PowerShell/Node and OS APIs under the current account. Ordinary execution, literal argument arrays, approved choices, current-lease authority and distinct history application ACKs remain unchanged. Native absence/failure is explicit and cannot certify settlement. No added third-party dependency, privileged/global host mutation, platform reduction, deadline increase or weakened permission/quality gate is authorized. Final acceptance requires the original concurrent/full/floor/actual kind gates and fresh review on committed source. |
 
 **D31 recovery status (2026-10-11):** Windows and Linux have actual native
-ownership evidence under their execution accounts. The current Linux fixture
-image also proves native zero-child/root-exit settlement as UID 10001 without
+ownership evidence under their execution accounts. The published Linux fixture
+image also proved native zero-child/root-exit settlement as UID 10001 without
 network access or added privileges. A symlinked validation projection produced
 two false integration failures; an exact physical copy passed both original
 suites (28 tests) without a product fix or assertion/deadline change. Final
@@ -406,6 +406,17 @@ global/floor/platform/cold-source review gates remain separate. Authoritative
 macOS ownership is still unavailable and blocks promotion; its hosted probe
 measures capabilities, not settlement acceptance. An unavailable user-input
 fallback does not approve a platform cut or additional dependency.
+
+The stopped compiler-free Linux recovery replaces per-root C# compilation
+with fixed emitted libc import metadata and one PowerShell readiness loop.
+A real compiler-refusal regression failed before the change; current native
+floor/LTS controls require genuine `ECHILD`, birth-qualified ownership and the
+retained parent root wait. Independent review also checked import metadata,
+strict private-frame types, fragmented transport and unchanged parent-side
+proof functions. Local full Windows and physical, unprivileged two-CPU Linux
+floor/LTS suites pass with the original four workers and deadlines. Those
+results do not certify the older published CI, the newly built kind image or
+native macOS; current committed-source, hosted and release gates remain separate.
 
 _Original decisions were resolved at hardening on 2026-10-07; verification evidence is in Assumptions. D29 and D30 are the operator-approved review/release-preparation extensions from 2026-10-08 and 2026-10-10._
 

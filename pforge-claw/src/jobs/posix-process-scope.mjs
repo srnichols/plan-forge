@@ -26,370 +26,444 @@ const UNSEALED_RUNTIME_HOOK = /^(?:CORECLR_|COR_|COMPlus_ProfAPI|LD_(?!PRELOAD$|
  */
 
 // The held root retains waitpid authority. Exec'ing Node here would lose the ability to reap adopted children.
-const NATIVE_SOURCE = String.raw`
-using System;
-using System.Collections;
-using System.Collections.Generic;
-using System.Collections.Concurrent;
-using System.Diagnostics;
-using System.Globalization;
-using System.IO;
-using System.Net.Sockets;
-using System.Runtime.InteropServices;
-using System.Text;
-using System.Text.Json;
-using System.Threading;
-using Microsoft.Win32.SafeHandles;
+const NATIVE_SCRIPT = String.raw`
+$ErrorActionPreference = 'Stop'
+$script:Unavailable = '__UNAVAILABLE__'
+$script:Unconfirmed = '__UNCONFIRMED__'
+$script:Limit = '__LIMIT__'
+$script:MaxProcesses = __MAX_PROCESSES__
+$script:DeadlineMs = 3000
+$script:ECHILD = 10
+$script:EINTR = 4
+$script:ESRCH = 3
+$script:SetChildSubreaper = 36
+$script:GetChildSubreaper = 37
+$script:PidFdOpenCall = 434
+$script:PidFdSignalCall = 424
+$script:KillSignal = 9
+$script:NoHang = 1
+$script:SetFdFlags = 2
+$script:CloseOnExec = 1
+$script:UnixDomain = 1
+$script:StreamSocket = 1
+$script:SocketCloseOnExec = 524288
+$script:SocketLevel = 1
+$script:PeerCredentialsOption = 17
+$script:PeerCredentialsBytes = 12
+$script:NativeIntBytes = 4
+$script:PollBytes = 8
+$script:SpawnActionsBytes = 256
+$script:IpcDescriptor = 3
+$script:ReadBatchBytes = 16384
+$script:DecodeSlackChars = 4
+$script:SelectIntervalMicroseconds = 100000
+$script:MaxActorBytes = 2097152
+$script:MaxControlBytes = 32768
+$script:MaxEnvironmentBytes = 8388608
+$script:MaxPidDigits = 16
+$script:NativeEntries = @{ prctlGet = 'prctl'; pidfd_open = 'syscall'; pidfd_send_signal = 'syscall';
+    spawn_init = 'posix_spawn_file_actions_init'; spawn_destroy = 'posix_spawn_file_actions_destroy';
+    spawn_dup2 = 'posix_spawn_file_actions_adddup2'; spawn_close = 'posix_spawn_file_actions_addclose' }
+$script:Utf8 = [Text.UTF8Encoding]::new($false, $true)
+$script:Stopped = [Collections.Generic.HashSet[int]]::new()
+$script:ExceededLimit = $false
+$script:Channels = [Collections.Generic.List[object]]::new()
+$script:Buffers = [Collections.Generic.List[IntPtr]]::new()
 
-public sealed class ScopeFault : Exception {
-    public readonly string Code;
-    public ScopeFault(string code) : base(code) { Code = code; }
+function Fail-Scope([string]$code, [int]$errno = 0) {
+    $fault = [InvalidOperationException]::new($code)
+    $fault.Data['NativeErrno'] = $errno
+    throw $fault
 }
-public static class ClawPosixNative {
-    public const string Unavailable = "__UNAVAILABLE__";
-    public const string Unconfirmed = "__UNCONFIRMED__";
-    public const string Limit = "__LIMIT__";
-    public const int ECHILD = 10, EINTR = 4, ESRCH = 3, MaxProcesses = __MAX_PROCESSES__, DeadlineMs = 3000;
-    public const int MaxControlChars = 32768, MaxActorChars = 2097152;
-    public const int MaxEnvironmentBytes = 8388608, ReadBatchBytes = 8192;
-    public const int SetChildSubreaper = 36, GetChildSubreaper = 37, KillSignal = 9, NoHang = 1;
-    public const int SetFdFlags = 2, CloseOnExec = 1, SocketLevel = 1, PeerCredentialsOption = 17;
-    public const long PidFdOpenCall = 434, PidFdSignalCall = 424;
-    public const short POLLIN = 1, POLLNVAL = 32;
-    [StructLayout(LayoutKind.Sequential)]
-    public struct PollFd { public int fd; public short events; public short revents; }
-    [StructLayout(LayoutKind.Sequential)]
-    public struct PeerCredentials { public int pid; public uint uid; public uint gid; }
-    [DllImport("libc", SetLastError=true)] public static extern int getpid();
-    [DllImport("libc", SetLastError=true)] public static extern int getppid();
-    [DllImport("libc", SetLastError=true)] public static extern uint getuid();
-    [DllImport("libc", SetLastError=true)] public static extern int close(int fd);
-    [DllImport("libc", SetLastError=true)] public static extern int fcntl(int fd, int command, int argument);
-    [DllImport("libc", SetLastError=true)] public static extern int waitpid(int pid, out int status, int options);
-    [DllImport("libc", SetLastError=true)] public static extern int poll([In,Out] PollFd[] fds, ulong count, int timeout);
-    [DllImport("libc", SetLastError=true)] public static extern int prctl(int option, ulong arg, ulong arg3, ulong arg4, ulong arg5);
-    [DllImport("libc", EntryPoint="prctl", SetLastError=true)]
-    public static extern int prctlGet(int option, out int value, ulong arg3, ulong arg4, ulong arg5);
-    [DllImport("libc", EntryPoint="syscall", SetLastError=true)]
-    public static extern long pidfd_open(long number, int pid, uint flags);
-    [DllImport("libc", EntryPoint="syscall", SetLastError=true)]
-    public static extern long pidfd_send_signal(long number, int fd, int signal, IntPtr info, uint flags);
-    [DllImport("libc", SetLastError=true)]
-    public static extern int getsockopt(int fd, int level, int option, out PeerCredentials peer, ref uint length);
-    [DllImport("libc")] public static extern void _exit(int code);
-    public static string Proc(params string[] parts) {
-        string target = Path.DirectorySeparatorChar + "proc";
-        foreach (string part in parts) target = Path.Combine(target, part);
-        return target;
+function Scope-Code($failure) {
+    $exception = $failure.Exception
+    while ($null -ne $exception) {
+        if ($exception.Message -in @($Unavailable, $Unconfirmed, $Limit)) { return $exception.Message }
+        $exception = $exception.InnerException
     }
-    public static (int Parent, string Birth) Identity(int pid) {
-        string text = File.ReadAllText(Proc(pid.ToString(CultureInfo.InvariantCulture), "stat"));
-        string[] fields = text.Substring(text.LastIndexOf(')') + 2).Split(' ', StringSplitOptions.RemoveEmptyEntries);
-        return (int.Parse(fields[1], CultureInfo.InvariantCulture), fields[19]);
-    }
-    public static int OpenPid(int pid, string birth, int? parent = null) {
-        var before = Identity(pid);
-        if (before.Birth != birth || (parent.HasValue && before.Parent != parent.Value)) throw new ScopeFault(Unconfirmed);
-        int fd = checked((int)pidfd_open(PidFdOpenCall, pid, 0));
-        if (fd < 0) throw new ScopeFault(Unavailable);
-        try {
-            var after = Identity(pid);
-            string identity = File.ReadAllText(Proc("self", "fdinfo", fd.ToString(CultureInfo.InvariantCulture)));
-            if (after != before || !identity.Contains("Pid:\t" + pid.ToString(CultureInfo.InvariantCulture) + "\n"))
-                throw new ScopeFault(Unconfirmed);
-            return fd;
-        } catch { close(fd); throw; }
-    }
-    public static bool HasExited(int fd, int timeout) {
-        var descriptors = new[] { new PollFd { fd = fd, events = POLLIN } };
-        int status = poll(descriptors, 1, timeout);
-        if (status < 0 && Marshal.GetLastWin32Error() == EINTR) return false;
-        if (status < 0 || (descriptors[0].revents & POLLNVAL) != 0) throw new ScopeFault(Unconfirmed);
-        return (descriptors[0].revents & POLLIN) != 0;
-    }
-    public static void EstablishSubreaper() {
-        if (prctl(SetChildSubreaper, 1, 0, 0, 0) != 0 ||
-            prctlGet(GetChildSubreaper, out int enabled, 0, 0, 0) != 0 || enabled != 1)
-            throw new ScopeFault(Unavailable);
-        int self = OpenPid(getpid(), Identity(getpid()).Birth);
-        try {
-            if (HasExited(self, 0)) throw new ScopeFault(Unconfirmed);
-            if (pidfd_send_signal(PidFdSignalCall, self, 0, IntPtr.Zero, 0) < 0) throw new ScopeFault(Unavailable);
+    return $Unconfirmed
+}
+function Native-Memory([int]$bytes) {
+    $pointer = [Runtime.InteropServices.Marshal]::AllocHGlobal($bytes)
+    $Buffers.Add($pointer)
+    return $pointer
+}
+function Proc-Path([string[]]$parts) {
+    $target = [IO.Path]::Combine([IO.Path]::DirectorySeparatorChar.ToString(), 'proc')
+    foreach ($part in $parts) { $target = [IO.Path]::Combine($target, $part) }
+    return $target
+}
+function Process-Identity([int]$processId) {
+    $text = [IO.File]::ReadAllText((Proc-Path @([string]$processId, 'stat')))
+    $fields = $text.Substring($text.LastIndexOf(')') + 2).Split([char[]]@(' '), [StringSplitOptions]::RemoveEmptyEntries)
+    return @{ Parent = [int]$fields[1]; Birth = $fields[19] }
+}
+
+# Only libc import metadata is emitted; no C# compiler or persisted assembly participates in startup.
+function Add-NativeMethod([string]$name, [type]$returnType, [type[]]$parameters) {
+    $entry = $(if ($NativeEntries.ContainsKey($name)) { $NativeEntries[$name] } else { $name })
+    $method = $script:NativeBuilder.DefineMethod($name,
+        [Reflection.MethodAttributes]'Public,Static,PinvokeImpl', $returnType, $parameters)
+    $attribute = [Runtime.InteropServices.DllImportAttribute]
+    $constructor = $attribute.GetConstructor([type[]]@([string]))
+    $fields = [Reflection.FieldInfo[]]@($attribute.GetField('EntryPoint'), $attribute.GetField('SetLastError'),
+        $attribute.GetField('CallingConvention'), $attribute.GetField('CharSet'), $attribute.GetField('ExactSpelling'))
+    $values = [object[]]@($entry, $true, [Runtime.InteropServices.CallingConvention]::Cdecl,
+        [Runtime.InteropServices.CharSet]::Ansi, $true)
+    $method.SetCustomAttribute([Reflection.Emit.CustomAttributeBuilder]::new($constructor,
+        [object[]]@('libc'), $fields, $values))
+    $method.SetImplementationFlags([Reflection.MethodImplAttributes]::PreserveSig)
+}
+function Initialize-NativeImports {
+    $assembly = [Reflection.Emit.AssemblyBuilder]::DefineDynamicAssembly(
+        [Reflection.AssemblyName]::new('Claw.Posix.Imports'), [Reflection.Emit.AssemblyBuilderAccess]::Run)
+    $script:NativeBuilder = $assembly.DefineDynamicModule('libc').DefineType('ClawPosixImports',
+        [Reflection.TypeAttributes]'Public,Abstract,Sealed')
+    Add-NativeMethod 'getpid' ([int]) @()
+    Add-NativeMethod 'getppid' ([int]) @()
+    Add-NativeMethod 'getuid' ([uint32]) @()
+    Add-NativeMethod 'close' ([int]) @([int])
+    Add-NativeMethod 'fcntl' ([int]) @([int], [int], [int])
+    Add-NativeMethod 'waitpid' ([int]) @([int], [IntPtr], [int])
+    Add-NativeMethod 'poll' ([int]) @([IntPtr], [uint64], [int])
+    Add-NativeMethod 'prctl' ([int]) @([int], [uint64], [uint64], [uint64], [uint64])
+    Add-NativeMethod 'prctlGet' ([int]) @([int], [IntPtr], [uint64], [uint64], [uint64])
+    Add-NativeMethod 'pidfd_open' ([long]) @([long], [int], [uint32])
+    Add-NativeMethod 'pidfd_send_signal' ([long]) @([long], [int], [int], [IntPtr], [uint32])
+    Add-NativeMethod 'getsockopt' ([int]) @([int], [int], [int], [IntPtr], [IntPtr])
+    Add-NativeMethod 'socketpair' ([int]) @([int], [int], [int], [IntPtr])
+    Add-NativeMethod 'spawn_init' ([int]) @([IntPtr])
+    Add-NativeMethod 'spawn_destroy' ([int]) @([IntPtr])
+    Add-NativeMethod 'spawn_dup2' ([int]) @([IntPtr], [int], [int])
+    Add-NativeMethod 'spawn_close' ([int]) @([IntPtr], [int])
+    Add-NativeMethod 'posix_spawn' ([int]) @([IntPtr], [string], [IntPtr], [IntPtr], [IntPtr], [IntPtr])
+    Add-NativeMethod '_exit' ([void]) @([int])
+    $script:Native = $script:NativeBuilder.CreateType()
+    $script:StatusMemory = Native-Memory $NativeIntBytes
+    $script:PollMemory = Native-Memory $PollBytes
+    $script:PeerMemory = Native-Memory $PeerCredentialsBytes
+    $script:LengthMemory = Native-Memory $NativeIntBytes
+}
+function Open-PidFd([int]$processId, [string]$birth, [int]$parent = 0) {
+    $before = Process-Identity $processId
+    if ($before.Birth -cne $birth -or ($parent -gt 0 -and $before.Parent -ne $parent)) { Fail-Scope $Unconfirmed }
+    $descriptor = [int]$Native::pidfd_open($PidFdOpenCall, $processId, 0)
+    $errno = [Runtime.InteropServices.Marshal]::GetLastPInvokeError()
+    if ($descriptor -lt 0) { Fail-Scope $Unavailable $errno }
+    try {
+        $after = Process-Identity $processId
+        $identity = [IO.File]::ReadAllText((Proc-Path @('self', 'fdinfo', [string]$descriptor)))
+        if ($after.Birth -cne $before.Birth -or $after.Parent -ne $before.Parent -or
+            -not $identity.Contains("Pid:" + [char]9 + $processId + [char]10)) { Fail-Scope $Unconfirmed }
+        return $descriptor
+    } catch { $null = $Native::close($descriptor); throw }
+}
+function Establish-Subreaper {
+    if ($Native::prctl($SetChildSubreaper, 1, 0, 0, 0) -ne 0 -or
+        $Native::prctlGet($GetChildSubreaper, $StatusMemory, 0, 0, 0) -ne 0 -or
+        [Runtime.InteropServices.Marshal]::ReadInt32($StatusMemory) -ne 1) { Fail-Scope $Unavailable }
+    $descriptor = Open-PidFd $script:RootPid $script:RootBirth
+    try {
+        [Runtime.InteropServices.Marshal]::WriteInt32($PollMemory, $descriptor)
+        [Runtime.InteropServices.Marshal]::WriteInt16($PollMemory, 4, 1)
+        [Runtime.InteropServices.Marshal]::WriteInt16($PollMemory, 6, 0)
+        if ($Native::poll($PollMemory, 1, 0) -lt 0 -or
+            [Runtime.InteropServices.Marshal]::ReadInt16($PollMemory, 6) -ne 0 -or
+            $Native::pidfd_send_signal($PidFdSignalCall, $descriptor, 0, [IntPtr]::Zero, 0) -lt 0) { Fail-Scope $Unavailable }
+    } finally { $null = $Native::close($descriptor) }
+}
+function Initial-Environment {
+    $stream = [IO.File]::OpenRead((Proc-Path @('self', 'environ')))
+    $contents = [IO.MemoryStream]::new()
+    $batch = [byte[]]::new(8192)
+    try {
+        while (($count = $stream.Read($batch, 0, $batch.Length)) -gt 0) {
+            if ($contents.Length + $count -gt $MaxEnvironmentBytes) { Fail-Scope $Limit }
+            $contents.Write($batch, 0, $count)
         }
-        finally { close(self); }
-    }
-    public static IEnumerable<string> InitialEnvironment() {
-        using var input = File.OpenRead(Proc("self", "environ"));
-        using var contents = new MemoryStream();
-        var batch = new byte[ReadBatchBytes];
-        int count;
-        while ((count = input.Read(batch, 0, batch.Length)) > 0) {
-            if (contents.Length + count > MaxEnvironmentBytes) throw new ScopeFault(Limit);
-            contents.Write(batch, 0, count);
+        return $Utf8.GetString($contents.ToArray()).Split([char[]]@([char]0), [StringSplitOptions]::RemoveEmptyEntries)
+    } finally { $stream.Dispose(); $contents.Dispose() }
+}
+function New-Vector([string[]]$entries) {
+    $strings = [Collections.Generic.List[IntPtr]]::new()
+    $pointer = [IntPtr]::Zero
+    try {
+        foreach ($entry in $entries) { $strings.Add([Runtime.InteropServices.Marshal]::StringToCoTaskMemUTF8($entry)) }
+        $pointer = [Runtime.InteropServices.Marshal]::AllocHGlobal(($strings.Count + 1) * [IntPtr]::Size)
+        for ($index = 0; $index -lt $strings.Count; $index++) {
+            [Runtime.InteropServices.Marshal]::WriteIntPtr($pointer, $index * [IntPtr]::Size, $strings[$index])
         }
-        return Encoding.UTF8.GetString(contents.ToArray()).Split('\0', StringSplitOptions.RemoveEmptyEntries);
-    }
-    public static string ReadLine(StreamReader reader, int limit) {
-        var text = new StringBuilder();
-        for (;;) {
-            int character = reader.Read();
-            if (character < 0) return text.Length == 0 ? null : throw new ScopeFault(Unconfirmed);
-            if (character == '\n') return text.ToString();
-            if (text.Length >= limit) throw new ScopeFault(Limit);
-            text.Append((char)character);
-        }
-    }
-    public static StreamWriter Writer(Stream stream) {
-        return new StreamWriter(stream, new UTF8Encoding(false), 4096, true) { AutoFlush = true, NewLine = "\n" };
-    }
-    public static string Error(Exception exception) {
-        return exception is ScopeFault fault ? fault.Code : Unconfirmed;
+        [Runtime.InteropServices.Marshal]::WriteIntPtr($pointer, $strings.Count * [IntPtr]::Size, [IntPtr]::Zero)
+        return @{ Pointer = $pointer; Strings = $strings }
+    } catch {
+        foreach ($entry in $strings) { [Runtime.InteropServices.Marshal]::FreeCoTaskMem($entry) }
+        if ($pointer -ne [IntPtr]::Zero) { [Runtime.InteropServices.Marshal]::FreeHGlobal($pointer) }
+        throw
     }
 }
-`;
-
-const ROOT_SOURCE = String.raw`
-public sealed class ClawPosixRoot {
-    const string ReadyMessage = "owned-ready", StartMessage = "owned-start", ResultMessage = "owned-result";
-    const string StopMessage = "__STOP_MESSAGE__";
-    const int UnixDomain = 1, StreamSocket = 1, SocketCloseOnExec = 524288;
-    const int SpawnActionsBytes = 256, MaxPidDigits = 16;
-    [DllImport("libc", SetLastError=true)] static extern int socketpair(int domain, int type, int protocol, [Out] int[] pair);
-    [DllImport("libc", SetLastError=true)] static extern int posix_spawn_file_actions_init(IntPtr actions);
-    [DllImport("libc", SetLastError=true)] static extern int posix_spawn_file_actions_destroy(IntPtr actions);
-    [DllImport("libc", SetLastError=true)] static extern int posix_spawn_file_actions_adddup2(IntPtr actions, int source, int target);
-    [DllImport("libc", SetLastError=true)] static extern int posix_spawn_file_actions_addclose(IntPtr actions, int fd);
-    [DllImport("libc", SetLastError=true)]
-    static extern int posix_spawn(out int pid, string executable, IntPtr actions, IntPtr attrs, IntPtr argv, IntPtr env);
-    sealed class Vector : IDisposable {
-        readonly List<IntPtr> strings = new List<IntPtr>();
-        public readonly IntPtr Pointer;
-        public Vector(IEnumerable<string> entries) {
-            foreach (string entry in entries) strings.Add(Marshal.StringToCoTaskMemUTF8(entry));
-            Pointer = Marshal.AllocHGlobal((strings.Count + 1) * IntPtr.Size);
-            for (int index = 0; index < strings.Count; index++) Marshal.WriteIntPtr(Pointer, index * IntPtr.Size, strings[index]);
-            Marshal.WriteIntPtr(Pointer, strings.Count * IntPtr.Size, IntPtr.Zero);
+function Close-Vector($vector) {
+    if ($null -eq $vector) { return }
+    foreach ($entry in $vector.Strings) { [Runtime.InteropServices.Marshal]::FreeCoTaskMem($entry) }
+    [Runtime.InteropServices.Marshal]::FreeHGlobal($vector.Pointer)
+}
+function New-Channel($socket, [string]$kind) {
+    $socket.SendTimeout = $DeadlineMs
+    $channel = @{ Socket = $socket; Kind = $kind; Text = ''; Decoder = $Utf8.GetDecoder() }
+    $Channels.Add($channel)
+    return $channel
+}
+function Channel-FromFd([int]$descriptor, [string]$kind) {
+    $handle = [Net.Sockets.SafeSocketHandle]::new([IntPtr]$descriptor, $true)
+    return New-Channel ([Net.Sockets.Socket]::new($handle)) $kind
+}
+function Write-Line($channel, [string]$line) {
+    $bytes = $Utf8.GetBytes($line + [char]10)
+    $offset = 0
+    while ($offset -lt $bytes.Length) {
+        $count = $channel.Socket.Send($bytes, $offset, $bytes.Length - $offset, [Net.Sockets.SocketFlags]::None)
+        if ($count -le 0) { Fail-Scope $Unconfirmed }
+        $offset += $count
+    }
+}
+function Write-Frame($channel, $frame) {
+    Write-Line $channel (ConvertTo-Json -InputObject $frame -Compress -Depth 8)
+}
+function Start-Supervisor($config) {
+    $pair = Native-Memory (2 * $NativeIntBytes)
+    if ($Native::socketpair($UnixDomain, ($StreamSocket -bor $SocketCloseOnExec), 0, $pair) -ne 0) { Fail-Scope $Unavailable }
+    $parentFd = [Runtime.InteropServices.Marshal]::ReadInt32($pair)
+    $childFd = [Runtime.InteropServices.Marshal]::ReadInt32($pair, 4)
+    $actions = Native-Memory $SpawnActionsBytes
+    $initialized = $false
+    $argv = $null
+    $environment = $null
+    try {
+        if ($Native::spawn_init($actions) -ne 0) { Fail-Scope $Unavailable }
+        $initialized = $true
+        if ($Native::spawn_dup2($actions, $childFd, $IpcDescriptor) -ne 0 -or
+            $Native::spawn_close($actions, $parentFd) -ne 0 -or
+            ($childFd -ne $IpcDescriptor -and $Native::spawn_close($actions, $childFd) -ne 0)) { Fail-Scope $Unavailable }
+        $entries = [Collections.Generic.List[string]]::new()
+        # PowerShell changes PATH; the kernel's original exec environment preserves the actor's exact values.
+        foreach ($entry in (Initial-Environment)) {
+            if (-not $entry.StartsWith('NODE_CHANNEL_FD=') -and
+                -not $entry.StartsWith('NODE_CHANNEL_SERIALIZATION_MODE=')) { $entries.Add($entry) }
         }
-        public void Dispose() {
-            foreach (IntPtr entry in strings) Marshal.FreeCoTaskMem(entry);
-            Marshal.FreeHGlobal(Pointer);
-        }
+        $entries.Add('NODE_CHANNEL_FD=' + $IpcDescriptor)
+        $entries.Add('NODE_CHANNEL_SERIALIZATION_MODE=json')
+        $argv = New-Vector @($config.node, $config.supervisorPath, $config.argument)
+        $environment = New-Vector ($entries.ToArray())
+        if ($Native::posix_spawn($StatusMemory, $config.node, $actions, [IntPtr]::Zero,
+            $argv.Pointer, $environment.Pointer) -ne 0) { Fail-Scope $Unavailable }
+        $script:InnerPid = [Runtime.InteropServices.Marshal]::ReadInt32($StatusMemory)
+        $script:Inner = Channel-FromFd $parentFd 'inner'
+        $parentFd = -1
+    } finally {
+        Close-Vector $argv
+        Close-Vector $environment
+        if ($initialized) { $null = $Native::spawn_destroy($actions) }
+        $null = $Native::close($childFd)
+        if ($parentFd -ge 0) { $null = $Native::close($parentFd) }
     }
-    readonly object state = new object(), outputLock = new object();
-    readonly int rootPid, ownerPid;
-    readonly string rootBirth;
-    readonly HashSet<int> stopped = new HashSet<int>();
-    readonly StreamWriter outerWriter;
-    readonly StreamReader outerReader;
-    StreamWriter innerWriter;
-    bool attached, terminating, started, exceededLimit;
-
-    ClawPosixRoot(int fd) {
-        rootPid = ClawPosixNative.getpid(); ownerPid = ClawPosixNative.getppid();
-        rootBirth = ClawPosixNative.Identity(rootPid).Birth;
-        if (ClawPosixNative.fcntl(fd, ClawPosixNative.SetFdFlags, ClawPosixNative.CloseOnExec) < 0)
-            throw new ScopeFault(ClawPosixNative.Unavailable);
-        var socket = new Socket(new SafeSocketHandle((IntPtr)fd, true));
-        var stream = new NetworkStream(socket, true);
-        outerWriter = ClawPosixNative.Writer(stream);
-        outerReader = new StreamReader(stream, Encoding.UTF8, false, 4096, true);
-    }
-    void SendOuter(object frame) {
-        lock (outputLock) outerWriter.WriteLine(JsonSerializer.Serialize(frame));
-    }
-    static void StartReader(ThreadStart read) {
-        // A held IPC read must not occupy the pool that would otherwise deliver its START.
-        new Thread(read) { IsBackground = true }.Start();
-    }
-    void StartSupervisor(JsonElement config) {
-        var pair = new int[2];
-        if (socketpair(UnixDomain, StreamSocket | SocketCloseOnExec, 0, pair) != 0)
-            throw new ScopeFault(ClawPosixNative.Unavailable);
-        IntPtr actions = Marshal.AllocHGlobal(SpawnActionsBytes);
-        bool initialized = false;
+}
+function Record-Stopped([int]$processId) {
+    if ($Stopped.Contains($processId)) { return }
+    if ($Stopped.Count -ge $MaxProcesses) { $script:ExceededLimit = $true }
+    else { $null = $Stopped.Add($processId) }
+}
+function Stop-OwnedChild([int]$processId) {
+    $descriptor = -1
+    try {
+        $identity = Process-Identity $processId
+        if ($identity.Parent -ne $RootPid) { Fail-Scope $Unconfirmed }
+        $descriptor = Open-PidFd $processId $identity.Birth $RootPid
+        $sent = $Native::pidfd_send_signal($PidFdSignalCall, $descriptor, $KillSignal, [IntPtr]::Zero, 0)
+        $errno = [Runtime.InteropServices.Marshal]::GetLastPInvokeError()
+        if ($sent -lt 0 -and $errno -ne $ESRCH) { Fail-Scope $Unconfirmed $errno }
+        Record-Stopped $processId
+    } catch [IO.FileNotFoundException] { return }
+    catch [IO.DirectoryNotFoundException] { return }
+    finally { if ($descriptor -ge 0) { $null = $Native::close($descriptor) } }
+}
+function Stop-ListedChildren($clock) {
+    foreach ($task in [IO.Directory]::EnumerateDirectories((Proc-Path @('self', 'task')))) {
+        try { $reader = [IO.File]::OpenText([IO.Path]::Combine($task, 'children')) }
+        catch [IO.FileNotFoundException] { continue }
+        catch [IO.DirectoryNotFoundException] { continue }
         try {
-            if (posix_spawn_file_actions_init(actions) != 0) throw new ScopeFault(ClawPosixNative.Unavailable);
-            initialized = true;
-            if (posix_spawn_file_actions_adddup2(actions, pair[1], 3) != 0 ||
-                posix_spawn_file_actions_addclose(actions, pair[0]) != 0 ||
-                (pair[1] != 3 && posix_spawn_file_actions_addclose(actions, pair[1]) != 0))
-                throw new ScopeFault(ClawPosixNative.Unavailable);
-            string node = config.GetProperty("node").GetString();
-            var environment = new List<string>();
-            // PowerShell mutates PATH at startup; the kernel retains our original exec environment.
-            foreach (string entry in ClawPosixNative.InitialEnvironment()) {
-                if (!entry.StartsWith("NODE_CHANNEL_FD=", StringComparison.Ordinal) &&
-                    !entry.StartsWith("NODE_CHANNEL_SERIALIZATION_MODE=", StringComparison.Ordinal)) environment.Add(entry);
-            }
-            environment.Add("NODE_CHANNEL_FD=3"); environment.Add("NODE_CHANNEL_SERIALIZATION_MODE=json");
-            using var argv = new Vector(new[] { node, config.GetProperty("supervisorPath").GetString(),
-                config.GetProperty("argument").GetString() });
-            using var env = new Vector(environment);
-            if (posix_spawn(out int child, node, actions, IntPtr.Zero, argv.Pointer, env.Pointer) != 0)
-                throw new ScopeFault(ClawPosixNative.Unavailable);
-        } finally {
-            if (initialized) posix_spawn_file_actions_destroy(actions);
-            Marshal.FreeHGlobal(actions);
-            ClawPosixNative.close(pair[1]);
-        }
-        var stream = new NetworkStream(new Socket(new SafeSocketHandle((IntPtr)pair[0], true)), true);
-        innerWriter = ClawPosixNative.Writer(stream);
-        var reader = new StreamReader(stream, Encoding.UTF8, false, 4096, true);
-        StartReader(() => Relay(reader));
-    }
-    void Relay(StreamReader reader) {
-        try {
-            string line;
-            while ((line = ClawPosixNative.ReadLine(reader, ClawPosixNative.MaxActorChars)) != null) {
-                using var document = JsonDocument.Parse(line);
-                var frame = document.RootElement;
-                if (frame.GetProperty("t").GetString() == ReadyMessage)
-                    SendOuter(new { v = 1, t = ReadyMessage, pid = rootPid });
-                else { lock (outputLock) outerWriter.WriteLine(line); }
-            }
-        } catch { if (!terminating) SendFailure(ClawPosixNative.Unconfirmed); }
-    }
-    void SendFailure(string code) {
-        try { SendOuter(new { v = 1, t = ResultMessage, code = -1, errorCode = code }); }
-        catch { terminating = true; }
-    }
-    void ReadParent() {
-        try {
-            string line;
-            while ((line = ClawPosixNative.ReadLine(outerReader, ClawPosixNative.MaxActorChars)) != null) {
-                using var document = JsonDocument.Parse(line);
-                var frame = document.RootElement;
-                if (frame.GetProperty("v").GetInt32() != 1) throw new ScopeFault(ClawPosixNative.Unconfirmed);
-                if (frame.GetProperty("t").GetString() == StopMessage) break;
-                if (frame.GetProperty("t").GetString() != StartMessage) continue;
-                lock (state) {
-                    if (!attached || terminating || started) throw new ScopeFault(ClawPosixNative.Unconfirmed);
-                    started = true;
-                    innerWriter.WriteLine(line);
+            $token = [Text.StringBuilder]::new()
+            while (($character = $reader.Read()) -ge 0) {
+                if ($clock.ElapsedMilliseconds -ge $DeadlineMs) { Fail-Scope $Unconfirmed }
+                if ([char]::IsWhiteSpace([char]$character)) {
+                    if ($token.Length -eq 0) { continue }
+                    Stop-OwnedChild ([int]$token.ToString())
+                    $null = $token.Clear()
+                } else {
+                    if ($token.Length -ge $MaxPidDigits) { Fail-Scope $Unconfirmed }
+                    $null = $token.Append([char]$character)
                 }
             }
-        } catch (Exception exception) { SendFailure(ClawPosixNative.Error(exception)); }
-        StopChildren();
-        ClawPosixNative._exit(0);
+            if ($token.Length -gt 0) { Stop-OwnedChild ([int]$token.ToString()) }
+        } finally { $reader.Dispose() }
     }
-    IEnumerable<int> Children() {
-        foreach (string task in Directory.EnumerateDirectories(ClawPosixNative.Proc("self", "task"))) {
-            StreamReader input;
-            try { input = File.OpenText(Path.Combine(task, "children")); }
-            catch (FileNotFoundException) { continue; }
-            catch (DirectoryNotFoundException) { continue; }
-            using (input) {
-                var token = new StringBuilder();
-                int character;
-                while ((character = input.Read()) >= 0) {
-                    if (char.IsWhiteSpace((char)character)) {
-                        if (token.Length == 0) continue;
-                        yield return int.Parse(token.ToString(), CultureInfo.InvariantCulture);
-                        token.Clear();
-                    } else {
-                        if (token.Length >= MaxPidDigits) throw new ScopeFault(ClawPosixNative.Unconfirmed);
-                        token.Append((char)character);
+}
+function Stop-Children {
+    $clock = [Diagnostics.Stopwatch]::StartNew()
+    try {
+        while ($clock.ElapsedMilliseconds -lt $DeadlineMs) {
+            do {
+                $reaped = $Native::waitpid(-1, $StatusMemory, $NoHang)
+                $errno = [Runtime.InteropServices.Marshal]::GetLastPInvokeError()
+                if ($reaped -gt 0) { Record-Stopped $reaped }
+            } while ($reaped -gt 0 -and $clock.ElapsedMilliseconds -lt $DeadlineMs)
+            if ($reaped -lt 0 -and $errno -eq $ECHILD) {
+                return @{ Zero = $true; Code = $(if ($ExceededLimit) { $Limit } else { $null }) }
+            }
+            if ($reaped -lt 0 -and $errno -ne $EINTR) { Fail-Scope $Unconfirmed $errno }
+            Stop-ListedChildren $clock
+            [Threading.Thread]::Sleep(1)
+        }
+        return @{ Zero = $false; Code = $Unconfirmed }
+    } catch { return @{ Zero = $false; Code = (Scope-Code $_) } }
+}
+function Accept-Control {
+    $socket = $script:Listener.Accept()
+    try {
+        [Runtime.InteropServices.Marshal]::WriteInt32($LengthMemory, $PeerCredentialsBytes)
+        if ($Native::getsockopt($socket.Handle.ToInt32(), $SocketLevel, $PeerCredentialsOption, $PeerMemory, $LengthMemory) -ne 0) {
+            Fail-Scope $Unconfirmed
+        }
+        $peerUid = [uint32]([long][Runtime.InteropServices.Marshal]::ReadInt32($PeerMemory, $NativeIntBytes) -band
+            [long]([uint32]::MaxValue))
+        if ([Runtime.InteropServices.Marshal]::ReadInt32($LengthMemory) -ne $PeerCredentialsBytes -or
+            [Runtime.InteropServices.Marshal]::ReadInt32($PeerMemory) -ne $OwnerPid -or $peerUid -ne $OwnerUid) {
+            Fail-Scope $Unconfirmed
+        }
+        if ($null -ne $script:Control) { Fail-Scope $Unconfirmed }
+        $script:Control = New-Channel $socket 'control'
+    } catch { $socket.Dispose(); throw }
+}
+function Is-NativeInteger($value) {
+    return $value -is [int] -or $value -is [long]
+}
+function Receive-Frame($channel, [string]$line) {
+    $frame = ConvertFrom-Json -InputObject $line -AsHashtable -NoEnumerate
+    if ($frame -isnot [Collections.IDictionary] -or -not (Is-NativeInteger $frame.v) -or $frame.v -ne 1) {
+        Fail-Scope $Unconfirmed
+    }
+    if ($channel.Kind -in @('outer', 'inner') -and $frame.t -isnot [string]) { Fail-Scope $Unconfirmed }
+    if ($channel.Kind -eq 'control' -and $frame.operation -isnot [string]) { Fail-Scope $Unconfirmed }
+    if ($channel.Kind -eq 'outer') {
+        if ($frame.t -ceq '__STOP_MESSAGE__') { $script:Stopping = $true; return }
+        if ($frame.t -cne 'owned-start') { Fail-Scope $Unconfirmed }
+        if (-not $script:Attached -or $script:Started -or $script:Stopping) { Fail-Scope $Unconfirmed }
+        $script:Started = $true
+        Write-Line $script:Inner $line
+    } elseif ($channel.Kind -eq 'inner') {
+        if ($frame.t -ceq 'owned-ready' -and (Is-NativeInteger $frame.pid) -and $frame.pid -eq $InnerPid -and -not $script:Ready) {
+            $script:Ready = $true
+            Write-Frame $script:Outer @{ v = 1; t = 'owned-ready'; pid = $RootPid }
+        } elseif ($frame.t -ceq 'owned-result' -and $script:Started -and (Is-NativeInteger $frame.code)) {
+            Write-Line $script:Outer $line
+        } else { Fail-Scope $Unconfirmed }
+    } elseif (-not $script:Attached) {
+        if ($frame.operation -cne 'attach' -or -not (Is-NativeInteger $frame.rootPid) -or $frame.rootPid -ne $RootPid -or
+            $frame.rootStartedAt -isnot [string] -or $frame.rootStartedAt -cne $RootBirth) { Fail-Scope $Unconfirmed }
+        $script:Attached = $true
+        Write-Frame $channel @{ v = 1; rootPid = $RootPid; rootStartedAt = $RootBirth; rootReady = $true;
+            subreaper = $true; pidfd = $true }
+    } else {
+        if ($frame.operation -cne 'terminate') { Fail-Scope $Unconfirmed }
+        $script:SendReceipt = $true
+        $script:Stopping = $true
+    }
+}
+function Read-Channel($channel) {
+    $count = $channel.Socket.Receive($script:ReadBytes, [Net.Sockets.SocketFlags]::None)
+    if ($count -eq 0) {
+        if ($channel.Kind -eq 'inner') { Fail-Scope $Unconfirmed }
+        $script:Stopping = $true
+        return
+    }
+    $characters = $channel.Decoder.GetChars($script:ReadBytes, 0, $count, $script:ReadChars, 0, $false)
+    $channel.Text += [string]::new($script:ReadChars, 0, $characters)
+    $maximum = $(if ($channel.Kind -eq 'control') { $MaxControlBytes } else { $MaxActorBytes })
+    if ($Utf8.GetByteCount($channel.Text) -gt $maximum) { Fail-Scope $Limit }
+    while (($end = $channel.Text.IndexOf([char]10)) -ge 0) {
+        $line = $channel.Text.Substring(0, $end)
+        $channel.Text = $channel.Text.Substring($end + 1)
+        Receive-Frame $channel $line
+        if ($script:Stopping) { return }
+    }
+}
+function Invoke-NativeRoot([string]$encoded) {
+    $exitCode = 1
+    $script:Attached = $false
+    $script:Started = $false
+    $script:Ready = $false
+    $script:Stopping = $false
+    $script:SendReceipt = $false
+    $script:Control = $null
+    $script:Outer = $null
+    $script:Listener = $null
+    try {
+        Initialize-NativeImports
+        $script:RootPid = $Native::getpid()
+        $script:OwnerPid = $Native::getppid()
+        $script:OwnerUid = $Native::getuid()
+        $script:RootBirth = (Process-Identity $RootPid).Birth
+        $descriptor = [int][Environment]::GetEnvironmentVariable('NODE_CHANNEL_FD')
+        if ($Native::fcntl($descriptor, $SetFdFlags, $CloseOnExec) -lt 0) { Fail-Scope $Unavailable }
+        $script:Outer = Channel-FromFd $descriptor 'outer'
+        Establish-Subreaper
+        $config = ConvertFrom-Json -InputObject ($Utf8.GetString([Convert]::FromBase64String($encoded))) -AsHashtable
+        $script:Listener = [Net.Sockets.Socket]::new([Net.Sockets.AddressFamily]::Unix,
+            [Net.Sockets.SocketType]::Stream, [Net.Sockets.ProtocolType]::Unspecified)
+        $address = [char]0 + 'pforge-claw-posix-' + $RootPid + '-' + $RootBirth
+        $script:Listener.Bind([Net.Sockets.UnixDomainSocketEndPoint]::new($address))
+        $script:Listener.Listen(1)
+        $script:ReadBytes = [byte[]]::new($ReadBatchBytes)
+        $script:ReadChars = [char[]]::new($ReadBatchBytes + $DecodeSlackChars)
+        if ($script:Outer.Socket.Poll(0, [Net.Sockets.SelectMode]::SelectRead)) { Read-Channel $script:Outer }
+        if (-not $script:Stopping) { Start-Supervisor $config }
+        # A single readiness loop services both private sockets; no blocking reader occupies the CLR worker pool.
+        while (-not $script:Stopping) {
+            $readable = [Collections.ArrayList]::new()
+            foreach ($channel in $Channels) { $null = $readable.Add($channel.Socket) }
+            $null = $readable.Add($script:Listener)
+            [Net.Sockets.Socket]::Select($readable, $null, $null, $SelectIntervalMicroseconds)
+            foreach ($socket in $readable) {
+                if ($socket -eq $script:Listener) { Accept-Control }
+                else {
+                    foreach ($channel in $Channels) {
+                        if ($channel.Socket -eq $socket) { Read-Channel $channel; break }
                     }
                 }
-                if (token.Length > 0) yield return int.Parse(token.ToString(), CultureInfo.InvariantCulture);
+                if ($script:Stopping) { break }
             }
         }
-    }
-    void RecordStopped(int pid) {
-        if (stopped.Contains(pid)) return;
-        if (stopped.Count >= ClawPosixNative.MaxProcesses) exceededLimit = true;
-        else stopped.Add(pid);
-    }
-    void StopChild(int pid) {
-        int fd = -1;
+        $receipt = Stop-Children
+        if ($script:SendReceipt) {
+            Write-Frame $script:Control @{ v = 1; rootPid = $RootPid; rootStartedAt = $RootBirth; rootReady = $true;
+                zeroChildren = $receipt.Zero; stoppedPids = @($Stopped); code = $receipt.Code;
+                unknownProcesses = $(if ($receipt.Zero) { 0 } else { $null }) }
+        }
+        if ($receipt.Zero) { $exitCode = 0 }
+    } catch {
+        $code = Scope-Code $_
         try {
-            var identity = ClawPosixNative.Identity(pid);
-            if (identity.Parent != rootPid) throw new ScopeFault(ClawPosixNative.Unconfirmed);
-            fd = ClawPosixNative.OpenPid(pid, identity.Birth, rootPid);
-            if (ClawPosixNative.pidfd_send_signal(ClawPosixNative.PidFdSignalCall, fd,
-                ClawPosixNative.KillSignal, IntPtr.Zero, 0) < 0 &&
-                Marshal.GetLastWin32Error() != ClawPosixNative.ESRCH) throw new ScopeFault(ClawPosixNative.Unconfirmed);
-            RecordStopped(pid);
-        } catch (FileNotFoundException) { return; }
-        catch (DirectoryNotFoundException) { return; }
-        finally { if (fd >= 0) ClawPosixNative.close(fd); }
+            if ($null -ne $script:Outer) {
+                Write-Frame $script:Outer @{ v = 1; t = 'owned-result'; code = -1; errorCode = $code }
+            }
+        } catch { $exitCode = 1 }
+        if ($null -ne $script:Native -and $null -ne $script:StatusMemory) { $null = Stop-Children }
+    } finally {
+        foreach ($channel in $Channels) { $channel.Socket.Dispose() }
+        if ($null -ne $script:Listener) { $script:Listener.Dispose() }
+        foreach ($pointer in $Buffers) { [Runtime.InteropServices.Marshal]::FreeHGlobal($pointer) }
     }
-    (bool Zero, string Code) StopChildren() {
-        lock (state) {
-            terminating = true;
-            var elapsed = Stopwatch.StartNew();
-            try {
-                while (elapsed.ElapsedMilliseconds < ClawPosixNative.DeadlineMs) {
-                    int reaped;
-                    do {
-                        reaped = ClawPosixNative.waitpid(-1, out int status, ClawPosixNative.NoHang);
-                        if (reaped > 0) RecordStopped(reaped);
-                    } while (reaped > 0);
-                    int error = Marshal.GetLastWin32Error();
-                    if (reaped < 0 && error == ClawPosixNative.ECHILD)
-                        return (true, exceededLimit ? ClawPosixNative.Limit : null);
-                    if (reaped < 0 && error != ClawPosixNative.EINTR) throw new ScopeFault(ClawPosixNative.Unconfirmed);
-                    foreach (int pid in Children()) {
-                        if (elapsed.ElapsedMilliseconds >= ClawPosixNative.DeadlineMs)
-                            return (false, ClawPosixNative.Unconfirmed);
-                        StopChild(pid);
-                    }
-                    Thread.Sleep(1);
-                }
-                return (false, ClawPosixNative.Unconfirmed);
-            } catch (Exception exception) { return (false, ClawPosixNative.Error(exception)); }
-        }
-    }
-    void Control(Socket listener) {
-        using var socket = listener.Accept();
-        uint length = 12;
-        if (ClawPosixNative.getsockopt(socket.Handle.ToInt32(), ClawPosixNative.SocketLevel,
-            ClawPosixNative.PeerCredentialsOption, out var peer, ref length) != 0 ||
-            peer.pid != ownerPid || peer.uid != ClawPosixNative.getuid()) return;
-        using var stream = new NetworkStream(socket, false);
-        using var reader = new StreamReader(stream, Encoding.UTF8, false, 4096, true);
-        using var writer = ClawPosixNative.Writer(stream);
-        using var request = JsonDocument.Parse(ClawPosixNative.ReadLine(reader, ClawPosixNative.MaxControlChars));
-        var attach = request.RootElement;
-        if (attach.GetProperty("rootPid").GetInt32() != rootPid ||
-            attach.GetProperty("rootStartedAt").GetString() != rootBirth) throw new ScopeFault(ClawPosixNative.Unconfirmed);
-        lock (state) attached = true;
-        writer.WriteLine(JsonSerializer.Serialize(new {
-            v = 1, rootPid, rootStartedAt = rootBirth, rootReady = true, subreaper = true, pidfd = true
-        }));
-        string command = ClawPosixNative.ReadLine(reader, ClawPosixNative.MaxControlChars);
-        if (command != null) {
-            using var operation = JsonDocument.Parse(command);
-            if (operation.RootElement.GetProperty("operation").GetString() != "terminate")
-                throw new ScopeFault(ClawPosixNative.Unconfirmed);
-        }
-        var receipt = StopChildren();
-        if (command != null) writer.WriteLine(JsonSerializer.Serialize(new {
-            v = 1, rootPid, rootStartedAt = rootBirth, rootReady = true, zeroChildren = receipt.Zero,
-            stoppedPids = stopped, unknownProcesses = receipt.Zero ? (int?)0 : null, code = receipt.Code
-        }));
-        ClawPosixNative._exit(receipt.Zero ? 0 : 1);
-    }
-    public static void Run(string encoded) {
-        ClawPosixRoot root = null;
-        try {
-            int fd = int.Parse(Environment.GetEnvironmentVariable("NODE_CHANNEL_FD"), CultureInfo.InvariantCulture);
-            root = new ClawPosixRoot(fd);
-            ClawPosixNative.EstablishSubreaper();
-            using var config = JsonDocument.Parse(Encoding.UTF8.GetString(Convert.FromBase64String(encoded)));
-            using var listener = new Socket(AddressFamily.Unix, SocketType.Stream, ProtocolType.Unspecified);
-            listener.Bind(new UnixDomainSocketEndPoint("\0pforge-claw-posix-" + root.rootPid + "-" + root.rootBirth));
-            listener.Listen(1);
-            root.StartSupervisor(config.RootElement);
-            StartReader(root.ReadParent);
-            root.Control(listener);
-            root.StopChildren();
-            ClawPosixNative._exit(1);
-        } catch (Exception exception) {
-            if (root != null) { root.SendFailure(ClawPosixNative.Error(exception)); root.StopChildren(); }
-            ClawPosixNative._exit(1);
-        }
-    }
+    if ($null -ne $script:Native) { $Native::_exit($exitCode) }
+    [Environment]::Exit($exitCode)
 }
 `;
 
@@ -403,8 +477,8 @@ function requireLinux() {
   if (!["x64", "arm64"].includes(process.arch)) throw unavailable("linux-64bit-pidfd-abi");
 }
 
-function nativeSource(body) {
-  return `${NATIVE_SOURCE}${body}`.replaceAll("__UNAVAILABLE__", NATIVE_SCOPE_ERRORS.UNAVAILABLE)
+function nativeSource() {
+  return NATIVE_SCRIPT.replaceAll("__UNAVAILABLE__", NATIVE_SCOPE_ERRORS.UNAVAILABLE)
     .replaceAll("__UNCONFIRMED__", NATIVE_SCOPE_ERRORS.UNCONFIRMED)
     .replaceAll("__LIMIT__", NATIVE_SCOPE_ERRORS.LIMIT)
     .replaceAll("__STOP_MESSAGE__", NATIVE_SUPERVISOR_STOP_MESSAGE)
@@ -412,7 +486,7 @@ function nativeSource(body) {
 }
 
 function powershellArguments(source, invocation) {
-  const script = `$ErrorActionPreference = "Stop"\nAdd-Type -TypeDefinition @'\n${source}\n'@\n${invocation}`;
+  const script = `${source}\n${invocation}`;
   return ["-NoLogo", "-NoProfile", "-NonInteractive", "-EncodedCommand", Buffer.from(script, "utf16le").toString("base64")];
 }
 
@@ -437,7 +511,7 @@ function validateBootstrapEnvironment(env) {
 }
 
 /**
- * Prepare a fixed native subreaper root, retaining reaping authority around the existing Node supervisor.
+ * Prepare a compiler-free PowerShell/libc subreaper root around the existing Node supervisor.
  * @param {{node:string, supervisorPath:string, cwd?:string, env?:NodeJS.ProcessEnv}} options
  * @returns {Promise<{command:string, args:string[]}>}
  */
@@ -453,7 +527,7 @@ export async function nativePosixSupervisorLaunch({ node, supervisorPath, cwd, e
   const config = Buffer.from(JSON.stringify({ node, supervisorPath, argument: NATIVE_SUPERVISOR_ARGUMENT })).toString("base64");
   return {
     command,
-    args: powershellArguments(nativeSource(ROOT_SOURCE), `[ClawPosixRoot]::Run('${config}')`),
+    args: powershellArguments(nativeSource(), `Invoke-NativeRoot '${config}'`),
   };
 }
 

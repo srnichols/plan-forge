@@ -6,6 +6,7 @@ import { fileURLToPath } from "node:url";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   createNativeSupervisor, nativeSupervisorRootExit, NATIVE_SCOPE_ERRORS,
+  NATIVE_SUPERVISOR_STOP_MESSAGE,
 } from "../src/jobs/native-command-supervisor.mjs";
 import {
   nativePosixSupervisorLaunch, openPosixProcessScope,
@@ -114,10 +115,10 @@ async function isLive(pid) {
   }
 }
 
-async function held(env = process.env) {
-  const launch = await nativePosixSupervisorLaunch({
+async function held(env = process.env, prepareLaunch = (launch) => launch) {
+  const launch = prepareLaunch(await nativePosixSupervisorLaunch({
     node: process.execPath, supervisorPath, cwd: process.cwd(), env,
-  });
+  }));
   const supervisor = createNativeSupervisor({ cwd: process.cwd(), env, launch });
   const resource = { supervisor, stdout: "", stderr: "" };
   resources.push(resource);
@@ -219,10 +220,14 @@ describe("Guard: POSIX ownership uses supported native facilities", () => {
     expect(source).toContain("pidfd");
     expect(source).toContain("waitpid");
     expect(source).toContain("ECHILD");
-    expect(source).toContain("var before = Identity(pid)");
-    expect(source).toContain("var after = Identity(pid)");
-    expect(source).toContain("after != before");
-    expect(source).toContain('Proc("self", "fdinfo"');
+    expect(source).toContain("$before = Process-Identity");
+    expect(source).toContain("$after = Process-Identity");
+    expect(source).toContain("$after.Birth -cne $before.Birth");
+    expect(source).toContain("Proc-Path @('self', 'fdinfo'");
+    expect(source).not.toContain("Add-Type");
+    expect(source).toContain("DefineMethod");
+    expect(source).toContain("GetField('SetLastError')");
+    expect(source).toContain("[Net.Sockets.Socket]::Select");
   });
 
   it("keeps helper discovery and observer environment independent from the argv actor", async () => {
@@ -247,6 +252,77 @@ describe("Guard: POSIX ownership uses supported native facilities", () => {
 });
 
 describe.skipIf(process.platform !== "linux")("Linux native subreaper ownership", () => {
+  it("establishes native ownership and reaps the real scope when the C# compiler is unavailable", async () => {
+    const resource = await held(process.env, (launch) => {
+      const args = [...launch.args];
+      const encodedIndex = args.indexOf("-EncodedCommand") + 1;
+      expect(encodedIndex).toBeGreaterThan(0);
+      const fixedScript = Buffer.from(args[encodedIndex], "base64").toString("utf16le");
+      const refuseCompiler = 'function global:Add-Type { throw "OWNED_NATIVE_COMPILER_REFUSED" }\n';
+      args[encodedIndex] = Buffer.from(refuseCompiler + fixedScript, "utf16le").toString("base64");
+      return { command: launch.command, args };
+    });
+    expect(await execute(resource, "process.exitCode=7")).toEqual({ code: 7 });
+    await stop(resource);
+  });
+
+  it("retains native errno metadata rather than certifying an invented ECHILD", async () => {
+    const resource = await held(process.env, (launch) => {
+      const args = [...launch.args];
+      const encodedIndex = args.indexOf("-EncodedCommand") + 1;
+      const fixedScript = Buffer.from(args[encodedIndex], "base64").toString("utf16le");
+      const checkErrno = `Initialize-NativeImports
+        $null = $Native::close(-1)
+        if ([Runtime.InteropServices.Marshal]::GetLastPInvokeError() -ne 9) { Fail-Scope $Unconfirmed }`;
+      expect(fixedScript).toContain("        Initialize-NativeImports\n");
+      args[encodedIndex] = Buffer.from(fixedScript.replace("        Initialize-NativeImports\n",
+        `${checkErrno}\n`), "utf16le").toString("base64");
+      return { command: launch.command, args };
+    });
+    expect(await execute(resource, "process.exitCode=7")).toEqual({ code: 7 });
+    await stop(resource);
+  });
+
+  it("refuses a real kernel subreaper capability error before READY or literal argv", async () => {
+    const launch = await nativePosixSupervisorLaunch({
+      node: process.execPath, supervisorPath, cwd: process.cwd(), env: process.env,
+    });
+    const encodedIndex = launch.args.indexOf("-EncodedCommand") + 1;
+    const fixedScript = Buffer.from(launch.args[encodedIndex], "base64").toString("utf16le");
+    expect(fixedScript).toContain("$script:SetChildSubreaper = 36");
+    launch.args[encodedIndex] = Buffer.from(fixedScript.replace("$script:SetChildSubreaper = 36",
+      "$script:SetChildSubreaper = -1"), "utf16le").toString("base64");
+    const supervisor = createNativeSupervisor({ cwd: process.cwd(), env: process.env, launch });
+    resources.push({ supervisor });
+    supervisor.child.stdout.resume();
+    supervisor.child.stderr.resume();
+    expect(await supervisor.ready).toBe(false);
+    expect(await supervisor.completion).toEqual({ code: -1, errorCode: NATIVE_SCOPE_ERRORS.UNAVAILABLE });
+    await supervisor.closed;
+    expect(await isLive(supervisor.child.pid)).toBe(false);
+  });
+
+  it("rejects a string version on private IPC without certifying settlement", async () => {
+    const resource = await held();
+    resource.supervisor.child.send({ v: "1", t: NATIVE_SUPERVISOR_STOP_MESSAGE });
+    expect(await resource.supervisor.completion).toEqual({ code: -1, errorCode: NATIVE_SCOPE_ERRORS.UNCONFIRMED });
+    await resource.supervisor.closed;
+    const receipt = await resource.scope.terminate();
+    expect(receipt).toMatchObject({
+      settlementConfirmed: false, unknownProcesses: null, code: NATIVE_SCOPE_ERRORS.UNCONFIRMED,
+    });
+    expect(resource.stdout).toBe("");
+    expect(await isLive(resource.scope.rootPid)).toBe(false);
+  });
+
+  it("preserves multibyte literal argv across fragmented private IPC reads", async () => {
+    const resource = await held();
+    const argument = "é🛠漢".repeat(4_096);
+    expect(await execute(resource, "process.stdout.write(process.argv[1])", [argument])).toEqual({ code: 0 });
+    await stop(resource);
+    expect(resource.stdout).toBe(argument);
+  });
+
   it("uses the retained real native child wait together with ECHILD, not a second compiler process", async () => {
     const source = await readFile(adapterPath, "utf8");
     expect(source).not.toContain("ClawPosixObserver");

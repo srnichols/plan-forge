@@ -21,9 +21,10 @@ capabilities fail local execution explicitly, never fall back to process-list
 guesses or broader permissions. A dispatcher using only remote execution lanes
 does not need to control those remote processes locally.
 
-The current adapters use a private, nonbreakaway Job Object with fixed native
-bindings instead of cold C# compilation on Windows, and a
-held child subreaper with birth-qualified pidfd signaling on Linux. Linux
+The current adapters use fixed native bindings instead of compiling C# logic
+at startup. Windows uses a private, nonbreakaway Job Object. Linux uses a
+PowerShell readiness loop with emitted libc import metadata and a held child
+subreaper with birth-qualified pidfd signaling. Linux
 settlement requires both the root's native `waitpid`/`ECHILD` zero-child receipt
 and the parent's retained native child wait for that exact root. A caller-created
 child object, root-close event or successful command cannot supply this proof.
@@ -41,6 +42,11 @@ control rather than relying on PowerShell's handling of SIGTERM during startup.
 No command arguments are launched on that path. The caller awaits the original
 root and its streams, but an unattached root still reports unconfirmed settlement
 and does not release publication or canonical-history ownership.
+
+Workers discover their available executable toolchains concurrently at startup,
+with the existing five-second bound on each probe. Missing tools remain absent
+from advertised capabilities; only projects configured for that worker's home
+lane are advertised. These discovery checks do not grant execution permissions.
 
 **macOS execution is a current release blocker.** An authoritative native
 descendant scope has not yet been verified there. Local mutating execution

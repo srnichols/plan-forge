@@ -67,6 +67,14 @@ describe("Guard: Kubernetes CI diagnostics cannot print job credentials", () => 
         "oneShot", "applicationAck", "canonicalL2FileCount", "cleanedUp",
       ]) expect(source.includes(field)).toBe(true);
     });
+
+    it("requires an authenticated API response through the exact endpoint policy before accepting kind evidence", () => {
+      const source = readFileSync(WORKFLOW, "utf8");
+      expect(source).toContain("gate.apiReachability");
+      expect(source).toContain('api.status!=="reachable"');
+      expect(source).toContain("api.httpStatus!==404");
+      expect(source).toContain("api.endpointCount<1");
+    });
   });
 
   it("routes failed-pod JSON through the bounded diagnostics helper", () => {

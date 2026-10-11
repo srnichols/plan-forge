@@ -30,8 +30,19 @@ const CI_DISPATCHER_IMAGE = "pforge-claw-k8s-fixture-dispatcher:ci";
 const CI_WORKER_IMAGE = "pforge-claw-k8s-fixture-worker:ci";
 const DISPATCHER_HOST = `pforge-claw-dispatcher.${CI_NAMESPACE}.svc`;
 const NEGATIVE_HOST = "pforge-claw-egress-target";
+const API_ENDPOINT_RESOURCE = {
+  apiVersion: "v1", kind: "Endpoints", metadata: { name: "kubernetes", namespace: "default" },
+  subsets: [{ addresses: [{ ip: "192.0.2.10" }], ports: [{ protocol: "TCP", port: 6443 }] }],
+};
+const API_REACHABLE_PROOF = { status: "reachable", httpStatus: 404 };
 const directories = [];
 const servers = [];
+
+function clusterMetadataReply(args) {
+  if (args.includes("endpoints")) return JSON.stringify(API_ENDPOINT_RESOURCE);
+  if (args.includes("-e") && args.at(-1) === NAMESPACE) return JSON.stringify(API_REACHABLE_PROOF);
+  return null;
+}
 
 function deployedFixture() {
   const identity = { jobId: "j1", projectId: "fixture-1", deltaId: "j1:final", sha256Total: createHash("sha256").update("fixture transfer").digest("hex") };
@@ -227,11 +238,16 @@ childProcess.spawn = (command, args, options) => {
     "get namespace": "namespace-check", "create namespace": "namespace-create",
     "apply -k": "overlay-apply", "delete namespace": "namespace-cleanup",
     "rollout status": "rollout-ready", "patch job": "probe-release",
-    "wait --for=condition=complete": "probe-complete", "exec -n": "scenario",
+    "wait --for=condition=complete": "probe-complete", "get endpoints": "api-endpoints",
+    "exec -n": args.includes("/app/tests/helpers/k8s-scenario.mjs") ? "scenario" : "api-probe",
   })[args.slice(offset, offset + 2).join(" ")];
   if (!operation || !["kubectl", "kind"].includes(command)) throw new Error("Unexpected native command");
   appendFileSync(${JSON.stringify(trace)}, JSON.stringify(operation) + "\\n");
-  const reply = { code: 0, stdout: "", stderr: "", ...failures[operation] };
+  const defaultReplies = {
+    "api-endpoints": ${JSON.stringify(JSON.stringify(API_ENDPOINT_RESOURCE))},
+    "api-probe": ${JSON.stringify(JSON.stringify(API_REACHABLE_PROOF))},
+  };
+  const reply = { code: 0, stdout: defaultReplies[operation] ?? "", stderr: "", ...failures[operation] };
   if (reply.missingExecutable) return nativeSpawn(${JSON.stringify(path.join(directory, "fixture-missing-native-credential-canary"))}, [], options);
   const replyFile = join(${JSON.stringify(directory)}, operation + ".json");
   writeFileSync(replyFile, JSON.stringify(reply), { mode: 0o600 });
@@ -455,7 +471,7 @@ describe("hosted Kubernetes command failure diagnostics", () => {
   it("identifies failed kubectl apply without printing the generated Secret body", async () => {
     const execution = await failedNativeCli({ "overlay-apply": applyFailure });
     expect(execution.commands).toEqual([
-      "namespace-check", "image-load", "namespace-create", "overlay-apply", "namespace-cleanup",
+      "namespace-check", "image-load", "api-endpoints", "namespace-create", "overlay-apply", "namespace-cleanup",
     ]);
     expect(execution.stderr).toContain('"command":"kubectl"');
     expect(execution.stderr).not.toContain(canary);
@@ -673,6 +689,8 @@ describe("deployed Kubernetes gate evidence", () => {
     const { proof, job } = deployedFixture();
     const runner = vi.fn(async (command, args) => {
       if (command !== "kubectl") return "";
+      const metadata = clusterMetadataReply(args);
+      if (metadata !== null) return metadata;
       if (args.includes("namespace") && args.includes("--ignore-not-found")) return "";
       if (args.includes("-e")) return JSON.stringify(proof);
       if (args.includes("get") && args.includes("job")) return JSON.stringify(job);
@@ -683,6 +701,7 @@ describe("deployed Kubernetes gate evidence", () => {
       namespace: NAMESPACE, context: "kind-fixture", dispatcherImage: DISPATCHER_IMAGE, workerImage: WORKER_IMAGE,
     }, { runner, exists: async () => {} });
     expect(result).toMatchObject({ status: "passed", namespace: NAMESPACE });
+    expect(result.apiReachability).toEqual({ status: "reachable", httpStatus: 404, endpointCount: 1 });
     expect(result.scenarioEvidence).toMatchObject({
       jobId: proof.jobId, jobName: proof.jobName, laneId: "k8s-dev",
       approvalConsumed: true, leaseGrantVerified: true, oneShot: true,
@@ -706,6 +725,8 @@ describe("deployed Kubernetes gate evidence", () => {
     proof.applicationAck.unexpected = canary;
     const runner = async (command, args) => {
       if (command !== "kubectl") return "";
+      const metadata = clusterMetadataReply(args);
+      if (metadata !== null) return metadata;
       if (args.includes("-e")) return JSON.stringify(proof);
       if (args.includes("get") && args.includes("job")) return JSON.stringify(job);
       return "";
@@ -721,6 +742,8 @@ describe("deployed Kubernetes gate evidence", () => {
     const { proof, job } = deployedFixture();
     const runner = vi.fn(async (command, args) => {
       if (command !== "kubectl") return "";
+      const metadata = clusterMetadataReply(args);
+      if (metadata !== null) return metadata;
       if (args.includes("create") && args.includes("namespace")) throw new Error("K8S_E2E_COMMAND_FAILED");
       if (args.includes("-e")) return JSON.stringify(proof);
       if (args.includes("get") && args.includes("job")) return JSON.stringify(job);
@@ -739,6 +762,8 @@ describe("deployed Kubernetes gate evidence", () => {
     proof.jobName = "--all-namespaces";
     const runner = vi.fn(async (command, args) => {
       if (command !== "kubectl") return "";
+      const metadata = clusterMetadataReply(args);
+      if (metadata !== null) return metadata;
       if (args.includes("-e")) return JSON.stringify(proof);
       if (args.includes("get") && args.includes("job")) return JSON.stringify(job);
       return "";

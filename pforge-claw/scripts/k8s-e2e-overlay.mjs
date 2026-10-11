@@ -2,7 +2,7 @@ import { readFile, realpath, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { randomBytes } from "node:crypto";
-import { buildJobEgressPolicy } from "../src/k8s/egress-policy.mjs";
+import { buildDispatcherApiEgressPolicy, buildJobEgressPolicy } from "../src/k8s/egress-policy.mjs";
 import { ROLES } from "../src/enums.mjs";
 import { generateFixtureTls } from "../tests/helpers/k8s-fixture-tls.mjs";
 
@@ -112,13 +112,16 @@ function dispatcherProbePatch({ namespace }) {
  * @param {{namespace: string, destination: string, dispatcherImage: string, workerImage: string}} options
  * @returns {object}
  */
-export function buildDevOverlay({ namespace, destination, dispatcherImage, workerImage, context = "kind-fixture" }) {
+export function buildDevOverlay({ namespace, destination, dispatcherImage, workerImage, context = "kind-fixture", apiServerEndpoints }) {
   validateE2eNamespace(namespace);
   return {
     apiVersion: "kustomize.config.k8s.io/v1beta1",
     kind: "Kustomization",
     namespace,
-    resources: [path.relative(destination, DEV_OVERLAY), "job-egress.yaml"],
+    resources: [
+      path.relative(destination, DEV_OVERLAY), "job-egress.yaml",
+      ...(apiServerEndpoints !== undefined ? ["dispatcher-api-egress.yaml"] : []),
+    ],
     images: [
       imageOverride(DISPATCHER_NAME, dispatcherImage),
       imageOverride("pforge-claw-worker-node", workerImage),
@@ -227,6 +230,8 @@ export async function writeDevOverlay(options) {
   const template = options.config ?? JSON.parse(await readFile(path.join(DEV_OVERLAY, "config.json"), "utf8"));
   const config = materializeDevConfig({ ...options, template });
   const egress = buildJobEgressPolicy({ namespace: options.namespace, allow: config.k8s?.egress?.allow ?? [] });
+  const apiEgress = options.apiServerEndpoints !== undefined
+    ? buildDispatcherApiEgressPolicy({ namespace: options.namespace, endpoints: options.apiServerEndpoints }) : null;
   const tls = await generateFixtureTls(options.namespace);
   const secrets = {
     PFORGE_CLAW_GH_TOKEN: randomBytes(SECRET_RANDOM_BYTES).toString("hex"),
@@ -242,5 +247,6 @@ export async function writeDevOverlay(options) {
   await writeFile(path.join(destination, "kustomization.yaml"), JSON.stringify(kustomization, null, 2) + "\n", { mode: 0o600 });
   await writeFile(path.join(destination, "config.json"), JSON.stringify(config, null, 2) + "\n");
   await writeFile(path.join(destination, "job-egress.yaml"), JSON.stringify(egress, null, 2) + "\n");
+  if (apiEgress) await writeFile(path.join(destination, "dispatcher-api-egress.yaml"), JSON.stringify(apiEgress, null, 2) + "\n");
   return { directory: destination, config, kustomization };
 }

@@ -11,7 +11,8 @@ import { planExecutionChoices, projectExecutionChoices } from "../src/jobs/execu
 import { resolveRuntimeId } from "../src/runtime/agent-runtime.mjs";
 import { byokProviderReference } from "../src/runtime/byok.mjs";
 import { validateConfig } from "../src/config.mjs";
-import { buildJobEgressPolicy } from "../src/k8s/egress-policy.mjs";
+import { buildDispatcherApiEgressPolicy, buildJobEgressPolicy, MAX_EGRESS_TARGETS } from "../src/k8s/egress-policy.mjs";
+import { ClawError } from "../src/errors.mjs";
 import { normalizeScenarioDiagnostics, SCENARIO_DIAGNOSTIC_PREFIX } from "../tests/helpers/k8s-scenario.mjs";
 
 const MAX_COMMAND_BYTES = 1_048_576;
@@ -62,6 +63,14 @@ const PROOF_PATH = "/data/k8s-e2e-result.json";
 const PROOF_READ = `import { readFileSync } from 'node:fs'; process.stdout.write(readFileSync('${PROOF_PATH}', 'utf8'));`;
 const SCENARIO_ENTRY_PATH = "/app/tests/helpers/k8s-scenario.mjs";
 const SCENARIO_ARGUMENT_COUNT = 7;
+const API_NOT_FOUND_STATUS = 404;
+const API_PROBE_CODE = [
+  'import { createK8sClient } from "/app/src/k8s/api.mjs";',
+  'try { await createK8sClient().getJob(process.argv[1], "pforge-claw-api-connectivity-probe");',
+  'throw new Error("K8S_E2E_API_UNCONFIRMED"); } catch (error) {',
+  `if (error?.code !== "K8S_API" || error?.details?.status !== ${API_NOT_FOUND_STATUS}) throw new Error("K8S_E2E_API_UNCONFIRMED");`,
+  `process.stdout.write(JSON.stringify({ status: "reachable", httpStatus: ${API_NOT_FOUND_STATUS} })); }`,
+].join(" ");
 
 function parseOptions(argv) {
   const options = {};
@@ -421,6 +430,63 @@ async function resumeProbe({ kubectl, namespace, name }) {
   await kubectl(["wait", "--for=condition=complete", `job/${name}`, "-n", namespace, "--timeout=90s"]);
 }
 
+function apiSubsetEndpoints(subset) {
+  if (!Array.isArray(subset?.addresses) || !Array.isArray(subset?.ports)) throw new Error("K8S_E2E_API_ENDPOINTS_INVALID");
+  if (subset.addresses.length * subset.ports.length > MAX_EGRESS_TARGETS) throw new Error("K8S_E2E_API_ENDPOINTS_INVALID");
+  return subset.ports.flatMap((endpointPort) => {
+    if (endpointPort?.protocol !== "TCP") throw new Error("K8S_E2E_API_ENDPOINTS_INVALID");
+    return subset.addresses.map((address) => ({ address: address?.ip, port: endpointPort.port }));
+  });
+}
+
+function parseApiEndpointResource(output) {
+  const resource = JSON.parse(output);
+  if (resource?.kind !== "Endpoints" || resource.metadata?.name !== "kubernetes"
+    || resource.metadata.namespace !== "default" || !Array.isArray(resource.subsets)
+    || resource.subsets.length > MAX_EGRESS_TARGETS) {
+    throw new Error("K8S_E2E_API_ENDPOINTS_INVALID");
+  }
+  return resource;
+}
+
+async function discoverApiEndpoints({ kubectl, namespace }) {
+  const output = await kubectl(["get", "endpoints", "kubernetes", "-n", "default", "-o", "json"]);
+  try {
+    const resource = parseApiEndpointResource(output);
+    const endpoints = [];
+    for (const subset of resource.subsets) {
+      const selected = apiSubsetEndpoints(subset);
+      if (selected.length > MAX_EGRESS_TARGETS - endpoints.length) throw new Error("K8S_E2E_API_ENDPOINTS_INVALID");
+      endpoints.push(...selected);
+    }
+    if (endpoints.length === 0) throw new Error("K8S_E2E_API_ENDPOINTS_INVALID");
+    buildDispatcherApiEgressPolicy({ namespace, endpoints });
+    return endpoints;
+  } catch (error) {
+    if (error instanceof SyntaxError || (error instanceof ClawError && error.code === "K8S_EGRESS_CONFIG_INVALID")) {
+      throw new Error("K8S_E2E_API_ENDPOINTS_INVALID");
+    }
+    throw error;
+  }
+}
+
+async function verifyDispatcherApi({ kubectl, namespace }) {
+  const output = await kubectl([
+    "exec", "-n", namespace, "deployment/pforge-claw-dispatcher", "--", "node",
+    "--input-type=module", "-e", API_PROBE_CODE, namespace,
+  ]);
+  let proof;
+  try {
+    proof = JSON.parse(output);
+  } catch {
+    throw new Error("K8S_E2E_API_UNCONFIRMED");
+  }
+  if (proof?.status !== "reachable" || proof.httpStatus !== API_NOT_FOUND_STATUS || Object.keys(proof).length !== 2) {
+    throw new Error("K8S_E2E_API_UNCONFIRMED");
+  }
+  return { status: proof.status, httpStatus: proof.httpStatus };
+}
+
 async function runDeployedScenario({ kubectl, namespace, workerImage, config }) {
   const pod = ["-n", namespace, "deployment/pforge-claw-dispatcher", "--", "node"];
   await kubectl(["exec", ...pod, SCENARIO_ENTRY_PATH]);
@@ -459,21 +525,26 @@ export async function runK8sE2e(options, { runner = execute, exists = access } =
   let ownsNamespace = false;
   let primaryFailure;
   try {
-    await writeDevOverlay({ ...options, config, destination: directory });
     const images = [options.dispatcherImage, options.workerImage];
     const loadArgs = cluster.command === "kind"
       ? ["load", "docker-image", ...images, "--name", cluster.name]
       : ["image", "import", ...images, "--cluster", cluster.name];
     await runner(cluster.command, loadArgs);
+    const apiServerEndpoints = await discoverApiEndpoints({ kubectl, namespace: options.namespace });
+    await writeDevOverlay({ ...options, config, destination: directory, apiServerEndpoints });
     await kubectl(["create", "namespace", options.namespace]);
     ownsNamespace = true;
     await kubectl(["apply", "-k", directory]);
     await kubectl(["rollout", "status", "deployment/pforge-claw-dispatcher", "-n", options.namespace, "--timeout=90s"]);
+    const apiReachability = await verifyDispatcherApi({ kubectl, namespace: options.namespace });
     await kubectl(["rollout", "status", "deployment/pforge-claw-egress-target", "-n", options.namespace, "--timeout=90s"]);
     await resumeProbe({ kubectl, namespace: options.namespace, name: "pforge-claw-egress-control" });
     await resumeProbe({ kubectl, namespace: options.namespace, name: "pforge-claw-egress-probe" });
     const scenarioEvidence = await runDeployedScenario({ kubectl, namespace: options.namespace, workerImage: options.workerImage, config });
-    return { status: "passed", namespace: options.namespace, context: options.context, scenarioEvidence };
+    return {
+      status: "passed", namespace: options.namespace, context: options.context,
+      apiReachability: { ...apiReachability, endpointCount: apiServerEndpoints.length }, scenarioEvidence,
+    };
   } catch (error) {
     primaryFailure = error;
     throw error;

@@ -44,6 +44,29 @@ The worker policies deny ingress and egress by default, then permit only
 cluster DNS and the namespace-local dispatcher. There is **no public-HTTPS
 catch-all** for workers. Enforcement requires a NetworkPolicy-capable CNI.
 
+The dispatcher also needs access to the actual Kubernetes API backend
+IP/port pairs. The `kubernetes` Service normally exposes TCP 443, but a CNI
+may enforce egress after service translation to a different backend port
+(commonly 6443). Do not solve this by permitting all destinations on 6443.
+Inspect your cluster's endpoint metadata:
+
+```sh
+kubectl get endpoints kubernetes --namespace default -o json
+```
+
+Add an overlay NetworkPolicy selecting only
+`app: pforge-claw, component: dispatcher`, with one explicit `/32` IPv4
+or `/128` IPv6 `ipBlock` and the reported TCP port for each API endpoint.
+Include that policy as an overlay resource and review it when endpoints
+change. The portable [buildDispatcherApiEgressPolicy](../../src/k8s/egress-policy.mjs)
+export renders these explicit `{ address, port }`
+pairs; it accepts no hostname, wildcard, subnet or fallback port.
+This is deployment configuration, not a cluster-specific runtime default.
+The disposable kind/k3d gate discovers the selected cluster's endpoints,
+renders this narrowly scoped policy, and requires a real authenticated
+API response from the dispatcher before running the worker scenario.
+Worker NetworkPolicy and dispatcher RBAC permissions remain unchanged.
+
 Add explicit external IPs/CIDRs to `config.json#k8s.egress.allow`, including a
 private OpenBrain endpoint when needed. Render a namespaced, additive
 TCP/443 policy offline with either shell and include the output file as an

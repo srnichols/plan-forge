@@ -198,6 +198,7 @@ jobs:
             --worker-fixture-image pforge-claw-k8s-fixture-worker:ci \
             2>&1 | tee "$RUNNER_TEMP/e2e-k8s.log"
           if grep -q '^SKIPPED:' "$RUNNER_TEMP/e2e-k8s.log"; then echo "::error::e2e-k8s skipped in CI"; exit 1; fi
+          node -e 'const fs=require("node:fs");const gate=JSON.parse(fs.readFileSync(process.argv[1],"utf8"));const api=gate.apiReachability;if(!api||api.status!=="reachable"||api.httpStatus!==404||!Number.isInteger(api.endpointCount)||api.endpointCount<1)throw new Error("Authenticated Kubernetes API endpoint proof missing");' "$RUNNER_TEMP/e2e-k8s.log"
           node -e 'const fs=require("node:fs");const gate=JSON.parse(fs.readFileSync(process.argv[1],"utf8"));const proof=gate.scenarioEvidence;if(gate.status!=="passed"||typeof proof?.jobId!=="string"||!proof.jobId||proof.approvalConsumed!==true||proof.leaseGrantVerified!==true||proof.oneShot!==true||proof.applicationAck?.ok!==true||!Number.isInteger(proof.canonicalL2FileCount)||proof.canonicalL2FileCount<1||proof.cleanedUp!==true)throw new Error("Real Kubernetes fixture evidence missing; blocked/dry-run/SKIPPED are not acceptance");fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY,`### Verified Kubernetes fixture lane\n\n- Job: ${proof.jobId}\n- Canonical files: ${proof.canonicalL2FileCount}\n- Signed lease/application ACK/cleanup: passed\n`);' "$RUNNER_TEMP/e2e-k8s.log"
 
       - name: Collect Kubernetes diagnostics

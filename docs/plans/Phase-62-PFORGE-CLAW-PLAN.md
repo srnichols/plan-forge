@@ -502,6 +502,35 @@ guards must be committed separately; fresh final committed delivery/update
 proof, current quality closure and new-head CI remain required. This evidence
 does not mark the phase Complete or authorize release/deployment.
 
+**D33 committed delivery closeout (2026-10-11):** installer `6c89d68e` and
+test-only `ac12bc5b` are separate local commits, with related documentation in
+`0fd85778`. A fresh exact committed checkout installed 608 locked packages and
+verified all 362 Claw blobs, 318 ESM modules and 1,446 relative imports with no
+missing files or line-ending conversions. Documented generation of the ignored
+CLI schema then passed the own-root MCP check (107 tools); both earlier bootstrap
+failures are retained. All 14 installer/traversal and strict source/installed
+guards passed in the 134-test cold floor packet. The actual committed archive
+contains the project MCP client and all nine preset `AGENTS.md` templates, but
+no root maintainer `AGENTS.md` or development plans.
+
+Real PowerShell and Bash updates from verified stable tag `v3.32.0` preserve
+consumer configuration, customized guidance, application VERSION and
+package-local configuration while recursively delivering the new test helper.
+These are explicitly allowed developer-source updates, not a stable release
+rehearsal. Each updated standard consumer passes 7,914 tests on Node 22.12/24
+with 48 skips and one todo. A fresh committed custom install passes 7,861 on
+each cohort with 101 skips and one todo. Its 21 additional passes are two
+`coverage`-named suites formerly omitted by the absolute-path filter; the
+earlier overlaid-consumer result of 7,840 remains historical evidence.
+The exact consumer snapshot is 478 staged paths, not committed or published.
+Unchanged canonical scanning reports 4,327 raw indicators at threshold 4;
+all 62 new exact contexts are reviewed, with no confirmed credentials or
+pending contexts. The nine-file lint and test-smell delta has no new findings.
+The Windows jscpd wrapper's invalid lint-row output is recorded in #349;
+direct invocation of the installed detector produced 45 genuine clone pairs.
+Current-head CI, native macOS, development-tool release disposition, the clean
+stable-release rehearsal and authenticated operator acceptance remain open.
+
 _Original decisions were resolved at hardening on 2026-10-07; verification evidence is in Assumptions. D29 and D30 are the operator-approved review/release-preparation extensions from 2026-10-08 and 2026-10-10._
 
 ## Acceptance Criteria

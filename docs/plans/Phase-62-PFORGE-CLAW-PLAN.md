@@ -450,6 +450,31 @@ serialization measured 136.7-176.1 ms and complete native lifetime measured
 hosted scheduling pressure. Neither a causal serialization bottleneck nor
 the exact hosted cause is established; this is not a runtime-fix claim.
 
+The subsequent `81c07bce` hosted diagnostics establish the failure before
+readiness: Ubuntu floor sent STOP at 5,000 ms and received READY at 5,757 ms,
+without acquisition or START; Ubuntu LTS never received READY before exit.
+The stopped D31 candidate removes the avoidable Utility JSON/environment
+cmdlet dependency using shipped .NET JSON facilities. Its real external
+utility-refusal test failed before product edits, and literal lone-surrogate
+parity regressions caught and corrected an initial compatibility defect.
+Strict lexical integers, bounded private frames, literal argv, peer identity,
+native `ECHILD` and the retained original-root wait remain required. Targeted
+floor/LTS results are not hosted closure. One earlier LTS packet's detached
+creator PID assertion failed and remains recorded; its original event history
+is unavailable. A deterministic fixture-only gate reproduced sampling before
+the live creator exits. The corrected test requires that pinned creator
+generation to exit and the same-birth leaf to be adopted before retaining the
+original PPID and native settlement assertions. Publication, capture, release
+and adoption share the original single one-second observation budget.
+Independent native/fixture review and current Windows/Linux floor/LTS full
+regression gates pass: Windows has 2,240 passing units with 52 OS skips and
+Linux has 2,274 with 19 OS skips; each cohort passes all 35 offline scenarios.
+The first physical Linux projection's four shell-parity failures were exact
+Windows CRLF copies; restoring only three projected shells to their verified
+Git LF blobs passed the original assertions without a product change. Fresh
+committed-source and actual new-head CI gates remain separate and pending;
+native macOS, release and authenticated operator acceptance remain blockers.
+
 _Original decisions were resolved at hardening on 2026-10-07; verification evidence is in Assumptions. D29 and D30 are the operator-approved review/release-preparation extensions from 2026-10-08 and 2026-10-10._
 
 ## Acceptance Criteria

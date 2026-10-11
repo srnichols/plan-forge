@@ -81,7 +81,11 @@ with `origin: "untrusted"` and must remain data rather than instructions.
   its own native capability/listener setup and starts the literal actor only
   after verified attachment and START. It restores the actor's original
   environment while closing private control descriptors; readiness alone
-  grants neither execution nor settlement authority. That certificate is registered only
+  grants neither execution nor settlement authority. Private framing uses
+  shipped .NET JSON facilities with the existing byte bounds and strict
+  integer/string/array checks; JSON cmdlet availability is not an ownership
+  prerequisite. A parsed frame still cannot substitute for native zero-member
+  evidence. That certificate is registered only
   for the supervisor factory's actual spawned child; PID fields, constructor
   lookalikes and caller-supplied exit values cannot create one.
   Expired authority is rejected before and after the awaited native-birth read,

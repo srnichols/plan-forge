@@ -29,6 +29,10 @@ literal actors: native capability and listener setup precede readiness, and
 verified attachment plus START precede actor execution. It does not launch a
 second Node supervisor before readiness. Command lookup, original actor
 environment, exit status and safe error reporting retain the existing contract.
+Private native frames use the JSON reader/writer already shipped in PowerShell's
+.NET runtime, not Utility-module JSON cmdlets. Their byte bounds, integer
+validation and literal Unicode argument handling remain enforced; removing a
+cold cmdlet dependency does not relax startup deadlines or certify settlement.
 Linux
 settlement requires both the root's native `waitpid`/`ECHILD` zero-child receipt
 and the parent's retained native child wait for that exact root. A caller-created

@@ -21,6 +21,7 @@ const supervisorPath = fileURLToPath(new URL("../src/jobs/native-command-supervi
 const adapterPath = fileURLToPath(new URL("../src/jobs/posix-process-scope.mjs", import.meta.url));
 const OWNED_DEADLINE_MS = 5_000;
 const MAX_PROBE_BYTES = 16_384;
+const EXITED_PROC_STATES = Object.freeze(["Z", "X"]);
 const resources = [];
 let fixtureSequence = 0;
 
@@ -112,8 +113,24 @@ async function birth(pid) {
 }
 
 async function isLive(pid) {
-  try { return !["Z", "X"].includes((await birth(pid)).state); } catch (error) {
+  try { return !EXITED_PROC_STATES.includes((await birth(pid)).state); } catch (error) {
     if (error.code === "ENOENT" || error.code === "ESRCH") return false;
+    throw error;
+  }
+}
+
+function expectLiveGeneration(identity, startedAt) {
+  expect(identity.startedAt).toBe(startedAt);
+  expect(EXITED_PROC_STATES).not.toContain(identity.state);
+}
+
+async function creatorGenerationExited(pid, startedAt) {
+  try {
+    const identity = await birth(pid);
+    if (identity.startedAt !== startedAt) throw new Error("DETACHED_CREATOR_PID_REUSED");
+    return EXITED_PROC_STATES.includes(identity.state);
+  } catch (error) {
+    if (["ENOENT", "ESRCH"].includes(error.code)) return true;
     throw error;
   }
 }
@@ -123,6 +140,15 @@ function collectNativeText(resource, stream) {
   const output = resource.supervisor.child[stream];
   output.on("data", (chunk) => { resource[stream] += decoder.write(chunk); });
   output.once("end", () => { resource[stream] += decoder.end(); });
+}
+
+function rewriteNativeLauncher(launch, rewrite) {
+  const args = [...launch.args];
+  const encodedIndex = args.indexOf("-EncodedCommand") + 1;
+  expect(encodedIndex).toBeGreaterThan(0);
+  const script = Buffer.from(args[encodedIndex], "base64").toString("utf16le");
+  args[encodedIndex] = Buffer.from(rewrite(script), "utf16le").toString("base64");
+  return { command: launch.command, args };
 }
 
 async function held(env = process.env, prepareLaunch = (launch) => launch, cwd = process.cwd()) {
@@ -160,6 +186,18 @@ async function stop(resource) {
   return receipt;
 }
 
+async function rejectPrivateVersion(version) {
+  const resource = await held();
+  resource.supervisor.child.send({ v: version, t: NATIVE_SUPERVISOR_STOP_MESSAGE });
+  expect(await resource.supervisor.completion).toEqual({ code: -1, errorCode: NATIVE_SCOPE_ERRORS.UNCONFIRMED });
+  await resource.supervisor.closed;
+  expect(await resource.scope.terminate()).toMatchObject({
+    settlementConfirmed: false, unknownProcesses: null, code: NATIVE_SCOPE_ERRORS.UNCONFIRMED,
+  });
+  expect(resource.stdout).toBe("");
+  expect(await isLive(resource.scope.rootPid)).toBe(false);
+}
+
 async function commandFixture() {
   const fixtures = path.resolve("tests", ".posix-command-fixtures");
   await mkdir(fixtures, { recursive: true });
@@ -182,14 +220,46 @@ async function plainCommand(command, args, { cwd, env }) {
   } finally { await supervisor.stop(); }
 }
 
-function detachedLeafScript() {
+function detachedLeafScript(gateAddress) {
   const leaf = "setInterval(() => {}, 1000)";
-  const creator = `const {spawn}=await import("node:child_process");
+  const gate = gateAddress ? `const{createConnection}=await import("node:net");
+    const gate=createConnection(${JSON.stringify(gateAddress)});
+    const connected=new Promise((resolve,reject)=>{gate.once("connect",resolve);gate.once("error",reject)});
+    const released=new Promise(resolve=>{gate.once("data",resolve);gate.once("end",resolve)});` : "";
+  const announcement = gateAddress ? `await connected;
+    gate.write(JSON.stringify({pid:process.pid})+"\\n");await released;gate.end();` : "";
+  const creator = `${gate}const {spawn}=await import("node:child_process");
     const leaf=spawn(process.execPath,["-e",${JSON.stringify(leaf)}],{detached:true,stdio:"ignore"});
-    process.stdout.write(String(leaf.pid)+"\\n"); leaf.unref();`;
+    process.stdout.write(String(leaf.pid)+"\\n"); leaf.unref();${announcement}`;
   return `const {spawn}=await import("node:child_process");
     const creator=spawn(process.execPath,["--input-type=module","-e",${JSON.stringify(creator)}],
       {detached:true,stdio:["ignore","inherit","inherit"]}); creator.unref();`;
+}
+
+async function detachedCreatorGate() {
+  fixtureSequence += 1;
+  const gate = { address: `\0pforge-posix-adoption-${process.pid}-${fixtureSequence}`, creator: null };
+  const server = net.createServer((socket) => {
+    resources.push({ socket });
+    gate.socket = socket;
+    let text = "";
+    socket.on("data", (chunk) => {
+      text += chunk.toString("ascii");
+      try {
+        if (text.length > MAX_PROBE_BYTES) throw new Error("DETACHED_CREATOR_GATE_LIMIT");
+        if (!text.includes("\n")) return;
+        const creator = JSON.parse(text.slice(0, text.indexOf("\n")));
+        if (!Number.isSafeInteger(creator.pid) || creator.pid <= 0)
+          throw new Error("DETACHED_CREATOR_GATE_IDENTITY");
+        gate.creator = creator;
+      } catch (error) { gate.error = error; socket.destroy(); }
+    });
+    socket.once("error", (error) => { gate.error = error; });
+    socket.once("end", () => { if (!gate.creator) gate.error = new Error("DETACHED_CREATOR_GATE_EOF"); });
+  });
+  resources.push({ server });
+  await new Promise((resolve, reject) => { server.once("error", reject); server.listen(gate.address, resolve); });
+  return gate;
 }
 
 async function independentLeaf() {
@@ -273,6 +343,15 @@ describe("Guard: POSIX ownership uses supported native facilities", () => {
     expect(supervisor).toContain("actorEnvironment");
   });
 
+  it("keeps the fixed native frame and environment path independent of utility cmdlets", async () => {
+    const source = await readFile(adapterPath, "utf8");
+    for (const command of ["ConvertTo-Json", "ConvertFrom-Json", "Where-Object", "Import-Module"])
+      expect(source).not.toContain(command);
+    expect(source).toContain("[Text.Json.JsonDocument]::Parse");
+    expect(source).toContain("[Text.Json.Utf8JsonWriter]::new");
+    expect(source).toContain("TryGetInt64");
+  });
+
   it.skipIf(process.platform === "linux")("reports the precise unavailable platform facility, never a fallback launch", async () => {
     await expect(nativePosixSupervisorLaunch({
       node: process.execPath, supervisorPath, cwd: process.cwd(), env: process.env,
@@ -326,6 +405,21 @@ describe.skipIf(process.platform !== "linux")("Linux native subreaper ownership"
       }).toEqual(baseline);
     });
 
+  it.each(["2026-10-11T19:15:30.000Z", "\ud800", "\udc00"])(
+    "matches real Node literal argv encoding for %j", async (argument) => {
+      const cwd = await commandFixture();
+      const env = { ...process.env };
+      const args = ["-e", "process.stdout.write(JSON.stringify(process.argv.slice(1)))", argument];
+      const baseline = await plainCommand(process.execPath, args, { cwd, env });
+      const resource = await held(env, (launch) => launch, cwd);
+      resource.supervisor.start(process.execPath, args);
+      const actual = await resource.supervisor.completion;
+      await stop(resource);
+      expect({
+        code: actual.code, errorCode: actual.errorCode ?? null, stdout: resource.stdout, stderr: resource.stderr,
+      }).toEqual(baseline);
+    });
+
   it("restores actor-only bootstrap values and removes private Node channel metadata", async () => {
     const cwd = await commandFixture();
     const fields = {
@@ -359,17 +453,10 @@ describe.skipIf(process.platform !== "linux")("Linux native subreaper ownership"
   });
 
   it("resets an ignored native signal for the literal actor without changing root authority", async () => {
-    const resource = await held(process.env, (launch) => {
-      const args = [...launch.args];
-      const encoded = args.indexOf("-EncodedCommand") + 1;
-      let script = Buffer.from(args[encoded], "base64").toString("utf16le");
-      script = script.replace("    $script:Native = $script:NativeBuilder.CreateType()",
-        "    Add-NativeMethod 'signal' ([IntPtr]) @([int], [IntPtr])\n    $script:Native = $script:NativeBuilder.CreateType()");
-      script = script.replace("        Establish-Subreaper\n",
-        "        Establish-Subreaper\n        $null = $Native::signal(15, [IntPtr]1)\n");
-      args[encoded] = Buffer.from(script, "utf16le").toString("base64");
-      return { command: launch.command, args };
-    });
+    const resource = await held(process.env, (launch) => rewriteNativeLauncher(launch, (script) =>
+      script.replace("    $script:Native = $script:NativeBuilder.CreateType()",
+        "    Add-NativeMethod 'signal' ([IntPtr]) @([int], [IntPtr])\n    $script:Native = $script:NativeBuilder.CreateType()")
+      .replace("        Establish-Subreaper\n", "        Establish-Subreaper\n        $null = $Native::signal(15, [IntPtr]1)\n")));
     resource.supervisor.start("sh", ["-c", 'kill -TERM $$; printf "signal incorrectly ignored"']);
     expect(await resource.supervisor.completion).toEqual({ code: -1 });
     await stop(resource);
@@ -459,45 +546,89 @@ describe.skipIf(process.platform !== "linux")("Linux native subreaper ownership"
   });
 
   it("establishes native ownership and reaps the real scope when the C# compiler is unavailable", async () => {
-    const resource = await held(process.env, (launch) => {
-      const args = [...launch.args];
-      const encodedIndex = args.indexOf("-EncodedCommand") + 1;
-      expect(encodedIndex).toBeGreaterThan(0);
-      const fixedScript = Buffer.from(args[encodedIndex], "base64").toString("utf16le");
-      const refuseCompiler = 'function global:Add-Type { throw "OWNED_NATIVE_COMPILER_REFUSED" }\n';
-      args[encodedIndex] = Buffer.from(refuseCompiler + fixedScript, "utf16le").toString("base64");
-      return { command: launch.command, args };
-    });
+    const resource = await held(process.env, (launch) => rewriteNativeLauncher(launch,
+      (script) => 'function global:Add-Type { throw "OWNED_NATIVE_COMPILER_REFUSED" }\n' + script));
     expect(await execute(resource, "process.exitCode=7")).toEqual({ code: 7 });
     await stop(resource);
   });
 
+  it("completes native READY, attach, argv and genuine zero without utility cmdlets or module autoload", async () => {
+    const refuseUtilities = String.raw`
+$PSModuleAutoLoadingPreference = 'None'
+function global:ConvertTo-Json {
+    [Console]::Error.WriteLine('OWNED_NATIVE_UTILITY_CMDLET_REFUSED|ConvertTo-Json')
+    throw 'OWNED_NATIVE_UTILITY_CMDLET_REFUSED'
+}
+function global:ConvertFrom-Json {
+    [Console]::Error.WriteLine('OWNED_NATIVE_UTILITY_CMDLET_REFUSED|ConvertFrom-Json')
+    throw 'OWNED_NATIVE_UTILITY_CMDLET_REFUSED'
+}
+function global:Where-Object {
+    [Console]::Error.WriteLine('OWNED_NATIVE_UTILITY_CMDLET_REFUSED|Where-Object')
+    throw 'OWNED_NATIVE_UTILITY_CMDLET_REFUSED'
+}
+function global:Import-Module { throw 'OWNED_NATIVE_MODULE_IMPORT_REFUSED' }
+`;
+    let timer;
+    try {
+      const deadline = new Promise((_, reject) => {
+        // +0ms retains the original3s READY bound; real utility refusal, not elapsed time, selects the dependency.
+        timer = setTimeout(() => reject(new Error("NATIVE_UTILITY_DEPENDENT_READY")), 3_000);
+      });
+      const resource = await Promise.race([held(process.env, (launch) => rewriteNativeLauncher(launch,
+        (script) => refuseUtilities + script)), deadline]);
+      clearTimeout(timer);
+      const args = ['literal "quote" and space', "", "é🛠漢", "trailing\\"];
+      expect(await execute(resource, "process.stdout.write(JSON.stringify(process.argv.slice(1)));process.exitCode=7;",
+        args)).toEqual({ code: 7 });
+      await stop(resource);
+      expect(JSON.parse(resource.stdout)).toEqual(args);
+      expect(resource.stderr).toBe("");
+    } finally { clearTimeout(timer); }
+  });
+
+  it.each([true, null, 1.5])("rejects a noninteger private frame version %j without granting native proof", rejectPrivateVersion);
+
+  it.each(["1.0", "1e0"])("rejects lexical noninteger version %s on the real peer-checked attach socket", async (version) => {
+    const launch = await nativePosixSupervisorLaunch({ node: process.execPath, supervisorPath, cwd: process.cwd() });
+    const supervisor = createNativeSupervisor({ cwd: process.cwd(), launch });
+    resources.push({ supervisor });
+    supervisor.child.stdout.resume();
+    supervisor.child.stderr.resume();
+    expect(await supervisor.ready).toBe(true);
+    const identity = await birth(supervisor.child.pid);
+    const socket = net.createConnection(`\0pforge-claw-posix-${supervisor.child.pid}-${identity.startedAt}`);
+    resources.push({ socket });
+    await new Promise((resolve, reject) => { socket.once("connect", resolve); socket.once("error", reject); });
+    socket.write(`{"v":${version},"operation":"attach","rootPid":${supervisor.child.pid},`
+      + `"rootStartedAt":${JSON.stringify(identity.startedAt)}}\n`);
+    expect(await supervisor.completion).toEqual({ code: -1, errorCode: NATIVE_SCOPE_ERRORS.UNCONFIRMED });
+    await supervisor.closed;
+    await expect(openPosixProcessScope({
+      rootPid: supervisor.child.pid, rootProcess: supervisor.child,
+    })).rejects.toMatchObject({ code: NATIVE_SCOPE_ERRORS.UNAVAILABLE });
+    expect(await isLive(supervisor.child.pid)).toBe(false);
+  });
+
   it("retains native errno metadata rather than certifying an invented ECHILD", async () => {
-    const resource = await held(process.env, (launch) => {
-      const args = [...launch.args];
-      const encodedIndex = args.indexOf("-EncodedCommand") + 1;
-      const fixedScript = Buffer.from(args[encodedIndex], "base64").toString("utf16le");
+    const resource = await held(process.env, (launch) => rewriteNativeLauncher(launch, (script) => {
       const checkErrno = `Initialize-NativeImports
         $null = $Native::close(-1)
         if ([Runtime.InteropServices.Marshal]::GetLastPInvokeError() -ne 9) { Fail-Scope $Unconfirmed }`;
-      expect(fixedScript).toContain("        Initialize-NativeImports\n");
-      args[encodedIndex] = Buffer.from(fixedScript.replace("        Initialize-NativeImports\n",
-        `${checkErrno}\n`), "utf16le").toString("base64");
-      return { command: launch.command, args };
-    });
+      expect(script).toContain("        Initialize-NativeImports\n");
+      return script.replace("        Initialize-NativeImports\n", `${checkErrno}\n`);
+    }));
     expect(await execute(resource, "process.exitCode=7")).toEqual({ code: 7 });
     await stop(resource);
   });
 
   it("refuses a real kernel subreaper capability error before READY or literal argv", async () => {
-    const launch = await nativePosixSupervisorLaunch({
+    const launch = rewriteNativeLauncher(await nativePosixSupervisorLaunch({
       node: process.execPath, supervisorPath, cwd: process.cwd(), env: process.env,
+    }), (script) => {
+      expect(script).toContain("$script:SetChildSubreaper = 36");
+      return script.replace("$script:SetChildSubreaper = 36", "$script:SetChildSubreaper = -1");
     });
-    const encodedIndex = launch.args.indexOf("-EncodedCommand") + 1;
-    const fixedScript = Buffer.from(launch.args[encodedIndex], "base64").toString("utf16le");
-    expect(fixedScript).toContain("$script:SetChildSubreaper = 36");
-    launch.args[encodedIndex] = Buffer.from(fixedScript.replace("$script:SetChildSubreaper = 36",
-      "$script:SetChildSubreaper = -1"), "utf16le").toString("base64");
     const supervisor = createNativeSupervisor({ cwd: process.cwd(), env: process.env, launch });
     resources.push({ supervisor });
     supervisor.child.stdout.resume();
@@ -508,18 +639,7 @@ describe.skipIf(process.platform !== "linux")("Linux native subreaper ownership"
     expect(await isLive(supervisor.child.pid)).toBe(false);
   });
 
-  it("rejects a string version on private IPC without certifying settlement", async () => {
-    const resource = await held();
-    resource.supervisor.child.send({ v: "1", t: NATIVE_SUPERVISOR_STOP_MESSAGE });
-    expect(await resource.supervisor.completion).toEqual({ code: -1, errorCode: NATIVE_SCOPE_ERRORS.UNCONFIRMED });
-    await resource.supervisor.closed;
-    const receipt = await resource.scope.terminate();
-    expect(receipt).toMatchObject({
-      settlementConfirmed: false, unknownProcesses: null, code: NATIVE_SCOPE_ERRORS.UNCONFIRMED,
-    });
-    expect(resource.stdout).toBe("");
-    expect(await isLive(resource.scope.rootPid)).toBe(false);
-  });
+  it("rejects a string version on private IPC without certifying settlement", () => rejectPrivateVersion("1"));
 
   it("preserves multibyte literal argv across fragmented private IPC reads", async () => {
     const resource = await held();
@@ -675,10 +795,32 @@ describe.skipIf(process.platform !== "linux")("Linux native subreaper ownership"
 
   it("stops a double-detached leaf after both unobserved creators exit", async () => {
     const resource = await held();
-    expect(await execute(resource, detachedLeafScript())).toEqual({ code: 0 });
-    await vi.waitFor(() => expect(resource.stdout.trim()).toMatch(/^\d+$/), { timeout: 1_000 });
-    const leafPid = Number(resource.stdout.trim());
-    const leafBirth = await birth(leafPid);
+    const gate = await detachedCreatorGate();
+    expect(await execute(resource, detachedLeafScript(gate.address))).toEqual({ code: 0 });
+    let creatorBirth, creatorPid, leafBirth, leafPid;
+    // +0ms keeps publication, generation exit and same-birth adoption inside the existing single 1s observation budget.
+    await vi.waitUntil(async () => {
+      if (gate.error) throw gate.error;
+      if (!gate.creator || !/^\d+$/.test(resource.stdout.trim())) return false;
+      leafPid ??= Number(resource.stdout.trim());
+      const currentLeaf = await birth(leafPid);
+      expectLiveGeneration(await birth(resource.scope.rootPid), resource.scope.rootStartedAt);
+      if (!creatorBirth) {
+        creatorPid = gate.creator.pid;
+        creatorBirth = await birth(creatorPid);
+        expect(creatorBirth).toMatchObject({ parentPid: resource.scope.rootPid });
+        expect(EXITED_PROC_STATES).not.toContain(creatorBirth.state);
+        expect(currentLeaf.parentPid).toBe(creatorPid);
+        expect(await creatorGenerationExited(creatorPid, creatorBirth.startedAt)).toBe(false);
+        leafBirth = currentLeaf;
+        gate.socket.end("release\n");
+        return false;
+      }
+      expectLiveGeneration(currentLeaf, leafBirth.startedAt);
+      if (!await creatorGenerationExited(creatorPid, creatorBirth.startedAt)) return false;
+      leafBirth = currentLeaf;
+      return leafBirth.parentPid === resource.scope.rootPid;
+    }, { timeout: 1_000 });
     expect(leafBirth.parentPid).toBe(resource.scope.rootPid);
     expect(await isLive(leafPid)).toBe(true);
     const receipt = await stop(resource);

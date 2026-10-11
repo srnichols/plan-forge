@@ -61,6 +61,7 @@ $script:DecodeSlackChars = 4
 $script:SelectIntervalMicroseconds = 100000
 $script:MaxActorBytes = 2097152
 $script:MaxControlBytes = 32768
+$script:MaxJsonDepth = 1024
 $script:MaxEnvironmentBytes = 8388608
 $script:MaxPidDigits = 16
 $script:NativeEntries = @{ prctlGet = 'prctl'; pidfd_open = 'syscall'; pidfd_send_signal = 'syscall';
@@ -235,8 +236,70 @@ function Write-Line($channel, [string]$line) {
         $offset += $count
     }
 }
+function Write-FrameValue($writer, $value) {
+    if ($null -eq $value) { $writer.WriteNullValue() }
+    elseif ($value -is [string]) { $writer.WriteStringValue([string]$value) }
+    elseif ($value -is [bool]) { $writer.WriteBooleanValue([bool]$value) }
+    elseif ($value -is [int] -or $value -is [long]) { $writer.WriteNumberValue([long]$value) }
+    elseif ($value -is [array]) {
+        $writer.WriteStartArray()
+        foreach ($entry in $value) { Write-FrameValue $writer $entry }
+        $writer.WriteEndArray()
+    } else { Fail-Scope $Unconfirmed }
+}
 function Write-Frame($channel, $frame) {
-    Write-Line $channel (ConvertTo-Json -InputObject $frame -Compress -Depth 8)
+    $stream = [IO.MemoryStream]::new()
+    $writer = [Text.Json.Utf8JsonWriter]::new($stream, [Text.Json.JsonWriterOptions]::new())
+    try {
+        $writer.WriteStartObject()
+        foreach ($entry in $frame.GetEnumerator()) {
+            $writer.WritePropertyName([string]$entry.Key)
+            Write-FrameValue $writer $entry.Value
+        }
+        $writer.WriteEndObject()
+        $writer.Flush()
+        Write-Line $channel ($Utf8.GetString($stream.ToArray()))
+    } finally { $writer.Dispose(); $stream.Dispose() }
+}
+function Read-FrameString([Text.Json.JsonElement]$value) {
+    try { return $value.GetString() }
+    catch [InvalidOperationException] {
+        # Node accepts lone UTF-16 JSON escapes and replaces them at the native UTF-8 argv boundary.
+        $literal = $value.GetRawText()
+        return [Text.RegularExpressions.Regex]::Unescape($literal.Substring(1, $literal.Length - 2))
+    }
+}
+function Read-FrameValue([Text.Json.JsonElement]$value) {
+    switch ($value.ValueKind) {
+        ([Text.Json.JsonValueKind]::String) { return Read-FrameString $value }
+        ([Text.Json.JsonValueKind]::True) { return $true }
+        ([Text.Json.JsonValueKind]::False) { return $false }
+        ([Text.Json.JsonValueKind]::Null) { return $null }
+        ([Text.Json.JsonValueKind]::Number) {
+            $integer = [long]0
+            if ($value.TryGetInt64([ref]$integer)) { return $integer }
+            return $value.GetDouble()
+        }
+        default { return $value.Clone() }
+    }
+}
+function Read-Frame([string]$line) {
+    $options = [Text.Json.JsonDocumentOptions]::new()
+    $options.MaxDepth = $MaxJsonDepth
+    $document = [Text.Json.JsonDocument]::Parse($line, $options)
+    try {
+        if ($document.RootElement.ValueKind -ne [Text.Json.JsonValueKind]::Object) { Fail-Scope $Unconfirmed }
+        $frame = [Collections.Generic.Dictionary[string,object]]::new([StringComparer]::Ordinal)
+        foreach ($property in $document.RootElement.EnumerateObject()) {
+            if ($property.Value.ValueKind -eq [Text.Json.JsonValueKind]::Array) {
+                $entries = [Collections.Generic.List[object]]::new()
+                foreach ($entry in $property.Value.EnumerateArray()) { $entries.Add((Read-FrameValue $entry)) }
+                $frame[$property.Name] = $entries.ToArray()
+            } else { $frame[$property.Name] = Read-FrameValue $property.Value }
+        }
+        # Only flat fields and literal string argv are consumed; structured values remain non-string/non-integer.
+        return ,$frame
+    } finally { $document.Dispose() }
 }
 function Actor-Environment {
     $values = [Collections.Generic.Dictionary[string,string]]::new([StringComparer]::Ordinal)
@@ -246,7 +309,10 @@ function Actor-Environment {
         if ($separator -le 0) { Fail-Scope $Unconfirmed }
         $values[$entry.Substring(0, $separator)] = $entry.Substring($separator + 1)
     }
-    $privateNames = @($values.Keys | Where-Object { $_.StartsWith($BootstrapPrefix, [StringComparison]::Ordinal) })
+    $privateNames = [Collections.Generic.List[string]]::new()
+    foreach ($name in $values.Keys) {
+        if ($name.StartsWith($BootstrapPrefix, [StringComparison]::Ordinal)) { $privateNames.Add($name) }
+    }
     foreach ($name in $privateNames) {
         if (-not $name.EndsWith('_NAME', [StringComparison]::Ordinal)) { continue }
         $originalName = $values[$name]
@@ -447,7 +513,7 @@ function Is-NativeInteger($value) {
     return $value -is [int] -or $value -is [long]
 }
 function Receive-Frame($channel, [string]$line) {
-    $frame = ConvertFrom-Json -InputObject $line -AsHashtable -NoEnumerate
+    $frame = Read-Frame $line
     if ($frame -isnot [Collections.IDictionary] -or -not (Is-NativeInteger $frame.v) -or $frame.v -ne 1) {
         Fail-Scope $Unconfirmed
     }

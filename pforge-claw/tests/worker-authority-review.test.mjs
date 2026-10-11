@@ -32,7 +32,7 @@ import { finalizePodJob } from "../src/lanes/k8s-job-lane.mjs";
 
 const edges = vi.hoisted(() => ({
   sockets: [], launches: [], onSocket: null, scheduleOpen: null, versionProbe: null,
-  onSpawn: null, onExecFile: null,
+  onSpawn: null, onExecFile: null, traceLaunch: null,
 }));
 vi.mock("node:child_process", async (original) => {
   const actual = await original();
@@ -47,7 +47,8 @@ vi.mock("node:child_process", async (original) => {
     },
   });
   const spawn = (...args) => {
-    const child = actual.spawn(...args);
+    const forwarded = edges.traceLaunch?.(...args) ?? args;
+    const child = actual.spawn(...forwarded);
     edges.onSpawn?.(child, args);
     return child;
   };
@@ -98,6 +99,12 @@ const PROCESS_TIMEOUT_MS = 30_000;
 const CLEANUP_RETRIES = 30;
 const CLEANUP_RETRY_MS = 100;
 const EXECUTABLE_PROBES = Object.freeze(["node", "git", "gh"]);
+const NATIVE_BOOT_STAGES = Object.freeze([
+  "runtime", "imports", "subreaper", "inner", "ready",
+]);
+const NATIVE_BOOT_PREFIX = "CLAW_TEST_NATIVE_STAGE:";
+const NATIVE_BOOT_LINE_LIMIT = 128;
+const NATIVE_BOOT_NEWLINE = "\n".charCodeAt(0);
 const cleanups = [];
 afterEach(async () => {
   for (const close of cleanups.splice(0).reverse()) await close();
@@ -109,6 +116,7 @@ afterEach(async () => {
   edges.versionProbe = null;
   edges.onSpawn = null;
   edges.onExecFile = null;
+  edges.traceLaunch = null;
   vi.restoreAllMocks();
   vi.unstubAllEnvs();
   vi.useRealTimers();
@@ -295,8 +303,74 @@ async function authoritySystem({
   return { root, registry, payload, workers, publications, received, consuming, repoPath };
 }
 
+function traceNativeStartupLaunch(command, args, options) {
+  if (process.platform !== "linux" || path.basename(command) !== "pwsh"
+    || !Array.isArray(options?.stdio) || !options.stdio.includes("ipc")) return undefined;
+  const index = args.indexOf("-EncodedCommand") + 1;
+  if (index === 0 || typeof args[index] !== "string") throw new Error("NATIVE_STARTUP_TRACE_COMMAND_MISSING");
+  let source = Buffer.from(args[index], "base64").toString("utf16le");
+  const anchors = [
+    ["        Initialize-NativeImports\n", "imports"],
+    ["        Establish-Subreaper\n", "subreaper"],
+    ["        if (-not $script:Stopping) { Start-Supervisor $config }\n", "inner"],
+    ["            Write-Frame $script:Outer @{ v = 1; t = 'owned-ready'; pid = $RootPid }\n", "ready"],
+  ];
+  for (const [anchor, stage] of anchors) {
+    if (source.split(anchor).length !== 2) throw new Error("NATIVE_STARTUP_TRACE_ANCHOR_MISSING");
+    const marker = `[Console]::Error.WriteLine("${NATIVE_BOOT_PREFIX}${stage}")\n`;
+    source = source.replace(anchor, stage === "ready" ? marker + anchor : anchor + marker);
+  }
+  // Fixed test-only milestones contain no environment, argv or actor payload.
+  source = `[Console]::Error.WriteLine("${NATIVE_BOOT_PREFIX}${NATIVE_BOOT_STAGES[0]}")\n` + source;
+  const forwarded = [...args];
+  forwarded[index] = Buffer.from(source, "utf16le").toString("base64");
+  return [command, forwarded, options];
+}
+
+function collectNativeBootStages(stream, stages) {
+  const pending = Buffer.alloc(NATIVE_BOOT_LINE_LIMIT);
+  let length = 0;
+  let isOverlong = false;
+  stream.on("data", (chunk) => {
+    for (const byte of Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk)) {
+      if (byte === NATIVE_BOOT_NEWLINE) {
+        if (!isOverlong) {
+          const line = pending.subarray(0, length).toString("utf8").trim();
+          const stage = NATIVE_BOOT_STAGES.find((name) => line === `${NATIVE_BOOT_PREFIX}${name}`);
+          if (stage && !stages.includes(stage)) stages.push(stage);
+        }
+        length = 0;
+        isOverlong = false;
+      } else if (!isOverlong) {
+        // Discard through newline so a pipe boundary cannot invent a new marker line.
+        if (length === NATIVE_BOOT_LINE_LIMIT) isOverlong = true;
+        else pending[length++] = byte;
+      }
+    }
+  });
+}
+
+describe("native startup diagnostic framing", () => {
+  const oversized = "x".repeat(NATIVE_BOOT_LINE_LIMIT + 1);
+  const marker = `${NATIVE_BOOT_PREFIX}${NATIVE_BOOT_STAGES[0]}\n`;
+  it.each([
+    ["fragmented overlong line", [oversized, marker]],
+    ["single overlong line", [oversized + marker]],
+    ["padded overlong line", [" ".repeat(NATIVE_BOOT_LINE_LIMIT) + marker]],
+  ])("discards %s through its newline before accepting a genuine marker", (_, chunks) => {
+    const stream = new EventEmitter();
+    const stages = [];
+    collectNativeBootStages(stream, stages);
+    for (const chunk of chunks) stream.emit("data", Buffer.from(chunk));
+    expect(stages).toEqual([]);
+    stream.emit("data", Buffer.from(`${NATIVE_BOOT_PREFIX}${NATIVE_BOOT_STAGES[1]}\n`));
+    expect(stages).toEqual([NATIVE_BOOT_STAGES[1]]);
+  });
+});
+
 it("FRC-03 releases authenticated publication authority after a real physically settled nonzero command", async () => {
-  const startup = { hostQueries: [], roots: [] };
+  const startup = { hostQueries: [], roots: [], nativeBootStages: [] };
+  edges.traceLaunch = traceNativeStartupLaunch;
   edges.onExecFile = (running) => {
     const phase = { hasNativeChild: Boolean(running.child), settled: false, rejected: false };
     startup.hostQueries.push(phase);
@@ -309,6 +383,7 @@ it("FRC-03 releases authenticated publication authority after a real physically 
       nativeExitObserved: false, closedObserved: false, errorObserved: false,
     };
     startup.roots.push(phase);
+    collectNativeBootStages(child.stderr, startup.nativeBootStages);
     child.once("spawn", () => { phase.spawned = true; });
     child.on("message", (frame) => {
       if (frame?.v === 1 && frame.pid === child.pid) phase.identityFrameObserved = true;
@@ -325,6 +400,7 @@ it("FRC-03 releases authenticated publication authority after a real physically 
   } finally {
     edges.onSpawn = null;
     edges.onExecFile = null;
+    edges.traceLaunch = null;
   }
   const diagnostics = {
     code: native.code,
@@ -344,6 +420,7 @@ it("FRC-03 releases authenticated publication authority after a real physically 
     pidAssigned: true, spawned: true, identityFrameObserved: true,
     nativeExitObserved: true, closedObserved: true, errorObserved: false,
   }]);
+  if (process.platform === "linux") expect(startup.nativeBootStages).toEqual(NATIVE_BOOT_STAGES);
   const system = await authoritySystem({ publicationOutcome: native });
   system.workers.A.release.resolve();
   await vi.waitFor(() => expect(system.registry.completion(system.payload.id)?.event.data.status).toBe("failed"));

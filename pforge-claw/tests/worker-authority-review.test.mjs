@@ -29,6 +29,9 @@ import { challenge, verifyMac } from "../src/protocol/auth.mjs";
 import { createWorkerServer } from "../src/protocol/ws-server.mjs";
 import { createHttpServer } from "../src/http.mjs";
 import { finalizePodJob } from "../src/lanes/k8s-job-lane.mjs";
+import {
+  createNativeSupervisor, hasNativeSettlementProof, nativeSupervisorRootExit, NATIVE_SUPERVISOR_STOP_MESSAGE,
+} from "../src/jobs/native-command-supervisor.mjs";
 
 const edges = vi.hoisted(() => ({
   sockets: [], launches: [], onSocket: null, scheduleOpen: null, versionProbe: null,
@@ -105,6 +108,14 @@ const NATIVE_BOOT_STAGES = Object.freeze([
 const NATIVE_BOOT_PREFIX = "CLAW_TEST_NATIVE_STAGE:";
 const NATIVE_BOOT_LINE_LIMIT = 128;
 const NATIVE_BOOT_NEWLINE = "\n".charCodeAt(0);
+const NATIVE_READY_MESSAGE = "owned-ready";
+const NATIVE_START_MESSAGE = "owned-start";
+const NATIVE_RESULT_MESSAGE = "owned-result";
+const NATIVE_EVENTS = Object.freeze({
+  SPAWN: "root-spawn", READY: "ready-received", ACQUIRED: "native-acquired",
+  START: "start-sent", RESULT: "result-received", STOP: "stop-sent",
+  EXIT: "root-exit", CLOSE: "root-close", ERROR: "root-error",
+});
 const cleanups = [];
 afterEach(async () => {
   for (const close of cleanups.splice(0).reverse()) await close();
@@ -350,6 +361,53 @@ function collectNativeBootStages(stream, stages) {
   });
 }
 
+function nativeStartup() {
+  return Object.defineProperty(
+    { hostQueries: [], roots: [], nativeBootStages: [], events: [], elapsedMs: {} },
+    "startedAt", { value: performance.now() },
+  );
+}
+
+function recordNativeStartup(startup, event) {
+  if (startup.events.includes(event)) return;
+  startup.events.push(event);
+  // Ages permit equal milliseconds (rounding tolerance); they never certify native settlement.
+  startup.elapsedMs[event] = Math.round(performance.now() - startup.startedAt);
+}
+
+function observeNativeRoot({ child, options, startup }) {
+  if (!Array.isArray(options?.stdio) || !options.stdio.includes("ipc")) return;
+  const phase = {
+    pidAssigned: Number.isSafeInteger(child.pid), spawned: false, identityFrameObserved: false,
+    nativeExitObserved: false, closedObserved: false, errorObserved: false,
+  };
+  startup.roots.push(phase);
+  collectNativeBootStages(child.stderr, startup.nativeBootStages);
+  const send = child.send;
+  child.send = (...args) => {
+    const frame = args[0];
+    if (frame?.v === 1) {
+      if (frame.t === NATIVE_SUPERVISOR_STOP_MESSAGE) recordNativeStartup(startup, NATIVE_EVENTS.STOP);
+      if (frame.t === NATIVE_START_MESSAGE) recordNativeStartup(startup, NATIVE_EVENTS.START);
+    }
+    return send.apply(child, args);
+  };
+  child.once("spawn", () => { phase.spawned = true; recordNativeStartup(startup, NATIVE_EVENTS.SPAWN); });
+  child.on("message", (frame) => {
+    if (frame?.v !== 1) return;
+    if (frame.t === NATIVE_READY_MESSAGE && frame.pid === child.pid) {
+      phase.identityFrameObserved = true;
+      recordNativeStartup(startup, NATIVE_EVENTS.READY);
+    }
+    if (frame.t === NATIVE_RESULT_MESSAGE && Number.isInteger(frame.code)) {
+      recordNativeStartup(startup, NATIVE_EVENTS.RESULT);
+    }
+  });
+  child.once("exit", () => { phase.nativeExitObserved = true; recordNativeStartup(startup, NATIVE_EVENTS.EXIT); });
+  child.once("close", () => { phase.closedObserved = true; recordNativeStartup(startup, NATIVE_EVENTS.CLOSE); });
+  child.once("error", () => { phase.errorObserved = true; recordNativeStartup(startup, NATIVE_EVENTS.ERROR); });
+}
+
 describe("native startup diagnostic framing", () => {
   const oversized = "x".repeat(NATIVE_BOOT_LINE_LIMIT + 1);
   const marker = `${NATIVE_BOOT_PREFIX}${NATIVE_BOOT_STAGES[0]}\n`;
@@ -368,34 +426,66 @@ describe("native startup diagnostic framing", () => {
   });
 });
 
+describe("native startup diagnostic ordering", () => {
+  async function controlledRoot(source) {
+    const startup = nativeStartup();
+    edges.onSpawn = (child, [, , options]) => observeNativeRoot({ child, options, startup });
+    const root = createNativeSupervisor({
+      cwd: await directory(), launch: { command: process.execPath, args: ["-e", source] },
+    });
+    cleanups.push(() => root.stop());
+    return { root, startup };
+  }
+
+  it("does not label a matching-pid non-READY frame as readiness", async () => {
+    const { root, startup } = await controlledRoot(`
+      process.send({v:1,t:"not-owned-ready",pid:process.pid},()=>process.exit(0));
+    `);
+    await root.closed;
+    expect(await root.ready).toBe(false);
+    expect(startup.roots[0].identityFrameObserved).toBe(false);
+    expect(startup.events).not.toContain(NATIVE_EVENTS.READY);
+  }, PROCESS_TIMEOUT_MS);
+
+  it("distinguishes late READY after private STOP from pre-interruption readiness", async () => {
+    const { root, startup } = await controlledRoot(`
+      process.on("message",frame=>{
+        if(frame?.v===1&&frame.t===${JSON.stringify(NATIVE_SUPERVISOR_STOP_MESSAGE)})
+          process.send({v:1,t:${JSON.stringify(NATIVE_READY_MESSAGE)},pid:process.pid},()=>process.exit(0));
+      });
+    `);
+    await root.stop();
+    expect(await root.ready).toBe(true);
+    expect(startup.roots[0].identityFrameObserved).toBe(true);
+    expect(startup.events).toContain(NATIVE_EVENTS.STOP);
+    expect(startup.events).toContain(NATIVE_EVENTS.READY);
+    expect(startup.events.indexOf(NATIVE_EVENTS.STOP)).toBeLessThan(startup.events.indexOf(NATIVE_EVENTS.READY));
+    expect(startup.events).not.toContain(NATIVE_EVENTS.ACQUIRED);
+    expect(startup.events).not.toContain(NATIVE_EVENTS.START);
+    expect(startup.events.length).toBeLessThanOrEqual(Object.keys(NATIVE_EVENTS).length);
+    expect(Object.keys(startup.elapsedMs)).toEqual(startup.events);
+    expect(startup.elapsedMs[NATIVE_EVENTS.STOP]).toBeLessThanOrEqual(startup.elapsedMs[NATIVE_EVENTS.READY]);
+    expect(JSON.stringify(startup)).not.toContain("startedAt");
+    const rootExit = nativeSupervisorRootExit(root.child);
+    expect(rootExit.exited).toBe(true);
+    expect(hasNativeSettlementProof(rootExit)).toBe(false);
+  }, PROCESS_TIMEOUT_MS);
+});
+
 it("FRC-03 releases authenticated publication authority after a real physically settled nonzero command", async () => {
-  const startup = { hostQueries: [], roots: [], nativeBootStages: [] };
+  const startup = nativeStartup();
   edges.traceLaunch = traceNativeStartupLaunch;
   edges.onExecFile = (running) => {
     const phase = { hasNativeChild: Boolean(running.child), settled: false, rejected: false };
     startup.hostQueries.push(phase);
     running.then(() => { phase.settled = true; }, () => { phase.settled = true; phase.rejected = true; });
   };
-  edges.onSpawn = (child, [, , options]) => {
-    if (!Array.isArray(options?.stdio) || !options.stdio.includes("ipc")) return;
-    const phase = {
-      pidAssigned: Number.isSafeInteger(child.pid), spawned: false, identityFrameObserved: false,
-      nativeExitObserved: false, closedObserved: false, errorObserved: false,
-    };
-    startup.roots.push(phase);
-    collectNativeBootStages(child.stderr, startup.nativeBootStages);
-    child.once("spawn", () => { phase.spawned = true; });
-    child.on("message", (frame) => {
-      if (frame?.v === 1 && frame.pid === child.pid) phase.identityFrameObserved = true;
-    });
-    child.once("exit", () => { phase.nativeExitObserved = true; });
-    child.once("close", () => { phase.closedObserved = true; });
-    child.once("error", () => { phase.errorObserved = true; });
-  };
+  edges.onSpawn = (child, [, , options]) => observeNativeRoot({ child, options, startup });
   let native;
   try {
     native = await runCommand(process.execPath, ["-e", "process.exitCode=7"], {
       requireSettlement: true, timeoutMs: 5_000,
+      onRootReady: () => recordNativeStartup(startup, NATIVE_EVENTS.ACQUIRED),
     });
   } finally {
     edges.onSpawn = null;
@@ -420,6 +510,10 @@ it("FRC-03 releases authenticated publication authority after a real physically 
     pidAssigned: true, spawned: true, identityFrameObserved: true,
     nativeExitObserved: true, closedObserved: true, errorObserved: false,
   }]);
+  expect(startup.events).toEqual([
+    NATIVE_EVENTS.SPAWN, NATIVE_EVENTS.READY, NATIVE_EVENTS.ACQUIRED, NATIVE_EVENTS.START,
+    NATIVE_EVENTS.RESULT, NATIVE_EVENTS.EXIT, NATIVE_EVENTS.CLOSE,
+  ]);
   if (process.platform === "linux") expect(startup.nativeBootStages).toEqual(NATIVE_BOOT_STAGES);
   const system = await authoritySystem({ publicationOutcome: native });
   system.workers.A.release.resolve();

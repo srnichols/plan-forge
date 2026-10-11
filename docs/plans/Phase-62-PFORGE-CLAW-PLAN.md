@@ -433,6 +433,23 @@ gates remain mandatory; the deliberately held loader is not asserted to explain
 the exact hosted timeout. No public API, permission, dependency, deadline or
 macOS requirement change is authorized by this internal optimization.
 
+The current `455f7bd1` hosted gate passed Windows floor/LTS, Ubuntu floor and
+real kind, but Ubuntu LTS has one original 5,000 ms FRC-03 timeout. Its READY
+marker and identity-frame observations continue through cleanup; they do not
+establish that readiness preceded interruption. Diagnostic-only regression
+controls now distinguish a matching-PID non-READY frame and actual late READY
+after private STOP, preserving native uncertainty. Fixed, bounded parent
+event order and monotonic ages identify READY receipt, verified acquisition,
+START, result, STOP and original-root exit/close without logging raw payloads.
+They do not alter deadlines, execution, permissions or settlement proof. The
+bounded cold four-worker/two-CPU producer cohort passed its three genuine
+native-settlement cases and one deliberately unconfirmed private-STOP case.
+The original output was recovered without rerunning the cohort: first READY
+serialization measured 136.7-176.1 ms and complete native lifetime measured
+1.56-1.64 seconds. No interval exceeded the original deadline or reproduced
+hosted scheduling pressure. Neither a causal serialization bottleneck nor
+the exact hosted cause is established; this is not a runtime-fix claim.
+
 _Original decisions were resolved at hardening on 2026-10-07; verification evidence is in Assumptions. D29 and D30 are the operator-approved review/release-preparation extensions from 2026-10-08 and 2026-10-10._
 
 ## Acceptance Criteria

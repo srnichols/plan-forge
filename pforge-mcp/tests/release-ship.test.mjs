@@ -82,6 +82,13 @@ describe("unexpectedReleaseChanges", () => {
     expect(unexpectedReleaseChanges(RELEASE_FILES)).toEqual([]);
     expect(unexpectedReleaseChanges(["VERSION", "pforge-mcp/server.mjs"])).toEqual(["pforge-mcp/server.mjs"]);
   });
+
+  it("allows the synchronized Claw manifest but never arbitrary Claw source or the independent SDK manifest", () => {
+    expect(RELEASE_FILES).toContain("pforge-claw/package.json");
+    expect(unexpectedReleaseChanges([
+      "pforge-claw/package.json", "pforge-claw/src/config.mjs", "pforge-sdk/package.json",
+    ])).toEqual(["pforge-claw/src/config.mjs", "pforge-sdk/package.json"]);
+  });
 });
 
 describe("buildReleaseSteps", () => {

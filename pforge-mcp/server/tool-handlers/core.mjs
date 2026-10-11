@@ -7,6 +7,7 @@ import { recall as brainRecall, getReviewerCalibration, federationReadTrajectori
 import { withAnvil, anvilStat, anvilClear, anvilRebuild, anvilDlqList, anvilDlqDrain } from "../../anvil.mjs";
 import { pipelinesList, pipelinesStats } from "../../pipelines.mjs";
 import {
+  readProvenance,
   drainOpenBrainQueue,
   isOpenBrainConfigured,
   shapeWatcherAnomalyThought,
@@ -280,6 +281,7 @@ const _NULL_RETURN_TOOLS = new Set([
   "forge_testbed_happypath",
   "forge_master_ask",
   "forge_master_audit",
+  "forge_master_observe",
   "forge_meta_bug_file",
   "forge_graph_query",
   "forge_patterns_list",
@@ -424,14 +426,20 @@ export async function searchOpenBrainL3(cwd, args) {
     const raw = searchRes?.results ?? searchRes?.thoughts ?? searchRes?.hits ?? [];
     if (!Array.isArray(raw)) return [];
 
-    return raw.map((h) => ({
-      source: "openbrain",
-      recordRef: String(h.id || h.recordRef || h.thought_id || ""),
-      text: String(h.content || h.text || ""),
-      timestamp: h.captured_at || h.timestamp || h.created_at || new Date().toISOString(),
-      tags: Array.isArray(h.tags) ? h.tags : [],
-      correlationId: h.correlationId || h.correlation_id || "",
-    })).filter((h) => h.text);
+    return raw.map((h) => {
+      const provenance = readProvenance(h);
+      return {
+        source: "openbrain",
+        recordRef: String(h.id || h.recordRef || h.thought_id || ""),
+        text: provenance.text,
+        timestamp: h.captured_at || h.timestamp || h.created_at || new Date().toISOString(),
+        tags: provenance.tags,
+        correlationId: h.correlationId || h.correlation_id || "",
+        origin: provenance.origin,
+        visibility: provenance.visibility,
+        project: provenance.project ?? h.project ?? null,
+      };
+    }).filter((h) => h.text);
   } catch {
     return [];
   } finally {

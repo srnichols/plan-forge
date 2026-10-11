@@ -438,8 +438,22 @@ export const TOOL_METADATA = {
     produces: [],
     consumes: [],
     sideEffects: ["broadcasts memory-captured hub event"],
-    errors: {},
-    example: { input: { content: "Use JWT for auth", type: "convention" }, output: { event: "memory-captured" } },
+    errors: {
+      INVALID_ORIGIN: { message: "origin must be trusted or untrusted", recovery: "Choose one of the supported provenance values." },
+      INVALID_VISIBILITY: { message: "visibility must be normal or restricted", recovery: "Choose one of the supported visibility values." },
+      INVALID_TAGS: { message: "tags must match the provenance tag rules", recovery: "Pass up to 10 lowercase tags containing only letters, digits, colon, or hyphen; each tag may be up to 40 characters." },
+    },
+    example: {
+      input: { content: "Use JWT for auth", type: "convention", origin: "untrusted", tags: ["source:web"] },
+      output: {
+        thought: {
+          content: "[[pforge origin=untrusted tags=source:web]]\nUse JWT for auth",
+          origin: "untrusted",
+          visibility: "normal",
+          tags: ["source:web"],
+        },
+      },
+    },
   },
   forge_brain_test: {
     intent: ["test", "ping", "round-trip", "openbrain"],
@@ -1475,7 +1489,15 @@ export const TOOL_METADATA = {
     },
     example: {
       input: { query: "blocker", tags: ["review"], limit: 10 },
-      output: { hits: [{ source: "bug", recordRef: "BUG-42", snippet: "…critical blocker in auth…", score: 2.1 }], total: 1, truncated: false, durationMs: 45 },
+      output: {
+        hits: [
+          { source: "bug", recordRef: "BUG-42", snippet: "…critical blocker in auth…", score: 2.1 },
+          { source: "openbrain", recordRef: "OB-7", snippet: "Use JWT for auth", score: 1.8, origin: "untrusted", visibility: "normal", tags: ["source:web"] },
+        ],
+        total: 2,
+        truncated: false,
+        durationMs: 45,
+      },
     },
   },
   // Phase FORGE-SHOP-05 Slice 05.1 — Unified timeline
@@ -1591,21 +1613,31 @@ export const TOOL_METADATA = {
     risk: "low",
     agentGuidance: "Use forge_master_ask for multi-step reasoning about Plan Forge workflows — ideating features, troubleshooting failures, querying run status, or funneling ideas into Crucible smelts. Also serves as the advisory / CTO-in-a-box lane for architectural guidance: ask 'should I refactor or ship X?', 'what is the right approach for Y?', 'architecture advice on Z' — the intent router classifies these to the advisory lane and the system prompt injects project principles. Forge-Master classifies intent, fetches memory context, and orchestrates tool calls on your behalf. Prefer this over manually calling individual forge tools when the task is open-ended or involves multiple steps. Do NOT use for direct file edits or code generation — Forge-Master is read-only.",
     errors: {
+      INVALID_INPUT: {
+        message: "A supplied forge_master_ask field is invalid",
+        recovery: "fix the named `field` (enum/type/range) and retry",
+      },
       reasoning_model_unavailable: {
         message: "No reasoning provider configured",
         recovery: "Set ANTHROPIC_API_KEY, OPENAI_API_KEY, or XAI_API_KEY, or configure forgeMaster.reasoningModel in .forge.json",
       },
     },
     example: {
-      input: { message: "I want to add multi-tenant billing to my pipeline", sessionId: "sess-abc123" },
+      input: {
+        message: "How can I check the current status of my plan?",
+        sessionId: "sess-abc123",
+        caller: { role: "owner", channel: "chat" },
+        responseFormat: { style: "brief", maxChars: 1200 },
+      },
       output: {
         sessionId: "sess-abc123",
-        reply: "I've started a Crucible smelt for your multi-tenant billing feature...",
-        toolCalls: [{ name: "forge_crucible_submit", args: {}, resultSummary: "Smelt created", costUSD: 0.002 }],
-        tokensIn: 1200,
-        tokensOut: 450,
-        totalCostUSD: 0.003,
+        reply: "Your current plan status is available through the read-only plan status tool.",
+        toolCalls: [{ name: "forge_plan_status", args: {}, resultSummary: "Plan status retrieved", costUSD: 0 }],
+        tokensIn: 120,
+        tokensOut: 45,
+        totalCostUSD: 0.0003,
         truncated: false,
+        usage: { tokensIn: 120, tokensOut: 45, costUSD: 0.0003, model: "resolved-model", provider: "resolved-provider" },
       },
     },
   },
@@ -1649,40 +1681,71 @@ export const TOOL_METADATA = {
     },
   },
   forge_master_observe: {
-    intent: ["observe", "observer", "narrate", "forge-master", "start-observer", "stop-observer"],
+    intent: ["observe", "observer", "narrate", "forge-master", "start-observer", "stop-observer", "insights"],
     aliases: ["observe_forge", "forge_observe"],
     cost: "medium",
     maxConcurrent: 1,
     addedIn: "3.8.0",
-    prerequisites: ["forgeMaster.observer.enabled: true in .forge.json", "ANTHROPIC_API_KEY or OPENAI_API_KEY or XAI_API_KEY (for narration)"],
-    produces: [".forge/brain/session.forgemaster.observer.*.json (narrations)", ".forge/forge-master-observer.pid (when --detach)"],
+    prerequisites: ["forgeMaster.observer.enabled: true in .forge.json", "ANTHROPIC_API_KEY or OPENAI_API_KEY or XAI_API_KEY (for narration)", "pforge-master installed next to pforge-mcp (pforge-mcp proxies this tool to the Forge-Master studio child)"],
+    produces: [".forge/forge-master-observer-state.json (observer budget state)"],
     consumes: [".forge.json (observer config)", ".forge/runs/** (hub events via WebSocket)"],
     sideEffects: [
-      "starts or stops a background hub subscriber process",
-      "writes narration summaries to OpenBrain via brain.remember",
-      "emits observer-started/observer-stopped/observer-narration-captured hub events",
+      "starts or stops the hub subscriber inside the Forge-Master studio child (pforge-mcp spawns the child on first use and proxies every call to it, so start, stop, and status share one observer and insight ring)",
+      "retains up to 50 forge-master-insight entries in the studio child's in-memory ring (lost when the child exits)",
+      "emits observer:narration and forge-master-insight events to the hub when one is attached",
     ],
     writesFiles: false,
     network: true,
     risk: "low",
-    agentGuidance: "Use forge_master_observe to start/stop the live observer that narrates notable hub events during plan execution. Observer is muted by default — enable with forgeMaster.observer.enabled: true in .forge.json. Budget-capped via maxUsdPerDay and maxNarrationsPerHour. Read-only: cannot invoke write tools or modify project files. Kill switch: PFORGE_FORGE_MASTER_OBSERVE_DISABLE=1.",
+    agentGuidance: "Use forge_master_observe to start/stop the live observer that narrates notable hub events during plan execution, and action:'status' with limit (1–25, default 10) and cursor (pass the previous page's nextCursor) to page retained insights. On pforge-mcp this tool is a proxy to the long-lived Forge-Master studio child — there is no in-process fallback, so FORGE_MASTER_UNAVAILABLE means the child could not be spawned or was lost (a respawned child starts stopped with an empty ring; call start again). Observer is muted by default — enable with forgeMaster.observer.enabled: true in .forge.json. Budget-capped via maxUsdPerDay and maxNarrationsPerHour. Read-only: cannot invoke write tools or modify project files. Kill switch: PFORGE_FORGE_MASTER_OBSERVE_DISABLE=1 (start returns observer-disabled; batches are not analysed).",
     errors: {
       "observer-disabled": {
-        message: "Observer is disabled",
-        recovery: "Set forgeMaster.observer.enabled: true in .forge.json",
+        message: "Observer is disabled (config flag off or PFORGE_FORGE_MASTER_OBSERVE_DISABLE=1)",
+        recovery: "Set forgeMaster.observer.enabled: true in .forge.json and unset PFORGE_FORGE_MASTER_OBSERVE_DISABLE",
       },
       "observer-budget-exceeded": {
-        message: "Daily USD or hourly narration cap reached",
+        message: "Daily USD or hourly narration cap reached — the turn is skipped and lastTurn.reason explains why",
         recovery: "Widen cap in .forge.json#forgeMaster.observer or wait for daily reset",
+      },
+      INVALID_INPUT: {
+        message: "action, limit, cursor, sessionId, detach, or path is invalid",
+        recovery: "Use action start|stop|status, an integer limit from 1 to 25, and a cursor copied from nextCursor",
+      },
+      FORGE_MASTER_UNAVAILABLE: {
+        message: "The Forge-Master studio child could not be spawned or the proxy connection was lost",
+        recovery: "Ensure pforge-master is installed (cd pforge-master && npm install), check pforge-mcp stderr, then retry and call start again",
       },
     },
     example: {
       input: { action: "start" },
-      output: { ok: true, status: "started", processId: 12345, message: "Observer started — batching hub events." },
+      output: {
+        ok: true,
+        message: "Observer started. Subscribing to hub events.",
+        status: { connected: false, stopped: false, retryCount: 0, bufferSize: 0, lastError: null, lastFlushAt: null, totalEventsReceived: 0, totalBatchesFlushed: 0, batchWindowMs: 60000 },
+      },
     },
     statusExample: {
+      input: { action: "status", limit: 2 },
+      output: {
+        ok: true,
+        status: { connected: true, stopped: false, retryCount: 0, bufferSize: 3, lastError: null, lastFlushAt: "2026-10-07T17:10:00.000Z", totalEventsReceived: 42, totalBatchesFlushed: 4, batchWindowMs: 60000 },
+        recentBatches: [{ receivedAt: "2026-10-07T17:10:00.000Z", events: [{ type: "slice-failed" }] }],
+        lastTurn: { at: "2026-10-07T17:10:01.000Z", ok: true, insightCount: 1 },
+        insights: {
+          ok: true,
+          insights: [{ seq: 7, insight: { id: "fmi-0123456789abcdef", severity: "warn", summary: "Slice 3 failed twice on the same gate.", evidence: [{ eventType: "slice-failed", ref: "slice-3" }], suggestedAction: null }, runId: "run-123", ts: "2026-10-07T17:10:01.000Z", count: 1, lastSeenAt: "2026-10-07T17:10:01.000Z" }],
+          total: 3,
+          limit: 2,
+          cursor: null,
+          nextCursor: "7",
+          hasMore: true,
+          truncated: false,
+        },
+      },
+    },
+    unavailableExample: {
       input: { action: "status" },
-      output: { ok: true, status: "running", processId: 12345, batchesProcessed: 4, narrationsGenerated: 1, budgetUsedUSD: 0.0012 },
+      output: { ok: false, error: "FORGE_MASTER_UNAVAILABLE", message: "The Forge-Master studio child is unavailable: pforge-master/server.mjs was not found next to pforge-mcp or failed to spawn. …" },
     },
   },
   forge_testbed_happypath: {

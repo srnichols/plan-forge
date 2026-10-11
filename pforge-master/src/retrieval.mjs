@@ -12,7 +12,9 @@
  * @module forge-master/retrieval
  */
 
+import { basename } from "node:path";
 import { recall } from "../../pforge-mcp/brain.mjs";
+import { readProvenance } from "../../pforge-mcp/memory.mjs";
 import { getForgeMasterConfig } from "./config.mjs";
 
 // ─── Constants ──────────────────────────────────────────────────────
@@ -63,6 +65,64 @@ function summarizeValue(key, value) {
     return json.length > 500 ? json.slice(0, 497) + "..." : json;
   }
   return String(value);
+}
+
+function isPlainObject(value) {
+  if (value === null || typeof value !== "object") return false;
+  const prototype = Object.getPrototypeOf(value);
+  return prototype === Object.prototype || prototype === null;
+}
+
+function isMemoryRecord(value) {
+  if (typeof value === "string") return value.startsWith("[[pforge ");
+  if (!isPlainObject(value)) return false;
+  return typeof value.content === "string" ||
+    typeof value.text === "string" ||
+    Object.hasOwn(value, "metadata") ||
+    Object.hasOwn(value, "origin") ||
+    Object.hasOwn(value, "visibility");
+}
+
+function partitionRecord({ key, record, tier, projectId }) {
+  if (!isMemoryRecord(record)) return { keep: true, trustedValue: record, untrusted: [] };
+  const provenanceRecord = typeof record === "string" ? { text: record } : record;
+  const provenance = readProvenance(provenanceRecord);
+
+  if (provenance.visibility === "restricted") {
+    if (tier === "l3") return { keep: false, trustedValue: null, untrusted: [] };
+    if (tier === "l2" && provenance.project && projectId && provenance.project !== projectId) {
+      return { keep: false, trustedValue: null, untrusted: [] };
+    }
+  }
+  if (provenance.origin === "untrusted") {
+    const untrusted = provenance.text.trim()
+      ? [{ kind: "other", source: `memory:${key}`, text: provenance.text }]
+      : [];
+    return { keep: false, trustedValue: null, untrusted };
+  }
+  return { keep: true, trustedValue: provenance.text, untrusted: [] };
+}
+
+function partitionRecalled({ key, value, tier, projectId }) {
+  if (!Array.isArray(value)) {
+    try {
+      const partitioned = partitionRecord({ key, record: value, tier, projectId });
+      return { trustedValue: partitioned.keep ? partitioned.trustedValue : null, untrusted: partitioned.untrusted };
+    } catch {
+      return { trustedValue: null, untrusted: [] };
+    }
+  }
+
+  const trustedValue = [];
+  const untrusted = [];
+  for (const record of value) {
+    try {
+      const partitioned = partitionRecord({ key, record, tier, projectId });
+      if (partitioned.keep) trustedValue.push(partitioned.trustedValue);
+      untrusted.push(...partitioned.untrusted);
+    } catch { /* discard only the malformed record */ }
+  }
+  return { trustedValue, untrusted };
 }
 
 // ─── Token Estimation ───────────────────────────────────────────────
@@ -121,13 +181,15 @@ function truncateSections(l1Section, l2Section, l3Section) {
 
 // ─── Public API ─────────────────────────────────────────────────────
 
-async function collectContextEntries({ keys, doRecall, recallArgs, cwd, sourceBucket }) {
+async function collectContextEntries({ keys, doRecall, recallArgs, cwd, sourceBucket, tier, projectId, untrustedBucket }) {
   const entries = [];
 
   for (const key of keys) {
     try {
       const value = await doRecall(key, recallArgs(key), { cwd });
-      const text = summarizeValue(key, value);
+      const { trustedValue, untrusted } = partitionRecalled({ key, value, tier, projectId });
+      untrustedBucket.push(...untrusted);
+      const text = summarizeValue(key, trustedValue);
       if (text) {
         entries.push({ key, text });
         sourceBucket.push(key);
@@ -160,23 +222,25 @@ function buildHubEventsSection(hubSubscriber) {
  *
  * @param {{ sessionId?: string, lane?: string, cwd?: string }} opts
  * @param {{ recall?: Function, getForgeMasterConfig?: Function }} [deps] — DI overrides
- * @returns {Promise<{ contextBlock: string, sources: { l1: string[], l2: string[], l3: string[] } }>}
+ * @returns {Promise<{ contextBlock: string, sources: { l1: string[], l2: string[], l3: string[] }, untrustedContext: Array<{ kind: string, source: string, text: string }> }>}
  */
 export async function fetchContext(opts = {}, deps = {}) {
   const { sessionId, lane, cwd } = opts;
+  const projectId = cwd ? basename(cwd) : null;
   const doRecall = deps.recall || recall;
   const getConfig = deps.getForgeMasterConfig || getForgeMasterConfig;
   const config = getConfig({ cwd });
   const sources = { l1: [], l2: [], l3: [] };
+  const untrustedContext = [];
 
   const l1Entries = await collectContextEntries(
-    { keys: L1_KEYS, doRecall: doRecall, recallArgs: () => ({ runId: sessionId }), cwd: cwd, sourceBucket: sources.l1 },
+    { keys: L1_KEYS, doRecall: doRecall, recallArgs: () => ({ runId: sessionId }), cwd: cwd, sourceBucket: sources.l1, tier: "l1", projectId, untrustedBucket: untrustedContext },
   );
   const l2Entries = await collectContextEntries(
-    { keys: L2_KEYS_BY_LANE[lane] || L2_KEYS_DEFAULT, doRecall: doRecall, recallArgs: () => ({}), cwd: cwd, sourceBucket: sources.l2 },
+    { keys: L2_KEYS_BY_LANE[lane] || L2_KEYS_DEFAULT, doRecall: doRecall, recallArgs: () => ({}), cwd: cwd, sourceBucket: sources.l2, tier: "l2", projectId, untrustedBucket: untrustedContext },
   );
   const l3Entries = config.l3Enabled
-    ? await collectContextEntries({ keys: L3_KEYS, doRecall: doRecall, recallArgs: () => ({ scope: "cross" }), cwd: cwd, sourceBucket: sources.l3 })
+    ? await collectContextEntries({ keys: L3_KEYS, doRecall: doRecall, recallArgs: () => ({ scope: "cross" }), cwd: cwd, sourceBucket: sources.l3, tier: "l3", projectId, untrustedBucket: untrustedContext })
     : [];
 
   let contextBlock = truncateSections(
@@ -190,7 +254,7 @@ export async function fetchContext(opts = {}, deps = {}) {
     contextBlock = contextBlock ? `${contextBlock}\n\n${hubSection}` : hubSection;
   }
 
-  return { contextBlock, sources };
+  return { contextBlock, sources, untrustedContext };
 }
 
 // Exported for testing

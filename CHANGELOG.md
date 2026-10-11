@@ -7,6 +7,27 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+### Added
+
+- **Experimental Forge-Claw package** (`pforge-claw`) — opt-in, host-level Telegram front door for governed execution lanes and Forge-Master reasoning. It is not installed or started by `setup`; it has not been published to npm. See the [Forge-Claw operator guide](docs/PFORGE-CLAW-GUIDE.md).
+- **`pforge claw` CLI** — adds `init`, `doctor`, `status`, `start`, `worker`, `service`, `dev`, and `commands` subcommands.
+- **Forge-Claw platform support** — dispatcher and workers target macOS, Windows, and Linux; live/platform matrix results remain pending.
+- `forge_master_ask` accepts optional `caller`, `responseFormat`, `untrustedContext`, `contextBlocks`, and `proposeActions` inputs, and returns a `usage` block. These changes are additive; existing response fields are unchanged.
+- `proposedActions` and `proposedActionsMessage` provide up to three role-filtered, proposal-only suggestions; Forge-Master does not execute them.
+- A structured `forge-master-insight` event and paginated observer status.
+- `forge_master_observe` is now registered on `pforge-mcp` as a proxy to the Forge-Master studio child, so any MCP client connected to a project can start/stop the observer and page insights (`limit`, `cursor`). There is no in-process fallback; an unreachable child returns `FORGE_MASTER_UNAVAILABLE`. Listed in the `liveguard` tool profile.
+- Memory provenance (`origin`, `tags`, `visibility`) and recall fencing, including fencing of untrusted recall.
+
+### Fixed
+
+- **Forge-Claw review hardening** — foreground plans return the real child outcome; prepared job environments reach runtime, MCP and Git/PR operations; cancellation fences publication; signed choices and canonical-history application acknowledgements gate worker completion and cleanup. Approvals retain current identity, exact-expiry, single-use and declared-fanout proof checks.
+- **Configurable Forge-Claw homes and runtimes** — home routing uses configured lane kind rather than a lane's name. The normative schema now describes lane/project runtime selection, provider endpoints, project bootstrap overrides and optional voice settings. Restricted jobs and captures stay in their authorized scope; budget holds can be retrieved explicitly after a card expires.
+- **Truthful offline validation** — task requests and scheduled slots retain durable identity across response failure/restart, failed preparation cannot reuse an old job, and Kubernetes CI requires signed-job, canonical-file and cleanup evidence from disposable fixture images. Offline results do not imply live provider, image, cluster or cross-platform acceptance.
+- **Governed recovery and source boundaries** — retries recheck current authority and full request scope, retain the actually approved choices, and recover a committed child after a partial response or restart without inheriting a plan parent's approval. Canonical history and signed runtime selection use shared lower-level helpers rather than loading workspace/executor composition cycles.
+- **Claw release version synchronization** — release and dev bump-back operations include Claw's manifest and root workspace lock entry when present; the release commit allowlist accepts its manifest without permitting arbitrary package-source changes. The SDK remains independently versioned, and checkouts without Claw remain supported.
+- **Claw lane and home-address validation** — configuration now rejects IDs outside the existing 1–81-character ASCII wire grammar before job admission; rename unsupported IDs and update their references rather than rewriting signed history. Registered, case-sensitive lane prefixes—including one-letter prefixes—take precedence in qualified home addresses, and `/lane` looks up the full ID while keeping unknown-ID replies bounded.
+- **Dispatcher Kubernetes API egress** — the portable endpoint-policy renderer allows only configured API backend IP/port pairs for dispatcher pods. Disposable kind/k3d validation discovers the selected cluster's endpoints and requires an authenticated API response before worker execution; it does not open all outbound 6443 or grant API access to workers.
+
 ## [3.32.0] — 2026-10-07 — Analyze and diagnose from the CLI, .NET gates on Microsoft.Testing.Platform
 
 ### Added
@@ -7476,4 +7497,3 @@ Every SKILL.md now follows the full Skill Blueprint format: Frontmatter → Trig
 - Setup wizard with auto-detection (`setup.ps1` / `setup.sh`)
 - Validation scripts (`validate-setup.ps1` / `validate-setup.sh`)
 - Worked examples for TypeScript, .NET, and Python
-

@@ -1092,6 +1092,26 @@ node pforge-mcp/server.mjs --project /path/to/project</code></pre>
 <p>This chapter covers the happy path for each command. For exhaustive edge-case documentation, see the source: <a href="https://github.com/srnichols/plan-forge/blob/master/docs/CLI-GUIDE.md" rel="noopener">CLI-GUIDE.md on GitHub</a></p>
 
         <!-- Prev / Next -->
+        <h2 id="pforge-claw">Forge-Claw CLI (experimental)</h2>
+        <p><code>pforge claw</code> is an opt-in host-level command group; it is not installed or started by <code>setup</code>. It exposes eight subcommands:</p>
+        <pre><code>Usage: pforge claw &lt;command&gt; [options]
+
+Commands:
+  init       Create a Forge-Claw home from an example
+  doctor     Check configuration and runtime prerequisites
+  status     Show dispatcher, project, and job status
+  start      Start the dispatcher
+  worker     Enroll, join, revoke, or run a worker
+  service    Install, uninstall, or inspect the host service
+  dev        Start or inspect a local development topology
+  commands   List registered chat commands as Markdown or JSON</code></pre>
+        <p>Each command supports <code>--help</code>. Examples:</p>
+        <pre><code>pforge claw init --example single-host --out ./claw
+pforge claw doctor --home ./claw
+pforge claw commands --markdown
+pforge claw worker enroll --lane &lt;lane-id&gt;</code></pre>
+        <p>Use the <a href="forge-claw.html">Forge-Claw manual chapter</a> for configuration, setup, and security guidance.</p>
+
         <div id="chapter-prev-next" class="chapter-nav"></div>
 
       </div>

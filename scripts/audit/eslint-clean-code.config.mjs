@@ -26,7 +26,7 @@ const cleanCodePlugin = {
 
 export default [
   {
-    files: ['pforge-mcp/**/*.mjs', 'pforge-master/**/*.mjs', 'scripts/**/*.mjs'],
+    files: ['pforge-mcp/**/*.mjs', 'pforge-master/**/*.mjs', 'pforge-claw/**/*.mjs', 'scripts/**/*.mjs'],
     ignores: ['scripts/audit/**', '**/tests/**', '**/node_modules/**', '**/ui/**'],
     languageOptions: {
       ecmaVersion: 'latest',

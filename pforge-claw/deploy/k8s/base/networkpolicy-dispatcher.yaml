@@ -1,0 +1,31 @@
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: pforge-claw-dispatcher
+  namespace: pforge-claw
+spec:
+  podSelector:
+    matchLabels:
+      app: pforge-claw
+      component: dispatcher
+  policyTypes: ["Ingress", "Egress"]
+  ingress:
+    - ports:
+        - protocol: TCP
+          port: 3190
+  egress:
+    - to:
+        - namespaceSelector: {}
+          # DNS resolver access is required for cluster service discovery.
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+    - to:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+      ports:
+        - protocol: TCP
+          port: 443
+  # Worker Job egress is Slice 23's responsibility. Enforcement requires a CNI that supports NetworkPolicy.

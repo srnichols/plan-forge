@@ -1,0 +1,10 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: pforge-claw-dispatcher
+spec:
+  template:
+    spec:
+      containers:
+        - name: dispatcher
+          imagePullPolicy: IfNotPresent

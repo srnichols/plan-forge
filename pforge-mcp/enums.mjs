@@ -33,6 +33,12 @@ export const ANALYZE_MODES = freezeArray(["plan", "file"]);
 export const FORGE_MASTER_MODES = freezeArray(["ask", "observe"]);
 export const WATCHER_MODES = freezeArray(["snapshot", "analyze", "cross-run"]);
 export const COST_SOURCES = freezeArray(["worker", "forge-master", "observer", "auditor"]);
+export const MEMORY_ORIGINS = freezeArray(["trusted", "untrusted"]);
+export const MEMORY_VISIBILITY = freezeArray(["normal", "restricted"]);
+export const FORGE_MASTER_INSIGHT_EVENT = "forge-master-insight";
+export const HUB_EVENT_TYPES = freezeArray([FORGE_MASTER_INSIGHT_EVENT]);
+export const INSIGHT_SEVERITIES = freezeArray(["info", "warn", "critical"]);
+export const MEMORY_TAG_RULES = Object.freeze({ pattern: "^[a-z0-9:-]{1,40}$", maxItems: 10, maxLength: 40 });
 
 function freezeErrorCode(code, severity, remediation, docAnchor = "named-error-catalog") {
   return Object.freeze({ code, severity, remediation, docAnchor });

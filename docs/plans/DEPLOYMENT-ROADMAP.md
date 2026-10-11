@@ -13,7 +13,7 @@
 | 📋 | Planned (DRAFT — Step-2 harden required before execution) |
 | 🔬 | Hardened (cleared for `pforge run-plan`) |
 | 🚧 | In Progress (slices executing) |
-| ✅ | Complete (S-final retro committed; CHANGELOG promoted; tag pushed) |
+| ✅ | Phase work and retro complete (release tag / npm publication may follow separately) |
 | ⏸️ | Paused / Blocked |
 
 ---
@@ -26,16 +26,16 @@ Listed in **execution order**. Each phase's Execution Hold gates on its predeces
 
 | Phase | Status | Goal | Reference |
 |-------|--------|------|-----------|
+| 62 — PFORGE-CLAW | 🚧 | Experimental implementation checkpoint recovered; fresh review found source-tracking, audit-coverage and governed-execution blockers. Remediation and regression validation are in progress. Cross-platform/live evidence remains pending; merge, release and deployment are not authorized in this coordinator session. | [Phase-62-PFORGE-CLAW-PLAN.md](./Phase-62-PFORGE-CLAW-PLAN.md) |
 | PRESET-BUILD-CHECKS | ✅ | Nightly compile checks for Rust and Swift preset samples, driven by committed block manifests, plus build-and-health checks for every documented Dockerfile (#309). Shipped v3.29.3; all eight stacks green on master. | [Phase-PRESET-BUILD-CHECKS-PLAN.md](./Phase-PRESET-BUILD-CHECKS-PLAN.md) |
 | UPDATE-CORE | ✅ | One Node implementation (`update-plan.mjs`) of the update scan, config migration and report, plus a shared `preset-catalog.json` for setup. Closes the two PowerShell/Bash parity gaps (#299). Ships in v3.30.0. | [Phase-UPDATE-CORE-PLAN.md](./Phase-UPDATE-CORE-PLAN.md) |
-| FORGE-MASTER-CLAW-AWARE | 📋 | Companion to PFORGE-CLAW (runs first): additive `forge_master_ask` contract (`caller`, `responseFormat`, `untrustedContext`, `contextBlocks`, `proposeActions` → structured `proposedActions`, `usage`), fenced untrusted input with narrowed allowlist, structured observer insights (`forge-master-insight` hub event), session compaction, memory provenance (`origin` / `tags` / `visibility` on `forge_memory_capture`) with recall fencing against memory poisoning. Forge-Master stays read-only. 10 slices. | [Phase-FORGE-MASTER-CLAW-AWARE-PLAN.md](./Phase-FORGE-MASTER-CLAW-AWARE-PLAN.md) |
-| PFORGE-CLAW | 📋 | Chat-native, always-on front door for Plan Forge (Telegram + GHCP via `@github/copilot-sdk`): Forge-Master Q&A, memory/idea capture, approval-gated skill/plan/task jobs, budget caps, morning digest and alerts, multi-project lanes. Milestones M0 → M4 run continuously (no hold points), ending with a full offline e2e harness, cross-platform CI (ubuntu / windows / macos + kind), a live reference environment (macOS, Windows, Linux K8s), and a full documentation and capabilities sweep. Memory integration: provenance-tagged captures, optional direct OpenBrain client, and `.forge` history merged back from worktrees, remote workers and pods. Generic and configurable for any operator: lanes and labels, channel adapters (Telegram first), agent runtimes (GHCP default, BYOK), any conformant cluster. New opt-in `pforge-claw/` package; no MCP surface change. | [Phase-PFORGE-CLAW-PLAN.md](./Phase-PFORGE-CLAW-PLAN.md) |
 
 ---
 
 ## Completed Phases
 | Phase | Goal | Shipped | Reference |
 |-------|------|---------|-----------|
+| 61 — FORGE-MASTER-CLAW-AWARE | Added the Forge-Master front-door contract (`caller`, `responseFormat`, `untrustedContext`, `contextBlocks`, proposal-only `proposedActions`, nullable usage), structured observer insights, paginated observation, and memory provenance/fencing. Forge-Master remains read-only. | 2026-10-08 | [Phase-61-FORGE-MASTER-CLAW-AWARE-PLAN.md](./Phase-61-FORGE-MASTER-CLAW-AWARE-PLAN.md) |
 | 59 — CRUCIBLE-MODES | Multi-mode Crucible intake substrate: extracted mode interface + registry, migrated tweak/feature/full lanes to mode files with per-mode `criticalFields`, added `bug-batch` mode (Root Cause Hypothesis + multi-slice synthesizer), renderer/parser alignment (`### Forbidden`, `[scope:]` headers), `crucible.legacy.tbdPlaceholders` deprecation gate. 88 new tests. Closes #140/#142/#145/#146/#147. | 2026-05-21 | [Phase-59-CRUCIBLE-MODES-PLAN.md](./Phase-59-CRUCIBLE-MODES-PLAN.md) |
 | OKTA-SCIM — SCIM 2.0 provisioning | SCIM 2.0 user/group provisioning endpoints (`/scim/v2/`), `ScimStore` with `.forge/` persistence, bearer-token auth, 14 routes, 39 tests. | 2026-05-20 | — |
 | 55 — CLEAN-CODE-SWEEP | Eliminated all 4 residual clean-code blocking errors from the post-Phase-53 audit: split `orchestrator/run-plan.mjs` (3,831 → 2,906 LOC) and `server/rest-api.mjs` (3,197 → 2,755 LOC), decomposed two `complexity-error` functions (`searchLocalThoughts`, `_callToolHandler_096_forge_embedding_status`), cleared frozen-arrays drift in `notifications/core.mjs`, triaged 6 SKIP-LEAK sites, whitelisted dep-boundary violation, replaced `"TIMEOUT"` literals with `ERROR_CODES.TIMEOUT`, and skipped preexisting Windows/libuv test failure with tracked issue. Final audit: **0 errors**. | 2026-05-20 | [Phase-55-CLEAN-CODE-SWEEP-PLAN.md](./Phase-55-CLEAN-CODE-SWEEP-PLAN.md) |

@@ -86,7 +86,7 @@ pforge-mcp/.vitest-results.json
 
 # Stale duplicate of pforge-mcp/dashboard/ (removed in repo cleanup; ignored
 # to prevent accidental re-introduction).
-mcp/
+/mcp/
 
 # Stray empty workspace directory (never tracked).
 plan-forge-master/

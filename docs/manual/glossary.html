@@ -158,7 +158,7 @@
           <tr><td><strong>Dashboard</strong></td><td>Web UI at <code>localhost:3100/dashboard</code>. 25 tabs for monitoring, cost, replay, skills, config, watcher, and LiveGuard.</td></tr>
           <tr><td><strong>Lifecycle Hook</strong></td><td>Automatic actions tied to Plan Forge's pipeline: <code>PreDeploy</code>, <code>PreCommit</code>, <code>PreAgentHandoff</code>, <code>PostSlice</code> (configured via <code>.github/hooks/plan-forge.json</code>). Distinct from Claude Code's own hook names.</td></tr>
           <tr><td><strong>OpenBrain</strong></td><td>The L3 memory layer. Self-hosted MCP server (PostgreSQL + pgvector) that provides cross-session, cross-tool semantic memory. Plan Forge ships with L1 (Hub) + L2 (<code>.forge/*.jsonl</code>) memory built-in; L3 requires OpenBrain. Without it, Reflexion lessons, Auto-skills, cross-project Federation, and 28 auto-capturing tools become inert. Recommended at install time; easy to add later via <code>pforge brain hint</code>. Deploy options: Docker, Supabase, Kubernetes, Azure. See <a href="https://srnichols.github.io/OpenBrain">srnichols.github.io/OpenBrain</a>.</td></tr>
-          <tr><td><strong>MCP</strong></td><td>Model Context Protocol. A standard for AI agents to call functions. Plan Forge's MCP server exposes <!--c:tools-->106<!--/c--> tools (core + LiveGuard + Watcher + Crucible + Tempering + Bug Registry + Testbed + Forge-Master).</td></tr>
+          <tr><td><strong>MCP</strong></td><td>Model Context Protocol. A standard for AI agents to call functions. Plan Forge's MCP server exposes <!--c:tools-->107<!--/c--> tools (core + LiveGuard + Watcher + Crucible + Tempering + Bug Registry + Testbed + Forge-Master).</td></tr>
           <tr><td><strong>ACI</strong></td><td>Agent-Computer Interface. The SWE-agent principle that an agent only performs as well as the surface lets it: bounded payloads, sparse fields, paginated lists, friendly empty-result messages. Enforced in Plan Forge via tool-surface temper guards in <code>architecture-principles.instructions.md</code>. <code>forge_search</code> is the reference standard.</td></tr>
           <tr><td><strong>Bridge</strong></td><td>Notification dispatcher that forwards WebSocket hub events to external platforms (Slack, Discord, Telegram, generic webhooks).</td></tr>
           <tr><td><strong>Knowledge Graph</strong></td><td>In-memory graph of Phase / Slice / Commit / File / Run / Bug nodes, queryable via <code>forge_graph_query</code>. Used by Forge-Master for cross-feature reasoning. See <a href="knowledge-graph.html">Chapter 28</a>.</td></tr>
@@ -232,6 +232,20 @@
           <tr><td><strong>Plan Lock Hash</strong></td><td>SHA-256 hash stored in <code>lockHash</code> frontmatter; the orchestrator refuses to run if the plan body has drifted.</td></tr>
           <tr><td><strong>Tool Denylist</strong></td><td>The <code>tools.deny</code> frontmatter field that strips listed MCP tools from the worker's session.</td></tr>
           <tr><td><strong>Network Allowlist</strong></td><td>The <code>network.allowed</code> frontmatter field listing permitted hosts for outbound connections (currently log-only).</td></tr>
+        </tbody>
+      </table>
+
+      <h2 id="forge-claw">Forge-Claw</h2>
+      <table class="manual-table">
+        <thead><tr><th>Term</th><th>Definition</th></tr></thead>
+        <tbody>
+          <tr><td><strong>Forge-Claw</strong></td><td>Experimental, opt-in, host-level Telegram front door that asks Forge-Master for reasoning and dispatches governed jobs to configured execution lanes.</td></tr>
+          <tr><td><strong>Dispatcher</strong></td><td>Forge-Claw component that applies caller and runtime policy, selects an execution lane, and controls job leasing.</td></tr>
+          <tr><td><strong>Lane</strong></td><td>A configured local, remote, or Kubernetes execution target. Labels and project placement rules constrain where jobs run.</td></tr>
+          <tr><td><strong>Worker</strong></td><td>A remote execution process that connects outbound to the dispatcher and performs work assigned to its lane.</td></tr>
+          <tr><td><strong>Channel Adapter</strong></td><td>Interface for receiving messages and sending replies, progress, and callbacks; Telegram is the first Forge-Claw adapter.</td></tr>
+          <tr><td><strong>Agent Runtime</strong></td><td>Provider abstraction used by a lane to run agent work; GHCP is the default and configured BYOK providers are alternatives.</td></tr>
+          <tr><td><strong>Proposed Action</strong></td><td>Validated suggestion returned by Forge-Master. It is not executed or approved; an authorized caller must create and govern any resulting job.</td></tr>
         </tbody>
       </table>
 

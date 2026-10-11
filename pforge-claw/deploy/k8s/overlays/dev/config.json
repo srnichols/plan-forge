@@ -1,0 +1,61 @@
+{
+  "v": 1,
+  "instanceId": "<dev-instance>",
+  "timezone": "Etc/UTC",
+  "channels": {
+    "telegram": {
+      "enabled": true,
+      "botTokenSecret": "PFORGE_CLAW_TELEGRAM_TOKEN",
+      "mode": "poll",
+      "generalChat": { "chatId": "<chat-id>" }
+    }
+  },
+  "allowlist": [
+    { "channel": "telegram", "userId": "<owner-id>", "role": "owner" },
+    { "channel": "telegram", "userId": "<approver-id>", "role": "approver" },
+    { "channel": "telegram", "userId": "<viewer-id>", "role": "viewer" }
+  ],
+  "policy": { "ghcpRoles": ["owner"], "nonOwnerRuntime": "byok-only" },
+  "runtimes": { "default": "copilot-sdk", "pforgeCommand": "auto" },
+  "lanes": [
+    { "id": "local", "kind": "local", "enabled": true },
+    {
+      "id": "k8s-dev",
+      "kind": "k8s",
+      "enabled": true,
+      "k8s": {
+        "namespace": "<namespace>", "defaultImage": "pforge-claw-worker-node:dev",
+        "deadlineSeconds": 120, "ttlSecondsAfterFinished": 10
+      }
+    }
+  ],
+  "projects": [
+    {
+      "id": "fixture-1",
+      "displayName": "Fixture one",
+      "repo": { "path": "<workspace>/fixture-1", "baseBranch": "main" },
+      "channel": { "adapter": "telegram", "chatId": "<chat-id>", "topicId": "<topic-1>" },
+      "homeLane": "local",
+      "placement": { "prefer": ["k8s-dev"], "requires": [] }
+    },
+    {
+      "id": "fixture-2",
+      "displayName": "Fixture two",
+      "repo": { "path": "<workspace>/fixture-2", "baseBranch": "main" },
+      "channel": { "adapter": "telegram", "chatId": "<chat-id>", "topicId": "<topic-2>" },
+      "homeLane": "local",
+      "placement": { "prefer": ["local"], "requires": [] }
+    },
+    {
+      "id": "fixture-3",
+      "displayName": "Restricted fixture",
+      "repo": { "path": "<workspace>/fixture-3", "baseBranch": "main" },
+      "channel": { "adapter": "telegram", "chatId": "<chat-id>", "topicId": "<topic-3>" },
+      "homeLane": "local",
+      "visibility": "restricted",
+      "placement": { "prefer": ["local"], "requires": [] }
+    }
+  ],
+  "k8s": { "egress": { "allow": [] } },
+  "http": { "bind": "0.0.0.0", "port": 3190 }
+}

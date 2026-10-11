@@ -1,0 +1,14 @@
+[Unit]
+Description=Plan Forge Claw dispatcher
+StartLimitBurst=5
+
+[Service]
+Type=simple
+ExecStart="__NODE__" "__CLI__" start --home "__HOME__"
+Environment="PFORGE_CLAW_HOME=__HOME__"
+Restart=on-failure
+RestartSec=10
+NoNewPrivileges=yes
+
+[Install]
+WantedBy=default.target

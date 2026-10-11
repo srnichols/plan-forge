@@ -1,12 +1,12 @@
 # Plan Forge — Capabilities Reference
 
-> **Tools**: 105 MCP on `pforge-mcp` (`forge_*`, includes `forge_master_ask` + Phase-43 `forge_master_audit`) plus 2 standalone tools on the companion `pforge-master` MCP server (`forge_master_ask`, `forge_master_observe`). The breakdown by family (35 core + 14 LiveGuard + 2 Watcher + 8 Crucible + 6 Tempering + 4 Bug Registry + 3 Testbed + 3 Review + 2 Notify + 5 Lattice + 2 Memory + 2 Sync + 1 Doctor + 1 Worker Guardrails + 4 Auditor/Observer + Forge-Master + ~newer) is no longer maintained inline — the authoritative source is `pforge-mcp/tools.json` (regenerated on every MCP server start). | **CLI mirrors**: Hallmark (`forge_hallmark_show|verify`, `pforge hallmark show|verify`), Anvil (`forge_anvil_stat|clear|rebuild|dlq_*`, `pforge anvil stat|clear|rebuild|dlq`) | **CLI**: 48+ commands (incl. Phase-43 `pforge audit`) | **Presets**: 9 | **Agents**: ~21 | **Skills**: ~12
+> **Tools**: 107 MCP on `pforge-mcp` (`forge_*`, includes Phase-43 `forge_master_audit` and `forge_master_ask` + `forge_master_observe`, which proxy to the companion) plus 2 tools on the companion `pforge-master` MCP server (`forge_master_ask`, `forge_master_observe`). The breakdown by family (35 core + 14 LiveGuard + 2 Watcher + 8 Crucible + 6 Tempering + 4 Bug Registry + 3 Testbed + 3 Review + 2 Notify + 5 Lattice + 2 Memory + 2 Sync + 1 Doctor + 1 Worker Guardrails + 4 Auditor/Observer + Forge-Master + ~newer) is no longer maintained inline — the authoritative source is `pforge-mcp/tools.json` (regenerated on every MCP server start). | **CLI mirrors**: Hallmark (`forge_hallmark_show|verify`, `pforge hallmark show|verify`), Anvil (`forge_anvil_stat|clear|rebuild|dlq_*`, `pforge anvil stat|clear|rebuild|dlq`) | **CLI**: 48+ commands (incl. Phase-43 `pforge audit`) | **Presets**: 9 | **Agents**: ~21 | **Skills**: ~12
 >
 > Machine-readable version: call `forge_capabilities` MCP tool, `GET https://planforge.software/.well-known/plan-forge.json`, or read `pforge-mcp/tools.json` (auto-generated on every MCP server start).
 
 ---
 
-## MCP Tools (106)
+## MCP Tools (107)
 
 | Tool | Intent | Cost | Description |
 |------|--------|------|-------------|
@@ -72,8 +72,9 @@
 | `forge_liveguard_run` | liveguard-run | medium | Run all applicable LiveGuard checks in a single call and return a unified health report. Executes: drift, sweep, secret-scan, regression-guard, dep-watch, alert-triage, and health-trend. Optionally runs diff if a plan is specified. NOTE: May take 2-3 minutes for .NET projects (dep-watch runs `dotnet list package --vulnerable`). Set client timeout to at least 300 seconds. |
 | `forge_local_recall_status` | local-recall | low | Inspect and manage the persistent TF-IDF index cache used by forge_local_search. Reports cache existence, corpus size, freshness (stale vs fresh), and build timestamp. Supports three subcommands: 'status' (default) — return cache diagnostics; 'warm' — pre-build the index so the first forge_local_search call has zero rebuild cost; 'clear' — delete the cache file to force a fresh rebuild. USE FOR: diagnosing why forge_local_search is slow; pre-warming the cache in CI; clearing a corrupt index. Returns: { ok, indexExists, version, builtAt, corpusSize, staleness, cacheFile, message } for status; { ok, action, ... } for warm/clear. |
 | `forge_local_search` | semantic-search | low | Semantic search over local .forge/ thought stores — searches openbrain-queue.jsonl, openbrain-queue.archive.jsonl, openbrain-dlq.jsonl, and liveguard-memories.jsonl using TF-IDF cosine similarity. Automatically upgrades to neural embeddings (all-MiniLM-L6-v2) when @xenova/transformers is installed. USE FOR: recalling prior decisions and patterns when OpenBrain (L3 Postgres) is not configured; offline semantic memory search; auditing what thoughts have been captured locally. DO NOT USE FOR: querying a live OpenBrain/Postgres instance (use forge_search with memory source); searching code (use forge_search or forge_lattice_query). |
-| `forge_master_ask` | ask | high | Ask Forge-Master to reason about Plan Forge workflows — ideate features via Crucible, troubleshoot failures, query run status, or get operational guidance. Classifies intent, fetches memory context, and orchestrates read-only tool calls. Returns reply text, tool call history, token counts, and session ID for conversation continuity. |
+| `forge_master_ask` | ask | high | Ask Forge-Master to reason about Plan Forge workflows — ideate features via Crucible, troubleshoot failures, query run status, or get operational guidance. Classifies intent, fetches memory context, and orchestrates read-only tool calls. Returns reply text, tool call history, token counts, usage, and session ID. Optional fields: caller (role/channel) and responseFormat shape the reply for the caller (e.g. brief, length-capped for chat); untrustedContext is fenced as third-party data and narrows the tools Forge-Master may use; contextBlocks add caller-supplied context; proposeActions:true returns up to 3 schema-validated proposedActions that Forge-Master never executes. When any optional field is supplied, truncated is an object with budget, reply, context, and untrusted flags. |
 | `forge_master_audit` | audit | high | Run a holistic CTO-style audit of the project. Forge-Master pulls drift, cost, open bugs, watcher alerts, deploy journal, and open Crucible smelts, then returns a structured report with summary, top 3 risks (with evidence), prioritized recommended actions (P0/P1/P2), and a cost note. Read-only. USE FOR: end-of-week health check, end-of-run hook, 'what should I worry about today?'. DO NOT USE FOR: per-slice troubleshooting (use forge_master_ask). |
+| `forge_master_observe` | observe | medium | Control the Forge-Master observer — a background hub subscriber that batches live Plan Forge events and can narrate notable patterns. status with limit or cursor returns insights with total, limit, cursor, nextCursor, hasMore, truncated, and an optional message. Read-only: cannot invoke write tools or modify project files. Proxied to the Forge-Master studio child so start, stop, and status share one observer and insight ring; when the child is unavailable returns { ok: false, error: 'FORGE_MASTER_UNAVAILABLE', message } (no in-process fallback). Kill switch: PFORGE_FORGE_MASTER_OBSERVE_DISABLE=1. |
 | `forge_memory_capture` | capture | low | Capture a thought, decision, or lesson into OpenBrain persistent memory. USE FOR: recording architecture decisions, patterns chosen, gotchas discovered, conventions established, or any cross-session knowledge that future AI sessions should know. Requires OpenBrain to be configured in .vscode/mcp.json or .claude/mcp.json. |
 | `forge_memory_report` | memory-report | low | GX.3 (v2.36): aggregate the health of every memory surface — L2 jsonl files (record counts, schema _v distribution), OpenBrain queue state (pending/delivered/failed/deferred/DLQ), drain stats trend, capture telemetry (per-tool/per-type volume + dedup rate), search cache health, and orphans under .forge/. Read-only — never mutates files. |
 | `forge_meta_bug_file` | self-repair | low | File a self-repair meta-bug against Plan Forge itself. Creates (or deduplicates) a GitHub issue for plan, orchestrator, or prompt defects discovered during execution. Auto-attaches trajectory context when slice reference is provided. |
@@ -92,7 +93,7 @@
 | `forge_run_plan` | execute | high | Execute a hardened plan — spawn CLI workers for each slice, validate at every boundary, track tokens. Supports Full Auto (gh copilot CLI) and Assisted (human + automated gates) modes. Use --estimate for cost prediction without executing. To bypass the Crucible gate: pass manualImport:true (MCP) or --manual-import (CLI). |
 | `forge_run_skill` | execute | medium | Execute a skill programmatically — parse the SKILL.md, run steps with validation gates, emit events to the hub, return structured results. Use for automated skill execution with progress tracking. |
 | `forge_runbook` | generate-runbook | low | Generate a human-readable operational runbook from a hardened plan file. Parses slices, scope contract, build/test commands, and validation gates into a structured Markdown document. Optionally appends recent incidents from .forge/incidents.jsonl for operational context. Saves to .forge/runbooks/<plan-name>-runbook.md and returns the output path. |
-| `forge_search` | search | low | Search across forge artifacts — runs, bugs, incidents, tempering, hub events, review queue, memories, and plans. Reads existing L2 files and optional L3 OpenBrain index. Returns ranked results with snippets. |
+| `forge_search` | search | low | Search across forge artifacts — runs, bugs, incidents, tempering, hub events, review queue, memories, and plans. Reads existing L2 files and optional L3 OpenBrain index. Returns ranked results with snippets; memory hits include origin, visibility, and tags, while restricted hits from other projects (or without a project) are excluded. |
 | `forge_secret_scan` | secret-scan | low | Post-commit entropy analysis — scan git diff output for high-entropy strings that may be leaked secrets. Uses Shannon entropy with key-name heuristics. Never logs actual secret values — only file paths, line numbers, entropy scores, and <REDACTED> placeholders. Caches results in .forge/secret-scan-cache.json. Annotates deploy journal sidecar when last deploy matches HEAD. |
 | `forge_skill_status` | read | low | Get recent skill execution events from the WebSocket hub history. Shows which skills were run, per-step results, and timing. |
 | `forge_smith` | diagnose | low | Inspect the forge — diagnose environment, VS Code config, setup health, version currency, and common problems. Returns structured results with pass/fail/warning counts. |
@@ -257,6 +258,7 @@ pforge run-plan <plan> --quorum=power # Flagship models, threshold 5, 5min timeo
 pforge run-plan <plan> --quorum=speed # Fast models, threshold 7, 2min timeout
 forge_tempering_run --objective "node scripts/measure-coverage.mjs" --accept-if greater # Accept only if the numeric metric improves
 pforge ext search|add|info|list       # Extension management
+pforge claw init|doctor|status|start|worker|service|dev|commands # Experimental, opt-in chat front door
 
 # LiveGuard CLI (v2.27.0+)
 pforge drift [--threshold N]          # Architecture drift score
@@ -741,6 +743,111 @@ Degradation: <2 successful dry-runs → falls back to normal execution. Reviewer
 | Test robustness | Hardcoded dates | **Relative dates** | Better |
 | Edge cases | Standard | **+voided regen, +sequence** | Better |
 
+## Forge-Master Front-Door Contract
+
+`forge_master_ask` accepts these optional, additive inputs. Invalid values return
+`error: "INVALID_INPUT"` and name the offending `field`; if text is capped,
+`truncated` reports the relevant flag.
+
+| Input | Contract |
+|-------|----------|
+| `caller` | Object requiring `role` (`owner`, `approver`, or `viewer`) and `channel` (`dashboard`, `vscode`, `chat`, or `api`). Optional `surface`, `projectId`, and `topic` are informational strings. |
+| `responseFormat` | `style` is `standard` or `brief`; `maxChars` is an integer from 200 to 20,000. A reply exceeding the limit is cut at a readable boundary and ends with `…(truncated — ask for more)`. |
+| `untrustedContext` | Array of `{kind, source?, text}` items; `kind` is `forward`, `link`, `transcript`, `file`, or `other`. Text is capped at 8 KB total. |
+| `contextBlocks` | Array of trusted `{title, text}` items, capped at 4 KB total. |
+| `proposeActions` | Set to `true` to request validated, structured suggestions; the response uses `proposedActions` and `proposedActionsMessage`. |
+
+When text is capped, the opt-in `truncated` object reports `untrusted: true`
+and/or `context: true`; reply shaping is reported separately by `reply`.
+
+When `proposeActions: true`, the response adds `proposedActions` (at most three)
+and `proposedActionsMessage`. Each action contains `type`, `projectId`, schema-
+validated `args`, `rationale` (at most 200 characters), `confidence` (`low`,
+`medium`, or `high`), `origin` (`trusted` or `untrusted`), and `mutating`
+(derived from action type). Viewer callers may receive only `bug`, `idea`, and
+`remember` actions; owner and approver callers may receive all supported types.
+`proposedActionsMessage` explains when no action was proposed. Proposals are
+suggestions only: Forge-Master never executes, approves, or queues them, and
+role filtering does not replace enforcement by the caller's adapter.
+
+The additive `usage` object is
+`{tokensIn, tokensOut, costUSD, model, provider}`. Unknown values are `null`,
+not `0`; existing top-level response fields remain available. In sessions longer
+than ten turns, the rolling-summary model runs after the reply is returned, so
+its cost is folded into the `usage` of the session's next successful turn.
+
+**Trust boundary.** Put third-party material only in `untrustedContext`.
+Forge-Master wraps it in randomized fences, narrows available tools to a
+read-only subset, and caps the turn at three tool calls. Fences identify data as
+untrusted; they do not make an unsafe caller or adapter safe.
+
+**Observer event.** `forge-master-insight` carries `ts`, optional `runId`, and
+an `insight` with a stable `id`, severity (`info`, `warn`, or `critical`), a
+summary limited to 200 characters, up to five evidence references, and a
+nullable `suggestedAction`. Each observer turn emits at most five insights.
+Use paginated `forge_master_observe` with `action: "status"` (`limit` and
+`cursor`) to read retained events; on `pforge-mcp` the tool proxies to the
+Forge-Master studio child that owns the insight ring. See
+[Forge-Master Observer Events](../pforge-mcp/EVENTS.md#forge-master-observer-events).
+
+Example request:
+
+```json
+{
+  "message": "Summarize this forwarded note and suggest a next step.",
+  "caller": { "role": "approver", "channel": "chat" },
+  "responseFormat": { "style": "brief", "maxChars": 1200 },
+  "proposeActions": true,
+  "untrustedContext": [
+    { "kind": "forward", "source": "forwarded message", "text": "The validation gate failed twice." }
+  ]
+}
+```
+
+Example response with a proposal:
+
+```json
+{
+  "sessionId": "session-example",
+  "reply": "The forwarded note reports two validation failures.",
+  "toolCalls": [],
+  "tokensIn": 120,
+  "tokensOut": 35,
+  "totalCostUSD": 0.0003,
+  "truncated": { "budget": false, "reply": false, "context": false, "untrusted": false },
+  "usage": { "tokensIn": 120, "tokensOut": 35, "costUSD": 0.0003, "model": "resolved-model", "provider": "resolved-provider" },
+  "proposedActions": [
+    {
+      "type": "task",
+      "projectId": "project-example",
+      "args": { "description": "Review the failing validation gate" },
+      "rationale": "The note reports repeated failures.",
+      "confidence": "medium",
+      "origin": "untrusted",
+      "mutating": true
+    }
+  ],
+  "proposedActionsMessage": "1 action(s) proposed. Forge-Master does not execute them; the caller decides."
+}
+```
+
+Example response when no action is proposed:
+
+```json
+{
+  "proposedActions": [],
+  "proposedActionsMessage": "No actions proposed — the answer is informational."
+}
+```
+
+## Forge-Claw (experimental)
+
+Forge-Claw is the opt-in, host-level Telegram front door for governed Plan Forge jobs; `setup` does not install or start it. Its dispatcher asks Forge-Master for reasoning, then applies Forge-Claw's own identity, runtime, approval, budget, and lane policies before any work runs. The package is `@pforge/pforge-claw`; the CLI group is `pforge claw` with `init`, `doctor`, `status`, `start`, `worker`, `service`, `dev`, and `commands`. Chat command metadata is drawn from the registered command catalog and filtered at runtime by caller role and topic.
+
+The capability surface nests Forge-Claw at `forgeMaster.companions.forgeClaw` to preserve the existing top-level capability snapshot contract. It describes the config at `PFORGE_CLAW_HOME/config.json`, its schema at `pforge-claw/config.schema.json`, and the guide at `docs/PFORGE-CLAW-GUIDE.md`. Forge-Claw pulls bounded, paginated `forge-master-insight` records through `forge_master_observe`; its `job.transition`, `job.finished`, and `lane.event` events remain internal to its package. There is no `forge_claw_*` MCP tool family.
+
+See the [Forge-Claw operator guide](PFORGE-CLAW-GUIDE.md) for prerequisites, setup, security boundaries, deployment, and current platform validation status.
+
 ## Memory Layers
 
 Plan Forge uses three distinct memory systems. Each has a specific role in the 3-session pipeline:
@@ -752,6 +859,12 @@ Plan Forge uses three distinct memory systems. Each has a specific role in the 3
 | **OpenBrain** | Semantic vector memory via MCP `search_thoughts` / `capture_thought` | Global (workspace-agnostic) | OpenBrain MCP server | Auto-injecting relevant prior decisions before each slice begins |
 
 All three are complementary. A typical phase uses all three: Copilot Memory for quick notes, the session bridge files for structured handoffs, and OpenBrain for surfacing past decisions automatically without manual prompting.
+
+`forge_memory_capture` supports `origin` (`trusted` or `untrusted`), `tags` (up to
+10 strings matching `[a-z0-9:-]{1,40}`), and `visibility` (`normal` or
+`restricted`). Defaults are `trusted`, no tags, and `normal`; older memories
+without provenance use `trusted` and `normal`. Provenance is read from OpenBrain
+metadata first, then top-level fields, then the inline header.
 
 See [COPILOT-VSCODE-GUIDE.md#memory-layers](COPILOT-VSCODE-GUIDE.md#memory-layers) for the full usage guide.
 
@@ -766,6 +879,12 @@ When configured (`.vscode/mcp.json` includes `openbrain`), the orchestrator inje
 | After run | Summary field | `_memoryCapture` with run summary + cost anomaly |
 
 Key OpenBrain tools: `search_thoughts`, `capture_thought`, `capture_thoughts`, `thought_stats`
+
+When non-default provenance is written to OpenBrain, a leading
+`[[pforge origin=… visibility=… tags=…]]` header is also stored; an existing
+header is replaced rather than stacked. Every recalled `untrusted` memory takes
+the fenced untrusted-context path, never the trusted prompt path. `restricted`
+memories are excluded from cross-project recall.
 
 ## Presets
 

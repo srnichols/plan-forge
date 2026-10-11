@@ -1,0 +1,52 @@
+{
+  "v": 1,
+  "instanceId": "<generated-by-init>",
+  "timezone": "Etc/UTC",
+  "channels": {
+    "telegram": {
+      "enabled": true,
+      "botTokenSecret": "PFORGE_CLAW_TELEGRAM_TOKEN",
+      "mode": "poll",
+      "generalChat": { "chatId": "<chat-id>" }
+    }
+  },
+  "allowlist": [{ "channel": "telegram", "userId": "<user-id>", "role": "owner" }],
+  "policy": { "ghcpRoles": ["owner"], "nonOwnerRuntime": "byok-only" },
+  "runtimes": {
+    "default": "copilot-sdk",
+    "byok": {
+      "anthropic": { "keySecret": "ANTHROPIC_API_KEY" },
+      "openai": { "keySecret": "OPENAI_API_KEY" }
+    },
+    "pforgeCommand": "auto",
+    "ghCommand": "auto"
+  },
+  "lanes": [
+    { "id": "local", "kind": "local", "enabled": true },
+    { "id": "mac-1", "kind": "remote", "labels": ["<remote-label>"], "enabled": true },
+    { "id": "ws-1", "kind": "remote", "labels": ["<optional-label>"], "enabled": true, "optIn": true }
+  ],
+  "projects": [{
+    "id": "project",
+    "repo": { "path": "/path/to/project", "forgeHome": "<home-lane>:/path/to/project/.forge" },
+    "channel": { "adapter": "telegram", "chatId": "<chat-id>" },
+    "placement": { "prefer": ["mac-1", "local"], "requires": [] },
+    "homeLane": "mac-1",
+    "visibility": "restricted",
+    "memory": { "l3": "off" }
+  }],
+  "memory": {
+    "openbrain": { "endpoint": "https://<host>/api", "tokenSecret": "OPENBRAIN_KEY" },
+    "botNamespace": "pforge-claw:<instanceId>",
+    "captureTaskOutcomes": true,
+    "captureApprovals": false,
+    "captureInsights": false
+  },
+  "worker": {
+    "dispatcherUrl": "wss://<host>/claw/workers",
+    "laneId": "mac-1",
+    "secretName": "PFORGE_CLAW_WORKER_SECRET",
+    "allowInsecureLan": false
+  },
+  "http": { "bind": "127.0.0.1", "port": 3190 }
+}

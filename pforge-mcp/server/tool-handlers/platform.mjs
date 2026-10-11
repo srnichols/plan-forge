@@ -137,6 +137,27 @@ import {
   searchOpenBrainL3,
 } from "./core.mjs";
 
+const FORGE_MASTER_NEW_FIELDS = Object.freeze([
+  "caller",
+  "responseFormat",
+  "untrustedContext",
+  "contextBlocks",
+  "proposeActions",
+]);
+
+export function _buildForgeMasterTurnInput(args, prefs, cwd) {
+  return {
+    message: args.message,
+    sessionId: args.sessionId || undefined,
+    maxToolCalls: args.maxToolCalls || undefined,
+    tier: prefs.tier || undefined,
+    cwd,
+    ...Object.fromEntries(FORGE_MASTER_NEW_FIELDS
+      .filter((field) => args[field] !== undefined)
+      .map((field) => [field, args[field]])),
+  };
+}
+
 async function _callToolHandler_074_forge_master_ask(request, args) {
   const { name } = request.params;
   if (!(name === "forge_master_ask")) return _CALL_TOOL_NO_MATCH;
@@ -167,13 +188,7 @@ async function _callToolHandler_074_forge_master_ask(request, args) {
       const { TOOL_METADATA } = await import("../../capabilities.mjs");
       const prefs = loadPrefs(cwd);
       const result = await runTurn(
-        {
-          message: args.message,
-          sessionId: args.sessionId || undefined,
-          maxToolCalls: args.maxToolCalls || undefined,
-          tier: prefs.tier || undefined,
-          cwd,
-        },
+        _buildForgeMasterTurnInput(args, prefs, cwd),
         {
           dispatcher: async (toolName, toolArgs, toolCwd) => {
             return invokeForgeTool(toolName, { ...toolArgs, path: toolCwd || cwd });
@@ -189,7 +204,10 @@ async function _callToolHandler_074_forge_master_ask(request, args) {
         toolCallCount: result.toolCalls?.length ?? 0,
         truncated: result.truncated,
       }, durationMs: Date.now() - t0, status: result.error ? "ERROR" : "OK", cwd });
-      return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+      return {
+        content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+        ...(result.error === "INVALID_INPUT" ? { isError: true } : {}),
+      };
     } catch (err) {
       emitToolTelemetry({ toolName: "forge_master_ask", inputs: args, result: { error: err.message }, durationMs: Date.now() - t0, status: "ERROR", cwd: findProjectRoot(PROJECT_DIR) });
       return { content: [{ type: "text", text: `Forge-Master error: ${err.message}` }], isError: true };

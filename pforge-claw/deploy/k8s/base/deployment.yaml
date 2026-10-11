@@ -1,0 +1,100 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: pforge-claw-dispatcher
+  namespace: pforge-claw
+  labels:
+    app: pforge-claw
+    component: dispatcher
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: pforge-claw
+      component: dispatcher
+  template:
+    metadata:
+      labels:
+        app: pforge-claw
+        component: dispatcher
+    spec:
+      serviceAccountName: pforge-claw-dispatcher
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
+        fsGroup: 10001
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: dispatcher
+          image: pforge-claw-dispatcher:placeholder
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: PFORGE_CLAW_HOME
+              value: /data
+            - name: PFORGE_CLAW_TELEGRAM_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: pforge-claw-secrets
+                  key: PFORGE_CLAW_TELEGRAM_TOKEN
+            - name: PFORGE_CLAW_TELEGRAM_WEBHOOK_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: pforge-claw-secrets
+                  key: PFORGE_CLAW_TELEGRAM_WEBHOOK_SECRET
+                  optional: true
+            - name: PFORGE_CLAW_GH_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: pforge-claw-secrets
+                  key: PFORGE_CLAW_GH_TOKEN
+                  optional: true
+            - name: PFORGE_CLAW_COPILOT_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: pforge-claw-secrets
+                  key: PFORGE_CLAW_COPILOT_TOKEN
+                  optional: true
+          ports:
+            - name: http
+              containerPort: 3190
+              protocol: TCP
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 20
+          readinessProbe:
+            httpGet:
+              path: /readyz
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 1
+              memory: 512Mi
+          securityContext:
+            runAsNonRoot: true
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          volumeMounts:
+            - name: data
+              mountPath: /data
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: pforge-claw-data
+        - name: tmp
+          emptyDir: {}

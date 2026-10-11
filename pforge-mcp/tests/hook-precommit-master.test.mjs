@@ -12,6 +12,8 @@ import { mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { resolve } from "node:path";
 import { randomUUID } from "node:crypto";
+import { fileURLToPath } from "node:url";
+import { optionalGuidanceUnavailable } from "./helpers/optional-guidance.mjs";
 
 // Mock child_process at the module level so both PreCommit.mjs and orchestrator.mjs
 // receive the mocked version.
@@ -29,11 +31,12 @@ vi.mock("node:child_process", async (importOriginal) => {
 
 // ─── Test subjects (imported AFTER vi.mock) ──────────────────────────
 
-import {
-  checkPreCommit,
-  detectDefaultBranch,
-  loadPreCommitConfig,
-} from "../../.github/hooks/PreCommit.mjs";
+const hookUrl = new URL("../../.github/hooks/PreCommit.mjs", import.meta.url);
+const skipMissingHook = optionalGuidanceUnavailable(fileURLToPath(hookUrl));
+const hook = skipMissingHook ? undefined : await import(hookUrl.href);
+const checkPreCommit = hook?.checkPreCommit;
+const detectDefaultBranch = hook?.detectDefaultBranch;
+const hookSuite = describe.skipIf(skipMissingHook);
 
 import { spawnWorker } from "../orchestrator.mjs";
 
@@ -47,7 +50,7 @@ function makeTmpDir() {
 
 // ─── detectDefaultBranch ─────────────────────────────────────────────
 
-describe("detectDefaultBranch", () => {
+hookSuite("detectDefaultBranch (requires installed PreCommit)", () => {
   afterEach(() => {
     mockExecSync.mockReset();
   });
@@ -79,7 +82,7 @@ describe("detectDefaultBranch", () => {
 
 // ─── checkPreCommit ──────────────────────────────────────────────────
 
-describe("checkPreCommit", () => {
+hookSuite("checkPreCommit (requires installed PreCommit)", () => {
   const savedEnv = {};
 
   beforeEach(() => {

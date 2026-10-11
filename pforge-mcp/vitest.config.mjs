@@ -38,6 +38,7 @@ const masterRoot = fileURLToPath(new URL("../pforge-master/", import.meta.url)).
 // tests/consumer-test-surface.test.mjs asserts against.
 const SOURCE_ONLY_SUITES = {
   "../setup.sh": [
+    "tests/runtime-install-source-path.test.mjs",
     "tests/setup-node-floor-path.test.mjs",
     "tests/release-archive.test.mjs",
     "tests/setup-openbrain-prompt.test.mjs",

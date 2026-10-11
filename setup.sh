@@ -95,6 +95,26 @@ copy_with_create() {
     return 0
 }
 
+copy_runtime_package() {
+    local src="$1" dst="$2" count_var="$3"
+    local rel_path file_count=0 traversal_pid
+    mkdir -p "$dst"
+    {
+        # Process-substitution failures do not affect the loop's status.
+        traversal_pid=$!
+        while IFS= read -r -d '' rel_path; do
+            rel_path="${rel_path#./}"
+            mkdir -p "$(dirname "$dst/$rel_path")"
+            cp -- "$src/$rel_path" "$dst/$rel_path"
+            file_count=$((file_count + 1))
+        done
+    # Checkout ancestors are not part of the package's runtime exclusions (#346).
+    } < <(cd -- "$src" && find . -type f ! -path '*/node_modules/*' ! -path '*/.forge/*' ! -path '*/coverage/*' -print0)
+    wait "$traversal_pid" || return "$?"
+    # Avoid a command-substitution subshell, which would mask copy errors under set -e.
+    printf -v "$count_var" '%s' "$file_count"
+}
+
 replace_placeholders() {
     local file="$1"
     local name="$2"
@@ -1575,15 +1595,7 @@ if [[ -d "$SDK_SRC_DIR" ]]; then
     echo ""
     cyan "Step 7b-pre-1: pforge-sdk (helper library)"
     SDK_DST_DIR="$PROJECT_PATH/pforge-sdk"
-    mkdir -p "$SDK_DST_DIR"
-    sdk_count=0
-    while IFS= read -r -d '' f; do
-        rel_path="${f#"$SDK_SRC_DIR/"}"
-        dst_file="$SDK_DST_DIR/$rel_path"
-        mkdir -p "$(dirname "$dst_file")"
-        cp "$f" "$dst_file"
-        sdk_count=$((sdk_count + 1))
-    done < <(find "$SDK_SRC_DIR" -type f ! -path '*/node_modules/*' ! -path '*/.forge/*' ! -path '*/coverage/*' -print0 2>/dev/null)
+    copy_runtime_package "$SDK_SRC_DIR" "$SDK_DST_DIR" sdk_count
     green "  COPY  pforge-sdk/ ($sdk_count files: hallmark, lattice, chunker, notifications, readers)"
 fi
 
@@ -1595,15 +1607,7 @@ if [[ -d "$FM_SRC_DIR" ]]; then
     echo ""
     cyan "Step 7b-pre-2: pforge-master (Forge-Master Studio)"
     FM_DST_DIR="$PROJECT_PATH/pforge-master"
-    mkdir -p "$FM_DST_DIR"
-    fm_count=0
-    while IFS= read -r -d '' f; do
-        rel_path="${f#"$FM_SRC_DIR/"}"
-        dst_file="$FM_DST_DIR/$rel_path"
-        mkdir -p "$(dirname "$dst_file")"
-        cp "$f" "$dst_file"
-        fm_count=$((fm_count + 1))
-    done < <(find "$FM_SRC_DIR" -type f ! -path '*/node_modules/*' ! -path '*/.forge/*' ! -path '*/coverage/*' -print0 2>/dev/null)
+    copy_runtime_package "$FM_SRC_DIR" "$FM_DST_DIR" fm_count
     green "  COPY  pforge-master/ ($fm_count files: server, observer-loop, planner, providers, ui)"
 
     # Auto-install pforge-master dependencies (@modelcontextprotocol/sdk + ws)
@@ -1624,19 +1628,7 @@ if [[ -d "$MCP_SRC_DIR" ]]; then
     cyan "Step 7b: MCP server (Plan Forge as tools)"
 
     MCP_DST_DIR="$PROJECT_PATH/pforge-mcp"
-    mkdir -p "$MCP_DST_DIR"
-
-    # Copy all MCP runtime files (not node_modules or .forge).
-    # `local` is invalid at script scope — these accumulators live at
-    # top-level inside the `if` block, so plain assignments are used.
-    mcp_count=0
-    while IFS= read -r -d '' f; do
-        rel_path="${f#"$MCP_SRC_DIR/"}"
-        dst_file="$MCP_DST_DIR/$rel_path"
-        mkdir -p "$(dirname "$dst_file")"
-        cp "$f" "$dst_file"
-        mcp_count=$((mcp_count + 1))
-    done < <(find "$MCP_SRC_DIR" -type f ! -path '*/node_modules/*' ! -path '*/.forge/*' ! -path '*/coverage/*' -print0 2>/dev/null)
+    copy_runtime_package "$MCP_SRC_DIR" "$MCP_DST_DIR" mcp_count
     green "  COPY  pforge-mcp/ ($mcp_count files: server, orchestrator, capabilities, dashboard, tests)"
 
     # Generate .vscode/mcp.json for Copilot MCP integration

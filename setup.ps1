@@ -106,6 +106,21 @@ function Copy-WithCreate([string]$Source, [string]$Destination, [bool]$Overwrite
     return $true
 }
 
+function Copy-RuntimePackage([string]$Source, [string]$Destination) {
+    New-Item -ItemType Directory -Path $Destination -Force | Out-Null
+    $fileCount = 0
+    foreach ($file in Get-ChildItem -LiteralPath $Source -File -Recurse) {
+        # Checkout ancestors are not part of the package's runtime exclusions (#346).
+        $relativePath = [System.IO.Path]::GetRelativePath($Source, $file.FullName)
+        if ($relativePath -match '(^|[\\/])(node_modules|\.forge|coverage)[\\/]') { continue }
+        $destinationFile = Join-Path $Destination $relativePath
+        New-Item -ItemType Directory -Path (Split-Path $destinationFile -Parent) -Force | Out-Null
+        Copy-Item -LiteralPath $file.FullName -Destination $destinationFile -Force
+        $fileCount++
+    }
+    return $fileCount
+}
+
 function Update-Placeholders([string]$FilePath, [string]$Name, [string]$Stack) {
     if (-not (Test-Path $FilePath)) { return }
     $content = Get-Content $FilePath -Raw
@@ -1699,20 +1714,7 @@ if (Test-Path $sdkSrcDir) {
     Write-Host ""
     Write-Host "Step 7b-pre-1: pforge-sdk (helper library)" -ForegroundColor Cyan
     $sdkDstDir = Join-Path $ProjectPath "pforge-sdk"
-    if (-not (Test-Path $sdkDstDir)) {
-        New-Item -ItemType Directory -Path $sdkDstDir -Force | Out-Null
-    }
-    $sdkFileCount = 0
-    Get-ChildItem -Path $sdkSrcDir -File -Recurse |
-        Where-Object { $_.FullName -notmatch '(node_modules|\.forge|coverage)' } |
-        ForEach-Object {
-            $relPath = $_.FullName.Substring($sdkSrcDir.Length + 1)
-            $dstFile = Join-Path $sdkDstDir $relPath
-            $dstParent = Split-Path $dstFile -Parent
-            if (-not (Test-Path $dstParent)) { New-Item -ItemType Directory -Path $dstParent -Force | Out-Null }
-            Copy-Item -Path $_.FullName -Destination $dstFile -Force
-            $sdkFileCount++
-        }
+    $sdkFileCount = Copy-RuntimePackage $sdkSrcDir $sdkDstDir
     Write-Host "  COPY  pforge-sdk/ ($sdkFileCount files: hallmark, lattice, chunker, notifications, readers)" -ForegroundColor Green
 }
 
@@ -1724,20 +1726,7 @@ if (Test-Path $fmSrcDir) {
     Write-Host ""
     Write-Host "Step 7b-pre-2: pforge-master (Forge-Master Studio)" -ForegroundColor Cyan
     $fmDstDir = Join-Path $ProjectPath "pforge-master"
-    if (-not (Test-Path $fmDstDir)) {
-        New-Item -ItemType Directory -Path $fmDstDir -Force | Out-Null
-    }
-    $fmFileCount = 0
-    Get-ChildItem -Path $fmSrcDir -File -Recurse |
-        Where-Object { $_.FullName -notmatch '(node_modules|\.forge|coverage)' } |
-        ForEach-Object {
-            $relPath = $_.FullName.Substring($fmSrcDir.Length + 1)
-            $dstFile = Join-Path $fmDstDir $relPath
-            $dstParent = Split-Path $dstFile -Parent
-            if (-not (Test-Path $dstParent)) { New-Item -ItemType Directory -Path $dstParent -Force | Out-Null }
-            Copy-Item -Path $_.FullName -Destination $dstFile -Force
-            $fmFileCount++
-        }
+    $fmFileCount = Copy-RuntimePackage $fmSrcDir $fmDstDir
     Write-Host "  COPY  pforge-master/ ($fmFileCount files: server, observer-loop, planner, providers, ui)" -ForegroundColor Green
 
     # Auto-install pforge-master dependencies (declares @modelcontextprotocol/sdk + ws)
@@ -1760,22 +1749,7 @@ if (Test-Path $mcpSrcDir) {
     Write-Host "Step 7b: MCP server (Plan Forge as tools)" -ForegroundColor Cyan
 
     $mcpDstDir = Join-Path $ProjectPath "pforge-mcp"
-    if (-not (Test-Path $mcpDstDir)) {
-        New-Item -ItemType Directory -Path $mcpDstDir -Force | Out-Null
-    }
-
-    # Copy all MCP runtime files (not node_modules or .forge)
-    $mcpFileCount = 0
-    Get-ChildItem -Path $mcpSrcDir -File -Recurse |
-        Where-Object { $_.FullName -notmatch '(node_modules|\.forge|coverage)' } |
-        ForEach-Object {
-            $relPath = $_.FullName.Substring($mcpSrcDir.Length + 1)
-            $dstFile = Join-Path $mcpDstDir $relPath
-            $dstParent = Split-Path $dstFile -Parent
-            if (-not (Test-Path $dstParent)) { New-Item -ItemType Directory -Path $dstParent -Force | Out-Null }
-            Copy-Item -Path $_.FullName -Destination $dstFile -Force
-            $mcpFileCount++
-        }
+    $mcpFileCount = Copy-RuntimePackage $mcpSrcDir $mcpDstDir
     Write-Host "  COPY  pforge-mcp/ ($mcpFileCount files: server, orchestrator, capabilities, dashboard, tests)" -ForegroundColor Green
 
     # Generate .vscode/mcp.json for Copilot MCP integration

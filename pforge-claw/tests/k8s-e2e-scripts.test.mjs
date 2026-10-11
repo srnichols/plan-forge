@@ -360,6 +360,7 @@ describe("hosted Kubernetes command failure diagnostics", () => {
       worker: { created: true, active: 1 },
       completion: { present: false, applicationAckPresent: false },
       events: { observed: 4, lastSeq: 4 },
+      jobRejection: { code: "K8S_API", apiCode: "K8S_API", httpStatus: 403, createAttempted: true },
       providerText: canary, token: canary, rawEvent: { data: canary },
     };
     const execution = await failedNativeCli({
@@ -377,6 +378,7 @@ describe("hosted Kubernetes command failure diagnostics", () => {
         phase: "completion", jobState: "running", jobs: 1, approvalConsumed: true,
         completion: { present: false, applicationAckPresent: false, applicationAckOk: null },
         events: { observed: 4, lastSeq: 4, ordered: null },
+        jobRejection: { code: "K8S_API", apiCode: "K8S_API", httpStatus: 403, createAttempted: true },
       },
       cleanupFailure: { operation: "delete", exitCode: 31 },
     });
@@ -384,6 +386,25 @@ describe("hosted Kubernetes command failure diagnostics", () => {
     expect(diagnostic.scenarioFailure).not.toHaveProperty("providerText");
     expect(diagnostic.scenarioFailure).not.toHaveProperty("token");
     expect(diagnostic.scenarioFailure).not.toHaveProperty("rawEvent");
+    expect(Buffer.byteLength(execution.stderr)).toBeLessThanOrEqual(MAX_CLI_DIAGNOSTIC_BYTES);
+  });
+
+  it("suppresses arbitrary rejection codes, malformed status and raw API bodies in the scenario relay", async () => {
+    const failure = {
+      schemaVersion: 1, status: "failed",
+      jobRejection: {
+        code: `K8S_${canary}`, apiCode: canary, httpStatus: "403", createAttempted: canary,
+        message: canary, body: { token: canary },
+      },
+    };
+    const execution = await failedNativeCli({
+      scenario: { code: 29, stderr: `K8S_E2E_SCENARIO_DIAGNOSTIC ${JSON.stringify(failure)}\n` },
+    });
+    const diagnostic = JSON.parse(execution.stderr.trim().split("\n").at(-1));
+    expect(diagnostic.scenarioFailure.jobRejection).toEqual({
+      code: null, apiCode: null, httpStatus: null, createAttempted: null,
+    });
+    expect(execution.stderr).not.toContain(canary);
     expect(Buffer.byteLength(execution.stderr)).toBeLessThanOrEqual(MAX_CLI_DIAGNOSTIC_BYTES);
   });
 

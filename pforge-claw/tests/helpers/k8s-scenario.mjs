@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import { readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
-import { currentJobs } from "../../src/jobs/model.mjs";
+import { currentJobs, JOBS_STREAM } from "../../src/jobs/model.mjs";
 import { JOB_STATES } from "../../src/enums.mjs";
 import { assembleDeltaChunks } from "../../src/memory/l2-sync.mjs";
 import { applicationIdentity, matchesApplicationAck } from "../../src/protocol/l2-ack.mjs";
@@ -10,7 +10,7 @@ import { L2_PACKET_KIND } from "../../src/protocol/messages.mjs";
 import { canonical } from "../../src/protocol/lease-grant.mjs";
 import {
   assertFixturePath, FIXTURE_LANE, FIXTURE_MAX_BYTES, FIXTURE_PREFIX, FIXTURE_PROOF_FILE,
-  FIXTURE_TIMEOUT_MS, readFixtureControl, validateFixtureScope,
+  FIXTURE_HTTP_STATUS, FIXTURE_TIMEOUT_MS, readFixtureControl, validateFixtureScope,
 } from "./k8s-fixture-common.mjs";
 
 const MAX_EVENTS = 100;
@@ -35,6 +35,30 @@ const SCENARIO_ERRORS = Object.freeze([
 const diagnosticFlag = (value) => typeof value === "boolean" ? value : null;
 const diagnosticCount = (value) => Number.isSafeInteger(value) && value >= 0 && value <= MAX_DIAGNOSTIC_COUNT ? value : null;
 const diagnosticObject = (value) => value && typeof value === "object" && !Array.isArray(value) ? value : {};
+const JOB_REJECTION_CODES = new Set([
+  "K8S_API", "K8S_BAD_INPUT", "K8S_BAD_CONFIG", "K8S_UNAVAILABLE", "K8S_NETWORK", "K8S_TIMEOUT",
+  "K8S_LANE_SECRET_MISSING", "K8S_NO_IMAGE", "LANE_BAD_CONFIG", "LANE_BAD_EVENT",
+  "JOB_DUPLICATE", "JOB_CANCELLED", "LEASE_PROOF_MISSING", "LEASE_GRANT_INVALID",
+  "RUNTIME_POLICY_DENIED", "BOOTSTRAP_SECRET_MISSING",
+]);
+const ADDITIONAL_HTTP_ERRORS = Object.freeze({
+  GONE: 410, UNPROCESSABLE: 422, RATE_LIMITED: 429, INTERNAL: 500, UNAVAILABLE: 503, GATEWAY_TIMEOUT: 504,
+});
+const REJECTION_HTTP_STATUSES = new Set([
+  ...Object.values(FIXTURE_HTTP_STATUS).filter((status) => status >= FIXTURE_HTTP_STATUS.BAD_REQUEST),
+  ...Object.values(ADDITIONAL_HTTP_ERRORS),
+]);
+
+/** Whitelist declared pre-worker failure codes and known HTTP errors; never echo messages or bodies. */
+export function normalizeJobRejection(input = {}) {
+  const selected = diagnosticObject(input);
+  return {
+    code: JOB_REJECTION_CODES.has(selected.code) ? selected.code : null,
+    apiCode: JOB_REJECTION_CODES.has(selected.apiCode) ? selected.apiCode : null,
+    httpStatus: REJECTION_HTTP_STATUSES.has(selected.httpStatus) ? selected.httpStatus : null,
+    createAttempted: diagnosticFlag(selected.createAttempted),
+  };
+}
 
 /** Return only declared fixture failure codes, never provider/error text. */
 export function scenarioErrorCode(error) {
@@ -74,6 +98,7 @@ function eventDiagnostics(events = {}) {
 /**
  * Whitelist the bounded failure DTO at both HTTP and stderr boundaries; missing measurements stay null.
  * Contains only stage/state enums, readiness/approval/grant/ACK flags and worker/event counts.
+ * jobRejection contains a declared durable code, typed API code, known HTTP error status and create-attempt flag.
  * Never contains job IDs, paths, keys, provider text, raw events, worker specs or application payloads.
  * @param {object} input
  * @returns {object}
@@ -90,6 +115,7 @@ export function normalizeScenarioDiagnostics(input = {}) {
     connectedWorkers: diagnosticCount(selected.connectedWorkers),
     worker: workerDiagnostics(selected.worker), completion: completionDiagnostics(selected.completion),
     events: eventDiagnostics(selected.events),
+    jobRejection: normalizeJobRejection(selected.jobRejection),
   };
 }
 
@@ -166,6 +192,19 @@ async function workerSnapshot(fixture, job) {
   }
 }
 
+function jobRejectionSnapshot(fixture, job) {
+  if (!job) return { createAttempted: null };
+  const creation = fixture.jobCreations.get(job.id);
+  let code = null;
+  // Job state reduction drops reasons; measure this job's matching durable transition instead.
+  for (const { record } of fixture.handles.store.read(JOBS_STREAM)) {
+    if (record.kind === "job.transition" && record.jobId === job.id && record.to === job.state) {
+      code = normalizeJobRejection({ code: record.reason }).code;
+    }
+  }
+  return { ...creation, code, createAttempted: Boolean(creation) };
+}
+
 /**
  * Measure only the exact scenario job, using existing read-only job/registry APIs; never select the latest job.
  * Diagnostics cannot supply acceptance evidence or start/retry a scenario.
@@ -186,6 +225,7 @@ export async function collectScenarioDiagnostics({ fixture, code = "K8S_E2E_SCEN
     connectedWorkers: fixture.registry.snapshot().workers,
     worker: await workerSnapshot(fixture, job), completion: completionSnapshot(completion, job),
     events: eventSnapshot({ events, completion, job, rejected: job && fixture.events.rejected.has(job.id) }),
+    jobRejection: jobRejectionSnapshot(fixture, job),
   });
 }
 

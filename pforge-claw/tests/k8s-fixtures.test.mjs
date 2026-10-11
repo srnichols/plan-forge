@@ -1,10 +1,12 @@
 import { spawnSync } from "node:child_process";
 import { createHash, X509Certificate } from "node:crypto";
+import { EventEmitter } from "node:events";
 import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
+import { PassThrough } from "node:stream";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { materializeDevConfig } from "../scripts/k8s-e2e-overlay.mjs";
+import { FIXTURE_CA_ENV, materializeDevConfig } from "../scripts/k8s-e2e-overlay.mjs";
 import { missingFixtureContracts, runK8sE2e, verifyScenarioEvidence } from "../scripts/k8s-e2e.mjs";
 import { validateConfig } from "../src/config.mjs";
 import { createK8sClient } from "../src/k8s/api.mjs";
@@ -515,14 +517,88 @@ describe("bounded fixture scenario failure diagnostics", () => {
       worker: { active: canary, ready: -1, statusRead: canary },
       completion: { ok: canary, applicationAckOk: canary, terminalStatus: canary },
       events: { observed: canary, lastSeq: canary, ordered: canary },
+      jobRejection: {
+        code: `K8S_${canary.toUpperCase()}`, apiCode: canary, httpStatus: "403", createAttempted: canary,
+        message: canary, body: { token: canary },
+      },
     });
     expect(normalized).toMatchObject({
       code: "K8S_E2E_SCENARIO_FAILED", phase: "unknown", jobState: null, jobs: null, connectedWorkers: null,
       worker: { active: null, ready: null, statusRead: null },
       completion: { ok: null, applicationAckOk: null, terminalStatus: null },
       events: { observed: null, lastSeq: null, ordered: null },
+      jobRejection: { code: null, apiCode: null, httpStatus: null, createAttempted: null },
     });
     expect(JSON.stringify(normalized)).not.toContain(canary);
     expect(JSON.stringify(normalized)).not.toContain(canary.toUpperCase());
+  });
+
+  it.each([
+    { name: "forbidden Job POST", host: "example.com", apiCode: "K8S_API", httpStatus: 403 },
+    { name: "missing service host", host: "", apiCode: "K8S_UNAVAILABLE", httpStatus: null },
+  ])("measures the declared $name failure before worker creation without disclosing API messages", async ({ host, apiCode, httpStatus }) => {
+    const { startK8sDispatcher } = await import("./helpers/k8s-dispatcher.mjs");
+    const { runK8sScenario } = await import("./helpers/k8s-scenario.mjs");
+    const requests = [];
+    const fixture = await startK8sDispatcher({
+      home: await workspace(), namespace: NAMESPACE, context: CONTEXT, listenPort: 0, workerImage: WORKER_IMAGE,
+      k8sApiFactory: () => createK8sClient({
+        host, readFile: async (file) => file.endsWith("token") ? canary : Buffer.from("fixture-ca"),
+        request: (options, callback) => {
+          const request = new EventEmitter();
+          request.write = () => {};
+          request.destroy = () => request.emit("close");
+          request.end = () => {
+            requests.push(options.method);
+            const response = new PassThrough();
+            response.statusCode = 403;
+            callback(response);
+            response.end(JSON.stringify({ kind: "Status", status: "Failure", message: canary }));
+          };
+          return request;
+        },
+      }),
+    });
+    running.push(fixture);
+    const failure = await runK8sScenario({ control: fixture.control, output: false }).catch((error) => error);
+    expect(failure).toBeInstanceOf(Error);
+    expect(failure.message).toBe("K8S_E2E_APPLICATION_UNCONFIRMED");
+    expect(failure.diagnostics).toMatchObject({
+      phase: "worker", jobState: "failed", approvalConsumed: true, receiptPresent: false, grantVerified: false,
+      worker: { created: false, statusRead: false },
+      completion: { present: false, applicationAckPresent: false },
+      events: { observed: 0, deltaChunks: 0 },
+      jobRejection: { code: "K8S_API", apiCode, httpStatus, createAttempted: true },
+    });
+    expect(requests).toEqual(host ? ["POST"] : []);
+    const output = JSON.stringify(failure.diagnostics);
+    expect(output).not.toContain(canary);
+    expect(output).not.toMatch(/"message"|"body"|"token"|"headers"/);
+    expect(Buffer.byteLength(output)).toBeLessThanOrEqual(MAX_DIAGNOSTIC_BYTES);
+    expect(fixture.jobNames.size).toBe(0);
+    expect(fixture.receipts.size).toBe(0);
+  });
+
+  it("reads the exact durable pre-POST rejection without inventing an API status", async () => {
+    const { startK8sDispatcher } = await import("./helpers/k8s-dispatcher.mjs");
+    const { runK8sScenario } = await import("./helpers/k8s-scenario.mjs");
+    let contacted = false;
+    const fixture = await startK8sDispatcher({
+      home: await workspace(), namespace: NAMESPACE, context: CONTEXT, listenPort: 0, workerImage: WORKER_IMAGE,
+      k8sApiFactory: () => createK8sClient({
+        host: "example.com", request: () => { contacted = true; throw new Error("cluster forbidden"); },
+      }),
+    });
+    running.push(fixture);
+    delete fixture.config.lanes.find((lane) => lane.id === "k8s-dev").k8s.secrets.env[FIXTURE_CA_ENV];
+    const failure = await runK8sScenario({ control: fixture.control, output: false }).catch((error) => error);
+    expect(failure).toBeInstanceOf(Error);
+    expect(failure.diagnostics).toMatchObject({
+      jobState: "failed", approvalConsumed: true, receiptPresent: false,
+      jobRejection: { code: "BOOTSTRAP_SECRET_MISSING", apiCode: null, httpStatus: null, createAttempted: false },
+    });
+    expect(contacted).toBe(false);
+    expect(fixture.jobNames.size).toBe(0);
+    expect(fixture.receipts.size).toBe(0);
   });
 });

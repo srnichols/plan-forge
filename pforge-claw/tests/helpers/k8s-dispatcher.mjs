@@ -16,7 +16,7 @@ import { QUORUM_MODES } from "../../src/approvals.mjs";
 import approvalsFeature from "../../src/features/approvals.mjs";
 import workersFeature from "../../src/features/workers.mjs";
 import { materializeDevConfig, PACKAGE_ROOT, FIXTURE_TLS_CERT_ENV, FIXTURE_TLS_KEY_ENV } from "../../scripts/k8s-e2e-overlay.mjs";
-import { collectScenarioDiagnostics, collectScenarioEvidence, SCENARIO_PHASE, scenarioErrorCode } from "./k8s-scenario.mjs";
+import { collectScenarioDiagnostics, collectScenarioEvidence, normalizeJobRejection, SCENARIO_PHASE, scenarioErrorCode } from "./k8s-scenario.mjs";
 import { fixtureSystemEnvironment } from "./k8s-worker.mjs";
 import { startFakeTelegram } from "./fake-telegram.mjs";
 import { startFixtureTlsProxy } from "./k8s-tls-proxy.mjs";
@@ -55,7 +55,7 @@ async function ownedHome(home) {
   return resolved;
 }
 
-function jobApiFactory({ factory, namespace, jobs, apis }) {
+function jobApiFactory({ factory, namespace, jobs, apis, creations }) {
   return (lane) => {
     const api = factory(lane.k8s);
     apis.set(lane.id, api);
@@ -63,9 +63,18 @@ function jobApiFactory({ factory, namespace, jobs, apis }) {
       ...api,
       async createJob(selectedNamespace, spec) {
         if (selectedNamespace !== namespace) throw new Error("K8S_E2E_NAMESPACE_INVALID");
-        const created = await api.createJob(selectedNamespace, spec);
-        jobs.set(spec.metadata.labels["pforge-claw/job-id"], created?.metadata?.name ?? spec.metadata.name);
-        return created;
+        const jobId = spec.metadata.labels["pforge-claw/job-id"];
+        creations.set(jobId, normalizeJobRejection({ createAttempted: true }));
+        try {
+          const created = await api.createJob(selectedNamespace, spec);
+          jobs.set(jobId, created?.metadata?.name ?? spec.metadata.name);
+          return created;
+        } catch (error) {
+          creations.set(jobId, normalizeJobRejection({
+            createAttempted: true, apiCode: error?.code, httpStatus: error?.details?.status,
+          }));
+          throw error;
+        }
       },
     };
   };
@@ -293,7 +302,7 @@ export async function startK8sDispatcher(input = {}) {
   const logger = options.logger ?? { info() {}, warn() {}, error() {} };
   const control = { namespace: options.namespace, context: options.context, url: `http://127.0.0.1:${port}`, token: randomBytes(SECRET_BYTES).toString("hex") };
   const fixture = {
-    home, control, telegram, receipts: new Map(), jobNames: new Map(), apis: new Map(),
+    home, control, telegram, receipts: new Map(), jobNames: new Map(), apis: new Map(), jobCreations: new Map(),
     scenarioStarted: false, scenarioPhase: SCENARIO_PHASE.REQUEST, scenarioStop: new AbortController(), scenario,
   };
   let http;
@@ -319,7 +328,10 @@ export async function startK8sDispatcher(input = {}) {
       env: fixtureSystemEnvironment(),
       runtimeFactory: async ({ id }) => ({ id, async run() { throw new Error("K8S_E2E_LOCAL_RUNTIME_REFUSED"); } }),
       createProjectClients: (input) => createProjectClients({ ...input, secrets, env: fixtureSystemEnvironment(), currentLaneId: "local" }),
-      k8sApiFactory: jobApiFactory({ factory: options.k8sApiFactory ?? createK8sClient, namespace: options.namespace, jobs: fixture.jobNames, apis: fixture.apis }),
+      k8sApiFactory: jobApiFactory({
+        factory: options.k8sApiFactory ?? createK8sClient, namespace: options.namespace,
+        jobs: fixture.jobNames, apis: fixture.apis, creations: fixture.jobCreations,
+      }),
     });
     fixture.registry = workersFeature.registry();
     if (!fixture.registry?.setL2Receiver) throw new Error("K8S_E2E_RECEIVER_UNAVAILABLE");

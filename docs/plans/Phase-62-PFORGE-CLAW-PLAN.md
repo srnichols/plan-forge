@@ -108,6 +108,14 @@ Explicit non-metrics: this phase does not aim to be a general life assistant (em
 - **(n) Owner-approved release preparation (D30)**: extend `scripts/sync-versions.mjs` for Claw's manifest/root-lock version fields and `scripts/release/ship.mjs` for its manifest-only release commit allowlist; add tests in the existing version-sync/release-ship suites and directly related documentation. Preserve the independently versioned SDK, checkouts without Claw and all source-quality gates. This is not a version bump, npm publication, production release or change to automatic installation/startup.
 - **(o) Native ownership remediation (D31)**: replace snapshot-only publication settlement with per-job OS-native ownership established before literal argv, using own source, the existing Node/PowerShell runtime and OS APIs. Add platform-scoped adapters, capability/error reporting, real detached-child/independent-process/concurrent regressions and directly related documentation. Preserve ordinary callers, authenticated current-lease publication, separate canonical-history ACKs, original deadlines and the no-TypeScript/no-new-third-party-dependency contract. No host elevation, global service/security/cgroup changes or unsupported-capability success fallback.
 - **(p) Bounded runtime security maintenance (D32)**: under the autonomous build-completion continuation, raise only existing MCP SDK and sharp dependency floors and reconcile existing root/standalone locks for the reviewed runtime advisories. Add a focused declared/locked/installed-version regression. Preserve package names, workspace membership, framework/SDK versions, Node floor, public tool artifacts, permissions and audit policy. No new dependency names, major audit-tool upgrades, platform waiver or release/deployment is included.
+- **(q) Consumer delivery closeout (D33)**: resolve the recorded installer/source-path and custom-preset installed-test blockers (#346/#347) as existing delivery repairs. Keep runtime-local cache exclusions and both-shell parity; do not reject a valid framework source merely because an ancestor is named `.forge`, `node_modules` or `coverage`. Installed custom presets may omit optional guidance, but core classifier/worker/gate tests must still run; present assets, standard installs and the source repository must retain required coverage. Preserve the custom asset choice, opt-in Claw installation, production classifiers, rules, baselines and permissions. Commit installer behavior and test-only optional-asset guards separately with before/after evidence.
+
+The exact D33 paths below enumerate that existing repair scope for automated
+scope checks; they do not authorize additional implementation:
+
+- Runtime installer repair: `setup.ps1`, `setup.sh`, `pforge-mcp/vitest.config.mjs`, `pforge-mcp/tests/runtime-install-source-path.test.mjs`.
+- Test-only guidance repair: `pforge-mcp/tests/helpers/optional-guidance.mjs`, `pforge-mcp/tests/optional-guidance.test.mjs`, `pforge-mcp/tests/diff-classify.test.mjs`, `pforge-mcp/tests/hook-precommit-master.test.mjs`, `pforge-mcp/tests/precommit-chain.test.mjs`, `pforge-mcp/tests/issue-258-gate-cannot-fail.test.mjs`, `pforge-mcp/tests/step0-prompt-speckit.test.mjs`.
+- Related delivery documentation: `CHANGELOG.md`, `docs/RELEASE-CHECKLIST.md`, `docs/plans/Phase-62-PFORGE-CLAW-PLAN.md`.
 
 ### Out of Scope
 
@@ -397,6 +405,7 @@ Plan Forge is open source. Forge-Claw ships as a **generic, configurable** capab
 | D30 | Release preparation and gated branch promotion | **Decided 2026-10-10 (operator):** approve the narrow release metadata extension above, feature-branch publication, CI and reviewed consumer promotion for dev/staging. The existing consumer target is `master`; phase plans and dev-only artifacts remain on `planning/main`. Promotion waits for required CI and independent review; no protection bypass, force-push, tag, production release or unspecified environment deployment is authorized by this preparation. |
 | D31 | Per-job native ownership | **Continuation directed 2026-10-10 (operator):** resolve the confirmed shared-OS snapshot ambiguity autonomously using scoped native ownership/authoritative lineage before command execution, rather than false proof or global test serialization. Own-source adapters may use existing PowerShell/Node and OS APIs under the current account. Ordinary execution, literal argument arrays, approved choices, current-lease authority and distinct history application ACKs remain unchanged. Native absence/failure is explicit and cannot certify settlement. No added third-party dependency, privileged/global host mutation, platform reduction, deadline increase or weakened permission/quality gate is authorized. Final acceptance requires the original concurrent/full/floor/actual kind gates and fresh review on committed source. |
 | D32 | Existing runtime security patch floors | **Autonomous completion continuation 2026-10-11:** use verified existing-package floors MCP SDK `^1.31.0` and sharp `^0.35.5`; reconcile existing proxy-addr/source-map-js occurrences to patched versions in both locks. The resolved SDK remains in major 1. The actual lock delta must add no package names and preserve unrelated runtime/model versions. Affected declared/locked/installed floors fail before remediation; root runtime-only and full standalone audits plus consumer regressions must pass afterward. Full root development-tool advisories remain reported separately, never suppressed. This is not a native-macOS scope decision or authorization to merge/tag/release/deploy. |
+| D33 | Existing consumer delivery blockers | **Autonomous build-closeout continuation 2026-10-11:** the latest instruction directs completion of remaining shipping gates. Repair the already-reproduced #346 runtime-copy ancestor bug without adding cache/secret delivery; separately repair #347 test loading for intentionally absent installed-custom guidance. Do not skip core runtime tests or mask missing standard/source assets, alter classifier logic or lower audit thresholds. Source, standard and custom before/after counts plus independent classifier-contract review are required. This does not waive native macOS, approve a privileged helper, alter automatic Claw installation, bump the actual release version or authorize release/deployment. |
 
 **D31 recovery status (2026-10-11):** Windows and Linux have actual native
 ownership evidence under their execution accounts. The published Linux fixture
@@ -472,8 +481,26 @@ Linux has 2,274 with 19 OS skips; each cohort passes all 35 offline scenarios.
 The first physical Linux projection's four shell-parity failures were exact
 Windows CRLF copies; restoring only three projected shells to their verified
 Git LF blobs passed the original assertions without a product change. Fresh
-committed-source and actual new-head CI gates remain separate and pending;
-native macOS, release and authenticated operator acceptance remain blockers.
+committed-source proof and actual CI at `93870758` passed the Windows/Linux
+floor/LTS and real kind gates. Both native macOS jobs still fail; neither
+capability measurement nor an unavailable owner-input fallback waives them.
+Release and authenticated operator acceptance remain separate blockers.
+
+**D33 current delivery evidence (2026-10-11):** source-stopped installer repairs
+pass 12 real-shell layout cases, each checking 46 delivered assets and 18 local
+cache exclusions, plus two explicit Bash traversal-failure cases. The source MCP
+suite passes 8,807 tests on each Node 22.12/24 cohort with 27 skips. Actual standard
+consumer installs made by both shells each pass 7,914 installed tests on both
+Node cohorts with 48 skips and one todo. The actual custom consumer passes 7,840
+on each cohort with 101 skips and one todo. Its targeted guidance packet retains
+32 core tests and 12 helper tests; 52 optional hook/prompt checks and one existing
+source-template check remain explicitly pending. Removing a required custom
+runbook still fails five assertions; removing a standard step2 prompt also fails
+five, with no added standard skips. Independent review closed the reproduced
+required-runbook and broken-link omission bugs. Installer product and test-only
+guards must be committed separately; fresh final committed delivery/update
+proof, current quality closure and new-head CI remain required. This evidence
+does not mark the phase Complete or authorize release/deployment.
 
 _Original decisions were resolved at hardening on 2026-10-07; verification evidence is in Assumptions. D29 and D30 are the operator-approved review/release-preparation extensions from 2026-10-08 and 2026-10-10._
 

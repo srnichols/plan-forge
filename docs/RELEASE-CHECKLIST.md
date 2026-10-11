@@ -104,11 +104,25 @@ from a file existing in the source checkout.
 
 For runtime packaging changes, exercise both a fresh install and an update
 from the previous release in temporary consumer projects, in both shells.
+Also exercise a framework source beneath a `.forge` ancestor (#346). Runtime
+copy exclusions must be package-relative: nested cache directories stay out,
+but the location of the framework checkout must not remove every module.
+Cache names apply to directory segments, not benign filenames or substrings.
+Traversal errors must remain visible and fail installation; a partial file
+enumeration is not a completed runtime copy.
 `scripts/release/rehearse.mjs` (§3 Step 3a) does this from the release
 archive; `scripts/release/verify-public.mjs` (§3 Step 8) covers the GitHub
 download.
 Check that newly added modules arrive, moved adapters resolve from their new
 locations, and the consumer's own version and configuration survive updating.
+Run installed suites for both the standard and custom presets (#347).
+Custom may intentionally omit optional prompts/hooks; only those asset-specific
+tests may be unavailable. The narrow omission allowlist is PreCommit, step0
+and step2; required runbooks are not optional. Core classifiers, worker behavior
+and gate checks must remain active. Missing standard/source assets, broken
+asset or ancestor links and invalid configuration must still fail. Record the
+exact passed/failed/skipped counts and keep test-contract
+changes separate from installer product fixes.
 The release archive must retain all three packages but exclude phase plans,
 archives, cleanup findings, and the root maintainer `AGENTS.md`.
 

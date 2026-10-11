@@ -5,9 +5,14 @@ import { pathToFileURL } from "node:url";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { run } from "../src/jobs/worktree.mjs";
 import { g1Directory } from "./g1-runner-fixture.mjs";
+import { openPosixProcessScope } from "../src/jobs/posix-process-scope.mjs";
+
+vi.mock("node:child_process", { spy: true });
 
 // +60000ms covers real process startup, native snapshots and Windows CI scheduling, not settlement proof.
 const NATIVE_TOLERANCE_MS = 60_000;
+const PRE_READY_CANCELLATION_MS = 3_000;
+const PRE_READY_MARKER = "CLAW_TEST_PRE_READY_SIGTERM_REFUSAL";
 const fixtures = [];
 
 async function fixture() {
@@ -72,6 +77,75 @@ afterEach(async () => {
 });
 
 describe("native owned process settlement", () => {
+  it.runIf(process.platform === "linux")("sends private stop when cancellation precedes READY and the actual native root refuses SIGTERM", async () => {
+    const value = await fixture();
+    const marker = path.join(value.root, "never-started.json");
+    const script = path.join(value.root, "never-started.mjs");
+    await writeFile(script, `import { writeFileSync } from "node:fs";writeFileSync(${JSON.stringify(marker)},"started");`);
+    const original = await vi.importActual("node:child_process");
+    const controller = new AbortController();
+    const overdue = Promise.withResolvers();
+    const onRootReady = vi.fn();
+    let root;
+    let closed;
+    let timer;
+    vi.mocked(spawn).mockImplementation((command, args, options) => {
+      let forwarded = args;
+      if (path.basename(command) === "pwsh") {
+        const index = args.indexOf("-EncodedCommand") + 1;
+        const bootstrap = Buffer.from(args[index], "base64").toString("utf16le");
+        const refusal = `
+          Add-Type -TypeDefinition 'public static class ClawTestSignalRefusal {
+            static System.Runtime.InteropServices.PosixSignalRegistration registration;
+            public static void Install() {
+              registration = System.Runtime.InteropServices.PosixSignalRegistration.Create(
+                System.Runtime.InteropServices.PosixSignal.SIGTERM, context => context.Cancel = true);
+            }
+          }'
+          [ClawTestSignalRefusal]::Install()
+          [Console]::Error.WriteLine("${PRE_READY_MARKER}")
+        `;
+        forwarded = [...args];
+        forwarded[index] = Buffer.from(refusal + bootstrap, "utf16le").toString("base64");
+      }
+      const child = original.spawn(command, forwarded, options);
+      if (path.basename(command) === "pwsh") {
+        root = child;
+        value.pids.push(child.pid);
+        closed = new Promise((resolve) => child.once("close", resolve));
+        child.stderr.on("data", (chunk) => {
+          if (timer || !chunk.toString().includes(PRE_READY_MARKER)) return;
+          // +0ms preserves the existing native control bound; a real runtime marker selects the failure phase.
+          timer = setTimeout(() => overdue.reject(new Error("PRE_READY_CANCELLATION_STALLED")), PRE_READY_CANCELLATION_MS);
+          controller.abort();
+        });
+      }
+      return child;
+    });
+    const running = run(process.execPath, [script], {
+      cwd: value.root, requireSettlement: true, signal: controller.signal, onRootReady,
+    });
+    try {
+      const result = await Promise.race([running, overdue.promise]);
+      expect(result.error?.code).toBe("JOB_CANCELLED");
+      expect(result.settlementConfirmed).toBe(false);
+      expect(onRootReady).not.toHaveBeenCalled();
+      await expect(readFile(marker)).rejects.toMatchObject({ code: "ENOENT" });
+      expect(root.exitCode !== null || root.signalCode !== null).toBe(true);
+      expect(root.connected).toBe(false);
+    } finally {
+      clearTimeout(timer);
+      vi.mocked(spawn).mockRestore();
+      if (root?.exitCode === null && root.signalCode === null) {
+        const scope = await openPosixProcessScope({ rootPid: root.pid, rootProcess: root });
+        expect((await scope.terminate()).settlementConfirmed).toBe(true);
+        await scope.close();
+      }
+      await closed;
+      await running;
+    }
+  }, 15_000);
+
   it("establishes a real held native root before repeated fast argv execution and proves its awaited stop", async () => {
     const value = await fixture();
     const script = path.join(value.root, "fast.mjs");

@@ -1,4 +1,3 @@
-import { spawn } from "node:child_process";
 import { constants } from "node:fs";
 import { access, readFile } from "node:fs/promises";
 import net from "node:net";
@@ -6,19 +5,16 @@ import path from "node:path";
 import { StringDecoder } from "node:string_decoder";
 import { fileURLToPath } from "node:url";
 import { ClawError } from "../errors.mjs";
-import { NATIVE_SCOPE_ERRORS, NATIVE_SUPERVISOR_ARGUMENT } from "./native-command-supervisor.mjs";
+import {
+  nativeSupervisorRootExit, NATIVE_SCOPE_ERRORS, NATIVE_SCOPE_MAX_PROCESSES, NATIVE_SUPERVISOR_ARGUMENT,
+  NATIVE_SUPERVISOR_STOP_MESSAGE,
+} from "./native-command-supervisor.mjs";
 
 const MAX_PATH_BYTES = 2_048;
 const MAX_CONTROL_BYTES = 32_768;
 const CONTROL_TIMEOUT_MS = 3_000;
-const BROKER_START_TIMEOUT_MS = 2_500;
-const MAX_BROKER_SCOPES = 256;
 const PROC_START_INDEX = 19;
 const SCOPE_ADDRESS_PREFIX = "\0pforge-claw-posix-";
-const BROKERS = new Map();
-const BROKER_ENVIRONMENT_FIELDS = Object.freeze([
-  "PATH", "HOME", "TMPDIR", "TMP", "TEMP", "LANG", "LC_ALL", "LC_CTYPE",
-]);
 const TRUSTED_SUPERVISOR_PATH = fileURLToPath(new URL("./native-command-supervisor.mjs", import.meta.url));
 const UNSEALED_RUNTIME_HOOK = /^(?:CORECLR_|COR_|COMPlus_ProfAPI|LD_(?!PRELOAD$|LIBRARY_PATH$))/;
 
@@ -155,6 +151,7 @@ public static class ClawPosixNative {
 const ROOT_SOURCE = String.raw`
 public sealed class ClawPosixRoot {
     const string ReadyMessage = "owned-ready", StartMessage = "owned-start", ResultMessage = "owned-result";
+    const string StopMessage = "__STOP_MESSAGE__";
     const int UnixDomain = 1, StreamSocket = 1, SocketCloseOnExec = 524288;
     const int SpawnActionsBytes = 256, MaxPidDigits = 16;
     [DllImport("libc", SetLastError=true)] static extern int socketpair(int domain, int type, int protocol, [Out] int[] pair);
@@ -262,6 +259,8 @@ public sealed class ClawPosixRoot {
             while ((line = ClawPosixNative.ReadLine(outerReader, ClawPosixNative.MaxActorChars)) != null) {
                 using var document = JsonDocument.Parse(line);
                 var frame = document.RootElement;
+                if (frame.GetProperty("v").GetInt32() != 1) throw new ScopeFault(ClawPosixNative.Unconfirmed);
+                if (frame.GetProperty("t").GetString() == StopMessage) break;
                 if (frame.GetProperty("t").GetString() != StartMessage) continue;
                 lock (state) {
                     if (!attached || terminating || started) throw new ScopeFault(ClawPosixNative.Unconfirmed);
@@ -394,61 +393,6 @@ public sealed class ClawPosixRoot {
 }
 `;
 
-const BROKER_SOURCE = String.raw`
-public static class ClawPosixObserver {
-    static readonly Dictionary<int, int> handles = new Dictionary<int, int>();
-    static readonly object state = new object(), outputLock = new object();
-    static void Send(object frame) {
-        lock (outputLock) { Console.Out.WriteLine(JsonSerializer.Serialize(frame)); Console.Out.Flush(); }
-    }
-    static object Execute(JsonElement request) {
-        int id = request.GetProperty("id").GetInt32(), pid = request.GetProperty("rootPid").GetInt32();
-        string operation = request.GetProperty("operation").GetString();
-        if (operation == "open") {
-            lock (state) {
-                if (handles.Count >= ClawPosixNative.MaxProcesses) throw new ScopeFault(ClawPosixNative.Limit);
-                if (handles.ContainsKey(pid)) throw new ScopeFault(ClawPosixNative.Unconfirmed);
-                handles[pid] = ClawPosixNative.OpenPid(pid, request.GetProperty("rootStartedAt").GetString(),
-                    ClawPosixNative.getppid());
-            }
-            return new { id, ok = true };
-        }
-        if (operation == "dispose") {
-            lock (state) {
-                if (handles.Remove(pid, out int descriptor)) ClawPosixNative.close(descriptor);
-            }
-            return new { id, ok = true };
-        }
-        if (operation != "wait") throw new ScopeFault(ClawPosixNative.Unconfirmed);
-        int fd;
-        lock (state) if (!handles.TryGetValue(pid, out fd)) throw new ScopeFault(ClawPosixNative.Unconfirmed);
-        var elapsed = Stopwatch.StartNew();
-        while (elapsed.ElapsedMilliseconds < ClawPosixNative.DeadlineMs) {
-            if (ClawPosixNative.HasExited(fd, (int)(ClawPosixNative.DeadlineMs - elapsed.ElapsedMilliseconds)))
-                return new { id, ok = true, exited = true };
-        }
-        throw new ScopeFault(ClawPosixNative.Unconfirmed);
-    }
-    public static void Run() {
-        Send(new { v = 1, ready = true });
-        try {
-            string line;
-            var input = new StreamReader(Console.OpenStandardInput(), Encoding.UTF8);
-            while ((line = ClawPosixNative.ReadLine(input, ClawPosixNative.MaxControlChars)) != null) {
-                using var document = JsonDocument.Parse(line);
-                var request = document.RootElement.Clone();
-                try { Send(Execute(request)); }
-                catch (Exception exception) { Send(new {
-                    id = request.GetProperty("id").GetInt32(), ok = false, code = ClawPosixNative.Error(exception)
-                }); }
-            }
-        } finally {
-            lock (state) { foreach (int fd in handles.Values) ClawPosixNative.close(fd); handles.Clear(); }
-        }
-    }
-}
-`;
-
 function unavailable(facility) {
   return new ClawError(NATIVE_SCOPE_ERRORS.UNAVAILABLE, { platform: process.platform, facility });
 }
@@ -463,7 +407,8 @@ function nativeSource(body) {
   return `${NATIVE_SOURCE}${body}`.replaceAll("__UNAVAILABLE__", NATIVE_SCOPE_ERRORS.UNAVAILABLE)
     .replaceAll("__UNCONFIRMED__", NATIVE_SCOPE_ERRORS.UNCONFIRMED)
     .replaceAll("__LIMIT__", NATIVE_SCOPE_ERRORS.LIMIT)
-    .replaceAll("__MAX_PROCESSES__", String(MAX_BROKER_SCOPES));
+    .replaceAll("__STOP_MESSAGE__", NATIVE_SUPERVISOR_STOP_MESSAGE)
+    .replaceAll("__MAX_PROCESSES__", String(NATIVE_SCOPE_MAX_PROCESSES));
 }
 
 function powershellArguments(source, invocation) {
@@ -528,73 +473,6 @@ function readFrames(stream, receive, fail) {
   stream.once("error", fail);
 }
 
-function brokerEnvironment() {
-  const env = { POWERSHELL_TELEMETRY_OPTOUT: "1", DOTNET_CLI_TELEMETRY_OPTOUT: "1" };
-  for (const field of BROKER_ENVIRONMENT_FIELDS) {
-    if (Object.hasOwn(process.env, field)) env[field] = process.env[field];
-  }
-  return env;
-}
-
-function makeBroker(command) {
-  const ready = Promise.withResolvers();
-  const closed = Promise.withResolvers();
-  const pending = new Map();
-  const child = spawn(command, powershellArguments(nativeSource(BROKER_SOURCE), "[ClawPosixObserver]::Run()"), {
-    env: brokerEnvironment(), shell: false, windowsHide: true, stdio: ["pipe", "pipe", "ignore"],
-  });
-  const broker = { child, pending, ready: ready.promise, closed: closed.promise, users: 0, sequence: 0 };
-  const fail = () => {
-    ready.reject(unavailable("linux-pidfd-observer"));
-    for (const request of pending.values()) request.reject(new ClawError(NATIVE_SCOPE_ERRORS.UNCONFIRMED));
-    pending.clear();
-  };
-  const timer = setTimeout(() => { fail(); child.kill("SIGKILL"); }, BROKER_START_TIMEOUT_MS);
-  readFrames(child.stdout, (frame) => {
-    if (frame.v === 1 && frame.ready === true) { clearTimeout(timer); ready.resolve(); return; }
-    const request = pending.get(frame.id);
-    if (!request) return;
-    pending.delete(frame.id);
-    if (frame.ok === true) request.resolve(frame);
-    else request.reject(new ClawError(Object.values(NATIVE_SCOPE_ERRORS).includes(frame.code)
-      ? frame.code : NATIVE_SCOPE_ERRORS.UNCONFIRMED));
-  }, fail);
-  child.stdin.on("error", fail);
-  child.once("error", fail);
-  child.once("close", () => { clearTimeout(timer); fail(); closed.resolve(); });
-  return broker;
-}
-
-function brokerRequest(broker, operation, identity) {
-  const request = Promise.withResolvers();
-  broker.sequence += 1;
-  const id = broker.sequence;
-  const timer = setTimeout(() => {
-    broker.pending.delete(id);
-    request.reject(new ClawError(NATIVE_SCOPE_ERRORS.UNCONFIRMED));
-  }, CONTROL_TIMEOUT_MS);
-  broker.pending.set(id, request);
-  broker.child.stdin.write(`${JSON.stringify({ id, operation, ...identity })}\n`);
-  return request.promise.finally(() => clearTimeout(timer));
-}
-
-async function acquireBroker(command) {
-  let broker = BROKERS.get(command);
-  if (!broker) { broker = makeBroker(command); BROKERS.set(command, broker); }
-  if (broker.users >= MAX_BROKER_SCOPES) throw new ClawError(NATIVE_SCOPE_ERRORS.LIMIT);
-  broker.users += 1;
-  try { await broker.ready; return broker; } catch (error) { await releaseBroker(command, broker); throw error; }
-}
-
-async function releaseBroker(command, broker) {
-  broker.users -= 1;
-  if (broker.users > 0) return;
-  if (BROKERS.get(command) === broker) BROKERS.delete(command);
-  broker.child.stdin.end();
-  const timer = setTimeout(() => broker.child.kill("SIGKILL"), CONTROL_TIMEOUT_MS);
-  try { await broker.closed; } finally { clearTimeout(timer); }
-}
-
 async function rootBirth(rootPid) {
   try {
     const text = await readFile(path.join(path.sep, "proc", String(rootPid), "stat"), "utf8");
@@ -645,11 +523,32 @@ function failedSettlement(identity, code = NATIVE_SCOPE_ERRORS.UNCONFIRMED) {
 
 function hasZeroDescendantReceipt(receipt, identity) {
   return matchesIdentity(receipt, identity) && receipt.zeroChildren === true && receipt.unknownProcesses === 0
-    && receipt.code == null && Array.isArray(receipt.stoppedPids) && receipt.stoppedPids.length <= MAX_BROKER_SCOPES
+    && receipt.code == null && Array.isArray(receipt.stoppedPids) && receipt.stoppedPids.length <= NATIVE_SCOPE_MAX_PROCESSES
     && receipt.stoppedPids.every((pid) => Number.isSafeInteger(pid) && pid > 0);
 }
 
-async function terminateScope({ identity, transport, broker }) {
+async function waitForNativeRootExit(rootPid, rootExit) {
+  let timer;
+  try {
+    const exit = await Promise.race([
+      rootExit,
+      new Promise((_, reject) => {
+        timer = setTimeout(() => reject(new ClawError(NATIVE_SCOPE_ERRORS.UNCONFIRMED)), CONTROL_TIMEOUT_MS);
+      }),
+    ]);
+    return exit.rootPid === rootPid;
+  } finally { clearTimeout(timer); }
+}
+
+function ownedRootCertificate(rootPid, rootProcess) {
+  const certificate = nativeSupervisorRootExit(rootProcess);
+  if (!certificate || certificate.rootPid !== rootPid || certificate.exited) {
+    throw unavailable("owned-native-child-handle");
+  }
+  return certificate;
+}
+
+async function terminateScope({ identity, transport, rootExit }) {
   try {
     transport.socket.write('{"v":1,"operation":"terminate"}\n');
     const receipt = await transport.receive();
@@ -657,8 +556,7 @@ async function terminateScope({ identity, transport, broker }) {
       return failedSettlement(identity, receipt?.code === NATIVE_SCOPE_ERRORS.LIMIT
         ? NATIVE_SCOPE_ERRORS.LIMIT : NATIVE_SCOPE_ERRORS.UNCONFIRMED);
     }
-    const exit = await brokerRequest(broker, "wait", identity);
-    if (exit.exited !== true) return failedSettlement(identity);
+    if (!(await waitForNativeRootExit(identity.rootPid, rootExit))) return failedSettlement(identity);
     return {
       ...identity, rootReady: true, stoppedPids: [...new Set([...receipt.stoppedPids, identity.rootPid])],
       settlementConfirmed: true, unknownProcesses: 0,
@@ -666,21 +564,17 @@ async function terminateScope({ identity, transport, broker }) {
   } catch { return failedSettlement(identity); }
 }
 
-function ownedScope({ identity, transport, broker, command }) {
+function ownedScope({ identity, transport, rootExit }) {
   let settlement;
   let closing;
   const terminate = () => {
-    settlement ??= terminateScope({ identity, transport, broker });
+    settlement ??= terminateScope({ identity, transport, rootExit });
     return settlement;
   };
   const close = () => {
     closing ??= (async () => {
       await terminate();
       transport.socket.destroy();
-      try { await brokerRequest(broker, "dispose", identity); } catch {
-        broker.child.stdin.end();
-      }
-      await releaseBroker(command, broker);
     })();
     return closing;
   };
@@ -688,29 +582,26 @@ function ownedScope({ identity, transport, broker, command }) {
 }
 
 /**
- * Attach only to a native held root; proof requires its waitpid/ECHILD receipt and pidfd-observed root exit.
- * @param {{rootPid:number, env?:NodeJS.ProcessEnv}} options
+ * Bind the retained native ChildProcess wait to the held root's identity and measured waitpid/ECHILD receipt.
+ * @param {{rootPid:number, rootProcess:import("node:child_process").ChildProcess, env?:NodeJS.ProcessEnv}} options
  * @returns {Promise<PosixProcessScope>}
  */
-export async function openPosixProcessScope({ rootPid } = {}) {
+export async function openPosixProcessScope({ rootPid, rootProcess } = {}) {
   if (!Number.isSafeInteger(rootPid) || rootPid <= 0) throw unavailable("positive-root-pid");
   requireLinux();
+  const certificate = ownedRootCertificate(rootPid, rootProcess);
   const identity = { rootPid, rootStartedAt: await rootBirth(rootPid) };
+  if (certificate.exited) throw unavailable("owned-native-child-handle");
   const transport = scopeTransport(identity);
-  let broker;
-  let command;
   try {
     transport.socket.write(`${JSON.stringify({ v: 1, operation: "attach", ...identity })}\n`);
     const hello = await transport.receive();
     if (!matchesIdentity(hello, identity) || hello.subreaper !== true || hello.pidfd !== true)
       throw unavailable("held-subreaper-root");
-    command = await powershellPath();
-    broker = await acquireBroker(command);
-    await brokerRequest(broker, "open", identity);
-    return ownedScope({ identity, transport, broker, command });
+    if (certificate.exited) throw unavailable("owned-native-child-handle");
+    return ownedScope({ identity, transport, rootExit: certificate.exit });
   } catch (error) {
     transport.socket.destroy();
-    if (broker) await releaseBroker(command, broker);
     throw error instanceof ClawError && [NATIVE_SCOPE_ERRORS.UNAVAILABLE, NATIVE_SCOPE_ERRORS.LIMIT].includes(error.code)
       ? error : unavailable("held-subreaper-root");
   }

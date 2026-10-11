@@ -15,11 +15,15 @@ const POLL_INTERVAL_MS = 25;
 const MAX_NATIVE_PID = 2_147_483_647;
 const IDLE_GRACE_MS = 1000;
 const MAX_ENCODED_COMMAND_LENGTH = 30_000;
+const NATIVE_COMMAND_TIMEOUT_MS = 5000;
+const COLD_TEST_TIMEOUT_MS = 30_000;
+const COMPILER_STALL_MS = 6000;
 const FAKE_BROKER_PID = 123_456_789;
 const FAKE_ROOT_PID = 123_456_788;
 const FAKE_BIRTH = "639272939750000000";
 const ADAPTER_URL = new URL("../src/jobs/windows-process-scope.mjs", import.meta.url);
 const SUPERVISOR_URL = new URL("../src/jobs/native-command-supervisor.mjs", import.meta.url);
+const WORKTREE_URL = new URL("../src/jobs/worktree.mjs", import.meta.url);
 const fixtures = [];
 const mockCleanups = [];
 
@@ -280,12 +284,18 @@ async function mockAdapter(respond) {
   };
 }
 
-async function capturedAdapter() {
+async function capturedAdapter(transformBootstrap) {
   await closeWindowsProcessBroker();
   vi.resetModules();
   const children = [];
   vi.doMock("node:child_process", () => ({
     spawn(command, args, options) {
+      if (transformBootstrap && command.toLowerCase().endsWith("pwsh.exe")) {
+        args = [...args];
+        const index = args.indexOf("-EncodedCommand") + 1;
+        const bootstrap = Buffer.from(args[index], "base64").toString("utf16le");
+        args[index] = Buffer.from(transformBootstrap(bootstrap), "utf16le").toString("base64");
+      }
       const child = spawn(command, args, options);
       children.push(child);
       return child;
@@ -294,6 +304,155 @@ async function capturedAdapter() {
   const adapter = await import("../src/jobs/windows-process-scope.mjs");
   mockCleanups.push(() => adapter.closeWindowsProcessBroker());
   return { open: adapter.openWindowsProcessScope, closeBroker: adapter.closeWindowsProcessBroker, children };
+}
+
+async function nativeBindingObservation() {
+  const probe = String.raw`
+    $imports = @($native.GetMethods() | ForEach-Object {
+      $attributes = $_.GetCustomAttributes([Runtime.InteropServices.DllImportAttribute],$false)
+      if ($attributes.Count -eq 1) {
+        @{ name=$_.Name; lastError=$attributes[0].SetLastError; entry=$attributes[0].EntryPoint
+           library=$attributes[0].Value; charset=$attributes[0].CharSet.ToString()
+           convention=$attributes[0].CallingConvention.ToString()
+           returns=$_.ReturnType.Name; parameters=@($_.GetParameters() | ForEach-Object { $_.ParameterType.Name })
+           preserveSig=($_.MethodImplementationFlags -band [Reflection.MethodImplAttributes]::PreserveSig) -ne 0 }
+      }
+    })
+    $controlAssembly = [Reflection.Emit.AssemblyBuilder]::DefineDynamicAssembly(
+      [Reflection.AssemblyName]::new("Claw.Win01.Control"),[Reflection.Emit.AssemblyBuilderAccess]::Run)
+    $control = $controlAssembly.DefineDynamicModule("Control").DefineType("Control",[Reflection.TypeAttributes]"Public,Abstract,Sealed")
+    $import = [Runtime.InteropServices.DllImportAttribute]
+    $ctor = $import.GetConstructor([Type[]]@([string]))
+    $fields = [Reflection.FieldInfo[]]@($import.GetField("SetLastError"),$import.GetField("EntryPoint"),
+      $import.GetField("CharSet"),$import.GetField("CallingConvention"))
+    foreach ($definition in @(
+      @{ name="ResetLastError"; entry="SetLastError"; returns=[void]; parameters=[Type[]]@([uint32]) },
+      @{ name="Query"; entry="QueryInformationJobObject"; returns=[bool]; parameters=[Type[]]@([IntPtr],[int],[IntPtr],[uint32],[IntPtr]) }
+    )) {
+      $method = $control.DefineMethod($definition.name,[Reflection.MethodAttributes]"Public,Static,PinvokeImpl",
+        [Reflection.CallingConventions]::Standard,$definition.returns,$definition.parameters)
+      $values = [object[]]@($true,$definition.entry,[Runtime.InteropServices.CharSet]::Unicode,
+        [Runtime.InteropServices.CallingConvention]::Winapi)
+      $method.SetCustomAttribute([Reflection.Emit.CustomAttributeBuilder]::new($ctor,[object[]]@("kernel32.dll"),$fields,$values))
+      $method.SetImplementationFlags([Reflection.MethodImplAttributes]::PreserveSig)
+    }
+    $control = $control.CreateType()
+    $probeJob = $native::CreateJobObject([IntPtr]::Zero,$null)
+    $probeBuffer = [Runtime.InteropServices.Marshal]::AllocHGlobal($ACCOUNTING_BYTES)
+    try {
+      if ($probeJob -eq [IntPtr]::Zero) { throw "WIN01_PROBE_CREATE_FAILED" }
+      $control::ResetLastError(0)
+      $nativeSuccess = $native::QueryInformationJobObject($probeJob,$BASIC_ACCOUNTING,$probeBuffer,1,[IntPtr]::Zero)
+      $nativeError = [Runtime.InteropServices.Marshal]::GetLastWin32Error()
+      $control::ResetLastError(0)
+      $controlSuccess = $control::Query($probeJob,$BASIC_ACCOUNTING,$probeBuffer,1,[IntPtr]::Zero)
+      $controlError = [Runtime.InteropServices.Marshal]::GetLastWin32Error()
+      [Console]::Error.WriteLine("WIN01_ABI:" + (ConvertTo-Json -Depth 4 -Compress -InputObject @{
+        imports=$imports; nativeSuccess=$nativeSuccess; nativeError=$nativeError
+        controlSuccess=$controlSuccess; controlError=$controlError
+        powershell=$PSVersionTable.PSVersion.ToString(); dotnet=[Environment]::Version.ToString()
+      }))
+    } finally {
+      [Runtime.InteropServices.Marshal]::FreeHGlobal($probeBuffer)
+      [void]$native::CloseHandle($probeJob)
+    }
+  `;
+  const encodedProbe = Buffer.from(probe, "utf8").toString("base64");
+  const adapter = await capturedAdapter((bootstrap) => bootstrap.replace(
+    "$broker = [ScriptBlock]::Create($reader.ReadToEnd())",
+    `$brokerSource = $reader.ReadToEnd()
+     $probe = [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String("${encodedProbe}"))
+     $broker = [ScriptBlock]::Create($brokerSource.Replace('$native = New-NativeBindings',
+       '$native = New-NativeBindings' + [Environment]::NewLine + $probe))`,
+  ));
+  const fixture = await endpoint();
+  const supervisor = createNativeSupervisor();
+  fixture.roots.push(supervisor);
+  expect(await supervisor.ready).toBe(true);
+  const opening = adapter.open({ rootPid: supervisor.child.pid });
+  await vi.waitFor(() => expect(adapter.children).toHaveLength(1));
+  let diagnostics = "";
+  adapter.children[0].stderr.setEncoding("utf8").on("data", (chunk) => { diagnostics += chunk; });
+  const scope = await opening;
+  fixture.scopes.push(scope);
+  await settle({ supervisor, scope });
+  await scope.close();
+  await adapter.closeBroker();
+  expect(isAlive(adapter.children[0].pid)).toBe(false);
+  const line = diagnostics.split(/\r?\n/).find((value) => value.startsWith("WIN01_ABI:"));
+  expect(line).toBeTypeOf("string");
+  return JSON.parse(line.slice("WIN01_ABI:".length));
+}
+
+async function coldNativeWorker(fixture, { blockCompiler = false } = {}) {
+  // The 30s outer scheduling tolerance never changes the real 5s command gate; clocks are diagnostic only.
+  const compilerEdge = blockCompiler ? `
+    function Add-Type {
+      [CmdletBinding()] param([string]$TypeDefinition)
+      [Threading.Thread]::Sleep(${COMPILER_STALL_MS})
+      Microsoft.PowerShell.Utility\\Add-Type @PSBoundParameters
+    }
+  ` : "";
+  const script = `
+    import childProcess from "node:child_process";
+    import { syncBuiltinESMExports } from "node:module";
+    import { performance } from "node:perf_hooks";
+    const launch = childProcess.spawn;
+    // Metrics use outer scheduling tolerance; the actual command deadline remains five seconds.
+    const started = performance.now();
+    const elapsedMs = () => performance.now() - started;
+    let brokerPid;
+    let rootPid;
+    let brokerStarts = 0;
+    childProcess.spawn = (command, args, options) => {
+      if (command.toLowerCase().endsWith("pwsh.exe")) {
+        brokerStarts++;
+        const encodedIndex = args.indexOf("-EncodedCommand") + 1;
+        if (${Boolean(blockCompiler)}) {
+          args = [...args];
+          const ownSource = Buffer.from(args[encodedIndex], "base64").toString("utf16le");
+          args[encodedIndex] = Buffer.from(${JSON.stringify(compilerEdge)} + ownSource, "utf16le").toString("base64");
+        }
+      }
+      const child = launch(command, args, options);
+      if (command.toLowerCase().endsWith("pwsh.exe")) brokerPid = child.pid;
+      if (args.includes("--pforge-command-supervisor")) rootPid = child.pid;
+      return child;
+    };
+    syncBuiltinESMExports();
+    const { run } = await import(${JSON.stringify(WORKTREE_URL.href)});
+    const { closeWindowsProcessBroker } = await import(${JSON.stringify(ADAPTER_URL.href)});
+    const native = await run(process.execPath, ["-e", "process.exitCode=7"], {
+      requireSettlement:true, timeoutMs:${NATIVE_COMMAND_TIMEOUT_MS}
+    });
+    await closeWindowsProcessBroker();
+    // Wall-clock diagnostics use the outer scheduling tolerance, not settlement or deadline evidence.
+    const safeCode = (code) => /^[A-Z][A-Z0-9_]{0,63}$/.test(code ?? "") ? code : null;
+    process.stdout.write(JSON.stringify({
+      code:native.code, errorCode:safeCode(native.error?.code),
+      settlementConfirmed:native.settlementConfirmed, rootReady:native.settlement?.rootReady === true,
+      identityPresent:typeof native.settlement?.rootStartedAt === "string",
+      unknownProcesses:native.settlement?.unknownProcesses ?? null,
+      rootPid,brokerPid,brokerStarts,elapsedMs:elapsedMs()
+    }));
+  `;
+  const child = spawn(process.execPath, ["--input-type=module", "-e", script], {
+    shell: false, windowsHide: true, stdio: ["ignore", "pipe", "pipe"],
+  });
+  let output = "";
+  child.stdout.setEncoding("utf8").on("data", (chunk) => { output += chunk; });
+  child.stderr.resume();
+  const closed = new Promise((resolve, reject) => {
+    child.once("error", reject);
+    child.once("close", resolve);
+  });
+  fixture.roots.push({ child, closed });
+  expect(await closed).toBe(0);
+  const receipt = JSON.parse(output);
+  expect(receipt.brokerStarts).toBe(1);
+  expect(isAlive(receipt.rootPid)).toBe(false);
+  expect(isAlive(receipt.brokerPid)).toBe(false);
+  return receipt;
 }
 
 async function withWindowsPlatform(operation) {
@@ -722,6 +881,69 @@ describe.runIf(process.platform === "win32")("Windows actual native broker failu
   }, NATIVE_TOLERANCE_MS);
 });
 
+describe.runIf(process.platform === "win32")("WIN-01 actual emitted native ABI", () => {
+  it.each(["metadata", "last-error"])("preserves native %s on all production imports", async (check) => {
+    const observation = await nativeBindingObservation();
+    const diagnostic = JSON.stringify({
+      importCount: observation.imports.length, lastErrorImports: observation.imports.filter((entry) => entry.lastError).length,
+      nativeError: observation.nativeError, controlError: observation.controlError,
+      powershell: observation.powershell, dotnet: observation.dotnet,
+    });
+    expect(observation.imports).toHaveLength(10);
+    const parameters = {
+      OpenProcess: ["UInt32", "Boolean", "Int32"],
+      CloseHandle: ["IntPtr"],
+      GetProcessTimes: ["IntPtr", "IntPtr", "IntPtr", "IntPtr", "IntPtr"],
+      CreateJobObject: ["IntPtr", "String"],
+      SetInformationJobObject: ["IntPtr", "Int32", "IntPtr", "UInt32"],
+      AssignProcessToJobObject: ["IntPtr", "IntPtr"],
+      IsProcessInJob: ["IntPtr", "IntPtr", "IntPtr"],
+      TerminateJobObject: ["IntPtr", "UInt32"],
+      WaitForSingleObject: ["IntPtr", "UInt32"],
+      QueryInformationJobObject: ["IntPtr", "Int32", "IntPtr", "UInt32", "IntPtr"],
+    };
+    for (const entry of observation.imports) {
+      const returns = ["OpenProcess", "CreateJobObject"].includes(entry.name) ? "IntPtr"
+        : entry.name === "WaitForSingleObject" ? "UInt32" : "Boolean";
+      expect(entry).toMatchObject({
+        library: "kernel32.dll", charset: "Unicode", convention: "Winapi", preserveSig: true,
+        entry: entry.name === "CreateJobObject" ? "CreateJobObjectW" : entry.name,
+        returns, parameters: parameters[entry.name],
+      });
+    }
+    expect(observation.nativeSuccess).toBe(false);
+    expect(observation.controlSuccess).toBe(false);
+    expect(observation.controlError).toBe(24);
+    if (check === "metadata") expect(observation.imports.every((entry) => entry.lastError), diagnostic).toBe(true);
+    else expect(observation.nativeError, diagnostic).toBe(observation.controlError);
+  }, NATIVE_TOLERANCE_MS);
+});
+
+describe.runIf(process.platform === "win32")("Windows cold native ownership deadline", () => {
+  it("starts four cold independent native owners within the existing five-second command deadlines", async () => {
+    const fixture = await endpoint();
+    const receipts = await Promise.all(Array.from({ length: 4 }, () => coldNativeWorker(fixture)));
+    expect(new Set(receipts.map((receipt) => receipt.rootPid)).size).toBe(4);
+    expect(new Set(receipts.map((receipt) => receipt.brokerPid)).size).toBe(4);
+    for (const receipt of receipts) {
+      expect(receipt, JSON.stringify(receipt)).toMatchObject({
+        code: 7, errorCode: null, rootReady: true, identityPresent: true,
+        settlementConfirmed: true, unknownProcesses: 0,
+      });
+    }
+  }, COLD_TEST_TIMEOUT_MS);
+
+  it("does not spend the native execution deadline on a blocked compiler during cold ownership", async () => {
+    const fixture = await endpoint();
+    // The compiler edge is delayed, not native ownership or zero-member proof; no broker is warmed.
+    const receipt = await coldNativeWorker(fixture, { blockCompiler: true });
+    expect(receipt, JSON.stringify(receipt)).toMatchObject({
+      code: 7, errorCode: null, rootReady: true, identityPresent: true,
+      settlementConfirmed: true, unknownProcesses: 0,
+    });
+  }, COLD_TEST_TIMEOUT_MS);
+});
+
 describe("Guard: Windows ownership has no global census or guessed PID termination", () => {
   it("contains native private job, root identity, no-breakaway limits and actual zero queries", async () => {
     const source = await readFile(ADAPTER_URL, "utf8");
@@ -732,8 +954,11 @@ describe("Guard: Windows ownership has no global census or guessed PID terminati
     expect(source).toContain("TerminateJobObject");
     expect(source).toContain("QueryInformationJobObject");
     expect(source).toContain("JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE");
-    expect(source).toContain("ActiveProcesses == 0");
+    expect(source).toContain("$activeProcesses -eq 0 -and $waited -eq $WAIT_OBJECT_0");
     expect(source).toContain("WaitForSingleObject");
+    expect(source).toContain("$method = $type.DefineMethod($signature.name");
+    expect(source).not.toContain("DefinePInvokeMethod(");
+    expect(source).not.toContain("Add-Type");
     expect(source).not.toMatch(/Get-CimInstance|Get-Process|Win32_Process|TerminateProcess|Stop-Process|taskkill|ParentProcessId/);
     expect(source).not.toMatch(/JOB_OBJECT_LIMIT_(?:SILENT_)?BREAKAWAY_OK/);
     expect(source).not.toMatch(/spawnSync|execSync|\bexec\s*\(|shell:\s*true/);

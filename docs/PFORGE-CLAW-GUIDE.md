@@ -21,12 +21,26 @@ capabilities fail local execution explicitly, never fall back to process-list
 guesses or broader permissions. A dispatcher using only remote execution lanes
 does not need to control those remote processes locally.
 
-The current adapters use a private, nonbreakaway Job Object on Windows and a
-held child subreaper with pidfd identity/exit checks on Linux. Linux requires
+The current adapters use a private, nonbreakaway Job Object with fixed native
+bindings instead of cold C# compilation on Windows, and a
+held child subreaper with birth-qualified pidfd signaling on Linux. Linux
+settlement requires both the root's native `waitpid`/`ECHILD` zero-child receipt
+and the parent's retained native child wait for that exact root. A caller-created
+child object, root-close event or successful command cannot supply this proof.
+Expired certificates cannot be rebound to a reused PID; the original native
+child must remain unreaped throughout birth and held-root identity binding.
+The parent reuses its original native wait instead of starting another compiled
+observer for every command. Linux requires
 accessible procfs and the corresponding kernel syscalls under the execution
 account; containers do not need privileged mode or added capabilities.
 `doctor` tests these facilities instead of inferring them from an OS version.
 Native ownership is lifecycle control, not an OS sandbox.
+
+Cancellation before native readiness uses the supervisor's fixed private stop
+control rather than relying on PowerShell's handling of SIGTERM during startup.
+No command arguments are launched on that path. The caller awaits the original
+root and its streams, but an unattached root still reports unconfirmed settlement
+and does not release publication or canonical-history ownership.
 
 **macOS execution is a current release blocker.** An authoritative native
 descendant scope has not yet been verified there. Local mutating execution

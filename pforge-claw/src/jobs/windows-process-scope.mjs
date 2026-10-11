@@ -48,354 +48,313 @@ let brokerCreation;
 
 // The broker receives only identity frames, never command arguments or caller credentials.
 const WINDOWS_BROKER_SOURCE = String.raw`
-using System;
-using System.Collections.Concurrent;
-using System.Collections.Generic;
-using System.Diagnostics;
-using System.Globalization;
-using System.Linq;
-using System.Runtime.InteropServices;
-using System.Text;
-using System.Text.Json;
-using System.Threading;
-using System.Threading.Tasks;
+$ErrorActionPreference = "Stop"
+$ProgressPreference = "SilentlyContinue"
+$JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE = 0x2000
+$ROOT_ACCESS = 0x101101
+$SYNCHRONIZE = 0x100000
+$WAIT_OBJECT_0 = 0
+$WAIT_TIMEOUT = 258
+$ERROR_MORE_DATA = 234
+$BASIC_ACCOUNTING = 1
+$PROCESS_ID_LIST = 3
+$EXTENDED_LIMITS = 9
+$LIMIT_FLAGS_OFFSET = 16
+$DWORD_BYTES = 4
+$PROCESS_TIMES_BYTES = 32
+$EXIT_TIME_OFFSET = 8
+$KERNEL_TIME_OFFSET = 16
+$USER_TIME_OFFSET = 24
+$EXTENDED_LIMIT_BYTES_64 = 144
+$EXTENDED_LIMIT_BYTES_32 = 112
+$ACCOUNTING_BYTES = 48
+$ACTIVE_PROCESS_OFFSET = 40
+$PID_LIST_HEADER_BYTES = 8
+$jobs = [Collections.Generic.Dictionary[string,object]]::new([StringComparer]::Ordinal)
+$ownedRoots = [Collections.Generic.HashSet[int]]::new()
+$scopeIds = [Collections.Generic.HashSet[string]]::new([StringComparer]::Ordinal)
+$requestIds = [Collections.Generic.HashSet[string]]::new([StringComparer]::Ordinal)
+$safeCodes = @(${Object.values(ERRORS).map((code) => `"${code}"`).join(",")})
+$native = $null
+$parentWait = $null
+$parentRegistration = $null
 
-internal sealed class ClawNativeFailure : Exception {
-  internal readonly string Code;
-  internal ClawNativeFailure(string code) : base(code) { Code = code; }
+function Stop-NativeFailure([string]$code) {
+  $failure = [InvalidOperationException]::new($code)
+  $failure.Data["ClawCode"] = $code
+  throw $failure
+}
+function Get-SafeFailure($failure, [string]$fallback) {
+  $code = $failure.Exception.Data["ClawCode"]
+  if ($safeCodes -ccontains $code) { return [string]$code }
+  return $fallback
+}
+function Assert-Native([bool]$valid, [string]$code) {
+  if (-not $valid) { Stop-NativeFailure $code }
+}
+function Send-NativeFrame($frame) {
+  [Console]::Out.WriteLine((ConvertTo-Json -InputObject $frame -Depth 4 -Compress))
+  [Console]::Out.Flush()
 }
 
-internal static class ClawJobApi {
-  internal const uint JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE = 0x00002000;
-  internal const uint PROCESS_SET_QUOTA = 0x0100;
-  internal const uint PROCESS_TERMINATE = 0x0001;
-  internal const uint PROCESS_QUERY_LIMITED_INFORMATION = 0x1000;
-  internal const uint SYNCHRONIZE = 0x00100000;
-  internal const uint WAIT_OBJECT_0 = 0;
-  internal const uint WAIT_TIMEOUT = 258;
-  internal const uint INFINITE = 0xffffffff;
-  internal const int ERROR_MORE_DATA = 234;
-  internal const int BASIC_ACCOUNTING = 1;
-  internal const int PROCESS_ID_LIST = 3;
-  internal const int EXTENDED_LIMITS = 9;
-  internal const int MAX_PIDS = ${MAX_KNOWN_PIDS};
-  internal const int SETTLE_TIMEOUT = ${NATIVE_SETTLEMENT_TIMEOUT_MS};
-  internal const int WAIT_INTERVAL = ${NATIVE_WAIT_INTERVAL_MS};
-
-  [StructLayout(LayoutKind.Sequential)]
-  internal struct FileTime { internal uint Low; internal uint High; }
-  [StructLayout(LayoutKind.Sequential)]
-  internal struct BasicLimits {
-    internal long PerProcessUserTimeLimit, PerJobUserTimeLimit;
-    internal uint LimitFlags;
-    internal UIntPtr MinimumWorkingSetSize, MaximumWorkingSetSize;
-    internal uint ActiveProcessLimit;
-    internal UIntPtr Affinity;
-    internal uint PriorityClass, SchedulingClass;
+function New-NativeBindings {
+  # Fixed P/Invoke metadata avoids invoking the C# compiler on each cold broker.
+  $assembly = [Reflection.Emit.AssemblyBuilder]::DefineDynamicAssembly(
+    [Reflection.AssemblyName]::new("Claw.Windows.JobApi"), [Reflection.Emit.AssemblyBuilderAccess]::Run)
+  $module = $assembly.DefineDynamicModule("Claw.Windows.JobApi")
+  $type = $module.DefineType("ClawJobApi", [Reflection.TypeAttributes]"Public,Abstract,Sealed")
+  $signatures = @(
+    @{ name="OpenProcess"; entry="OpenProcess"; returns=[IntPtr]; parameters=[Type[]]@([uint32],[bool],[int]) },
+    @{ name="CloseHandle"; entry="CloseHandle"; returns=[bool]; parameters=[Type[]]@([IntPtr]) },
+    @{ name="GetProcessTimes"; entry="GetProcessTimes"; returns=[bool]; parameters=[Type[]]@([IntPtr],[IntPtr],[IntPtr],[IntPtr],[IntPtr]) },
+    @{ name="CreateJobObject"; entry="CreateJobObjectW"; returns=[IntPtr]; parameters=[Type[]]@([IntPtr],[string]) },
+    @{ name="SetInformationJobObject"; entry="SetInformationJobObject"; returns=[bool]; parameters=[Type[]]@([IntPtr],[int],[IntPtr],[uint32]) },
+    @{ name="AssignProcessToJobObject"; entry="AssignProcessToJobObject"; returns=[bool]; parameters=[Type[]]@([IntPtr],[IntPtr]) },
+    @{ name="IsProcessInJob"; entry="IsProcessInJob"; returns=[bool]; parameters=[Type[]]@([IntPtr],[IntPtr],[IntPtr]) },
+    @{ name="TerminateJobObject"; entry="TerminateJobObject"; returns=[bool]; parameters=[Type[]]@([IntPtr],[uint32]) },
+    @{ name="WaitForSingleObject"; entry="WaitForSingleObject"; returns=[uint32]; parameters=[Type[]]@([IntPtr],[uint32]) },
+    @{ name="QueryInformationJobObject"; entry="QueryInformationJobObject"; returns=[bool]; parameters=[Type[]]@([IntPtr],[int],[IntPtr],[uint32],[IntPtr]) }
+  )
+  $importType = [Runtime.InteropServices.DllImportAttribute]
+  $constructor = $importType.GetConstructor([Type[]]@([string]))
+  $fields = [Reflection.FieldInfo[]]@($importType.GetField("SetLastError"), $importType.GetField("EntryPoint"),
+    $importType.GetField("CharSet"), $importType.GetField("CallingConvention"))
+  foreach ($signature in $signatures) {
+    # The attribute must create the import map; updating an existing map loses SetLastError.
+    $method = $type.DefineMethod($signature.name,
+      [Reflection.MethodAttributes]"Public,Static,PinvokeImpl", [Reflection.CallingConventions]::Standard,
+      $signature.returns, $signature.parameters)
+    $values = [object[]]@($true, $signature.entry, [Runtime.InteropServices.CharSet]::Unicode,
+      [Runtime.InteropServices.CallingConvention]::Winapi)
+    $method.SetCustomAttribute([Reflection.Emit.CustomAttributeBuilder]::new($constructor, [object[]]@("kernel32.dll"),
+      $fields, $values))
+    $method.SetImplementationFlags([Reflection.MethodImplAttributes]::PreserveSig)
   }
-  [StructLayout(LayoutKind.Sequential)]
-  internal struct IoCounters {
-    internal ulong ReadOperationCount, WriteOperationCount, OtherOperationCount;
-    internal ulong ReadTransferCount, WriteTransferCount, OtherTransferCount;
-  }
-  [StructLayout(LayoutKind.Sequential)]
-  internal struct ExtendedLimits {
-    internal BasicLimits BasicLimitInformation;
-    internal IoCounters IoInfo;
-    internal UIntPtr ProcessMemoryLimit, JobMemoryLimit, PeakProcessMemoryUsed, PeakJobMemoryUsed;
-  }
-  [StructLayout(LayoutKind.Sequential)]
-  internal struct Accounting {
-    internal long TotalUserTime, TotalKernelTime, ThisPeriodTotalUserTime, ThisPeriodTotalKernelTime;
-    internal uint TotalPageFaultCount, TotalProcesses, ActiveProcesses, TotalTerminatedProcesses;
-  }
-
-  [DllImport("kernel32.dll", SetLastError = true)]
-  internal static extern IntPtr OpenProcess(uint access, bool inherit, int pid);
-  [DllImport("kernel32.dll", SetLastError = true)]
-  internal static extern bool CloseHandle(IntPtr handle);
-  [DllImport("kernel32.dll", SetLastError = true)]
-  internal static extern bool GetProcessTimes(IntPtr process, out FileTime created, out FileTime exited,
-    out FileTime kernel, out FileTime user);
-  [DllImport("kernel32.dll", SetLastError = true, CharSet = CharSet.Unicode)]
-  internal static extern IntPtr CreateJobObject(IntPtr attributes, string name);
-  [DllImport("kernel32.dll", SetLastError = true)]
-  internal static extern bool SetInformationJobObject(IntPtr job, int kind, ref ExtendedLimits limits, uint size);
-  [DllImport("kernel32.dll", SetLastError = true)]
-  internal static extern bool AssignProcessToJobObject(IntPtr job, IntPtr process);
-  [DllImport("kernel32.dll", SetLastError = true)]
-  internal static extern bool IsProcessInJob(IntPtr process, IntPtr job, out bool assigned);
-  [DllImport("kernel32.dll", SetLastError = true)]
-  internal static extern bool TerminateJobObject(IntPtr job, uint exitCode);
-  [DllImport("kernel32.dll", SetLastError = true)]
-  internal static extern uint WaitForSingleObject(IntPtr handle, uint milliseconds);
-  [DllImport("kernel32.dll", SetLastError = true, EntryPoint = "QueryInformationJobObject")]
-  internal static extern bool QueryAccounting(IntPtr job, int kind, out Accounting accounting, uint size, IntPtr returned);
-  [DllImport("kernel32.dll", SetLastError = true, EntryPoint = "QueryInformationJobObject")]
-  internal static extern bool QueryInformationJobObject(IntPtr job, int kind, IntPtr buffer, uint size, IntPtr returned);
-
-  internal static long Birth(IntPtr process) {
-    FileTime created, exited, kernel, user;
-    if (!GetProcessTimes(process, out created, out exited, out kernel, out user))
-      throw new ClawNativeFailure("${ERRORS.IDENTITY}");
-    long fileTime = unchecked((long)(((ulong)created.High << 32) | created.Low));
-    return DateTime.FromFileTimeUtc(fileTime).Ticks;
-  }
+  # A managed wait callback must not run a PowerShell scriptblock on an unowned thread.
+  $callback = $type.DefineMethod("ParentExited", [Reflection.MethodAttributes]"Public,Static", [void],
+    [Type[]]@([object],[bool]))
+  $il = $callback.GetILGenerator()
+  $done = $il.DefineLabel()
+  $il.Emit([Reflection.Emit.OpCodes]::Ldarg_1)
+  $il.Emit([Reflection.Emit.OpCodes]::Brtrue_S,$done)
+  $il.Emit([Reflection.Emit.OpCodes]::Ldc_I4_0)
+  $il.Emit([Reflection.Emit.OpCodes]::Call, [Environment].GetMethod("Exit", [Type[]]@([int])))
+  $il.MarkLabel($done)
+  $il.Emit([Reflection.Emit.OpCodes]::Ret)
+  return $type.CreateType()
 }
 
-internal sealed class ClawJobSettlement {
-  internal int[] Pids = Array.Empty<int>();
-  internal bool Confirmed;
-  internal uint? Unknown;
-  internal string Code;
+function Get-NativeBirth([IntPtr]$processHandle) {
+  $times = [Runtime.InteropServices.Marshal]::AllocHGlobal($PROCESS_TIMES_BYTES)
+  try {
+    $valid = $native::GetProcessTimes($processHandle, $times, [IntPtr]::Add($times,$EXIT_TIME_OFFSET),
+      [IntPtr]::Add($times,$KERNEL_TIME_OFFSET), [IntPtr]::Add($times,$USER_TIME_OFFSET))
+    Assert-Native $valid "${ERRORS.IDENTITY}"
+    $birth = [DateTime]::FromFileTimeUtc([Runtime.InteropServices.Marshal]::ReadInt64($times)).Ticks
+    return $birth.ToString([Globalization.CultureInfo]::InvariantCulture)
+  } finally { [Runtime.InteropServices.Marshal]::FreeHGlobal($times) }
 }
-
-internal sealed class ClawOwnedJob : IDisposable {
-  internal readonly int Pid;
-  internal readonly long StartedAt;
-  private readonly object gate = new object();
-  private IntPtr process;
-  private IntPtr job;
-  internal ClawOwnedJob(int pid) {
-    Pid = pid;
+function Close-OwnedScope($scope) {
+  $jobClosed = $true
+  $rootClosed = $true
+  if ($scope.job -ne [IntPtr]::Zero) {
+    $jobClosed = $native::CloseHandle($scope.job)
+    $scope.job = [IntPtr]::Zero
+  }
+  if ($scope.process -ne [IntPtr]::Zero) {
+    $rootClosed = $native::CloseHandle($scope.process)
+    $scope.process = [IntPtr]::Zero
+  }
+  Assert-Native ($jobClosed -and $rootClosed) "${ERRORS.QUERY}"
+}
+function New-OwnedScope($frame) {
+  Assert-Native ($native::WaitForSingleObject($parentWait.SafeWaitHandle.DangerousGetHandle(),0) -eq $WAIT_TIMEOUT) "${ERRORS.BROKER}"
+  Assert-Native ($frame.rootPid -ne $parentPid -and $frame.rootPid -ne $brokerPid -and
+    -not $ownedRoots.Contains($frame.rootPid) -and -not $scopeIds.Contains($frame.scope)) "${ERRORS.IDENTITY}"
+  Assert-Native ($jobs.Count -lt ${MAX_SCOPES} -and $scopeIds.Count -lt ${MAX_REQUESTS}) "${ERRORS.LIMIT}"
+  $scope = @{ rootPid=[int]$frame.rootPid; rootStartedAt=$null; process=[IntPtr]::Zero; job=[IntPtr]::Zero }
+  $limits = [IntPtr]::Zero
+  $assigned = [IntPtr]::Zero
+  try {
+    $scope.process = $native::OpenProcess($ROOT_ACCESS,$false,$scope.rootPid)
+    Assert-Native ($scope.process -ne [IntPtr]::Zero) "${ERRORS.ATTACH}"
+    Assert-Native ($native::WaitForSingleObject($scope.process,0) -eq $WAIT_TIMEOUT) "${ERRORS.ATTACH}"
+    $scope.rootStartedAt = Get-NativeBirth $scope.process
+    $scope.job = $native::CreateJobObject([IntPtr]::Zero,$null)
+    Assert-Native ($scope.job -ne [IntPtr]::Zero) "${ERRORS.ATTACH}"
+    # Windows ABI offsets are independent of managed struct packing; pointer widths select the extent.
+    $limitBytes = if ([IntPtr]::Size -eq 8) { $EXTENDED_LIMIT_BYTES_64 } else { $EXTENDED_LIMIT_BYTES_32 }
+    $limits = [Runtime.InteropServices.Marshal]::AllocHGlobal($limitBytes)
+    [Runtime.InteropServices.Marshal]::Copy([byte[]]::new($limitBytes),0,$limits,$limitBytes)
+    [Runtime.InteropServices.Marshal]::WriteInt32($limits,$LIMIT_FLAGS_OFFSET,$JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE)
+    Assert-Native ($native::SetInformationJobObject($scope.job,$EXTENDED_LIMITS,$limits,$limitBytes)) "${ERRORS.ATTACH}"
+    Assert-Native ($native::AssignProcessToJobObject($scope.job,$scope.process)) "${ERRORS.ATTACH}"
+    $assigned = [Runtime.InteropServices.Marshal]::AllocHGlobal($DWORD_BYTES)
+    Assert-Native ($native::IsProcessInJob($scope.process,$scope.job,$assigned)) "${ERRORS.IDENTITY}"
+    Assert-Native ([Runtime.InteropServices.Marshal]::ReadInt32($assigned) -eq 1) "${ERRORS.IDENTITY}"
+    Assert-Native ((Get-NativeBirth $scope.process) -ceq $scope.rootStartedAt) "${ERRORS.IDENTITY}"
+    Assert-Native ($native::WaitForSingleObject($scope.process,0) -eq $WAIT_TIMEOUT) "${ERRORS.IDENTITY}"
+    $jobs.Add($frame.scope,$scope)
+    [void]$ownedRoots.Add($scope.rootPid)
+    [void]$scopeIds.Add($frame.scope)
+    return $scope
+  } catch {
+    Close-OwnedScope $scope
+    throw
+  } finally {
+    if ($limits -ne [IntPtr]::Zero) { [Runtime.InteropServices.Marshal]::FreeHGlobal($limits) }
+    if ($assigned -ne [IntPtr]::Zero) { [Runtime.InteropServices.Marshal]::FreeHGlobal($assigned) }
+  }
+}
+function Get-OwnedPids($scope) {
+  $bytes = $PID_LIST_HEADER_BYTES + ${MAX_KNOWN_PIDS} * [IntPtr]::Size
+  $buffer = [Runtime.InteropServices.Marshal]::AllocHGlobal($bytes)
+  try {
+    [Runtime.InteropServices.Marshal]::Copy([byte[]]::new($bytes),0,$buffer,$bytes)
+    $complete = $native::QueryInformationJobObject($scope.job,$PROCESS_ID_LIST,$buffer,$bytes,[IntPtr]::Zero)
+    Assert-Native ($complete -or [Runtime.InteropServices.Marshal]::GetLastWin32Error() -eq $ERROR_MORE_DATA) "${ERRORS.QUERY}"
+    $listed = [Runtime.InteropServices.Marshal]::ReadInt32($buffer,$DWORD_BYTES)
+    Assert-Native ($listed -ge 0 -and $listed -le ${MAX_KNOWN_PIDS}) "${ERRORS.QUERY}"
+    $members = [Collections.Generic.HashSet[int]]::new()
+    [void]$members.Add($scope.rootPid)
+    for ($index=0; $index -lt $listed -and $members.Count -lt ${MAX_KNOWN_PIDS}; $index++) {
+      $member = [Runtime.InteropServices.Marshal]::ReadIntPtr($buffer,$PID_LIST_HEADER_BYTES + $index * [IntPtr]::Size).ToInt64()
+      Assert-Native ($member -gt ${SYSTEM_PID_MAX} -and $member -le ${MAX_PID}) "${ERRORS.QUERY}"
+      [void]$members.Add([int]$member)
+    }
+    [int[]]$known = @($members)
+    [Array]::Sort($known)
+    return $known
+  } finally { [Runtime.InteropServices.Marshal]::FreeHGlobal($buffer) }
+}
+function Stop-OwnedScope($scope) {
+  Assert-Native ($scope.job -ne [IntPtr]::Zero) "${ERRORS.CLOSED}"
+  Assert-Native ((Get-NativeBirth $scope.process) -ceq $scope.rootStartedAt) "${ERRORS.IDENTITY}"
+  $settlement = @{ stoppedPids=@(); settlementConfirmed=$false; unknownProcesses=$null; code=$null }
+  $accounting = [Runtime.InteropServices.Marshal]::AllocHGlobal($ACCOUNTING_BYTES)
+  try {
+    $settlement.stoppedPids = [int[]]@(Get-OwnedPids $scope)
+    Assert-Native ($native::TerminateJobObject($scope.job,1)) "${ERRORS.QUERY}"
+    $elapsed = [Diagnostics.Stopwatch]::StartNew()
+    while ($true) {
+      Assert-Native ($native::QueryInformationJobObject($scope.job,$BASIC_ACCOUNTING,$accounting,$ACCOUNTING_BYTES,[IntPtr]::Zero)) "${ERRORS.QUERY}"
+      $activeProcesses = [uint32][Runtime.InteropServices.Marshal]::ReadInt32($accounting,$ACTIVE_PROCESS_OFFSET)
+      $waited = $native::WaitForSingleObject($scope.process,0)
+      Assert-Native ($waited -eq $WAIT_OBJECT_0 -or $waited -eq $WAIT_TIMEOUT) "${ERRORS.QUERY}"
+      $settlement.unknownProcesses = $activeProcesses
+      if ($activeProcesses -eq 0 -and $waited -eq $WAIT_OBJECT_0) {
+        $settlement.settlementConfirmed = $true
+        return $settlement
+      }
+      if ($elapsed.ElapsedMilliseconds -ge ${NATIVE_SETTLEMENT_TIMEOUT_MS}) {
+        $settlement.code = "${ERRORS.TIMEOUT}"
+        return $settlement
+      }
+      if ($waited -eq $WAIT_TIMEOUT) { [void]$native::WaitForSingleObject($scope.process,${NATIVE_WAIT_INTERVAL_MS}) }
+      else { [Threading.Thread]::Sleep(${NATIVE_WAIT_INTERVAL_MS}) }
+    }
+  } catch {
+    [void]$native::TerminateJobObject($scope.job,1)
+    $settlement.unknownProcesses = $null
+    $settlement.code = Get-SafeFailure $_ "${ERRORS.QUERY}"
+    return $settlement
+  } finally { [Runtime.InteropServices.Marshal]::FreeHGlobal($accounting) }
+}
+function Read-NativeLine {
+  $line = [Text.StringBuilder]::new()
+  while ($true) {
+    $character = [Console]::In.Read()
+    if ($character -lt 0) {
+      Assert-Native ($line.Length -eq 0) "${ERRORS.PROTOCOL}"
+      return $null
+    }
+    if ($character -eq 10) { return $line.ToString() }
+    Assert-Native ($line.Length -lt ${MAX_FRAME_BYTES}) "${ERRORS.PROTOCOL}"
+    if ($character -ne 13) { [void]$line.Append([char]$character) }
+  }
+}
+function Read-NativeFrame([string]$line) {
+  try { $frame = ConvertFrom-Json -InputObject $line -AsHashtable }
+  catch { Stop-NativeFailure "${ERRORS.PROTOCOL}" }
+  Assert-Native ($frame -is [Collections.IDictionary]) "${ERRORS.PROTOCOL}"
+  Assert-Native (($frame.v -is [int] -or $frame.v -is [long]) -and $frame.v -eq 1 -and
+    $frame.t -is [string] -and $frame.t -ceq "request") "${ERRORS.PROTOCOL}"
+  Assert-Native ($frame.id -is [string] -and $frame.id -cmatch "\A[a-f0-9]{32}\z" -and
+    $frame.scope -is [string] -and $frame.scope -cmatch "\A[a-f0-9]{32}\z") "${ERRORS.PROTOCOL}"
+  Assert-Native (($frame.rootPid -is [int] -or $frame.rootPid -is [long]) -and
+    $frame.rootPid -gt ${SYSTEM_PID_MAX} -and $frame.rootPid -le ${MAX_PID}) "${ERRORS.PROTOCOL}"
+  Assert-Native (@("${OPERATIONS.OPEN}","${OPERATIONS.TERMINATE}","${OPERATIONS.CLOSE}") -ccontains $frame.op) "${ERRORS.PROTOCOL}"
+  foreach ($name in $frame.Keys) {
+    Assert-Native (@("v","t","id","scope","op","rootPid","rootStartedAt") -ccontains $name) "${ERRORS.PROTOCOL}"
+  }
+  $fields = if ($frame.op -ceq "${OPERATIONS.OPEN}") { 6 } else { 7 }
+  Assert-Native ($frame.Count -eq $fields) "${ERRORS.PROTOCOL}"
+  if ($fields -eq 7) { Assert-Native ($frame.rootStartedAt -is [string]) "${ERRORS.PROTOCOL}" }
+  return $frame
+}
+function Send-OwnedResponse($frame,$scope,$settlement) {
+  if ($null -eq $settlement) {
+    $settlement = @{ stoppedPids=@(); settlementConfirmed=$false; unknownProcesses=$null; code=$null }
+  }
+  Send-NativeFrame @{
+    v=1; t="response"; id=$frame.id; scope=$frame.scope; op=$frame.op; ok=$true
+    rootPid=$scope.rootPid; rootStartedAt=$scope.rootStartedAt; rootReady=$true
+    stoppedPids=@($settlement.stoppedPids); settlementConfirmed=$settlement.settlementConfirmed
+    unknownProcesses=$settlement.unknownProcesses; code=$settlement.code
+  }
+}
+try {
+  [Console]::OutputEncoding = [Text.UTF8Encoding]::new($false)
+  $native = New-NativeBindings
+  $parentPid = [int]$env:${PARENT_PID_ENVIRONMENT}
+  $current = [Diagnostics.Process]::GetCurrentProcess()
+  try { $brokerPid = $current.Id } finally { $current.Dispose() }
+  Assert-Native ($parentPid -gt ${SYSTEM_PID_MAX} -and $parentPid -ne $brokerPid) "${ERRORS.IDENTITY}"
+  $parentHandle = $native::OpenProcess($SYNCHRONIZE,$false,$parentPid)
+  Assert-Native ($parentHandle -ne [IntPtr]::Zero) "${ERRORS.UNAVAILABLE}"
+  $parentWait = [Threading.EventWaitHandle]::new($false,[Threading.EventResetMode]::ManualReset)
+  $parentWait.SafeWaitHandle = [Microsoft.Win32.SafeHandles.SafeWaitHandle]::new($parentHandle,$true)
+  Assert-Native ($native::WaitForSingleObject($parentHandle,0) -eq $WAIT_TIMEOUT) "${ERRORS.UNAVAILABLE}"
+  $callback = [Delegate]::CreateDelegate([Threading.WaitOrTimerCallback],$native.GetMethod("ParentExited"))
+  $parentRegistration = [Threading.ThreadPool]::RegisterWaitForSingleObject($parentWait,$callback,$null,-1,$true)
+  Send-NativeFrame @{ v=1; t="ready"; pid=$brokerPid; parentPid=$parentPid }
+  while ($null -ne ($line = Read-NativeLine)) {
+    $frame = Read-NativeFrame $line
+    Assert-Native ($requestIds.Count -lt ${MAX_REQUESTS}) "${ERRORS.LIMIT}"
+    Assert-Native ($requestIds.Add($frame.id)) "${ERRORS.PROTOCOL}"
     try {
-      process = ClawJobApi.OpenProcess(ClawJobApi.PROCESS_SET_QUOTA | ClawJobApi.PROCESS_TERMINATE |
-        ClawJobApi.PROCESS_QUERY_LIMITED_INFORMATION | ClawJobApi.SYNCHRONIZE, false, pid);
-      if (process == IntPtr.Zero || ClawJobApi.WaitForSingleObject(process, 0) != ClawJobApi.WAIT_TIMEOUT)
-        throw new ClawNativeFailure("${ERRORS.ATTACH}");
-      StartedAt = ClawJobApi.Birth(process);
-      job = ClawJobApi.CreateJobObject(IntPtr.Zero, null);
-      if (job == IntPtr.Zero) throw new ClawNativeFailure("${ERRORS.ATTACH}");
-      var limits = new ClawJobApi.ExtendedLimits();
-      limits.BasicLimitInformation.LimitFlags = ClawJobApi.JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE;
-      if (!ClawJobApi.SetInformationJobObject(job, ClawJobApi.EXTENDED_LIMITS, ref limits,
-        (uint)Marshal.SizeOf<ClawJobApi.ExtendedLimits>()) || !ClawJobApi.AssignProcessToJobObject(job, process))
-        throw new ClawNativeFailure("${ERRORS.ATTACH}");
-      bool assigned;
-      if (!ClawJobApi.IsProcessInJob(process, job, out assigned) || !assigned ||
-        ClawJobApi.Birth(process) != StartedAt ||
-        ClawJobApi.WaitForSingleObject(process, 0) != ClawJobApi.WAIT_TIMEOUT)
-        throw new ClawNativeFailure("${ERRORS.IDENTITY}");
-    } catch {
-      Dispose();
-      throw;
-    }
-  }
-
-  private int[] KnownMembers() {
-    const int headerBytes = 8;
-    int bytes = headerBytes + ClawJobApi.MAX_PIDS * IntPtr.Size;
-    IntPtr buffer = Marshal.AllocHGlobal(bytes);
-    try {
-      bool complete = ClawJobApi.QueryInformationJobObject(job, ClawJobApi.PROCESS_ID_LIST,
-        buffer, (uint)bytes, IntPtr.Zero);
-      if (!complete && Marshal.GetLastWin32Error() != ClawJobApi.ERROR_MORE_DATA)
-        throw new ClawNativeFailure("${ERRORS.QUERY}");
-      int listed = Marshal.ReadInt32(buffer, sizeof(uint));
-      if (listed < 0 || listed > ClawJobApi.MAX_PIDS) throw new ClawNativeFailure("${ERRORS.QUERY}");
-      var members = new HashSet<int> { Pid };
-      for (int index = 0; index < listed && members.Count < ClawJobApi.MAX_PIDS; index++) {
-        long member = Marshal.ReadIntPtr(buffer, headerBytes + index * IntPtr.Size).ToInt64();
-        if (member <= ${SYSTEM_PID_MAX} || member > ${MAX_PID}) throw new ClawNativeFailure("${ERRORS.QUERY}");
-        members.Add((int)member);
+      if ($frame.op -ceq "${OPERATIONS.OPEN}") {
+        Send-OwnedResponse $frame (New-OwnedScope $frame) $null
+        continue
       }
-      int[] known = new int[members.Count];
-      members.CopyTo(known);
-      Array.Sort(known);
-      return known;
-    } finally { Marshal.FreeHGlobal(buffer); }
-  }
-
-  internal ClawJobSettlement Terminate(int rootPid, string birth) {
-    lock (gate) {
-      if (job == IntPtr.Zero) throw new ClawNativeFailure("${ERRORS.CLOSED}");
-      if (rootPid != Pid || birth != StartedAt.ToString(CultureInfo.InvariantCulture) ||
-        ClawJobApi.Birth(process) != StartedAt)
-        throw new ClawNativeFailure("${ERRORS.IDENTITY}");
-      var settlement = new ClawJobSettlement();
-      try {
-        settlement.Pids = KnownMembers();
-        if (!ClawJobApi.TerminateJobObject(job, 1)) throw new ClawNativeFailure("${ERRORS.QUERY}");
-        var elapsed = Stopwatch.StartNew();
-        while (true) {
-          ClawJobApi.Accounting accounting;
-          if (!ClawJobApi.QueryAccounting(job, ClawJobApi.BASIC_ACCOUNTING, out accounting,
-            (uint)Marshal.SizeOf<ClawJobApi.Accounting>(), IntPtr.Zero))
-            throw new ClawNativeFailure("${ERRORS.QUERY}");
-          uint waited = ClawJobApi.WaitForSingleObject(process, 0);
-          if (waited != ClawJobApi.WAIT_OBJECT_0 && waited != ClawJobApi.WAIT_TIMEOUT)
-            throw new ClawNativeFailure("${ERRORS.QUERY}");
-          settlement.Unknown = accounting.ActiveProcesses;
-          if (accounting.ActiveProcesses == 0 && waited == ClawJobApi.WAIT_OBJECT_0) {
-            settlement.Confirmed = true;
-            return settlement;
-          }
-          if (elapsed.ElapsedMilliseconds >= ClawJobApi.SETTLE_TIMEOUT) {
-            settlement.Code = "${ERRORS.TIMEOUT}";
-            return settlement;
-          }
-          if (waited == ClawJobApi.WAIT_TIMEOUT)
-            ClawJobApi.WaitForSingleObject(process, ClawJobApi.WAIT_INTERVAL);
-          else Thread.Sleep(ClawJobApi.WAIT_INTERVAL);
-        }
-      } catch (ClawNativeFailure failure) {
-        ClawJobApi.TerminateJobObject(job, 1);
-        settlement.Confirmed = false;
-        settlement.Unknown = null;
-        settlement.Code = failure.Code;
-        return settlement;
+      Assert-Native ($jobs.ContainsKey($frame.scope)) "${ERRORS.IDENTITY}"
+      $scope = $jobs[$frame.scope]
+      Assert-Native ($scope.rootPid -eq $frame.rootPid -and $scope.rootStartedAt -ceq $frame.rootStartedAt) "${ERRORS.IDENTITY}"
+      if ($frame.op -ceq "${OPERATIONS.TERMINATE}") {
+        Send-OwnedResponse $frame $scope (Stop-OwnedScope $scope)
+        continue
       }
-    }
-  }
-
-  public void Dispose() {
-    lock (gate) {
-      bool jobClosed = true, processClosed = true;
-      if (job != IntPtr.Zero) { jobClosed = ClawJobApi.CloseHandle(job); job = IntPtr.Zero; }
-      if (process != IntPtr.Zero) { processClosed = ClawJobApi.CloseHandle(process); process = IntPtr.Zero; }
-      if (!jobClosed || !processClosed) throw new ClawNativeFailure("${ERRORS.QUERY}");
-    }
-  }
-}
-
-internal sealed class ClawJobFrame {
-  internal string Id, Scope, Op, Birth;
-  internal int Pid;
-  internal static ClawJobFrame Parse(string line) {
-    using (var document = JsonDocument.Parse(line)) {
-      var root = document.RootElement;
-      Guid parsed;
-      var frame = new ClawJobFrame {
-        Id = root.GetProperty("id").GetString(), Scope = root.GetProperty("scope").GetString(),
-        Op = root.GetProperty("op").GetString(), Pid = root.GetProperty("rootPid").GetInt32()
-      };
-      if (root.GetProperty("v").GetInt32() != 1 || root.GetProperty("t").GetString() != "request" ||
-        frame.Id == null || frame.Id.Length != 32 || !Guid.TryParseExact(frame.Id, "N", out parsed) ||
-        frame.Scope == null || frame.Scope.Length != 32 || !Guid.TryParseExact(frame.Scope, "N", out parsed) ||
-        frame.Pid <= ${SYSTEM_PID_MAX} ||
-        (frame.Op != "${OPERATIONS.OPEN}" && frame.Op != "${OPERATIONS.TERMINATE}" && frame.Op != "${OPERATIONS.CLOSE}"))
-        throw new ClawNativeFailure("${ERRORS.PROTOCOL}");
-      int fields = 0;
-      foreach (var field in root.EnumerateObject()) {
-        if (field.Name != "v" && field.Name != "t" && field.Name != "id" && field.Name != "scope" &&
-          field.Name != "op" && field.Name != "rootPid" && field.Name != "rootStartedAt")
-          throw new ClawNativeFailure("${ERRORS.PROTOCOL}");
-        fields++;
-      }
-      if (frame.Op != "${OPERATIONS.OPEN}") frame.Birth = root.GetProperty("rootStartedAt").GetString();
-      if (fields != (frame.Op == "${OPERATIONS.OPEN}" ? 6 : 7))
-        throw new ClawNativeFailure("${ERRORS.PROTOCOL}");
-      return frame;
-    }
-  }
-}
-
-public static class ClawWindowsJobBroker {
-  private static readonly object registryGate = new object(), outputGate = new object();
-  private static readonly Dictionary<string, ClawOwnedJob> jobs = new Dictionary<string, ClawOwnedJob>();
-  private static readonly HashSet<int> roots = new HashSet<int>();
-  private static readonly HashSet<string> requests = new HashSet<string>(), scopes = new HashSet<string>();
-  private static readonly ConcurrentDictionary<string, Task> inflight = new ConcurrentDictionary<string, Task>();
-  private static int parentPid, brokerPid;
-  private static IntPtr parent;
-  private static volatile bool stopping;
-
-  private static void Write(object frame) {
-    lock (outputGate) { Console.Out.WriteLine(JsonSerializer.Serialize(frame)); Console.Out.Flush(); }
-  }
-  private static void Reply(ClawJobFrame frame, ClawOwnedJob owned, ClawJobSettlement measured = null) {
-    var settlement = measured ?? new ClawJobSettlement();
-    Write(new {
-      v = 1, t = "response", id = frame.Id, scope = frame.Scope, op = frame.Op, ok = true,
-      rootPid = owned.Pid, rootStartedAt = owned.StartedAt.ToString(CultureInfo.InvariantCulture), rootReady = true,
-      stoppedPids = settlement.Pids, settlementConfirmed = settlement.Confirmed,
-      unknownProcesses = settlement.Unknown, code = settlement.Code
-    });
-  }
-  private static ClawOwnedJob Open(ClawJobFrame frame) {
-    lock (registryGate) {
-      if (stopping || ClawJobApi.WaitForSingleObject(parent, 0) != ClawJobApi.WAIT_TIMEOUT)
-        throw new ClawNativeFailure("${ERRORS.BROKER}");
-      if (frame.Pid == parentPid || frame.Pid == brokerPid || roots.Contains(frame.Pid) || scopes.Contains(frame.Scope))
-        throw new ClawNativeFailure("${ERRORS.IDENTITY}");
-      if (jobs.Count >= ${MAX_SCOPES} || scopes.Count >= ${MAX_REQUESTS})
-        throw new ClawNativeFailure("${ERRORS.LIMIT}");
-      var owned = new ClawOwnedJob(frame.Pid);
-      jobs.Add(frame.Scope, owned);
-      roots.Add(frame.Pid);
-      scopes.Add(frame.Scope);
-      return owned;
-    }
-  }
-  private static void Dispatch(ClawJobFrame frame) {
-    try {
-      if (frame.Op == "${OPERATIONS.OPEN}") { Reply(frame, Open(frame)); return; }
-      ClawOwnedJob owned;
-      lock (registryGate) {
-        if (!jobs.TryGetValue(frame.Scope, out owned)) throw new ClawNativeFailure("${ERRORS.IDENTITY}");
-      }
-      if (frame.Pid != owned.Pid || frame.Birth != owned.StartedAt.ToString(CultureInfo.InvariantCulture))
-        throw new ClawNativeFailure("${ERRORS.IDENTITY}");
-      if (frame.Op == "${OPERATIONS.TERMINATE}") { Reply(frame, owned, owned.Terminate(frame.Pid, frame.Birth)); return; }
-      ClawJobSettlement measured;
-      try { measured = owned.Terminate(frame.Pid, frame.Birth); }
+      try { $settlement = Stop-OwnedScope $scope }
       finally {
-        owned.Dispose();
-        lock (registryGate) { jobs.Remove(frame.Scope); roots.Remove(owned.Pid); }
+        Close-OwnedScope $scope
+        [void]$jobs.Remove($frame.scope)
+        [void]$ownedRoots.Remove($scope.rootPid)
       }
-      Reply(frame, owned, measured);
-    } catch (Exception error) {
-      Write(new {
-        v = 1, t = "response", id = frame.Id, scope = frame.Scope, op = frame.Op, ok = false,
-        code = error is ClawNativeFailure ? ((ClawNativeFailure)error).Code : "${ERRORS.BROKER}"
-      });
+      Send-OwnedResponse $frame $scope $settlement
+    } catch {
+      Send-NativeFrame @{ v=1; t="response"; id=$frame.id; scope=$frame.scope; op=$frame.op; ok=$false
+        code=(Get-SafeFailure $_ "${ERRORS.BROKER}") }
     }
   }
-  private static string ReadLine() {
-    var line = new StringBuilder();
-    while (true) {
-      int character = Console.In.Read();
-      if (character < 0) return line.Length == 0 ? null : throw new ClawNativeFailure("${ERRORS.PROTOCOL}");
-      if (character == '\n') return line.ToString();
-      if (line.Length >= ${MAX_FRAME_BYTES}) throw new ClawNativeFailure("${ERRORS.PROTOCOL}");
-      if (character != '\r') line.Append((char)character);
-    }
+} catch {
+  Send-NativeFrame @{ v=1; t="failed"; code=(Get-SafeFailure $_ "${ERRORS.UNAVAILABLE}") }
+} finally {
+  foreach ($scope in $jobs.Values) {
+    try { Close-OwnedScope $scope }
+    catch { Send-NativeFrame @{ v=1; t="failed"; code="${ERRORS.QUERY}" } }
   }
-  public static void Run(int ownerPid) {
-    parentPid = ownerPid;
-    using (var current = Process.GetCurrentProcess()) brokerPid = current.Id;
-    Console.OutputEncoding = new UTF8Encoding(false);
-    try {
-      if (parentPid <= ${SYSTEM_PID_MAX} || parentPid == brokerPid) throw new ClawNativeFailure("${ERRORS.IDENTITY}");
-      parent = ClawJobApi.OpenProcess(ClawJobApi.SYNCHRONIZE, false, parentPid);
-      if (parent == IntPtr.Zero || ClawJobApi.WaitForSingleObject(parent, 0) != ClawJobApi.WAIT_TIMEOUT)
-        throw new ClawNativeFailure("${ERRORS.UNAVAILABLE}");
-      new Thread(() => {
-        if (ClawJobApi.WaitForSingleObject(parent, ClawJobApi.INFINITE) == ClawJobApi.WAIT_OBJECT_0) Environment.Exit(0);
-      }) { IsBackground = true }.Start();
-      Write(new { v = 1, t = "ready", pid = brokerPid, parentPid = parentPid });
-      string line;
-      while ((line = ReadLine()) != null) {
-        var frame = ClawJobFrame.Parse(line);
-        if (requests.Count >= ${MAX_REQUESTS}) throw new ClawNativeFailure("${ERRORS.LIMIT}");
-        if (!requests.Add(frame.Id)) throw new ClawNativeFailure("${ERRORS.PROTOCOL}");
-        var task = Task.Run(() => Dispatch(frame));
-        inflight[frame.Id] = task;
-        task.ContinueWith(completed => { Task ignored; inflight.TryRemove(frame.Id, out ignored); });
-      }
-    } catch (Exception error) {
-      Write(new { v = 1, t = "failed", code = error is ClawNativeFailure ? ((ClawNativeFailure)error).Code : "${ERRORS.PROTOCOL}" });
-    } finally {
-      stopping = true;
-      Task.WaitAll(inflight.Values.ToArray(), ${REQUEST_TIMEOUT_MS});
-      lock (registryGate) {
-        foreach (var owned in jobs.Values) owned.Dispose();
-        jobs.Clear();
-        roots.Clear();
-      }
-      // Process exit closes the parent's read-only wait handle without racing its watcher.
-    }
-  }
+  if ($null -ne $parentRegistration) { [void]$parentRegistration.Unregister($null) }
+  if ($null -ne $parentWait) { $parentWait.Dispose() }
 }
 `;
 // Compress fixed own source to stay below Windows' native command-line length limit.
@@ -407,9 +366,9 @@ try {
 $compressed = [IO.MemoryStream]::new([Convert]::FromBase64String("${COMPRESSED_BROKER_SOURCE}"))
 $inflated = [IO.Compression.GZipStream]::new($compressed, [IO.Compression.CompressionMode]::Decompress)
 $reader = [IO.StreamReader]::new($inflated, [Text.Encoding]::UTF8)
-try { Add-Type -TypeDefinition $reader.ReadToEnd() -ErrorAction Stop }
+try { $broker = [ScriptBlock]::Create($reader.ReadToEnd()) }
 finally { $reader.Dispose(); $inflated.Dispose(); $compressed.Dispose() }
-[ClawWindowsJobBroker]::Run([int]$env:${PARENT_PID_ENVIRONMENT})
+& $broker
 exit 0
 } catch {
 [Console]::WriteLine('{"v":1,"t":"failed","code":"${ERRORS.UNAVAILABLE}"}')

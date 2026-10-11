@@ -14,7 +14,7 @@ async function scopeAdapter({ env, cwd }) {
   if (process.platform === "linux" || process.platform === "darwin") {
     const { nativePosixSupervisorLaunch, openPosixProcessScope } = await import("./posix-process-scope.mjs");
     const launch = await nativePosixSupervisorLaunch({ node: process.execPath, supervisorPath: SUPERVISOR_PATH, cwd, env });
-    return { launch, open: (rootPid) => openPosixProcessScope({ rootPid, env }) };
+    return { launch, open: (rootPid, rootProcess) => openPosixProcessScope({ rootPid, rootProcess, env }) };
   }
   throw new ClawError(NATIVE_SCOPE_ERRORS.UNAVAILABLE);
 }
@@ -60,12 +60,15 @@ function unconfirmed(supervisor, code = NATIVE_SCOPE_ERRORS.UNCONFIRMED) {
   };
 }
 
+async function closeUnconfirmedSupervisor(supervisor) {
+  if (!supervisor) return;
+  // Native initialization may defer signals; the fixed private stop frame reaches its owned-child cleanup.
+  await supervisor.stop();
+}
+
 async function settleScope({ supervisor, scope }) {
   if (!scope) {
-    if (supervisor) {
-      supervisor.child.kill();
-      await supervisor.closed;
-    }
+    await closeUnconfirmedSupervisor(supervisor);
     return unconfirmed(supervisor);
   }
   let settlement;
@@ -98,7 +101,7 @@ async function executeInScope({ command, args, options, state }) {
   state.output = collectOutput(supervisor, { maxOutput, appendOutput });
   const ready = await Promise.race([supervisor.ready, state.interruption.promise]);
   if (!ready) throw state.interruption.failure() ?? new ClawError(NATIVE_SCOPE_ERRORS.UNAVAILABLE);
-  const scope = await adapter.open(supervisor.child.pid);
+  const scope = await adapter.open(supervisor.child.pid, supervisor.child);
   state.scope = scope;
   if (scope.rootPid !== supervisor.child.pid || typeof scope.rootStartedAt !== "string") {
     throw new ClawError(NATIVE_SCOPE_ERRORS.UNCONFIRMED);
@@ -162,10 +165,7 @@ export async function runOwnedProcess(command, args, options) {
     settlement = await settleScope(state);
   } catch (error) {
     state.cleanupFailure = nativeError(error);
-    if (state.supervisor) {
-      state.supervisor.child.kill();
-      await state.supervisor.closed;
-    }
+    await closeUnconfirmedSupervisor(state.supervisor);
     settlement = unconfirmed(state.supervisor);
   } finally {
     state.interruption.close();

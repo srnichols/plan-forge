@@ -1,11 +1,11 @@
-import { spawn } from "node:child_process";
+import { ChildProcess, spawn } from "node:child_process";
 import { access, readFile } from "node:fs/promises";
 import net from "node:net";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
-  createNativeSupervisor, NATIVE_SCOPE_ERRORS,
+  createNativeSupervisor, nativeSupervisorRootExit, NATIVE_SCOPE_ERRORS,
 } from "../src/jobs/native-command-supervisor.mjs";
 import {
   nativePosixSupervisorLaunch, openPosixProcessScope,
@@ -124,7 +124,9 @@ async function held(env = process.env) {
   supervisor.child.stdout.on("data", (chunk) => { resource.stdout += chunk.toString("utf8"); });
   supervisor.child.stderr.on("data", (chunk) => { resource.stderr += chunk.toString("utf8"); });
   expect(await supervisor.ready, resource.stderr).toBe(true);
-  resource.scope = await openPosixProcessScope({ rootPid: supervisor.child.pid, env });
+  resource.scope = await openPosixProcessScope({
+    rootPid: supervisor.child.pid, rootProcess: supervisor.child, env,
+  });
   return resource;
 }
 
@@ -226,7 +228,8 @@ describe("Guard: POSIX ownership uses supported native facilities", () => {
   it("keeps helper discovery and observer environment independent from the argv actor", async () => {
     const source = await readFile(adapterPath, "utf8");
     expect(source).toContain("process.env.PATH");
-    expect(source).toContain("env: brokerEnvironment()");
+    expect(source).not.toContain("brokerEnvironment");
+    expect(source).toContain("nativeSupervisorRootExit(rootProcess)");
     expect(source).not.toContain("String(env.PATH");
     const supervisor = await readFile(supervisorPath, "utf8");
     expect(supervisor).toContain("supervisorEnvironment");
@@ -244,6 +247,62 @@ describe("Guard: POSIX ownership uses supported native facilities", () => {
 });
 
 describe.skipIf(process.platform !== "linux")("Linux native subreaper ownership", () => {
+  it("uses the retained real native child wait together with ECHILD, not a second compiler process", async () => {
+    const source = await readFile(adapterPath, "utf8");
+    expect(source).not.toContain("ClawPosixObserver");
+    expect(source).toContain("rootProcess");
+    expect(source).toContain("ECHILD");
+    const supervisorSource = await readFile(supervisorPath, "utf8");
+    expect(supervisorSource).toContain("NATIVE_ROOT_EXITS.set(child");
+    expect(supervisorSource).toContain('child.once("exit"');
+    for (let index = 0; index < 3; index += 1) {
+      const resource = await held();
+      expect(await execute(resource, "process.exitCode=7")).toEqual({ code: 7 });
+      await stop(resource);
+      await resource.scope.close();
+    }
+  }, 20_000);
+
+  it("rejects a caller-supplied fake exit certificate before consuming native root authority", async () => {
+    const launch = await nativePosixSupervisorLaunch({
+      node: process.execPath, supervisorPath, cwd: process.cwd(), env: process.env,
+    });
+    const supervisor = createNativeSupervisor({ cwd: process.cwd(), env: process.env, launch });
+    const resource = { supervisor };
+    resources.push(resource);
+    expect(await supervisor.ready).toBe(true);
+    const counterfeitChild = new ChildProcess();
+    counterfeitChild.pid = supervisor.child.pid;
+    counterfeitChild.exitCode = 0;
+    for (const rootProcess of [{ pid: supervisor.child.pid, exitCode: 0 }, counterfeitChild]) {
+      await expect((async () => {
+        resource.scope = await openPosixProcessScope({ rootPid: supervisor.child.pid, rootProcess });
+      })()).rejects.toMatchObject({ code: NATIVE_SCOPE_ERRORS.UNAVAILABLE });
+    }
+    expect(await isLive(supervisor.child.pid)).toBe(true);
+    resource.scope = await openPosixProcessScope({
+      rootPid: supervisor.child.pid, rootProcess: supervisor.child,
+    });
+    expect(await execute(resource, "process.exitCode=7")).toEqual({ code: 7 });
+    await stop(resource);
+  }, OWNED_DEADLINE_MS);
+
+  it("retains native exit state so a completed root certificate cannot be rebound to a reused PID", async () => {
+    const resource = await held();
+    const certificate = nativeSupervisorRootExit(resource.supervisor.child);
+    expect(Object.isFrozen(certificate)).toBe(true);
+    expect(certificate.exited).toBe(false);
+    expect(await execute(resource, "process.exitCode=7")).toEqual({ code: 7 });
+    await stop(resource);
+    expect(certificate.exited).toBe(true);
+    await expect(openPosixProcessScope({
+      rootPid: certificate.rootPid, rootProcess: resource.supervisor.child,
+    })).rejects.toMatchObject({
+      code: NATIVE_SCOPE_ERRORS.UNAVAILABLE,
+      details: { facility: "owned-native-child-handle" },
+    });
+  }, OWNED_DEADLINE_MS);
+
   it("holds real ownership before fast literal argv and proves root death within the existing 5s gate", async () => {
     // +0ms tolerance intentionally preserves the caller's original 5s deadline; elapsed time is not proof.
     const started = performance.now();
@@ -377,7 +436,9 @@ describe.skipIf(process.platform !== "linux")("Linux native subreaper ownership"
     const supervisor = createNativeSupervisor({ cwd: process.cwd(), env: process.env });
     resources.push({ supervisor });
     expect(await supervisor.ready).toBe(true);
-    await expect(openPosixProcessScope({ rootPid: supervisor.child.pid })).rejects.toMatchObject({
+    await expect(openPosixProcessScope({
+      rootPid: supervisor.child.pid, rootProcess: supervisor.child,
+    })).rejects.toMatchObject({
       code: NATIVE_SCOPE_ERRORS.UNAVAILABLE,
       details: { facility: "held-subreaper-root" },
     });

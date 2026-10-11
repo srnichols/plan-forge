@@ -4,13 +4,16 @@ import { fileURLToPath } from "node:url";
 import { ClawError } from "../errors.mjs";
 
 export const NATIVE_SUPERVISOR_ARGUMENT = "--pforge-command-supervisor";
+export const NATIVE_SUPERVISOR_STOP_MESSAGE = "owned-stop";
 export const NATIVE_SCOPE_MAX_PROCESSES = 256;
 export const NATIVE_SCOPE_ERRORS = Object.freeze({
   UNAVAILABLE: "PLAN_PROCESS_NATIVE_UNAVAILABLE",
   UNCONFIRMED: "PLAN_PROCESS_SCOPE_UNCONFIRMED",
   LIMIT: "PLAN_PROCESS_TREE_LIMIT",
 });
-const MESSAGES = Object.freeze({ READY: "owned-ready", START: "owned-start", RESULT: "owned-result" });
+const MESSAGES = Object.freeze({
+  READY: "owned-ready", START: "owned-start", RESULT: "owned-result", STOP: NATIVE_SUPERVISOR_STOP_MESSAGE,
+});
 const BOOTSTRAP_ENVIRONMENT_FIELDS = Object.freeze([
   "NODE_OPTIONS", "NODE_PATH", "NODE_V8_COVERAGE", "NODE_DEBUG", "NODE_DEBUG_NATIVE",
   "PSModulePath", "DOTNET_STARTUP_HOOKS", "DOTNET_ADDITIONAL_DEPS", "DOTNET_SHARED_STORE",
@@ -18,6 +21,30 @@ const BOOTSTRAP_ENVIRONMENT_FIELDS = Object.freeze([
 ]);
 const ENVIRONMENT_PREFIX = "PFORGE_CLAW_NATIVE_BOOTSTRAP_";
 const SAFE_ERROR = /^[A-Z0-9_]{1,64}$/;
+const NATIVE_ROOT_EXITS = new WeakMap();
+
+/**
+ * Read the retained parent-owned native wait; caller-created ChildProcess objects have no certificate.
+ * @param {import("node:child_process").ChildProcess} rootProcess
+ * @returns {{rootPid:number, readonly exited:boolean, exit:Promise<{rootPid:number}>}|undefined}
+ */
+export function nativeSupervisorRootExit(rootProcess) {
+  return NATIVE_ROOT_EXITS.get(rootProcess);
+}
+
+function retainNativeRootExit(child) {
+  const rootPid = child.pid;
+  if (!Number.isSafeInteger(rootPid) || rootPid <= 0) return;
+  const nativeExit = Promise.withResolvers();
+  let hasExited = false;
+  NATIVE_ROOT_EXITS.set(child, Object.freeze({
+    rootPid, get exited() { return hasExited; }, exit: nativeExit.promise,
+  }));
+  child.once("exit", () => {
+    hasExited = true;
+    nativeExit.resolve(Object.freeze({ rootPid }));
+  });
+}
 
 function nativeRootIdentity(scope) {
   return Number.isSafeInteger(scope.rootPid) && scope.rootPid > 0
@@ -77,7 +104,9 @@ export function createNativeSupervisor({ cwd, env = process.env, launch } = {}) 
     cwd, env: supervisorEnvironment(env), shell: false, windowsHide: true,
     detached: process.platform !== "win32", stdio: ["ignore", "pipe", "pipe", "ipc"],
   });
+  retainNativeRootExit(child);
   let started = false;
+  let stopping = false;
   child.on("message", (frame) => {
     if (frame?.v !== 1) return;
     if (frame.t === MESSAGES.READY && frame.pid === child.pid) ready.resolve(true);
@@ -99,8 +128,20 @@ export function createNativeSupervisor({ cwd, env = process.env, launch } = {}) 
   });
   return {
     child, ready: ready.promise, completion: completion.promise, closed: closed.promise,
+    stop() {
+      if (stopping) return closed.promise;
+      stopping = true;
+      const forceStop = () => {
+        if (child.exitCode === null && child.signalCode === null) child.kill("SIGKILL");
+      };
+      if (child.connected) child.send({ v: 1, t: MESSAGES.STOP }, (error) => {
+        if (error) forceStop();
+      });
+      else forceStop();
+      return closed.promise;
+    },
     start(command, args) {
-      if (started || !child.connected) throw new ClawError("COMMAND_FAILED");
+      if (started || stopping || !child.connected) throw new ClawError("COMMAND_FAILED");
       if (typeof command !== "string" || !command || command.includes("\0")
         || !Array.isArray(args) || args.some((argument) => typeof argument !== "string" || argument.includes("\0"))) {
         throw new ClawError("COMMAND_INVALID");
@@ -137,6 +178,10 @@ function executeFrame(frame) {
 function supervise() {
   let started = false;
   process.on("message", (frame) => {
+    if (frame?.v === 1 && frame.t === MESSAGES.STOP) {
+      process.exit(0);
+      return;
+    }
     if (started || frame?.v !== 1 || frame.t !== MESSAGES.START) return;
     started = true;
     executeFrame(frame);

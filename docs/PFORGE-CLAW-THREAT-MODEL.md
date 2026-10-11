@@ -76,6 +76,16 @@ with `origin: "untrusted"` and must remain data rather than instructions.
 - D31 native lifecycle control uses a private Windows Job Object or a live
   Linux subreaper/pidfd scope before launching literal command arguments.
   Success requires native zero-owned-child evidence and root-exit identity;
+  Linux combines the held root's `waitpid`/`ECHILD` receipt with its original
+  parent's retained kernel child wait. That certificate is registered only
+  for the supervisor factory's actual spawned child; PID fields, constructor
+  lookalikes and caller-supplied exit values cannot create one.
+  Expired authority is rejected before and after the awaited native-birth read,
+  and after the held-root hello, so a reused PID cannot pair a new generation's
+  zero receipt with an old generation's completed kernel wait.
+  A fixed private stop frame can cancel initialization before native attachment.
+  Its delivery and the root's eventual close are not zero-member certificates;
+  those unconfirmed outcomes retain publication and canonical-history fences.
   global process-list inference is not accepted. Missing proof retains the
   publication/workspace fence. This is not containment of arbitrary external
   services or hostile interference by the OS account.

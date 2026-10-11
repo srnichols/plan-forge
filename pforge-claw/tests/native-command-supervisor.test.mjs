@@ -4,7 +4,8 @@ import path from "node:path";
 import { pathToFileURL } from "node:url";
 import { afterEach, describe, expect, it } from "vitest";
 import {
-  createNativeSupervisor, hasNativeSettlementProof, NATIVE_SCOPE_MAX_PROCESSES, NATIVE_SUPERVISOR_ARGUMENT,
+  createNativeSupervisor, hasNativeSettlementProof, nativeSupervisorRootExit, NATIVE_SCOPE_MAX_PROCESSES,
+  NATIVE_SUPERVISOR_ARGUMENT,
 } from "../src/jobs/native-command-supervisor.mjs";
 import { g1Directory } from "./g1-runner-fixture.mjs";
 
@@ -33,6 +34,22 @@ afterEach(async () => {
 });
 
 describe("held native command supervisor", () => {
+  it("stops its held root over private control, prevents later START and never treats root exit as zero-member proof", async () => {
+    const { root, cwd } = await supervisor();
+    const marker = path.join(cwd, "never-started.json");
+    const script = path.join(cwd, "never-started.mjs");
+    await writeFile(script, `import { writeFileSync } from "node:fs";writeFileSync(${JSON.stringify(marker)},"started");`);
+    await root.stop();
+    await root.stop();
+    expect(root.child.exitCode).toBe(0);
+    expect(root.child.connected).toBe(false);
+    expect(() => root.start(process.execPath, [script])).toThrow("COMMAND_FAILED");
+    await expect(readFile(marker)).rejects.toMatchObject({ code: "ENOENT" });
+    const certificate = nativeSupervisorRootExit(root.child);
+    expect(certificate.exited).toBe(true);
+    expect(hasNativeSettlementProof(certificate)).toBe(false);
+  }, TEST_TIMEOUT_MS);
+
   it("does not claim a private IPC channel when imported by another program with the same flag", async () => {
     const cwd = await g1Directory("native-command-library-");
     const program = path.join(cwd, "library-import.mjs");

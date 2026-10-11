@@ -26,7 +26,7 @@ const PUBLICATION_TIMEOUT_MS = 10_000;
  * @property {AbortSignal} [signal]
  * @typedef {object} PublicationScope
  * @property {AbortSignal} signal
- * @property {() => void} confirmSettled Trusted callback confirms every begun operation settled successfully.
+ * @property {() => void} confirmSettled Trusted callback confirms physical settlement, not command success.
  */
 
 class WorkerPublicationAuthority {

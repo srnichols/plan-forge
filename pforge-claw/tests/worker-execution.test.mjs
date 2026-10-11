@@ -265,7 +265,10 @@ describe("lease-scoped runner execution", () => {
     await enrollCommand({ home, config, laneId: "pods", rotate: true });
     expect(JSON.parse(await readFile(path.join(home, "secrets.json"), "utf8")).FIXTURE_LANE_KEY).not.toBe(first);
   }, PROCESS_TEST_TIMEOUT_MS);
-  it.each([false, true])("runs a one-shot job end to end or refuses it without a valid approval grant (tampered: %s)", async (tampered) => {
+  it.each([[false, false], [true, false], [false, true]])(
+    "runs a one-shot job end to end or retains an unsafe source (tampered: %s, native-unconfirmed: %s)", async (
+      tampered, nativeUnconfirmed,
+    ) => {
     const { repos, project, ctx, runner, home } = await fixture();
     const workdir = path.join(repos.directory, "pod");
     await mkdir(workdir);
@@ -306,9 +309,12 @@ describe("lease-scoped runner execution", () => {
     let finalized;
     const code = runOneShot(env, {
       workdir,
-      runner: (command, args, options) => runner(command, args[0] === "clone"
-        ? args.map((argument) => argument === "https://fixture.test/repository.git" ? repos.projects[0].originPath : argument)
-        : args, options),
+      runner: async (command, args, options) => {
+        const completed = await runner(command, args[0] === "clone"
+          ? args.map((argument) => argument === "https://fixture.test/repository.git" ? repos.projects[0].originPath : argument)
+          : args, options);
+        return nativeUnconfirmed && args.includes("push") ? { ...completed, settlementConfirmed: false } : completed;
+      },
       finalize: async (options) => {
         finalized = options;
         expect(options.env.POD_BOOTSTRAP_CANARY).toBe("pod-bootstrap-only-canary");
@@ -344,6 +350,20 @@ describe("lease-scoped runner execution", () => {
       expect(await code).toBe(1);
       expect(events.at(-1).data).toMatchObject({ status: "failed", error: "LEASE_GRANT_INVALID" });
       await expect(access(path.join(workdir, "repo"))).rejects.toMatchObject({ code: "ENOENT" });
+      return;
+    }
+    if (nativeUnconfirmed) {
+      expect(await code).toBe(1);
+      expect(events.at(-1).data).toMatchObject({
+        status: "failed", error: "LEASE_PUBLICATION_DENIED", settlementConfirmed: false,
+      });
+      expect(finalized).toBeUndefined();
+      expect(events.some((event) => event.type === "artifact" && event.data.kind === "l2-delta")).toBe(false);
+      expect(registry.completion(POD_JOB_ID)).toMatchObject({ ok: false, applicationAck: null });
+      expect(await readFile(path.join(workdir, "repo", ".forge", "runs", POD_JOB_ID, "run.json"), "utf8"))
+        .toBe('{"ok":true}');
+      await expect(access(path.join(root, ".forge", "runs", POD_JOB_ID, "run.json")))
+        .rejects.toMatchObject({ code: "ENOENT" });
       return;
     }
     expect(await code).toBe(0);

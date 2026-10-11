@@ -1,4 +1,4 @@
-import { ClawError } from "../errors.mjs";
+import { ClawError, withClawErrorDetails } from "../errors.mjs";
 import { approvedChoicesFor, consumedApprovalFor, QUORUM_MODES } from "./approval-proof.mjs";
 import { FEATURES } from "../features/index.mjs";
 import { toSessionMcpServers } from "../runtime/copilot-session.mjs";
@@ -9,6 +9,7 @@ import { currentJobs, JOBS_STREAM, transition } from "./model.mjs";
 import { canReleaseWorkspace, createRunnerLifecycle, failureReason } from "./runner-lifecycle.mjs";
 import { closeRunnerMcp, openRunnerMcp } from "./runner-mcp.mjs";
 import { runForegroundPlan } from "./plan-process.mjs";
+import { NATIVE_SCOPE_ERRORS } from "./native-command-supervisor.mjs";
 
 export { resolvePlan } from "./plan-resolution.mjs";
 
@@ -33,11 +34,14 @@ function createStoredJobs(ctx) {
 }
 
 function parseJobResult(completed, fallback) {
-  if (completed?.status === "cancelled") throw new ClawError("JOB_CANCELLED");
-  if (completed?.status === "failed" || completed?.ok === false || completed?.isError) {
+  if (!completed) return completed;
+  const settlement = completed.settlementConfirmed === false ? { settlementConfirmed: false } : {};
+  if (completed.status === "cancelled") throw new ClawError("JOB_CANCELLED", settlement);
+  if (completed.status === "failed" || completed.ok === false || completed.isError) {
     const code = failureReason({ code: completed.error });
-    throw new ClawError(code === "JOB_RUN_FAILED" ? fallback : code);
+    throw new ClawError(code === "JOB_RUN_FAILED" ? fallback : code, settlement);
   }
+  if (completed.settlementConfirmed === false) throw new ClawError(NATIVE_SCOPE_ERRORS.UNCONFIRMED, settlement);
   return completed;
 }
 
@@ -156,8 +160,9 @@ export function createRunners(ctx = {}, { jobs = createStoredJobs(ctx), workspac
         throw error;
       } finally {
         const closed = await closeRunnerMcp(client, dependencies);
-        if (!closed && !failure) throw new ClawError("MCP_CLOSE_FAILED", {
+        if (!closed) throw withClawErrorDetails(failure, failure ? "JOB_RUN_FAILED" : "MCP_CLOSE_FAILED", {
           ...(completed?.planActuals ? { planActuals: completed.planActuals } : {}),
+          settlementConfirmed: false,
         });
       }
     }, { emit, signal });

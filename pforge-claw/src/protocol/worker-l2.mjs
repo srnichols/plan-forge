@@ -8,6 +8,7 @@ import {
   applicationIdentity, collectApplicationChunk, createApplicationTransfer, EMPTY_L2_DELTA, matchesApplicationAck, matchesLeaseAck,
 } from "./l2-ack.mjs";
 import { L2_ACK_ERRORS } from "./messages.mjs";
+import { NATIVE_SCOPE_ERRORS } from "../jobs/native-command-supervisor.mjs";
 
 const ACK_TIMEOUT_MS = 30_000;
 
@@ -118,6 +119,15 @@ class WorkerHistory {
   }
 
   async finish(lease, event, snapshot) {
+    if (event.data.settlementConfirmed === false) {
+      this.remember(lease, createLaneEvent({
+        jobId: lease.job.id, seq: 1, type: "finished", data: {
+          ...event.data, status: lease.cancelled ? "cancelled" : "failed",
+          l2: { ok: false, code: NATIVE_SCOPE_ERRORS.UNCONFIRMED },
+        },
+      }));
+      return;
+    }
     let terminalData;
     try {
       const deltaId = lease.application?.identity.deltaId ?? lease.job.id;

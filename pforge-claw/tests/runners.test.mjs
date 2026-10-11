@@ -92,7 +92,10 @@ async function makeFixture({
     const record = { cmd, args: [...args], options };
     calls.push(record);
     if (cmd === "gh" || cmd === context.config.runtimes.ghCommand?.[0]) {
-      return { code: 0, stdout: "created https://example.test/pr/1\n", stderr: "" };
+      return {
+        code: 0, stdout: "created https://example.test/pr/1\n", stderr: "",
+        ...(options.requireSettlement === true ? { settlementConfirmed: true } : {}),
+      };
     }
     if (cmd === process.execPath && args.some((arg) => arg.endsWith("fake-pforge.mjs"))
       && args.at(-1) === "smith") return { code: 0, stdout: "smith ok", stderr: "" };
@@ -282,7 +285,10 @@ describe("job runners", { timeout: NATIVE_RUNNER_TOLERANCE_MS }, () => {
     await addOrigin(f);
     const original = f.context.runner;
     f.context.runner = async (cmd, args, options) => {
-      if (cmd === "gh") return { code: 1, stdout: "", stderr: "failed" };
+      if (cmd === "gh") return {
+        code: 1, stdout: "", stderr: "failed",
+        ...(options.requireSettlement === true ? { settlementConfirmed: true } : {}),
+      };
       return original(cmd, args, options);
     };
     const result = await createRunners(f.context).runJob(f.job, {});

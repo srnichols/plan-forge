@@ -157,9 +157,10 @@ async function runnerFixture({ script = FAILURE_SCRIPT, quorum = "power", resume
         fixture.prChange = await run("git", ["--git-dir", origin, "show", `${branch}:approved-change.txt`]);
         fixture.prBody = args[args.indexOf("--body") + 1];
         const diff = await run("git", ["--git-dir", origin, "diff", "--quiet", `main..${branch}`]);
-        return diff.code === 1 && fixture.prChange.code === 0
+        return { ...(diff.code === 1 && fixture.prChange.code === 0
           ? { code: 0, stdout: "https://example.test/pr/native-review\n", stderr: "" }
-          : { code: 1, stdout: "", stderr: "No approved changes on proposed PR head" };
+          : { code: 1, stdout: "", stderr: "No approved changes on proposed PR head" }),
+        ...(options.requireSettlement === true ? { settlementConfirmed: true } : {}) };
       }
       return run(command, args, options);
     },
@@ -589,9 +590,7 @@ function publicationOwner(fixture) {
   const runner = fixture.ctx.runner;
   fixture.ctx.runner = async (command, args, options) => {
     expect(isReserved, `publication command ${command} ${args.join(" ")} escaped its owner`).toBe(true);
-    // External-command contract fixture only; this does not certify the old generic run driver.
-    const completed = await runner(command, args, options);
-    return Object.hasOwn(completed, "settlementConfirmed") ? completed : { ...completed, settlementConfirmed: true };
+    return runner(command, args, options);
   };
   fixture.ctx.withPublication = async ({ job, signal }, operation) => {
     expect(job.id).toBe(fixture.job.id);
@@ -684,8 +683,8 @@ describe("runner trusted publication owner contract", { timeout: NATIVE_PUBLICAT
   it.each([
     [true, 0, true],
     [false, 0, false],
-    [true, -1, false],
-  ])("awaits interrupted command physical proof %s, outcome %s, and confirms only unambiguous success", async (
+    [true, -1, true],
+  ])("awaits interrupted command physical proof %s, outcome %s, and confirms only measured settlement", async (
     proof, code, shouldConfirm,
   ) => {
     const fixture = await runnerFixture({ script: ISOLATED_SCRIPT });

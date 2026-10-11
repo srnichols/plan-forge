@@ -131,8 +131,20 @@ function finishEntry(entry, status, error, options) {
     if (!data.planActuals) data.planActualsError = entry.planActualsError ?? PLAN_ACTUALS_UNCONFIRMED;
   }
   if (error !== undefined) data.error = error;
+  if (entry.settlementConfirmed === false) data.settlementConfirmed = false;
   pushEvent(entry, "finished", data, options);
   for (const wake of entry.waiters.splice(0)) wake({ value: undefined, done: true });
+}
+
+function recordNativeUncertainty(entry, outcome) {
+  if (outcome?.settlementConfirmed === false) entry.settlementConfirmed = false;
+}
+
+function recordPlanActuals(entry, outcome) {
+  if (entry.job.type !== "plan") return;
+  entry.planActuals = normalizePlanActuals({ job: entry.job, actuals: outcome?.planActuals });
+  const code = failureReason({ code: outcome?.planActualsError });
+  entry.planActualsError = code === "JOB_RUN_FAILED" ? PLAN_ACTUALS_UNCONFIRMED : code;
 }
 
 function createEventStream(entry, cancel) {
@@ -196,11 +208,8 @@ export function createLocalLane({
       emit: (type, data) => pushEvent(entry, type, data, eventOptions),
     });
     entry.usage = result?.usage;
-    if (entry.job.type === "plan") {
-      entry.planActuals = normalizePlanActuals({ job: entry.job, actuals: result?.planActuals });
-      const code = failureReason({ code: result?.planActualsError });
-      entry.planActualsError = code === "JOB_RUN_FAILED" ? PLAN_ACTUALS_UNCONFIRMED : code;
-    }
+    recordNativeUncertainty(entry, result);
+    recordPlanActuals(entry, result);
     const status = entry.controller.signal.aborted ? "cancelled" : result?.status ?? "succeeded";
     finishEntry(entry, status, result?.error, eventOptions);
   }
@@ -222,6 +231,7 @@ export function createLocalLane({
       }
       await runEntry(entry);
     } catch (error) {
+      recordNativeUncertainty(entry, error?.details);
       const status = entry.controller.signal.aborted ? "cancelled" : "failed";
       finishEntry(entry, status, status === "failed" ? errorCode(error) : undefined, eventOptions);
     } finally {

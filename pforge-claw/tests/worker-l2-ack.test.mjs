@@ -21,6 +21,7 @@ afterEach(async () => {
 
 async function fixture({
   registry, ackTimeoutMs = 30_000, afterJob, onLeaseAcked, jobType = "task", runtimeResult = {},
+  allowNativeTerminalReadiness = false,
 } = {}) {
   const root = await mkdtemp(path.join(TEST_DIRECTORY, ".worker-ack-"));
   cleanups.push(() => rm(root, { recursive: true, force: true }));
@@ -87,7 +88,8 @@ async function fixture({
     receive(lease);
   }
   cleanups.push(async () => { agent.stop(); await agent.drain(); });
-  await vi.waitFor(() => expect(sent.some((packet) => packet.event?.data.kind === "l2-delta")).toBe(true));
+  await vi.waitFor(() => expect(sent.some((packet) => packet.event?.data.kind === "l2-delta"
+    || (allowNativeTerminalReadiness && packet.event?.type === "finished"))).toBe(true));
   return { root, forgeDir, canonical, agent, sent, receive, lease };
 }
 
@@ -132,6 +134,27 @@ function planActuals(usage = { costUSD: 0, premiumRequests: null }) {
 }
 
 describe("worker application acknowledgements", () => {
+  it("does not collect or acknowledge a physically unconfirmed native source", async () => {
+    const afterJob = vi.fn();
+    const system = await fixture({
+      runtimeResult: {
+        status: "failed", error: "PLAN_PROCESS_SCOPE_UNCONFIRMED", settlementConfirmed: false,
+      },
+      allowNativeTerminalReadiness: true, afterJob,
+    });
+    expect(system.sent.some((packet) => packet.event?.data.kind === "l2-delta")).toBe(false);
+    await system.agent.drain();
+    const terminal = system.sent.find((packet) => packet.event?.type === "finished").event;
+    expect(terminal.data).toMatchObject({
+      status: "failed", error: "PLAN_PROCESS_SCOPE_UNCONFIRMED", settlementConfirmed: false,
+    });
+    expect(terminal.data.l2?.ok).not.toBe(true);
+    expect(afterJob).toHaveBeenCalledOnce();
+    expect(afterJob.mock.calls[0][0].applicationAck).toBeNull();
+    expect(await readFile(path.join(system.forgeDir, "runs", "j1", "run.json"), "utf8"))
+      .toBe('{"source":"only-copy"}');
+  });
+
   it("does not accept missing or unsafe lease identity as a current wire ACK", () => {
     expect(matchesLeaseAck({}, {})).toBe(false);
     expect(matchesLeaseAck({ leaseId: "l1", attempt: 1.5 }, { leaseId: "l1", attempt: 1.5 })).toBe(false);

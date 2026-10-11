@@ -27,7 +27,7 @@ import { createWorkerServer } from "../src/protocol/ws-server.mjs";
 import { createHttpServer } from "../src/http.mjs";
 import { finalizePodJob } from "../src/lanes/k8s-job-lane.mjs";
 
-const edges = vi.hoisted(() => ({ sockets: [], launches: [] }));
+const edges = vi.hoisted(() => ({ sockets: [], launches: [], onSocket: null }));
 vi.mock("ws", async (original) => {
   const actual = await original();
   const { EventEmitter: Emitter } = await import("node:events");
@@ -38,6 +38,7 @@ vi.mock("ws", async (original) => {
       super();
       if (edges.nativeTransport) return new actual.WebSocket(url);
       edges.sockets.push(this);
+      edges.onSocket?.(this);
       queueMicrotask(() => this.emit("open"));
     }
     send(raw) { this.onSend?.(decode(raw)); }
@@ -75,6 +76,7 @@ afterEach(async () => {
   edges.sockets.length = 0;
   edges.launches.length = 0;
   edges.nativeTransport = false;
+  edges.onSocket = null;
   vi.restoreAllMocks();
   vi.unstubAllEnvs();
   vi.useRealTimers();
@@ -86,7 +88,7 @@ async function directory() {
   return root;
 }
 
-async function approvedPayload(root, { laneKind = "remote" } = {}) {
+async function approvedPayload(root, { laneKind = "remote", jobId = "f0020001" } = {}) {
   const repoPath = path.join(root, "canonical");
   await mkdir(path.join(repoPath, ".vscode"), { recursive: true });
   await writeFile(path.join(repoPath, ".vscode", "mcp.json"), JSON.stringify({
@@ -105,7 +107,7 @@ async function approvedPayload(root, { laneKind = "remote" } = {}) {
     jobs: { pushOnFailure: false },
   };
   const store = createStore(path.join(root, "dispatcher-state"));
-  const created = createJob({ id: "f0020001", type: "task", projectId: "p1" });
+  const created = createJob({ id: jobId, type: "task", projectId: "p1" });
   const job = { ...created.job, description: "approved authority probe", callerId: "holder", callerRole: "owner",
     adapter: "telegram", chatId: "fixture-chat" };
   store.append(JOBS_STREAM, { ...created.event, job });
@@ -173,7 +175,9 @@ function pipe({ registry, workerId, localLane, execution, publicationReady = tru
   return { agent, sent, received, receive, socket, transport };
 }
 
-async function authoritySystem({ holdPublicationFor, publicationReady = true, waitForRuntime = true } = {}) {
+async function authoritySystem({
+  holdPublicationFor, publicationReady = true, waitForRuntime = true, publicationOutcome,
+} = {}) {
   vi.useFakeTimers();
   vi.setSystemTime(0);
   const root = await directory();
@@ -185,6 +189,7 @@ async function authoritySystem({ holdPublicationFor, publicationReady = true, wa
   });
   cleanups.push(() => registry.close());
   const publications = [];
+  let nativeOutcomeConsumed = false;
   const workers = {};
   for (const workerId of ["A", "B"]) {
     const entered = Promise.withResolvers();
@@ -208,6 +213,10 @@ async function authoritySystem({ holdPublicationFor, publicationReady = true, wa
       if (args.includes("push") && workerId === holdPublicationFor) {
         pushStarted.resolve();
         await settlePush.promise;
+      }
+      if (args.includes("push") && publicationOutcome && !nativeOutcomeConsumed) {
+        nativeOutcomeConsumed = true;
+        return publicationOutcome;
       }
       return {
         code: 0, settlementConfirmed: true,
@@ -253,6 +262,30 @@ async function authoritySystem({ holdPublicationFor, publicationReady = true, wa
   if (waitForRuntime) await vi.waitFor(() => expect(workers.A.signal).toBeInstanceOf(AbortSignal));
   return { root, registry, payload, workers, publications, received, consuming, repoPath };
 }
+
+it("FRC-03 releases authenticated publication authority after a real physically settled nonzero command", async () => {
+  const native = await runCommand(process.execPath, ["-e", "process.exitCode=7"], {
+    requireSettlement: true, timeoutMs: 5_000,
+  });
+  expect(native).toMatchObject({ code: 7, settlementConfirmed: true });
+  expect(native.settlement).toMatchObject({
+    rootReady: true, rootStartedAt: expect.any(String), unknownProcesses: 0,
+  });
+  const system = await authoritySystem({ publicationOutcome: native });
+  system.workers.A.release.resolve();
+  await vi.waitFor(() => expect(system.registry.completion(system.payload.id)?.event.data.status).toBe("failed"));
+  await system.consuming;
+  expect(system.registry.snapshot().byLane["execution-host"]).toMatchObject({
+    publicationFences: 0, active: 0,
+  });
+  expect(system.workers.A.sent.some((packet) => packet.t === PUBLICATION_MESSAGE
+    && packet.operation === PUBLICATION_OPERATIONS.END)).toBe(true);
+  const next = await approvedPayload(path.join(system.root, "next-job"), { jobId: "f0020002" });
+  expect(next.payload.leaseGrant.approval).not.toEqual(system.payload.leaseGrant.approval);
+  system.registry.enqueue("execution-host", { kind: "job", job: next.payload });
+  await vi.waitFor(() => expect(Object.values(system.workers).some((worker) =>
+    worker.received.some((packet) => packet.kind === "job" && packet.job?.id === next.payload.id))).toBe(true));
+}, PROCESS_TIMEOUT_MS);
 
 async function workerHomeFixture() {
   const root = await directory();
@@ -702,10 +735,15 @@ describe("FR-06 authenticated worker home credentials", () => {
     const packets = [];
     const registry = createWorkerRegistry();
     cleanups.push(() => registry.close());
+    const connected = Promise.withResolvers();
+    edges.onSocket = connected.resolve;
     const running = workerCommand.run(["--home", root]);
     cleanups.push(async () => { process.emit("SIGTERM"); await running; });
-    await vi.waitFor(() => expect(edges.sockets).toHaveLength(1));
-    const socket = edges.sockets[0];
+    const socket = await Promise.race([
+      connected.promise,
+      running.then(() => { throw new Error("Worker ended before creating its transport"); }),
+    ]);
+    edges.onSocket = null;
     socket.onSend = (packet) => {
       packets.push(packet);
       if (packet.t === "ack") registry.onAck({ ...packet, workerId: "home-worker" });

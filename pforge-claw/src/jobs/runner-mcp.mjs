@@ -1,4 +1,4 @@
-import { ClawError } from "../errors.mjs";
+import { ClawError, withClawErrorDetails } from "../errors.mjs";
 import { buildWorktreeLaunch, connectProject } from "../mcp/project-client.mjs";
 import { prepareWorkspaceMcpEnvironment } from "./bootstrap-mcp.mjs";
 
@@ -33,7 +33,8 @@ async function launchedClient({ ctx, project, worktree, env, signal, client }) {
     signal?.throwIfAborted();
     return { ...client, launch };
   } catch (error) {
-    await closeRunnerMcp(client, ctx);
+    const closed = await closeRunnerMcp(client, ctx);
+    if (!closed) throw withClawErrorDetails(error, "JOB_RUN_FAILED", { settlementConfirmed: false });
     throw error;
   }
 }
@@ -61,8 +62,8 @@ export async function openRunnerMcp({ ctx, project, worktree, env, signal, mcpBo
   signal?.throwIfAborted();
   const client = await (ctx.connectProject ?? connectProject)(launch, { redact: ctx.secrets?.redact });
   if (signal?.aborted) {
-    await client.close();
-    throw new ClawError("JOB_CANCELLED");
+    const closed = await closeRunnerMcp(client, ctx);
+    throw new ClawError("JOB_CANCELLED", closed ? {} : { settlementConfirmed: false });
   }
   return { ...client, launch };
 }

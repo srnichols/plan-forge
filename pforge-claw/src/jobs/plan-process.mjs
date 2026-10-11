@@ -1,7 +1,7 @@
 import { readFile, readdir, stat } from "node:fs/promises";
 import { createHash } from "node:crypto";
 import path from "node:path";
-import { ClawError } from "../errors.mjs";
+import { ClawError, withClawErrorDetails } from "../errors.mjs";
 import { QUORUM_MODES } from "./approval-proof.mjs";
 import { isInside, resolveCommand, resolvePforgeCommand, run } from "./worktree.mjs";
 import { assertJobActive, PLAN_ACTUALS_UNCONFIRMED, PLAN_RUN_ID } from "./runner-lifecycle.mjs";
@@ -298,8 +298,9 @@ export async function runForegroundPlan({ ctx, job, worktree, env, signal, emit,
   };
   signal?.addEventListener("abort", onAbort, { once: true });
   if (signal?.aborted) onAbort();
+  let outcome;
   try {
-    const outcome = await (ctx.planRunner ?? run)(executable, args, {
+    outcome = await (ctx.planRunner ?? run)(executable, args, {
       cwd: worktree, env, signal, requireSettlement: true, maxOutput: OUTPUT_LIMIT,
     });
     const completed = { ...outcome, spawned: !["ENOENT", "EACCES"].includes(outcome.error?.code) };
@@ -314,6 +315,10 @@ export async function runForegroundPlan({ ctx, job, worktree, env, signal, emit,
     });
     emitNativeOutput({ outcome, emit, secrets: ctx.secrets });
     return { status: "succeeded", ...actuals };
+  } catch (error) {
+    throw withClawErrorDetails(error, "JOB_RUN_FAILED", {
+      settlementConfirmed: outcome?.settlementConfirmed === true,
+    });
   } finally {
     signal?.removeEventListener("abort", onAbort);
     pollingController.abort();

@@ -7,6 +7,7 @@ import { TERMINAL } from "./model.mjs";
 import { prepareJobEnvironment } from "./runner-environment.mjs";
 import { beginJobHistory, synchronizeJobHistory } from "./runner-history.mjs";
 import { resolveGhCommand } from "./worktree.mjs";
+import { NATIVE_SCOPE_ERRORS } from "./native-command-supervisor.mjs";
 
 const ERROR_CODE = /^[A-Z0-9_]{1,64}$/;
 const EVENT_TEXT_LIMIT = 8192;
@@ -99,19 +100,29 @@ function emitFinished({ ctx, job, state, reason, execution }) {
   });
 }
 
+function hasUnconfirmedSettlement(error) {
+  return error?.details?.settlementConfirmed === false;
+}
+
+function warnJobFailure({ ctx, job, message, code, logCode = code }) {
+  ctx.logger?.warn?.(message, { code: logCode });
+  ctx.bus?.emit("job.warning", { jobId: job.id, code });
+}
+
 async function runPublicationCommand({ ctx, command, args, cwd, env, signal, publicationSettlement }) {
   if (publicationSettlement) publicationSettlement.pending += 1;
   try {
     const completed = await ctx.runner(command, args, { cwd, env, signal, requireSettlement: true });
-    if (publicationSettlement && completed?.settlementConfirmed !== true) {
-      publicationSettlement.allConfirmed = false;
-      throw new ClawError(PUBLICATION_ERRORS.DENIED);
+    if (completed?.settlementConfirmed !== true) {
+      throw new ClawError(PUBLICATION_ERRORS.DENIED, { settlementConfirmed: false });
     }
-    if (publicationSettlement && completed.code !== 0) publicationSettlement.allConfirmed = false;
     return completed;
   } catch (error) {
     if (publicationSettlement) publicationSettlement.allConfirmed = false;
-    throw error;
+    if (hasUnconfirmedSettlement(error)) throw error;
+    throw new ClawError(PUBLICATION_ERRORS.DENIED, {
+      code: failureReason(error), settlementConfirmed: false,
+    });
   } finally {
     if (publicationSettlement) publicationSettlement.pending -= 1;
   }
@@ -244,8 +255,10 @@ async function pushFailure({ ctx, job, handle, env, signal }) {
     });
   } catch (error) {
     if (isCancelled(error, signal)) return;
-    ctx.logger?.warn?.("Failed worktree push failed", { code: failureReason(error) });
-    ctx.bus?.emit("job.warning", { jobId: job.id, code: "FAILURE_PUSH_FAILED" });
+    warnJobFailure({
+      ctx, job, message: "Failed worktree push failed", code: "FAILURE_PUSH_FAILED", logCode: failureReason(error),
+    });
+    return { settlementConfirmed: !hasUnconfirmedSettlement(error) };
   }
 }
 
@@ -305,7 +318,8 @@ async function prepareWorkspace({ ctx, job, project, signal, state }) {
 }
 
 async function finalizeJobHistory({ ctx, job, state, signal }) {
-  if (!state.executionStarted || state.externalHistoryDelivery || state.historyAttempted) return state.history;
+  if (!state.executionStarted || state.settlementConfirmed === false
+    || state.externalHistoryDelivery || state.historyAttempted) return state.history;
   state.historyAttempted = true;
   try {
     state.history = await synchronizeJobHistory({
@@ -333,16 +347,24 @@ async function finalizeFailedHistory({ ctx, job, state }) {
     await finalizeJobHistory({ ctx, job, state });
   } catch (error) {
     const code = failureReason(error);
-    ctx.logger?.warn?.("Job history delivery failed; source retained", { code });
-    ctx.bus?.emit("job.warning", { jobId: job.id, code });
+    warnJobFailure({ ctx, job, message: "Job history delivery failed; source retained", code });
   }
 }
 
 async function failWorkspace({ ctx, job, state, error, signal }) {
   state.handle ??= error?.worktreeHandle ?? null;
-  if (!isCancelled(error, signal)) await pushFailure({ ctx, job, handle: state.handle, env: state.env, signal });
-  await finalizeFailedHistory({ ctx, job, state });
-  return { ...settleFailure({ ctx, job, error, signal, execution: state.execution }), ...historyOutcome(state) };
+  if (hasUnconfirmedSettlement(error)) state.settlementConfirmed = false;
+  if (state.settlementConfirmed !== false && !isCancelled(error, signal)) {
+    const pushed = await pushFailure({ ctx, job, handle: state.handle, env: state.env, signal });
+    if (pushed?.settlementConfirmed === false) state.settlementConfirmed = false;
+  }
+  if (state.settlementConfirmed === false) {
+    warnJobFailure({ ctx, job, message: "Native settlement unconfirmed; source retained", code: NATIVE_SCOPE_ERRORS.UNCONFIRMED });
+  } else await finalizeFailedHistory({ ctx, job, state });
+  return {
+    ...settleFailure({ ctx, job, error, signal, execution: state.execution }), ...historyOutcome(state),
+    ...(state.settlementConfirmed === false ? { settlementConfirmed: false } : {}),
+  };
 }
 
 async function completeWorkspace({ ctx, job, project, state, returned, signal, emit }) {
@@ -393,6 +415,9 @@ export function createRunnerLifecycle(ctx) {
       state.executionStarted = true;
       const returned = await execute({ job, project, worktree: state.handle, env: state.env, signal });
       state.execution = returned;
+      if (returned?.settlementConfirmed === false) throw new ClawError(
+        NATIVE_SCOPE_ERRORS.UNCONFIRMED, { settlementConfirmed: false },
+      );
       return await completeWorkspace({ ctx, job, project, state, returned, signal, emit });
     } catch (error) {
       return failWorkspace({ ctx, job, state, error, signal });

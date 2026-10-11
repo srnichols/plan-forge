@@ -443,6 +443,7 @@ export async function runOneShot(env = process.env, {
     });
     const runtime = await executor.runtimeFor(verified);
     const result = await runtime.run(input, options);
+    if (result?.settlementConfirmed === false) return result;
     const finalized = await finalize({
       repoDir: boot.repoDir, jobId, projectId: verified.projectId,
       env: jobEnv, runner: podRunner, deadlineMs,

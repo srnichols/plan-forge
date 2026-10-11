@@ -303,6 +303,14 @@ proof. Failed or cancelled jobs preserve their primary outcome and retain
 workspace/history ownership until canonical application acknowledgement and
 the required cleanup evidence are available.
 
+A physically settled nonzero command still fails the job, but can release its
+authenticated publication reservation; command success is not the settlement
+certificate. Explicit `settlementConfirmed: false` instead keeps that reservation
+and source ownership uncertain. Local execution, worker history and one-shot pod
+finalization preserve the flag and do not snapshot, apply or acknowledge a
+potentially live source. Ordinary settled failures still deliver their canonical
+history without replacing the primary failure.
+
 ## Experimental release readiness
 
 Forge-Claw is an opt-in Node ESM source package, not a new TypeScript build

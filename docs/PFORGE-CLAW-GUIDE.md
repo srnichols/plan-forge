@@ -427,7 +427,7 @@ the evidence table blank until the operator performs and records the scenarios.
 
 ## Tested Platforms
 
-CI covers offline unit and end-to-end tests, scripted/fake Telegram interactions, and a doctor smoke test against the placeholder example configuration. It provisions a pinned Kubernetes client for offline manifest rendering and selects supported Bash on macOS instead of the system Bash 3. Those toolchain prerequisites do not constitute a passing platform gate. CI does not cover authenticated GitHub Copilot or BYOK, or live Telegram. The doctor smoke test confirms example diagnostics and does not prove Kubernetes/CNI or authentication readiness.
+CI covers offline unit and end-to-end tests, scripted/fake Telegram interactions, and a doctor smoke test against the placeholder example configuration. It provisions a pinned Kubernetes client for offline manifest rendering and selects supported Bash on macOS instead of the system Bash 3. The disposable Kubernetes lane pins kind v0.27.0 with its digest-pinned v1.32.2 node image; older kind v0.26.0 cannot import images into that containerd 2 node. Those toolchain prerequisites do not constitute a passing platform gate. CI does not cover authenticated GitHub Copilot or BYOK, or live Telegram. The doctor smoke test confirms example diagnostics and does not prove Kubernetes/CNI or authentication readiness.
 
 | OS | Arch | Node | K8s distro/version | CNI | Runtime | Channel | Result | Date | Reporter | Evidence |
 |---|---|---:|---|---|---|---|---|---|---|---|

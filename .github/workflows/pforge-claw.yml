@@ -154,9 +154,10 @@ jobs:
 
       - uses: helm/kind-action@v1.12.0
         with:
+          version: 'v0.27.0'
           cluster_name: kind
           config: ${{ runner.temp }}/kind.yaml
-          node_image: kindest/node:v1.32.2
+          node_image: kindest/node:v1.32.2@sha256:f226345927d7e348497136874b6d207e0b32cc52154ad8323129352923a3142f
 
       - name: Install Calico CNI
         shell: bash

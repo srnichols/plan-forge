@@ -6,7 +6,7 @@ import { StringDecoder } from "node:string_decoder";
 import { fileURLToPath } from "node:url";
 import { ClawError } from "../errors.mjs";
 import {
-  nativeSupervisorRootExit, NATIVE_SCOPE_ERRORS, NATIVE_SCOPE_MAX_PROCESSES, NATIVE_SUPERVISOR_ARGUMENT,
+  nativeSupervisorRootExit, NATIVE_SCOPE_ERRORS, NATIVE_SCOPE_MAX_PROCESSES,
   NATIVE_SUPERVISOR_STOP_MESSAGE,
 } from "./native-command-supervisor.mjs";
 
@@ -44,16 +44,18 @@ $script:KillSignal = 9
 $script:NoHang = 1
 $script:SetFdFlags = 2
 $script:CloseOnExec = 1
-$script:UnixDomain = 1
-$script:StreamSocket = 1
-$script:SocketCloseOnExec = 524288
 $script:SocketLevel = 1
 $script:PeerCredentialsOption = 17
 $script:PeerCredentialsBytes = 12
 $script:NativeIntBytes = 4
 $script:PollBytes = 8
 $script:SpawnActionsBytes = 256
-$script:IpcDescriptor = 3
+$script:SpawnAttributesBytes = 512
+$script:SignalSetBytes = 128
+$script:SpawnSetSignalDefaults = 4
+$script:SpawnSetSignalMask = 8
+$script:BootstrapPrefix = 'PFORGE_CLAW_NATIVE_BOOTSTRAP_'
+$script:AsyncSpawnErrors = @{ 2 = 'ENOENT'; 11 = 'EAGAIN'; 13 = 'EACCES'; 23 = 'ENFILE'; 24 = 'EMFILE' }
 $script:ReadBatchBytes = 16384
 $script:DecodeSlackChars = 4
 $script:SelectIntervalMicroseconds = 100000
@@ -63,7 +65,9 @@ $script:MaxEnvironmentBytes = 8388608
 $script:MaxPidDigits = 16
 $script:NativeEntries = @{ prctlGet = 'prctl'; pidfd_open = 'syscall'; pidfd_send_signal = 'syscall';
     spawn_init = 'posix_spawn_file_actions_init'; spawn_destroy = 'posix_spawn_file_actions_destroy';
-    spawn_dup2 = 'posix_spawn_file_actions_adddup2'; spawn_close = 'posix_spawn_file_actions_addclose' }
+    spawn_close = 'posix_spawn_file_actions_addclose'; attr_init = 'posix_spawnattr_init';
+    attr_destroy = 'posix_spawnattr_destroy'; attr_defaults = 'posix_spawnattr_setsigdefault';
+    attr_mask = 'posix_spawnattr_setsigmask'; attr_flags = 'posix_spawnattr_setflags' }
 $script:Utf8 = [Text.UTF8Encoding]::new($false, $true)
 $script:Stopped = [Collections.Generic.HashSet[int]]::new()
 $script:ExceededLimit = $false
@@ -131,11 +135,17 @@ function Initialize-NativeImports {
     Add-NativeMethod 'pidfd_open' ([long]) @([long], [int], [uint32])
     Add-NativeMethod 'pidfd_send_signal' ([long]) @([long], [int], [int], [IntPtr], [uint32])
     Add-NativeMethod 'getsockopt' ([int]) @([int], [int], [int], [IntPtr], [IntPtr])
-    Add-NativeMethod 'socketpair' ([int]) @([int], [int], [int], [IntPtr])
     Add-NativeMethod 'spawn_init' ([int]) @([IntPtr])
     Add-NativeMethod 'spawn_destroy' ([int]) @([IntPtr])
-    Add-NativeMethod 'spawn_dup2' ([int]) @([IntPtr], [int], [int])
     Add-NativeMethod 'spawn_close' ([int]) @([IntPtr], [int])
+    Add-NativeMethod 'attr_init' ([int]) @([IntPtr])
+    Add-NativeMethod 'attr_destroy' ([int]) @([IntPtr])
+    Add-NativeMethod 'attr_defaults' ([int]) @([IntPtr], [IntPtr])
+    Add-NativeMethod 'attr_mask' ([int]) @([IntPtr], [IntPtr])
+    Add-NativeMethod 'attr_flags' ([int]) @([IntPtr], [short])
+    Add-NativeMethod 'sigfillset' ([int]) @([IntPtr])
+    Add-NativeMethod 'sigemptyset' ([int]) @([IntPtr])
+    Add-NativeMethod 'confstr' ([uint64]) @([int], [IntPtr], [uint64])
     Add-NativeMethod 'posix_spawn' ([int]) @([IntPtr], [string], [IntPtr], [IntPtr], [IntPtr], [IntPtr])
     Add-NativeMethod '_exit' ([void]) @([int])
     $script:Native = $script:NativeBuilder.CreateType()
@@ -228,43 +238,133 @@ function Write-Line($channel, [string]$line) {
 function Write-Frame($channel, $frame) {
     Write-Line $channel (ConvertTo-Json -InputObject $frame -Compress -Depth 8)
 }
-function Start-Supervisor($config) {
-    $pair = Native-Memory (2 * $NativeIntBytes)
-    if ($Native::socketpair($UnixDomain, ($StreamSocket -bor $SocketCloseOnExec), 0, $pair) -ne 0) { Fail-Scope $Unavailable }
-    $parentFd = [Runtime.InteropServices.Marshal]::ReadInt32($pair)
-    $childFd = [Runtime.InteropServices.Marshal]::ReadInt32($pair, 4)
+function Actor-Environment {
+    $values = [Collections.Generic.Dictionary[string,string]]::new([StringComparer]::Ordinal)
+    # PowerShell changes PATH; only the kernel-retained initial environment describes the caller's exact values.
+    foreach ($entry in (Initial-Environment)) {
+        $separator = $entry.IndexOf('=')
+        if ($separator -le 0) { Fail-Scope $Unconfirmed }
+        $values[$entry.Substring(0, $separator)] = $entry.Substring($separator + 1)
+    }
+    $privateNames = @($values.Keys | Where-Object { $_.StartsWith($BootstrapPrefix, [StringComparison]::Ordinal) })
+    foreach ($name in $privateNames) {
+        if (-not $name.EndsWith('_NAME', [StringComparison]::Ordinal)) { continue }
+        $originalName = $values[$name]
+        if (-not $originalName -or $originalName.Contains('=') -or $originalName.Contains([char]0) -or
+            $originalName.StartsWith($BootstrapPrefix, [StringComparison]::Ordinal)) { Fail-Scope $Unconfirmed }
+        $valueName = $name.Substring(0, $name.Length - '_NAME'.Length)
+        if ($values.ContainsKey($valueName)) { $values[$originalName] = $values[$valueName] }
+        else { $null = $values.Remove($originalName) }
+    }
+    foreach ($name in $privateNames) { $null = $values.Remove($name) }
+    $null = $values.Remove('NODE_CHANNEL_FD')
+    $null = $values.Remove('NODE_CHANNEL_SERIALIZATION_MODE')
+    return ,$values
+}
+function Default-ExecutablePath {
+    $length = $Native::confstr(0, [IntPtr]::Zero, 0)
+    if ($length -le 1 -or $length -gt $MaxControlBytes) { Fail-Scope $Unavailable }
+    $buffer = Native-Memory ([int]$length)
+    if ($Native::confstr(0, $buffer, $length) -ne $length) { Fail-Scope $Unavailable }
+    return [Runtime.InteropServices.Marshal]::PtrToStringUTF8($buffer)
+}
+function Spawn-Candidate([string]$candidate, $context) {
+    $errno = $Native::posix_spawn($StatusMemory, $candidate, $context.Actions, $context.Attributes,
+        $context.Argv.Pointer, $context.Environment.Pointer)
+    if ($errno -ne 8) { return $errno }
+    # glibc execvp, used by Node/libuv on Linux, runs executable text files through sh after ENOEXEC.
+    $shell = [IO.Path]::Combine([IO.Path]::DirectorySeparatorChar.ToString(), 'bin', 'sh')
+    $shellArgs = [Collections.Generic.List[string]]::new()
+    $shellArgs.Add($shell)
+    $shellArgs.Add($candidate)
+    foreach ($argument in $context.Arguments) { $shellArgs.Add($argument) }
+    $fallback = New-Vector ($shellArgs.ToArray())
+    try {
+        return $Native::posix_spawn($StatusMemory, $shell, $context.Actions, $context.Attributes,
+            $fallback.Pointer, $context.Environment.Pointer)
+    } finally { Close-Vector $fallback }
+}
+function Spawn-Command([string]$command, $context) {
+    if ($command.Contains([IO.Path]::DirectorySeparatorChar)) { return Spawn-Candidate $command $context }
+    $pathValue = $(if ($context.Values.ContainsKey('PATH')) { $context.Values['PATH'] } else { Default-ExecutablePath })
+    $denied = $false
+    foreach ($directory in $pathValue.Split([char]':')) {
+        $candidate = $(if ($directory) { [IO.Path]::Combine($directory, $command) } else { $command })
+        $errno = Spawn-Candidate $candidate $context
+        if ($errno -eq 0) { return 0 }
+        if ($errno -eq 13) { $denied = $true; continue }
+        if ($errno -notin @(2, 20)) { return $errno }
+    }
+    return $(if ($denied) { 13 } else { 2 })
+}
+function Validate-Command($frame) {
+    if ($frame.command -isnot [string] -or -not $frame.command -or $frame.command.Contains([char]0) -or
+        $frame.args -isnot [array]) { return $false }
+    foreach ($argument in $frame.args) {
+        if ($argument -isnot [string] -or $argument.Contains([char]0)) { return $false }
+    }
+    return $true
+}
+function Start-Actor($frame) {
+    if (-not (Validate-Command $frame)) {
+        Write-Frame $script:Outer @{ v = 1; t = 'owned-result'; code = -1; errorCode = 'COMMAND_INVALID' }
+        return
+    }
     $actions = Native-Memory $SpawnActionsBytes
-    $initialized = $false
+    $attributes = Native-Memory $SpawnAttributesBytes
+    $defaults = Native-Memory $SignalSetBytes
+    $mask = Native-Memory $SignalSetBytes
+    $actionsInitialized = $false
+    $attributesInitialized = $false
     $argv = $null
     $environment = $null
     try {
         if ($Native::spawn_init($actions) -ne 0) { Fail-Scope $Unavailable }
-        $initialized = $true
-        if ($Native::spawn_dup2($actions, $childFd, $IpcDescriptor) -ne 0 -or
-            $Native::spawn_close($actions, $parentFd) -ne 0 -or
-            ($childFd -ne $IpcDescriptor -and $Native::spawn_close($actions, $childFd) -ne 0)) { Fail-Scope $Unavailable }
-        $entries = [Collections.Generic.List[string]]::new()
-        # PowerShell changes PATH; the kernel's original exec environment preserves the actor's exact values.
-        foreach ($entry in (Initial-Environment)) {
-            if (-not $entry.StartsWith('NODE_CHANNEL_FD=') -and
-                -not $entry.StartsWith('NODE_CHANNEL_SERIALIZATION_MODE=')) { $entries.Add($entry) }
+        $actionsInitialized = $true
+        foreach ($socket in @($script:Outer.Socket, $script:Control.Socket, $script:Listener)) {
+            if ($Native::spawn_close($actions, $socket.Handle.ToInt32()) -ne 0) { Fail-Scope $Unavailable }
         }
-        $entries.Add('NODE_CHANNEL_FD=' + $IpcDescriptor)
-        $entries.Add('NODE_CHANNEL_SERIALIZATION_MODE=json')
-        $argv = New-Vector @($config.node, $config.supervisorPath, $config.argument)
+        if ($Native::attr_init($attributes) -ne 0) { Fail-Scope $Unavailable }
+        $attributesInitialized = $true
+        if ($Native::sigfillset($defaults) -ne 0 -or $Native::sigemptyset($mask) -ne 0 -or
+            $Native::attr_defaults($attributes, $defaults) -ne 0 -or
+            $Native::attr_mask($attributes, $mask) -ne 0 -or
+            $Native::attr_flags($attributes, ($SpawnSetSignalDefaults -bor $SpawnSetSignalMask)) -ne 0) { Fail-Scope $Unavailable }
+        $values = Actor-Environment
+        $entries = [Collections.Generic.List[string]]::new()
+        foreach ($entry in $values.GetEnumerator()) { $entries.Add($entry.Key + '=' + $entry.Value) }
+        $argv = New-Vector (@($frame.command) + $frame.args)
         $environment = New-Vector ($entries.ToArray())
-        if ($Native::posix_spawn($StatusMemory, $config.node, $actions, [IntPtr]::Zero,
-            $argv.Pointer, $environment.Pointer) -ne 0) { Fail-Scope $Unavailable }
-        $script:InnerPid = [Runtime.InteropServices.Marshal]::ReadInt32($StatusMemory)
-        $script:Inner = Channel-FromFd $parentFd 'inner'
-        $parentFd = -1
+        $context = @{ Actions = $actions; Attributes = $attributes; Argv = $argv; Environment = $environment;
+            Values = $values; Arguments = $frame.args }
+        $errno = Spawn-Command $frame.command $context
+        if ($errno -ne 0) {
+            # The shared Node supervisor maps synchronous spawn exceptions to COMMAND_INVALID.
+            $code = $(if ($AsyncSpawnErrors.ContainsKey($errno)) { $AsyncSpawnErrors[$errno] } else { 'COMMAND_INVALID' })
+            Write-Frame $script:Outer @{ v = 1; t = 'owned-result'; code = -1; errorCode = $code }
+            return
+        }
+        $script:ActorPid = [Runtime.InteropServices.Marshal]::ReadInt32($StatusMemory)
+        $birth = (Process-Identity $script:ActorPid).Birth
+        $script:ActorFd = Open-PidFd $script:ActorPid $birth $RootPid
     } finally {
         Close-Vector $argv
         Close-Vector $environment
-        if ($initialized) { $null = $Native::spawn_destroy($actions) }
-        $null = $Native::close($childFd)
-        if ($parentFd -ge 0) { $null = $Native::close($parentFd) }
+        if ($attributesInitialized) { $null = $Native::attr_destroy($attributes) }
+        if ($actionsInitialized) { $null = $Native::spawn_destroy($actions) }
     }
+}
+function Read-ActorExit {
+    if ($script:ActorPid -le 0 -or $script:ActorExited) { return }
+    $reaped = $Native::waitpid($script:ActorPid, $StatusMemory, $NoHang)
+    $errno = [Runtime.InteropServices.Marshal]::GetLastPInvokeError()
+    if ($reaped -eq 0 -or ($reaped -lt 0 -and $errno -eq $EINTR)) { return }
+    if ($reaped -ne $script:ActorPid) { Fail-Scope $Unconfirmed $errno }
+    $script:ActorExited = $true
+    Record-Stopped $reaped
+    $status = [Runtime.InteropServices.Marshal]::ReadInt32($StatusMemory)
+    $code = $(if (($status -band 127) -eq 0) { ($status -shr 8) -band 255 } else { -1 })
+    Write-Frame $script:Outer @{ v = 1; t = 'owned-result'; code = $code }
 }
 function Record-Stopped([int]$processId) {
     if ($Stopped.Contains($processId)) { return }
@@ -351,21 +451,14 @@ function Receive-Frame($channel, [string]$line) {
     if ($frame -isnot [Collections.IDictionary] -or -not (Is-NativeInteger $frame.v) -or $frame.v -ne 1) {
         Fail-Scope $Unconfirmed
     }
-    if ($channel.Kind -in @('outer', 'inner') -and $frame.t -isnot [string]) { Fail-Scope $Unconfirmed }
+    if ($channel.Kind -eq 'outer' -and $frame.t -isnot [string]) { Fail-Scope $Unconfirmed }
     if ($channel.Kind -eq 'control' -and $frame.operation -isnot [string]) { Fail-Scope $Unconfirmed }
     if ($channel.Kind -eq 'outer') {
         if ($frame.t -ceq '__STOP_MESSAGE__') { $script:Stopping = $true; return }
         if ($frame.t -cne 'owned-start') { Fail-Scope $Unconfirmed }
         if (-not $script:Attached -or $script:Started -or $script:Stopping) { Fail-Scope $Unconfirmed }
         $script:Started = $true
-        Write-Line $script:Inner $line
-    } elseif ($channel.Kind -eq 'inner') {
-        if ($frame.t -ceq 'owned-ready' -and (Is-NativeInteger $frame.pid) -and $frame.pid -eq $InnerPid -and -not $script:Ready) {
-            $script:Ready = $true
-            Write-Frame $script:Outer @{ v = 1; t = 'owned-ready'; pid = $RootPid }
-        } elseif ($frame.t -ceq 'owned-result' -and $script:Started -and (Is-NativeInteger $frame.code)) {
-            Write-Line $script:Outer $line
-        } else { Fail-Scope $Unconfirmed }
+        Start-Actor $frame
     } elseif (-not $script:Attached) {
         if ($frame.operation -cne 'attach' -or -not (Is-NativeInteger $frame.rootPid) -or $frame.rootPid -ne $RootPid -or
             $frame.rootStartedAt -isnot [string] -or $frame.rootStartedAt -cne $RootBirth) { Fail-Scope $Unconfirmed }
@@ -381,7 +474,6 @@ function Receive-Frame($channel, [string]$line) {
 function Read-Channel($channel) {
     $count = $channel.Socket.Receive($script:ReadBytes, [Net.Sockets.SocketFlags]::None)
     if ($count -eq 0) {
-        if ($channel.Kind -eq 'inner') { Fail-Scope $Unconfirmed }
         $script:Stopping = $true
         return
     }
@@ -396,16 +488,18 @@ function Read-Channel($channel) {
         if ($script:Stopping) { return }
     }
 }
-function Invoke-NativeRoot([string]$encoded) {
+function Invoke-NativeRoot {
     $exitCode = 1
     $script:Attached = $false
     $script:Started = $false
-    $script:Ready = $false
     $script:Stopping = $false
     $script:SendReceipt = $false
     $script:Control = $null
     $script:Outer = $null
     $script:Listener = $null
+    $script:ActorPid = 0
+    $script:ActorFd = -1
+    $script:ActorExited = $false
     try {
         Initialize-NativeImports
         $script:RootPid = $Native::getpid()
@@ -416,7 +510,6 @@ function Invoke-NativeRoot([string]$encoded) {
         if ($Native::fcntl($descriptor, $SetFdFlags, $CloseOnExec) -lt 0) { Fail-Scope $Unavailable }
         $script:Outer = Channel-FromFd $descriptor 'outer'
         Establish-Subreaper
-        $config = ConvertFrom-Json -InputObject ($Utf8.GetString([Convert]::FromBase64String($encoded))) -AsHashtable
         $script:Listener = [Net.Sockets.Socket]::new([Net.Sockets.AddressFamily]::Unix,
             [Net.Sockets.SocketType]::Stream, [Net.Sockets.ProtocolType]::Unspecified)
         $address = [char]0 + 'pforge-claw-posix-' + $RootPid + '-' + $RootBirth
@@ -425,8 +518,8 @@ function Invoke-NativeRoot([string]$encoded) {
         $script:ReadBytes = [byte[]]::new($ReadBatchBytes)
         $script:ReadChars = [char[]]::new($ReadBatchBytes + $DecodeSlackChars)
         if ($script:Outer.Socket.Poll(0, [Net.Sockets.SelectMode]::SelectRead)) { Read-Channel $script:Outer }
-        if (-not $script:Stopping) { Start-Supervisor $config }
-        # A single readiness loop services both private sockets; no blocking reader occupies the CLR worker pool.
+        if (-not $script:Stopping) { Write-Frame $script:Outer @{ v = 1; t = 'owned-ready'; pid = $RootPid } }
+        # Native readiness precedes literal START; the direct actor never shares our private IPC descriptors.
         while (-not $script:Stopping) {
             $readable = [Collections.ArrayList]::new()
             foreach ($channel in $Channels) { $null = $readable.Add($channel.Socket) }
@@ -441,6 +534,7 @@ function Invoke-NativeRoot([string]$encoded) {
                 }
                 if ($script:Stopping) { break }
             }
+            if (-not $script:Stopping) { Read-ActorExit }
         }
         $receipt = Stop-Children
         if ($script:SendReceipt) {
@@ -458,6 +552,7 @@ function Invoke-NativeRoot([string]$encoded) {
         } catch { $exitCode = 1 }
         if ($null -ne $script:Native -and $null -ne $script:StatusMemory) { $null = Stop-Children }
     } finally {
+        if ($script:ActorFd -ge 0) { $null = $Native::close($script:ActorFd) }
         foreach ($channel in $Channels) { $channel.Socket.Dispose() }
         if ($null -ne $script:Listener) { $script:Listener.Dispose() }
         foreach ($pointer in $Buffers) { [Runtime.InteropServices.Marshal]::FreeHGlobal($pointer) }
@@ -511,7 +606,7 @@ function validateBootstrapEnvironment(env) {
 }
 
 /**
- * Prepare a compiler-free PowerShell/libc subreaper root around the existing Node supervisor.
+ * Prepare a held PowerShell/libc subreaper that starts the literal actor only after native attach.
  * @param {{node:string, supervisorPath:string, cwd?:string, env?:NodeJS.ProcessEnv}} options
  * @returns {Promise<{command:string, args:string[]}>}
  */
@@ -524,10 +619,9 @@ export async function nativePosixSupervisorLaunch({ node, supervisorPath, cwd, e
   if (node !== process.execPath || path.resolve(supervisorPath) !== TRUSTED_SUPERVISOR_PATH)
     throw unavailable("fixed-supervisor-path");
   const command = await powershellPath();
-  const config = Buffer.from(JSON.stringify({ node, supervisorPath, argument: NATIVE_SUPERVISOR_ARGUMENT })).toString("base64");
   return {
     command,
-    args: powershellArguments(nativeSource(), `Invoke-NativeRoot '${config}'`),
+    args: powershellArguments(nativeSource(), "Invoke-NativeRoot"),
   };
 }
 

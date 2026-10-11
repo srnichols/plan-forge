@@ -1,10 +1,10 @@
 import { ChildProcess, spawn } from "node:child_process";
 import { createHash } from "node:crypto";
-import { access, readFile } from "node:fs/promises";
+import { access, chmod, mkdir, mkdtemp, readFile, rm, symlink, writeFile } from "node:fs/promises";
 import net from "node:net";
 import path from "node:path";
 import { StringDecoder } from "node:string_decoder";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   createNativeSupervisor, nativeSupervisorRootExit, NATIVE_SCOPE_ERRORS,
@@ -15,6 +15,7 @@ import {
 } from "../src/jobs/posix-process-scope.mjs";
 
 vi.mock("node:fs/promises", { spy: true });
+vi.mock("node:child_process", { spy: true });
 
 const supervisorPath = fileURLToPath(new URL("../src/jobs/native-command-supervisor.mjs", import.meta.url));
 const adapterPath = fileURLToPath(new URL("../src/jobs/posix-process-scope.mjs", import.meta.url));
@@ -124,11 +125,11 @@ function collectNativeText(resource, stream) {
   output.once("end", () => { resource[stream] += decoder.end(); });
 }
 
-async function held(env = process.env, prepareLaunch = (launch) => launch) {
+async function held(env = process.env, prepareLaunch = (launch) => launch, cwd = process.cwd()) {
   const launch = prepareLaunch(await nativePosixSupervisorLaunch({
-    node: process.execPath, supervisorPath, cwd: process.cwd(), env,
+    node: process.execPath, supervisorPath, cwd, env,
   }));
-  const supervisor = createNativeSupervisor({ cwd: process.cwd(), env, launch });
+  const supervisor = createNativeSupervisor({ cwd, env, launch });
   const resource = { supervisor, stdout: "", stderr: "" };
   resources.push(resource);
   for (const stream of ["stdout", "stderr"]) collectNativeText(resource, stream);
@@ -157,6 +158,28 @@ async function stop(resource) {
   expect(receipt.stoppedPids).toContain(receipt.rootPid);
   expect(await isLive(receipt.rootPid)).toBe(false);
   return receipt;
+}
+
+async function commandFixture() {
+  const fixtures = path.resolve("tests", ".posix-command-fixtures");
+  await mkdir(fixtures, { recursive: true });
+  const directory = await mkdtemp(path.join(fixtures, "argv-"));
+  resources.push({ directory });
+  return directory;
+}
+
+async function plainCommand(command, args, { cwd, env }) {
+  const supervisor = createNativeSupervisor({ cwd, env });
+  const resource = { supervisor, stdout: "", stderr: "" };
+  for (const stream of ["stdout", "stderr"]) collectNativeText(resource, stream);
+  try {
+    expect(await supervisor.ready).toBe(true);
+    supervisor.start(command, args);
+    const completed = await supervisor.completion;
+    await supervisor.stop();
+    return { code: completed.code, errorCode: completed.errorCode ?? null,
+      stdout: resource.stdout, stderr: resource.stderr };
+  } finally { await supervisor.stop(); }
 }
 
 function detachedLeafScript() {
@@ -197,11 +220,12 @@ async function independentLeaf() {
 }
 
 afterEach(async () => {
-  await Promise.all(resources.splice(0).map(async ({ scope, supervisor, socket, server }) => {
+  await Promise.all(resources.splice(0).map(async ({ scope, supervisor, socket, server, directory }) => {
     if (socket) { socket.end("stop\n"); socket.destroy(); }
     if (server) await new Promise((resolve) => server.close(resolve));
     if (scope) await scope.close();
     else if (supervisor) { supervisor.child.kill("SIGKILL"); await supervisor.closed; }
+    if (directory) await rm(directory, { recursive: true, force: true });
   }));
 });
 
@@ -260,6 +284,180 @@ describe("Guard: POSIX ownership uses supported native facilities", () => {
 });
 
 describe.skipIf(process.platform !== "linux")("Linux native subreaper ownership", () => {
+  it.each(["path", "empty-path", "path-denied-then-found", "path-notdir-then-found", "relative",
+    "default-path", "text-executable", "missing", "permission", "directory", "argument-limit", "signal"])(
+    "matches real Node spawn argv/PATH/status/error semantics for %s", async (kind) => {
+      const cwd = await commandFixture();
+      const bin = path.join(cwd, "bin");
+      const denied = path.join(cwd, "denied");
+      await mkdir(bin);
+      await mkdir(denied);
+      await symlink(process.execPath, path.join(bin, "actor"));
+      await symlink(process.execPath, path.join(cwd, "actor"));
+      await writeFile(path.join(denied, "actor"), "not executable");
+      const relative = path.join(cwd, "report.mjs");
+      await writeFile(relative, `import{readFileSync}from"node:fs";process.stdout.write(JSON.stringify({argv:process.argv.slice(2),argv0:process.argv0,cwd:process.cwd(),stdinBytes:readFileSync(0).length}));process.stderr.write("stderr");process.exitCode=7;`);
+      const env = { ...process.env, PATH: bin };
+      let command = "actor";
+      let args = [relative, "literal quote'\";$value", "trailing\\", "", "é🛠漢"];
+      if (kind === "empty-path") env.PATH = "";
+      if (kind === "path-denied-then-found") env.PATH = [denied, bin].join(path.delimiter);
+      if (kind === "path-notdir-then-found") env.PATH = [relative, bin].join(path.delimiter);
+      if (kind === "relative") command = `.${path.sep}actor`;
+      if (kind === "default-path") { delete env.PATH; command = "true"; args = []; }
+      if (kind === "text-executable") {
+        command = `.${path.sep}plain-command`;
+        await writeFile(path.join(cwd, "plain-command"), 'printf "%s" "$1"; printf "stderr" >&2; exit 7\n');
+        await chmod(path.join(cwd, "plain-command"), 0o755);
+        args = ["literal quote'\";$value", "", "é🛠漢"];
+      }
+      if (kind === "missing") { command = path.join(cwd, "missing"); args = []; }
+      if (kind === "permission") { command = path.join(denied, "actor"); args = []; }
+      if (kind === "directory") { command = bin; args = []; }
+      if (kind === "argument-limit") args = [relative, "x".repeat(131_072)];
+      if (kind === "signal") args = ["-e", 'process.kill(process.pid, "SIGTERM")'];
+      const baseline = await plainCommand(command, args, { cwd, env });
+      const resource = await held(env, (launch) => launch, cwd);
+      resource.supervisor.start(command, args);
+      const actual = await resource.supervisor.completion;
+      await stop(resource);
+      expect({
+        code: actual.code, errorCode: actual.errorCode ?? null, stdout: resource.stdout, stderr: resource.stderr,
+      }).toEqual(baseline);
+    });
+
+  it("restores actor-only bootstrap values and removes private Node channel metadata", async () => {
+    const cwd = await commandFixture();
+    const fields = {
+      NODE_OPTIONS: "--no-warnings", NODE_PATH: "actor-module-canary", PSModulePath: "actor-only-modules",
+      DOTNET_STARTUP_HOOKS: "actor-only-hooks", DOTNET_ADDITIONAL_DEPS: "actor-only-deps",
+      DOTNET_SHARED_STORE: "actor-only-store", LD_LIBRARY_PATH: "actor-only-library-directory",
+      NODE_DEBUG: "", NODE_DEBUG_NATIVE: "",
+    };
+    const env = { ...process.env, ...fields, PATH: "actor-only-path", EMPTY_CANARY: "" };
+    const resource = await held(env, (launch) => launch, cwd);
+    const names = [...Object.keys(fields), "PATH", "EMPTY_CANARY"];
+    expect(await execute(resource, `process.stdout.write(JSON.stringify({
+      values:Object.fromEntries(${JSON.stringify(names)}.map(name=>[name,process.env[name]])),
+      cwd:process.cwd(),channel:process.env.NODE_CHANNEL_FD??null,mode:process.env.NODE_CHANNEL_SERIALIZATION_MODE??null,
+      send:typeof process.send,privateFields:Object.keys(process.env).filter(name=>name.startsWith("PFORGE_CLAW_NATIVE_BOOTSTRAP_"))
+    }));`)).toEqual({ code: 0 });
+    await stop(resource);
+    expect(JSON.parse(resource.stdout)).toEqual({
+      values: { ...fields, PATH: env.PATH, EMPTY_CANARY: "" }, cwd, channel: null, mode: null,
+      send: "undefined", privateFields: [],
+    });
+  });
+
+  it("rejects invalid literal command frames before an actor is created", async () => {
+    const resource = await held();
+    resource.supervisor.child.send({ v: 1, t: "owned-start", command: process.execPath, args: [null] });
+    expect(await resource.supervisor.completion).toEqual({ code: -1, errorCode: "COMMAND_INVALID" });
+    const receipt = await stop(resource);
+    expect(receipt.stoppedPids).toEqual([receipt.rootPid]);
+    expect(resource.stdout).toBe("");
+  });
+
+  it("resets an ignored native signal for the literal actor without changing root authority", async () => {
+    const resource = await held(process.env, (launch) => {
+      const args = [...launch.args];
+      const encoded = args.indexOf("-EncodedCommand") + 1;
+      let script = Buffer.from(args[encoded], "base64").toString("utf16le");
+      script = script.replace("    $script:Native = $script:NativeBuilder.CreateType()",
+        "    Add-NativeMethod 'signal' ([IntPtr]) @([int], [IntPtr])\n    $script:Native = $script:NativeBuilder.CreateType()");
+      script = script.replace("        Establish-Subreaper\n",
+        "        Establish-Subreaper\n        $null = $Native::signal(15, [IntPtr]1)\n");
+      args[encoded] = Buffer.from(script, "utf16le").toString("base64");
+      return { command: launch.command, args };
+    });
+    resource.supervisor.start("sh", ["-c", 'kill -TERM $$; printf "signal incorrectly ignored"']);
+    expect(await resource.supervisor.completion).toEqual({ code: -1 });
+    await stop(resource);
+    expect(resource.stdout).toBe("");
+  });
+
+  it("does not execute START before native attach and never certifies that refused path", async () => {
+    const launch = await nativePosixSupervisorLaunch({ node: process.execPath, supervisorPath, cwd: process.cwd() });
+    const supervisor = createNativeSupervisor({ cwd: process.cwd(), launch });
+    resources.push({ supervisor });
+    supervisor.child.stdout.resume();
+    supervisor.child.stderr.resume();
+    expect(await supervisor.ready).toBe(true);
+    supervisor.start(process.execPath, ["-e", "process.exitCode=7"]);
+    expect(await supervisor.completion).toEqual({ code: -1, errorCode: NATIVE_SCOPE_ERRORS.UNCONFIRMED });
+    await supervisor.closed;
+    await expect(openPosixProcessScope({
+      rootPid: supervisor.child.pid, rootProcess: supervisor.child,
+    })).rejects.toMatchObject({ code: NATIVE_SCOPE_ERRORS.UNAVAILABLE });
+  });
+
+  it("makes native READY independent of a second Node loader held before actor START", async () => {
+    const fixtures = path.resolve("tests", ".posix-bootstrap-fixtures");
+    await mkdir(fixtures, { recursive: true });
+    const directory = await mkdtemp(path.join(fixtures, "loader-hold-"));
+    resources.push({ directory });
+    fixtureSequence += 1;
+    const address = `\0pforge-posix-loader-${process.pid}-${fixtureSequence}`;
+    let connections = 0;
+    let releaseActor = false;
+    const sockets = [];
+    const server = net.createServer((socket) => {
+      connections += 1;
+      sockets.push(socket);
+      resources.push({ socket });
+      if (releaseActor) socket.end("release");
+    });
+    resources.push({ server });
+    await new Promise((resolve, reject) => {
+      server.once("error", reject);
+      server.listen(address, resolve);
+    });
+    const loader = path.join(directory, "held-loader.mjs");
+    await writeFile(loader, `
+      import { createConnection } from "node:net";
+      const channel = createConnection(${JSON.stringify(address)});
+      await new Promise((resolve, reject) => { channel.once("data", resolve); channel.once("error", reject); });
+      channel.destroy();
+    `);
+    const actual = await vi.importActual("node:child_process");
+    const loaderOptions = `--import=${pathToFileURL(loader).href}`;
+    vi.mocked(spawn).mockImplementation((command, args, options) => actual.spawn(command, args,
+      path.basename(command) === "pwsh" ? { ...options, env: { ...options.env, NODE_OPTIONS: loaderOptions } } : options));
+    let supervisor;
+    let scope;
+    let timer;
+    try {
+      const env = { ...process.env };
+      delete env.NODE_OPTIONS;
+      const launch = await nativePosixSupervisorLaunch({ node: process.execPath, supervisorPath, cwd: process.cwd(), env });
+      supervisor = createNativeSupervisor({ cwd: process.cwd(), env, launch });
+      supervisor.child.stdout.resume();
+      supervisor.child.stderr.resume();
+      const deadline = new Promise((_, reject) => {
+        // +0ms preserves the native3s control bound; an actual loader/socket gate, not time, selects the dependency.
+        timer = setTimeout(() => reject(new Error("SECOND_NODE_BOOTSTRAP_BLOCKED_NATIVE_READY")), 3_000);
+      });
+      expect(await Promise.race([supervisor.ready, deadline])).toBe(true);
+      scope = await openPosixProcessScope({ rootPid: supervisor.child.pid, rootProcess: supervisor.child });
+      expect(connections).toBe(0);
+      releaseActor = true;
+      for (const socket of sockets) socket.end("release");
+      supervisor.start(process.execPath, ["-e", "process.exitCode=7"]);
+      expect(await supervisor.completion).toEqual({ code: 7 });
+      const receipt = await scope.terminate();
+      expect(receipt).toMatchObject({ rootReady: true, settlementConfirmed: true, unknownProcesses: 0 });
+      expect(receipt.stoppedPids).toContain(receipt.rootPid);
+      expect(connections).toBe(1);
+      await supervisor.closed;
+    } finally {
+      clearTimeout(timer);
+      vi.mocked(spawn).mockRestore();
+      for (const socket of sockets) socket.end("release");
+      if (scope) await scope.close();
+      else if (supervisor) await supervisor.stop();
+    }
+  });
+
   it("establishes native ownership and reaps the real scope when the C# compiler is unavailable", async () => {
     const resource = await held(process.env, (launch) => {
       const args = [...launch.args];

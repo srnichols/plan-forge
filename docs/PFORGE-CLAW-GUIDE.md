@@ -24,7 +24,12 @@ does not need to control those remote processes locally.
 The current adapters use fixed native bindings instead of compiling C# logic
 at startup. Windows uses a private, nonbreakaway Job Object. Linux uses a
 PowerShell readiness loop with emitted libc import metadata and a held child
-subreaper with birth-qualified pidfd signaling. Linux
+subreaper with birth-qualified pidfd signaling. That root directly supervises
+literal actors: native capability and listener setup precede readiness, and
+verified attachment plus START precede actor execution. It does not launch a
+second Node supervisor before readiness. Command lookup, original actor
+environment, exit status and safe error reporting retain the existing contract.
+Linux
 settlement requires both the root's native `waitpid`/`ECHILD` zero-child receipt
 and the parent's retained native child wait for that exact root. A caller-created
 child object, root-close event or successful command cannot supply this proof.

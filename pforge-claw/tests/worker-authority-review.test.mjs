@@ -100,7 +100,7 @@ const CLEANUP_RETRIES = 30;
 const CLEANUP_RETRY_MS = 100;
 const EXECUTABLE_PROBES = Object.freeze(["node", "git", "gh"]);
 const NATIVE_BOOT_STAGES = Object.freeze([
-  "runtime", "imports", "subreaper", "inner", "ready",
+  "runtime", "imports", "subreaper", "ready",
 ]);
 const NATIVE_BOOT_PREFIX = "CLAW_TEST_NATIVE_STAGE:";
 const NATIVE_BOOT_LINE_LIMIT = 128;
@@ -312,13 +312,13 @@ function traceNativeStartupLaunch(command, args, options) {
   const anchors = [
     ["        Initialize-NativeImports\n", "imports"],
     ["        Establish-Subreaper\n", "subreaper"],
-    ["        if (-not $script:Stopping) { Start-Supervisor $config }\n", "inner"],
-    ["            Write-Frame $script:Outer @{ v = 1; t = 'owned-ready'; pid = $RootPid }\n", "ready"],
+    ["        if (-not $script:Stopping) { Write-Frame $script:Outer @{ v = 1; t = 'owned-ready'; pid = $RootPid } }\n", "ready"],
   ];
   for (const [anchor, stage] of anchors) {
     if (source.split(anchor).length !== 2) throw new Error("NATIVE_STARTUP_TRACE_ANCHOR_MISSING");
     const marker = `[Console]::Error.WriteLine("${NATIVE_BOOT_PREFIX}${stage}")\n`;
-    source = source.replace(anchor, stage === "ready" ? marker + anchor : anchor + marker);
+    const annotated = stage === "ready" ? anchor.replace("{ ", `{ ${marker.trimEnd()}; `) : anchor + marker;
+    source = source.replace(anchor, annotated);
   }
   // Fixed test-only milestones contain no environment, argv or actor payload.
   source = `[Console]::Error.WriteLine("${NATIVE_BOOT_PREFIX}${NATIVE_BOOT_STAGES[0]}")\n` + source;

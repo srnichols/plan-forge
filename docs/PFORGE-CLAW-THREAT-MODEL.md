@@ -77,7 +77,11 @@ with `origin: "untrusted"` and must remain data rather than instructions.
   Linux subreaper/pidfd scope before launching literal command arguments.
   Success requires native zero-owned-child evidence and root-exit identity;
   Linux combines the held root's `waitpid`/`ECHILD` receipt with its original
-  parent's retained kernel child wait. That certificate is registered only
+  parent's retained kernel child wait. The Linux root reports readiness after
+  its own native capability/listener setup and starts the literal actor only
+  after verified attachment and START. It restores the actor's original
+  environment while closing private control descriptors; readiness alone
+  grants neither execution nor settlement authority. That certificate is registered only
   for the supervisor factory's actual spawned child; PID fields, constructor
   lookalikes and caller-supplied exit values cannot create one.
   Expired authority is rejected before and after the awaited native-birth read,

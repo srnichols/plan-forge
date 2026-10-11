@@ -418,6 +418,19 @@ floor/LTS suites pass with the original four workers and deadlines. Those
 results do not certify the older published CI, the newly built kind image or
 native macOS; current committed-source, hosted and release gates remain separate.
 
+The stopped direct-native-actor recovery removes the second Node supervisor
+before Linux readiness. A real held-loader dependency regression failed before
+the change; the native PowerShell root now reports readiness after its own
+capability/listener setup, and literal actor execution still requires verified
+attachment and START. Existing Node-supervisor baselines check command lookup,
+argv, environment, signal, status and safe-error parity; native zero-child and
+exact original-root-exit proof remain separate. Shared diagnostic anchors track
+the new readiness boundary without treating a milestone as authority.
+Independent review, final current-source/floor/full/kind and committed-source
+gates remain mandatory; the deliberately held loader is not asserted to explain
+the exact hosted timeout. No public API, permission, dependency, deadline or
+macOS requirement change is authorized by this internal optimization.
+
 _Original decisions were resolved at hardening on 2026-10-07; verification evidence is in Assumptions. D29 and D30 are the operator-approved review/release-preparation extensions from 2026-10-08 and 2026-10-10._
 
 ## Acceptance Criteria

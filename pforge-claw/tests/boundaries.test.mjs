@@ -76,6 +76,7 @@ const PRIVATE_IP_PATTERN = /\b(?:10\.(?:\d{1,3}\.){2}\d{1,3}|192\.168\.(?:\d{1,3
 const RFC_PRIVATE_RANGES = /\b(?:10\.0\.0\.0\/8|172\.16\.0\.0\/12|192\.168\.0\.0\/16)\b/g;
 const FQDN_PATTERN = /\b(?:(?:https?:\/\/)?)([a-z\d-]+(?:\.[a-z\d-]+)+)\b/gi;
 const TLD_PATTERN = /\.(?:com|org|net|io|dev|app|co|ai|invalid)$/i;
+const NATIVE_FRAMEWORK_NAMESPACE = /^\s*using\s+System\.(?:IO|Net)\s*;\s*$/;
 const EXEC_IMPORT_PATTERN = new RegExp(
   `\\bimport\\b[^;]*\\b${EXEC}(?:Sync)?\\b[^;]*\\bfrom\\s*["'](?:node:)?${CHILD_PROCESS}["']|\\brequire\\s*\\(\\s*["'](?:node:)?${CHILD_PROCESS}["']\\s*\\)`,
 );
@@ -126,12 +127,19 @@ function hasForbiddenImport({ file, text }) {
   return false;
 }
 
+function isNativeFrameworkNamespace(text, position) {
+  const start = text.lastIndexOf("\n", position) + 1;
+  const end = text.indexOf("\n", position);
+  return NATIVE_FRAMEWORK_NAMESPACE.test(text.slice(start, end === -1 ? text.length : end));
+}
+
 function hasUnapprovedHost(text) {
   FQDN_PATTERN.lastIndex = 0;
   let match;
   while ((match = FQDN_PATTERN.exec(text)) !== null) {
     const host = match[1].toLowerCase();
     if (!TLD_PATTERN.test(host)) continue;
+    if (isNativeFrameworkNamespace(text, match.index)) continue;
     if (ALLOWED_HOSTS.has(host)) continue;
     if (K8S_API_GROUPS.has(host)) continue;
     if (host === COPILOT_HOST_SUFFIX || host.endsWith(`.${COPILOT_HOST_SUFFIX}`) || host.endsWith(".example")) continue;
@@ -246,6 +254,13 @@ describe("Guard: no operator-specific values", () => {
       expect(hasUnapprovedHost(host), host).toBe(false);
     }
     expect(hasUnapprovedHost("extension.rbac.authorization.k8s.io")).toBe(true);
+  });
+
+  it("distinguishes native framework namespace directives from operator hostnames", () => {
+    expect(hasUnapprovedHost("using System.IO;\nusing System.Net;\nusing System.Net.Sockets;")).toBe(false);
+    expect(hasUnapprovedHost("using Operator.IO;")).toBe(true);
+    expect(hasUnapprovedHost('const host = "System.IO";')).toBe(true);
+    expect(hasUnapprovedHost("using System.IO; // https://operator.invalid")).toBe(true);
   });
 
   it("contains no operator-specific values", () => {

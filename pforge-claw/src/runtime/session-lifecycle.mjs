@@ -17,6 +17,19 @@ async function boundedCleanup(operation) {
   }
 }
 
+/**
+ * Retains a bounded abort request without exposing transport errors.
+ * An absent session leaves the request available for the factory's later handoff.
+ * @param {{session?: {abort?: () => Promise<void> | void}, onCleanupFailure: (code: string) => void}} options
+ * @returns {Promise<void> | undefined}
+ */
+export function abortSdkSession({ session, onCleanupFailure }) {
+  if (typeof session?.abort !== "function") return;
+  return boundedCleanup(() => session.abort()).catch(() => {
+    onCleanupFailure("SDK_ABORT_FAILED");
+  });
+}
+
 export async function stopSdkClient({ client, onCleanupFailure }) {
   if (!client) return true;
   let stopped;

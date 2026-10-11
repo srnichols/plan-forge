@@ -1,5 +1,5 @@
 import { ClawError } from "../errors.mjs";
-import { disconnectSdkSession, stopSdkClient } from "./session-lifecycle.mjs";
+import { abortSdkSession, disconnectSdkSession, stopSdkClient } from "./session-lifecycle.mjs";
 
 const MAX_PROGRESS_LENGTH = 2000;
 
@@ -140,13 +140,14 @@ function clientOptionsFor({ turn, provider, secrets }) {
   return options;
 }
 
-function sessionConfigFor({ turn, provider, usage }) {
+function sessionConfigFor({ turn, provider, usage, isActive }) {
   return {
     model: turn.model,
     workingDirectory: turn.cwd,
     mcpServers: turn.mcpServers,
     onPermissionRequest: turn.onPermissionRequest ?? denyAllPermissions,
     onEvent: (ev) => {
+      if (!isActive()) return;
       usage.add(ev);
       const mapped = mapSdkEvent(ev);
       if (mapped) turn.emit?.(mapped.type, mapped.data);
@@ -175,6 +176,11 @@ async function runTurn({ turn, createSession, provider, secrets, timeoutMs }) {
   let client;
   let session;
   let aborted = false;
+  let acceptsEvents = true;
+  /** @type {Promise<void> | undefined} */
+  let abortRequest;
+  /** @type {PromiseWithResolvers<void>} */
+  const cancellation = Promise.withResolvers();
   let outcome;
   const cleanupErrors = [];
   const onCleanupFailure = (code) => {
@@ -187,22 +193,29 @@ async function runTurn({ turn, createSession, provider, secrets, timeoutMs }) {
   };
   const onAbort = () => {
     aborted = true;
-    session?.abort?.();
+    acceptsEvents = false;
+    abortRequest ??= abortSdkSession({ session, onCleanupFailure });
+    cancellation.resolve();
   };
   try {
     turn.signal?.addEventListener("abort", onAbort, { once: true });
     ({ client, session } = await createSession({
       clientOptions: clientOptionsFor({ turn, provider, secrets }),
-      sessionConfig: sessionConfigFor({ turn, provider, usage }),
+      sessionConfig: sessionConfigFor({ turn, provider, usage, isActive: () => acceptsEvents }),
       onCleanupFailure,
     }));
     if (turn.signal?.aborted || aborted) onAbort();
-    else await session.sendAndWait({ prompt: turn.prompt }, turn.timeoutMs ?? timeoutMs);
+    else await Promise.race([
+      session.sendAndWait({ prompt: turn.prompt }, turn.timeoutMs ?? timeoutMs),
+      cancellation.promise,
+    ]);
     outcome = turnResult({ turn, aborted, usage });
   } catch (error) {
     outcome = turnResult({ turn, aborted, usage, error });
   } finally {
+    acceptsEvents = false;
     turn.signal?.removeEventListener("abort", onAbort);
+    await abortRequest;
     await disconnectSdkSession({ session, onCleanupFailure });
     const stopped = await stopSdkClient({ client, onCleanupFailure });
     if (!stopped && outcome?.ok) outcome = {

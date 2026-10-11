@@ -267,7 +267,16 @@ it("FRC-03 releases authenticated publication authority after a real physically 
   const native = await runCommand(process.execPath, ["-e", "process.exitCode=7"], {
     requireSettlement: true, timeoutMs: 5_000,
   });
-  expect(native).toMatchObject({ code: 7, settlementConfirmed: true });
+  const diagnostics = {
+    code: native.code,
+    errorCode: /^[A-Z0-9_]{1,64}$/.test(native.error?.code ?? "") ? native.error.code : null,
+    rootReady: native.settlement?.rootReady === true,
+    rootIdentityPresent: Number.isSafeInteger(native.settlement?.rootPid)
+      && typeof native.settlement?.rootStartedAt === "string",
+    settlementConfirmed: native.settlementConfirmed === true,
+    zeroUnknownMeasured: native.settlement?.unknownProcesses === 0,
+  };
+  expect(native, JSON.stringify(diagnostics)).toMatchObject({ code: 7, settlementConfirmed: true });
   expect(native.settlement).toMatchObject({
     rootReady: true, rootStartedAt: expect.any(String), unknownProcesses: 0,
   });

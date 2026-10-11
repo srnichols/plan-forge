@@ -13,6 +13,8 @@ import { mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { resolve } from "node:path";
 import { randomUUID } from "node:crypto";
+import { fileURLToPath } from "node:url";
+import { optionalGuidanceUnavailable } from "./helpers/optional-guidance.mjs";
 
 // ─── Mock child_process ──────────────────────────────────────────────
 
@@ -28,13 +30,13 @@ vi.mock("node:child_process", async (importOriginal) => {
 
 // ─── Test subjects (imported AFTER vi.mock) ──────────────────────────
 
-import {
-  checkPreCommit,
-  loadChainConfig,
-  loadPreCommitConfig,
-  runPreCommitChain,
-  runCommandEntry,
-} from "../../.github/hooks/PreCommit.mjs";
+const hookUrl = new URL("../../.github/hooks/PreCommit.mjs", import.meta.url);
+const skipMissingHook = optionalGuidanceUnavailable(fileURLToPath(hookUrl));
+const hook = skipMissingHook ? undefined : await import(hookUrl.href);
+const loadChainConfig = hook?.loadChainConfig;
+const runPreCommitChain = hook?.runPreCommitChain;
+const runCommandEntry = hook?.runCommandEntry;
+const hookSuite = describe.skipIf(skipMissingHook);
 
 // ─── Helpers ─────────────────────────────────────────────────────────
 
@@ -54,7 +56,7 @@ function writeForgeJson(dir, config) {
 
 // ─── loadChainConfig ─────────────────────────────────────────────────
 
-describe("loadChainConfig", () => {
+hookSuite("loadChainConfig (requires installed PreCommit)", () => {
   it("returns chain from explicit configPath", () => {
     const dir = makeTmpDir();
     const chain = [{ name: "master-reject", type: "builtin" }];
@@ -91,7 +93,7 @@ describe("loadChainConfig", () => {
 
 // ─── runPreCommitChain — empty chain ─────────────────────────────────
 
-describe("runPreCommitChain — empty chain (fallback)", () => {
+hookSuite("runPreCommitChain — empty chain (fallback)", () => {
   const savedEnv = {};
 
   beforeEach(() => {
@@ -121,7 +123,7 @@ describe("runPreCommitChain — empty chain (fallback)", () => {
 
 // ─── runPreCommitChain — one-entry chain (builtin) ───────────────────
 
-describe("runPreCommitChain — one-entry chain", () => {
+hookSuite("runPreCommitChain — one-entry chain", () => {
   const savedEnv = {};
   let tmpDir;
 
@@ -196,7 +198,7 @@ describe("runPreCommitChain — one-entry chain", () => {
 
 // ─── runPreCommitChain — two-entry chain with second denying ─────────
 
-describe("runPreCommitChain — two-entry chain", () => {
+hookSuite("runPreCommitChain — two-entry chain", () => {
   const savedEnv = {};
   let tmpDir;
 
@@ -310,7 +312,7 @@ describe("runPreCommitChain — two-entry chain", () => {
 
 // ─── runCommandEntry ─────────────────────────────────────────────────
 
-describe("runCommandEntry", () => {
+hookSuite("runCommandEntry", () => {
   afterEach(() => {
     mockExecSync.mockReset();
   });
@@ -375,7 +377,7 @@ describe("runCommandEntry", () => {
 
 // ─── Unknown types ───────────────────────────────────────────────────
 
-describe("runPreCommitChain — unknown entry type", () => {
+hookSuite("runPreCommitChain — unknown entry type", () => {
   const savedEnv = {};
 
   beforeEach(() => {

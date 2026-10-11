@@ -57,7 +57,7 @@ function readProbe(child) {
 }
 
 beforeAll(() => {
-  fixtureRoot = realpathSync(mkdtempSync(path.join(os.tmpdir(), "claw-wrapper-")));
+  fixtureRoot = realpathSync.native(mkdtempSync(path.join(os.tmpdir(), "claw-wrapper-")));
   const directories = [".git", "pforge-claw", "pforge-mcp", path.join("docs", "plans")];
   for (const directory of directories) mkdirSync(path.join(fixtureRoot, directory), { recursive: true });
   for (const wrapper of WRAPPERS) copyFileSync(path.join(REPO_ROOT, wrapper.file), path.join(fixtureRoot, wrapper.file));
@@ -78,7 +78,7 @@ describe.each(WRAPPERS)("$name CLI wrapper", (wrapper) => {
     const probe = readProbe(child);
     expect(probe.args).toEqual(args);
     expect(probe.prepared).toBe("prepared-job-environment");
-    expect(path.resolve(probe.cwd)).toBe(path.resolve(fixtureRoot));
+    expect(realpathSync.native(probe.cwd)).toBe(realpathSync.native(fixtureRoot));
   });
 
   it("propagates a Claw child failure", () => {
@@ -95,7 +95,8 @@ describe.each(WRAPPERS)("$name CLI wrapper", (wrapper) => {
     expect(child.status, child.stderr).toBe(0);
     const probe = readProbe(child);
     expect(probe.args[0]).toBe("--run");
-    expect(path.resolve(probe.args[1])).toBe(path.join(fixtureRoot, "docs", "plans", "example plan.md"));
+    expect(realpathSync.native(path.resolve(probe.args[1])))
+      .toBe(realpathSync.native(path.join(fixtureRoot, "docs", "plans", "example plan.md")));
     expect(probe.args.slice(2)).toEqual(["--mode", "auto", "--resume-from", "7", "--quorum=power"]);
     expect(probe.prepared).toBe("prepared-job-environment");
   });

@@ -151,11 +151,20 @@ describe("G1 configured home routing", () => {
     expect(connect).not.toHaveBeenCalled();
   });
 
-  it("does not interpret an absolute Windows drive as an identically named registered lane", () => {
+  it("requires explicit home-lane qualification when a Windows drive letter is also a registered lane", () => {
     const canonical = path.win32.join("C:\\canonical", ".forge");
+    const config = { lanes: [{ id: "C", kind: "remote" }, { id: "desktop-home", kind: "local" }] };
     expect(resolveForgeHome({
       project: { homeLane: "desktop-home", repo: { path: "C:\\checkout", forgeHome: canonical } },
-      config: { lanes: [{ id: "C", kind: "remote" }, { id: "desktop-home", kind: "local" }] },
+      config,
+    })).toEqual({ laneId: "C", path: canonical.slice(2) });
+    expect(resolveForgeHome({
+      project: { homeLane: "desktop-home", repo: { path: "C:\\checkout", forgeHome: `desktop-home:${canonical}` } },
+      config,
+    })).toEqual({ laneId: "desktop-home", path: canonical });
+    expect(resolveForgeHome({
+      project: { homeLane: "desktop-home", repo: { path: "C:\\checkout", forgeHome: canonical } },
+      config: { lanes: [{ id: "desktop-home", kind: "local" }] },
     })).toEqual({ laneId: "desktop-home", path: canonical });
   });
 });

@@ -1,5 +1,11 @@
 {
   "$defs": {
+    "identifier": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,80}$",
+      "description": "Use 1-81 ASCII letters, digits, dots, underscores or hyphens, starting with a letter or digit. Rename unsupported IDs and update all matching project/lane references, including homeLane, placement.prefer, worker.laneId, schedules[].project and qualified forgeHome prefixes."
+    },
     "secretName": {
       "type": "string",
       "pattern": "^[A-Z][A-Z0-9_]*$",
@@ -53,7 +59,7 @@
     "lane": {
       "type": "object",
       "properties": {
-        "id": { "type": "string", "minLength": 1 },
+        "id": { "$ref": "#/$defs/identifier" },
         "kind": { "type": "string", "enum": ["local", "remote", "k8s"] },
         "labels": { "type": "array", "items": { "type": "string" } },
         "enabled": { "type": "boolean" },
@@ -89,7 +95,7 @@
         "id": { "type": "string", "minLength": 1 },
         "kind": { "type": "string", "enum": ["digest", "skill"] },
         "at": { "$ref": "#/$defs/scheduleAt" },
-        "project": { "type": "string" },
+        "project": { "$ref": "#/$defs/identifier" },
         "skill": { "type": "string" },
         "preApproved": { "type": "boolean" }
       },
@@ -99,7 +105,7 @@
     "project": {
       "type": "object",
       "properties": {
-        "id": { "type": "string", "minLength": 1 },
+        "id": { "$ref": "#/$defs/identifier" },
         "displayName": { "type": "string" },
         "repo": {
           "type": "object",
@@ -107,7 +113,10 @@
             "path": { "type": "string", "minLength": 1 },
             "remote": { "type": "string" },
             "baseBranch": { "type": "string" },
-            "forgeHome": { "type": "string" }
+            "forgeHome": {
+              "type": "string",
+              "description": "Canonical L2 directory, optionally <registered-lane-id>:<path>. Exact registered lane prefixes take precedence over Windows drive syntax on every host. If a drive letter is also a registered lane, use <homeLane>:C:\\path\\.forge for a Windows drive home on homeLane. IDs are case-sensitive; the path is preserved verbatim."
+            }
           },
           "required": ["path"],
           "x-known": true
@@ -125,7 +134,7 @@
         "placement": {
           "type": "object",
           "properties": {
-            "prefer": { "type": "array", "items": { "type": "string" } },
+            "prefer": { "type": "array", "items": { "$ref": "#/$defs/identifier" } },
             "requires": { "type": "array", "items": { "type": "string" } }
           },
           "x-known": true
@@ -137,7 +146,7 @@
         },
         "runtime": { "$ref": "#/$defs/runtime" },
         "bootstrap": { "$ref": "#/$defs/bootstrap" },
-        "homeLane": { "type": "string" },
+        "homeLane": { "$ref": "#/$defs/identifier" },
         "keepAlive": { "type": "boolean" },
         "budget": { "$ref": "#/$defs/budget" },
         "visibility": { "$ref": "#/$defs/visibility" },
@@ -284,7 +293,7 @@
       "type": "object",
       "properties": {
         "dispatcherUrl": { "type": "string" },
-        "laneId": { "type": "string" },
+        "laneId": { "$ref": "#/$defs/identifier" },
         "secretName": { "$ref": "#/$defs/secretName" },
         "allowInsecureLan": { "type": "boolean", "default": false }
       },

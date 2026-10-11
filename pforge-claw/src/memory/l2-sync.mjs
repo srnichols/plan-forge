@@ -57,13 +57,16 @@ function laneIds(config) {
  */
 function configuredForgeHome({ project, config, configured }) {
   if (typeof configured !== "string" || !configured) throwL2(L2_ERROR_CODES.MALFORMED);
-  const isAbsolute = path.win32.isAbsolute(configured) || path.posix.isAbsolute(configured);
-  const colon = isAbsolute ? -1 : configured.indexOf(":");
-  if (colon >= 0) {
+  const colon = configured.indexOf(":");
+  // Registered prefixes win on every host; an explicit home-lane prefix disambiguates drive homes.
+  if (colon > 0 && laneIds(config).includes(configured.slice(0, colon))) {
     const laneId = configured.slice(0, colon);
     const homePath = configured.slice(colon + 1);
-    if (!laneIds(config).includes(laneId) || !homePath) throwL2(L2_ERROR_CODES.PATH_REJECTED);
+    if (!homePath) throwL2(L2_ERROR_CODES.PATH_REJECTED);
     return { laneId, path: homePath };
+  }
+  if (colon >= 0 && !path.win32.isAbsolute(configured) && !path.posix.isAbsolute(configured)) {
+    throwL2(L2_ERROR_CODES.PATH_REJECTED);
   }
   if (typeof project?.homeLane !== "string" || !project.homeLane) throwL2(L2_ERROR_CODES.MALFORMED);
   return { laneId: project.homeLane, path: configured };

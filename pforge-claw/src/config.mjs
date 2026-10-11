@@ -82,10 +82,17 @@ function validateChoices({ value, schema, rootSchema, path: pathName, errors }) 
   }
 }
 
+function patternHint(schema) {
+  return `Required pattern: ${schema.pattern}. ${schema.description ?? ""}`.trim();
+}
+
 function validateScalar({ value, schema, path: pathName, errors }) {
   if (typeof value === "string") {
     if (schema.pattern && !new RegExp(schema.pattern).test(value)) {
-      addIssue({ target: errors, path: pathName, code: "SCHEMA_PATTERN", message: "Value does not match the required format." });
+      addIssue({
+        target: errors, path: pathName, code: "SCHEMA_PATTERN", message: "Value does not match the required format.",
+        hint: patternHint(schema),
+      });
     }
     if (schema.minLength !== undefined && value.length < schema.minLength) {
       addIssue({ target: errors, path: pathName, code: "SCHEMA_MIN_LENGTH", message: "Value is shorter than the minimum length." });

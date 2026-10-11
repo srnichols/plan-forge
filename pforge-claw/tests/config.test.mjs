@@ -1,6 +1,7 @@
-import { mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
-import os from "node:os";
+import { randomUUID } from "node:crypto";
+import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { afterEach, describe, expect, it } from "vitest";
 import { LANE_KINDS, ROLES, VISIBILITY } from "../src/enums.mjs";
 import { RUNTIME_IDS } from "../src/runtime/agent-runtime.mjs";
@@ -17,11 +18,12 @@ import {
 } from "../src/config.mjs";
 import { EXAMPLES } from "../src/init.mjs";
 
-const tempDirs = [];
-const tmpDir = async () => {
-  const dir = await mkdtemp(path.join(os.tmpdir(), "claw-"));
-  tempDirs.push(dir);
-  return dir;
+const directories = [];
+const configurationFixture = async () => {
+  const directory = path.join(fileURLToPath(new URL("./.lane-contract-review-fixtures/", import.meta.url)), `config-${randomUUID()}`);
+  await mkdir(directory, { recursive: true });
+  directories.push(directory);
+  return directory;
 };
 
 function minimalConfig() {
@@ -42,7 +44,7 @@ function minimalConfig() {
 }
 
 afterEach(async () => {
-  await Promise.all(tempDirs.splice(0).map((dir) => rm(dir, { recursive: true, force: true })));
+  await Promise.all(directories.splice(0).map((directory) => rm(directory, { recursive: true, force: true })));
 });
 
 describe("config validation", () => {
@@ -205,7 +207,7 @@ describe("config validation", () => {
   });
 
   it("returns structured missing and parse errors from loadConfig", async () => {
-    const home = await tmpDir();
+    const home = await configurationFixture();
     const missing = await loadConfig({ home });
     expect(missing.errors[0].code).toBe("CONFIG_MISSING");
     await mkdir(home, { recursive: true });

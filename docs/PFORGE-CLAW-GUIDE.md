@@ -189,6 +189,21 @@ Lanes are operator-defined execution targets: `local`, `remote`, or `k8s`. Give 
 
 Lane IDs are identifiers, not implementation switches. A local home can have any ID, and a remote lane named `local` still uses the remote transport. Runtime selection follows `projects[].runtime`, then the executing lane's `runtime`, then `runtimes.default`. BYOK credentials are resolved from the executing lane's secret store at call time; configuration contains only provider endpoints and secret names. A non-owner request must have an eligible configured BYOK runtime; merely setting `nonOwnerRuntime: "byok-only"` does not authorize use of a Copilot seat.
 
+Lane and project IDs use the existing wire grammar: 1–81 ASCII letters, digits,
+dots, underscores or hyphens, starting with a letter or digit. Unsupported IDs
+are now rejected during configuration validation rather than failing later at
+lease creation. Rename registrations such as `build lane` to `build-lane` and
+update their `homeLane`, placement, worker, schedule and qualified-home
+references. Re-enroll affected workers; do not rewrite historical signed grants
+or consumed approval records. Descriptive labels remain separate from IDs.
+
+Registered lane prefixes in `repo.forgeHome` take precedence over Windows-drive
+classification, including a one-letter address such as `x:/srv/audit/.forge`.
+IDs are case-sensitive, and path bytes are preserved. Unregistered drive letters
+still use native Windows path semantics. If `C` is a registered lane but a home
+address should refer to a Windows drive, explicitly qualify it with the intended
+home lane, for example `control:C:\workspace\.forge`.
+
 ## Telegram setup
 
 Create a bot with BotFather and place the token value in the secret store under the configured environment-variable name. Do not put the token in `config.json`, source, logs, screenshots, or evidence. Use long-polling by default; webhook mode is opt-in and must be configured with a secret token and public HTTPS endpoint.

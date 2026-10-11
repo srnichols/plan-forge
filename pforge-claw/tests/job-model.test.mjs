@@ -1,6 +1,7 @@
-import { mkdtempSync, rmSync, unlinkSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { randomUUID } from "node:crypto";
+import { mkdirSync, rmSync, unlinkSync } from "node:fs";
 import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { afterEach, describe, expect, it } from "vitest";
 import { JOB_STATES } from "../src/enums.mjs";
 import { ClawError } from "../src/errors.mjs";
@@ -18,7 +19,8 @@ import { createStore } from "../src/state/store.mjs";
 
 const directories = [];
 const makeDirectory = () => {
-  const directory = mkdtempSync(join(tmpdir(), "claw-jobs-"));
+  const directory = join(fileURLToPath(new URL("./.lane-contract-review-fixtures/", import.meta.url)), `jobs-${randomUUID()}`);
+  mkdirSync(directory, { recursive: true });
   directories.push(directory);
   return directory;
 };

@@ -43,7 +43,7 @@ const directories = [];
 const cleanups = [];
 
 async function temporaryDirectory() {
-  const directory = await g1Directory("g1-l2-sync-");
+  const directory = await g1Directory("lane-contract-review-l2-");
   directories.push(directory);
   return directory;
 }

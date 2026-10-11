@@ -1,7 +1,9 @@
 import { EventEmitter } from "node:events";
+import { execFile } from "node:child_process";
 import { access, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { promisify } from "node:util";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import workerCommand, { createLeaseExecution, runOneShot } from "../src/cli/worker.mjs";
 import { createLocalLane } from "../src/lanes/local-lane.mjs";
@@ -28,7 +30,29 @@ import { createWorkerServer } from "../src/protocol/ws-server.mjs";
 import { createHttpServer } from "../src/http.mjs";
 import { finalizePodJob } from "../src/lanes/k8s-job-lane.mjs";
 
-const edges = vi.hoisted(() => ({ sockets: [], launches: [], onSocket: null, scheduleOpen: null }));
+const edges = vi.hoisted(() => ({
+  sockets: [], launches: [], onSocket: null, scheduleOpen: null, versionProbe: null,
+  onSpawn: null, onExecFile: null,
+}));
+vi.mock("node:child_process", async (original) => {
+  const actual = await original();
+  const { promisify: toPromise } = await import("node:util");
+  const execute = toPromise(actual.execFile);
+  const execFile = (...args) => actual.execFile(...args);
+  Object.defineProperty(execFile, toPromise.custom, {
+    value: (...args) => {
+      const running = edges.versionProbe?.(...args) ?? execute(...args);
+      edges.onExecFile?.(running);
+      return running;
+    },
+  });
+  const spawn = (...args) => {
+    const child = actual.spawn(...args);
+    edges.onSpawn?.(child, args);
+    return child;
+  };
+  return { ...actual, execFile, spawn };
+});
 vi.mock("ws", async (original) => {
   const actual = await original();
   const { EventEmitter: Emitter } = await import("node:events");
@@ -73,6 +97,7 @@ const HEARTBEAT_MS = 15_000;
 const PROCESS_TIMEOUT_MS = 30_000;
 const CLEANUP_RETRIES = 30;
 const CLEANUP_RETRY_MS = 100;
+const EXECUTABLE_PROBES = Object.freeze(["node", "git", "gh"]);
 const cleanups = [];
 afterEach(async () => {
   for (const close of cleanups.splice(0).reverse()) await close();
@@ -81,6 +106,9 @@ afterEach(async () => {
   edges.nativeTransport = false;
   edges.onSocket = null;
   edges.scheduleOpen = null;
+  edges.versionProbe = null;
+  edges.onSpawn = null;
+  edges.onExecFile = null;
   vi.restoreAllMocks();
   vi.unstubAllEnvs();
   vi.useRealTimers();
@@ -268,9 +296,36 @@ async function authoritySystem({
 }
 
 it("FRC-03 releases authenticated publication authority after a real physically settled nonzero command", async () => {
-  const native = await runCommand(process.execPath, ["-e", "process.exitCode=7"], {
-    requireSettlement: true, timeoutMs: 5_000,
-  });
+  const startup = { hostQueries: [], roots: [] };
+  edges.onExecFile = (running) => {
+    const phase = { hasNativeChild: Boolean(running.child), settled: false, rejected: false };
+    startup.hostQueries.push(phase);
+    running.then(() => { phase.settled = true; }, () => { phase.settled = true; phase.rejected = true; });
+  };
+  edges.onSpawn = (child, [, , options]) => {
+    if (!Array.isArray(options?.stdio) || !options.stdio.includes("ipc")) return;
+    const phase = {
+      pidAssigned: Number.isSafeInteger(child.pid), spawned: false, identityFrameObserved: false,
+      nativeExitObserved: false, closedObserved: false, errorObserved: false,
+    };
+    startup.roots.push(phase);
+    child.once("spawn", () => { phase.spawned = true; });
+    child.on("message", (frame) => {
+      if (frame?.v === 1 && frame.pid === child.pid) phase.identityFrameObserved = true;
+    });
+    child.once("exit", () => { phase.nativeExitObserved = true; });
+    child.once("close", () => { phase.closedObserved = true; });
+    child.once("error", () => { phase.errorObserved = true; });
+  };
+  let native;
+  try {
+    native = await runCommand(process.execPath, ["-e", "process.exitCode=7"], {
+      requireSettlement: true, timeoutMs: 5_000,
+    });
+  } finally {
+    edges.onSpawn = null;
+    edges.onExecFile = null;
+  }
   const diagnostics = {
     code: native.code,
     errorCode: /^[A-Z0-9_]{1,64}$/.test(native.error?.code ?? "") ? native.error.code : null,
@@ -279,11 +334,16 @@ it("FRC-03 releases authenticated publication authority after a real physically 
       && typeof native.settlement?.rootStartedAt === "string",
     settlementConfirmed: native.settlementConfirmed === true,
     zeroUnknownMeasured: native.settlement?.unknownProcesses === 0,
+    startup,
   };
   expect(native, JSON.stringify(diagnostics)).toMatchObject({ code: 7, settlementConfirmed: true });
   expect(native.settlement).toMatchObject({
     rootReady: true, rootStartedAt: expect.any(String), unknownProcesses: 0,
   });
+  expect(startup.roots).toEqual([{
+    pidAssigned: true, spawned: true, identityFrameObserved: true,
+    nativeExitObserved: true, closedObserved: true, errorObserved: false,
+  }]);
   const system = await authoritySystem({ publicationOutcome: native });
   system.workers.A.release.resolve();
   await vi.waitFor(() => expect(system.registry.completion(system.payload.id)?.event.data.status).toBe("failed"));
@@ -744,7 +804,7 @@ describe("FR-02 current lease publication authority", () => {
 
 describe("worker capability startup", () => {
   it("starts all independent executable probes before awaiting any one result", async () => {
-    const names = ["node", "git", "gh"];
+    const names = EXECUTABLE_PROBES;
     const probes = new Map(names.map((name) => [name, Promise.withResolvers()]));
     const execFileFn = vi.fn((name) => probes.get(name).promise);
     const detecting = detectCapabilities({ config: { projects: [] }, laneId: "home", execFileFn });
@@ -775,11 +835,25 @@ describe("worker capability startup", () => {
       toolchains: ["node", "git"], projects: ["here"],
     });
   });
+
+  it("keeps native executable results and errors real outside the fixture metadata probes", async () => {
+    const execute = promisify(execFile);
+    edges.versionProbe = vi.fn(() => undefined);
+    expect(await execute(process.execPath, ["-e", "process.stdout.write('out');process.stderr.write('err')"]))
+      .toMatchObject({ stdout: "out", stderr: "err" });
+    await expect(execute(path.join(TEST_DIRECTORY, "absent-fixture-executable"), []))
+      .rejects.toMatchObject({ code: "ENOENT" });
+    expect(edges.versionProbe.mock.calls).toHaveLength(2);
+  });
 });
 
 describe("FR-06 authenticated worker home credentials", () => {
   it("uses the worker-store-only BYOK reference in the actual command's home-read client pool", async () => {
     const { root, repoPath, config, canary } = await workerHomeFixture();
+    edges.versionProbe = vi.fn((command, args) => {
+      if (!EXECUTABLE_PROBES.includes(command) || args.length !== 1 || args[0] !== "--version") return undefined;
+      return Promise.resolve({ stdout: "fixture-version", stderr: "" });
+    });
     const packets = [];
     const registry = createWorkerRegistry();
     cleanups.push(() => registry.close());
@@ -832,6 +906,10 @@ describe("FR-06 authenticated worker home credentials", () => {
     expect(edges.launches[0].env).toMatchObject({ FR06_WORKER_BYOK: canary, HOME_PROVIDER: canary });
     expect(JSON.stringify(packets)).not.toContain(canary);
     expect(config.projects[0].homeLane).toBe("registered-home");
+    expect(edges.versionProbe.mock.calls.map(([command]) => command)).toEqual(EXECUTABLE_PROBES);
+    for (const call of edges.versionProbe.mock.calls) {
+      expect(call.slice(1)).toEqual([["--version"], { timeout: 5000, windowsHide: true }]);
+    }
   });
 
   it("retains resolver refresh and redaction while refusing a removed worker-store provider key", async () => {

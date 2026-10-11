@@ -1,7 +1,9 @@
 import { ChildProcess, spawn } from "node:child_process";
+import { createHash } from "node:crypto";
 import { access, readFile } from "node:fs/promises";
 import net from "node:net";
 import path from "node:path";
+import { StringDecoder } from "node:string_decoder";
 import { fileURLToPath } from "node:url";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
@@ -115,6 +117,13 @@ async function isLive(pid) {
   }
 }
 
+function collectNativeText(resource, stream) {
+  const decoder = new StringDecoder("utf8");
+  const output = resource.supervisor.child[stream];
+  output.on("data", (chunk) => { resource[stream] += decoder.write(chunk); });
+  output.once("end", () => { resource[stream] += decoder.end(); });
+}
+
 async function held(env = process.env, prepareLaunch = (launch) => launch) {
   const launch = prepareLaunch(await nativePosixSupervisorLaunch({
     node: process.execPath, supervisorPath, cwd: process.cwd(), env,
@@ -122,8 +131,7 @@ async function held(env = process.env, prepareLaunch = (launch) => launch) {
   const supervisor = createNativeSupervisor({ cwd: process.cwd(), env, launch });
   const resource = { supervisor, stdout: "", stderr: "" };
   resources.push(resource);
-  supervisor.child.stdout.on("data", (chunk) => { resource.stdout += chunk.toString("utf8"); });
-  supervisor.child.stderr.on("data", (chunk) => { resource.stderr += chunk.toString("utf8"); });
+  for (const stream of ["stdout", "stderr"]) collectNativeText(resource, stream);
   expect(await supervisor.ready, resource.stderr).toBe(true);
   resource.scope = await openPosixProcessScope({
     rootPid: supervisor.child.pid, rootProcess: supervisor.child, env,
@@ -321,6 +329,66 @@ describe.skipIf(process.platform !== "linux")("Linux native subreaper ownership"
     expect(await execute(resource, "process.stdout.write(process.argv[1])", [argument])).toEqual({ code: 0 });
     await stop(resource);
     expect(resource.stdout).toBe(argument);
+  });
+
+  it("preserves raw native output split inside a multibyte character after the first fragment is consumed", async () => {
+    const resource = await held();
+    const argument = "é🛠漢".repeat(4_096);
+    const expectedBytes = Buffer.from(argument, "utf8");
+    const splitByte = 4;
+    const digest = (bytes) => createHash("sha256").update(bytes).digest("hex");
+    const rawFragments = [];
+    resource.supervisor.child.stdout.on("data", (chunk) => rawFragments.push(chunk));
+    const firstFragment = new Promise((resolve) => resource.supervisor.child.stdout.once("data", resolve));
+    fixtureSequence += 1;
+    const address = `\0pforge-claw-posix-utf8-${process.pid}-${fixtureSequence}`;
+    const connected = Promise.withResolvers();
+    const reportedArgv = Promise.withResolvers();
+    const server = net.createServer((socket) => {
+      resources.push({ socket });
+      socket.once("data", (chunk) => reportedArgv.resolve(JSON.parse(chunk.toString("utf8"))));
+      connected.resolve(socket);
+    });
+    resources.push({ server });
+    await new Promise((resolve, reject) => {
+      server.once("error", reject);
+      server.listen(address, resolve);
+    });
+    const executing = execute(resource, `
+      const { createConnection } = await import("node:net");
+      const { createHash } = await import("node:crypto");
+      const channel = createConnection(${JSON.stringify(address)});
+      await new Promise((resolve, reject) => { channel.once("connect", resolve); channel.once("error", reject); });
+      const bytes = Buffer.from(process.argv[1], "utf8");
+      channel.write(JSON.stringify({ bytes: bytes.length, sha256: createHash("sha256").update(bytes).digest("hex") }));
+      const released = new Promise((resolve) => channel.once("data", resolve));
+      await new Promise((resolve) => process.stdout.write(bytes.subarray(0, ${splitByte}), resolve));
+      await released;
+      await new Promise((resolve) => process.stdout.write(bytes.subarray(${splitByte}), resolve));
+      channel.end();
+    `, [argument]);
+    const socket = await connected.promise;
+    const argv = await reportedArgv.promise;
+    const firstChunk = await firstFragment;
+    socket.write("continue");
+    expect(await executing).toEqual({ code: 0 });
+    await stop(resource);
+    expect(Buffer.isBuffer(firstChunk), JSON.stringify({
+      firstChunkType: typeof firstChunk, firstChunkIsBuffer: Buffer.isBuffer(firstChunk), splitByte,
+    })).toBe(true);
+    expect(rawFragments.length).toBeGreaterThanOrEqual(2);
+    expect(rawFragments.every((chunk) => Buffer.isBuffer(chunk))).toBe(true);
+    expect(firstChunk.equals(expectedBytes.subarray(0, splitByte))).toBe(true);
+    const raw = Buffer.concat(rawFragments);
+    expect(argv).toEqual({ bytes: expectedBytes.length, sha256: digest(expectedBytes) });
+    expect(raw.length).toBe(expectedBytes.length);
+    expect(digest(raw)).toBe(digest(expectedBytes));
+    expect(raw.equals(expectedBytes)).toBe(true);
+    expect(resource.stdout === argument, JSON.stringify({
+      splitByte, argvBytes: argv.bytes, rawBytes: raw.length, rawSha256: digest(raw),
+      decodedBytes: Buffer.byteLength(resource.stdout), decodedSha256: digest(resource.stdout),
+      replacementCharacters: [...resource.stdout].filter((character) => character === "\uFFFD").length,
+    })).toBe(true);
   });
 
   it("uses the retained real native child wait together with ECHILD, not a second compiler process", async () => {

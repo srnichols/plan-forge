@@ -181,6 +181,12 @@ jobs:
             echo "- kind node image: kindest/node:v1.32.2"
           } >> "$GITHUB_STEP_SUMMARY"
 
+      - name: Load disposable fixture images into kind
+        shell: bash
+        run: |
+          set -euo pipefail
+          kind load docker-image pforge-claw-k8s-fixture-dispatcher:ci pforge-claw-k8s-fixture-worker:ci --name kind
+
       - name: Run Kubernetes end-to-end tests
         shell: bash
         run: |

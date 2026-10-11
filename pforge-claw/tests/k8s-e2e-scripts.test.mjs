@@ -5,7 +5,7 @@ import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { createServer as createHttpServer } from "node:http";
 import { createServer as createHttpsServer } from "node:https";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import { canonical } from "../src/protocol/lease-grant.mjs";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
@@ -212,13 +212,13 @@ syncBuiltinESMExports();
 
 async function failedNativeCli(failures) {
   const directory = await workspace();
-  const preload = path.join(directory, "native-command-edge.cjs");
+  const preload = path.join(directory, "native-command-edge.mjs");
   const trace = path.join(directory, "commands.jsonl");
   await writeFile(preload, `
-const childProcess = require("node:child_process");
-const { syncBuiltinESMExports } = require("node:module");
-const { appendFileSync, writeFileSync } = require("node:fs");
-const { join } = require("node:path");
+import childProcess from "node:child_process";
+import { syncBuiltinESMExports } from "node:module";
+import { appendFileSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
 const nativeSpawn = childProcess.spawn;
 const failures = ${JSON.stringify(failures)};
 childProcess.spawn = (command, args, options) => {
@@ -247,7 +247,7 @@ syncBuiltinESMExports();
     "--worker-fixture-image", CI_WORKER_IMAGE,
   ], {
     cwd: PACKAGE_ROOT, encoding: "utf8", timeout: PROCESS_TIMEOUT_MS,
-    env: { ...process.env, NODE_OPTIONS: `--require ${JSON.stringify(preload)}` },
+    env: { ...process.env, NODE_OPTIONS: `--import ${JSON.stringify(pathToFileURL(preload).href)}` },
   });
   expect(execution.error).toBeUndefined();
   expect(execution.status).toBe(1);

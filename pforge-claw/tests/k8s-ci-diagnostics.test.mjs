@@ -28,6 +28,14 @@ describe("Guard: Kubernetes CI diagnostics cannot print job credentials", () => 
   });
 
   describe("Guard: Kubernetes CI validates actual fixture Jobs and canonical history", () => {
+    it("captures the real kind image-import failure before applying any secret-bearing fixture resources", () => {
+      const source = readFileSync(WORKFLOW, "utf8");
+      const command = "kind load docker-image pforge-claw-k8s-fixture-dispatcher:ci pforge-claw-k8s-fixture-worker:ci --name kind";
+      expect(source).toContain(command);
+      expect(source.indexOf(command)).toBeLessThan(source.indexOf("name: Run Kubernetes end-to-end tests"));
+      expect(source).toContain("name: Load disposable fixture images into kind");
+    });
+
     it.each(["dispatcher", "worker"])("builds the pinned %s fixture target before the lane gate", (target) => {
       const source = readFileSync(WORKFLOW, "utf8");
       const command = `docker build --platform linux/amd64 --file pforge-claw/deploy/Dockerfile.k8s-fixtures --target ${target} --tag pforge-claw-k8s-fixture-${target}:ci .`;

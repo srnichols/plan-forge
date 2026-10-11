@@ -1,6 +1,7 @@
 import { generateKeyPair, randomBytes, sign } from "node:crypto";
 import { promisify } from "node:util";
 
+export const FIXTURE_LOOPBACK_TLS_HOST = "localhost";
 const generateKeys = promisify(generateKeyPair);
 const OIDS = Object.freeze({
   SHA256_RSA: "1.2.840.113549.1.1.11", COMMON_NAME: "2.5.4.3",
@@ -82,7 +83,7 @@ export async function generateFixtureTls(namespace) {
   const ca = certificate({ publicKey: caKeys.publicKey, signingKey: caKeys.privateKey, subject: issuer, issuer, isCa: true });
   const cert = certificate({
     publicKey: serverKeys.publicKey, signingKey: caKeys.privateKey, subject: host, issuer, isCa: false,
-    hosts: [host, `${host}.cluster.local`, "pforge-claw-dispatcher", "localhost"],
+    hosts: [host, `${host}.cluster.local`, "pforge-claw-dispatcher", FIXTURE_LOOPBACK_TLS_HOST],
   });
   const key = serverKeys.privateKey.export({ type: "pkcs8", format: "pem" });
   return { ca, cert, key };

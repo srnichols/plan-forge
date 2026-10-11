@@ -20,6 +20,7 @@ import { collectScenarioDiagnostics, collectScenarioEvidence, normalizeJobReject
 import { fixtureSystemEnvironment } from "./k8s-worker.mjs";
 import { startFakeTelegram } from "./fake-telegram.mjs";
 import { startFixtureTlsProxy } from "./k8s-tls-proxy.mjs";
+import { FIXTURE_LOOPBACK_TLS_HOST } from "./k8s-fixture-tls.mjs";
 import {
   fixtureCheckout, FIXTURE_CA_ENV, FIXTURE_CONTROL_FILE, FIXTURE_CONTEXT_ENV, FIXTURE_CORE_PORT,
   FIXTURE_HTTP_PORT, FIXTURE_HTTP_STATUS, FIXTURE_LANE,
@@ -268,7 +269,7 @@ async function configuration({ options, home, telegram, port }) {
   config.channels.telegram.apiBase = telegram.apiBase;
   config.http = { bind: "127.0.0.1", port };
   if (!options.tls) config.worker.dispatcherUrl = `ws://127.0.0.1:${port}/claw/workers`;
-  if (options.tls?.loopback) config.worker.dispatcherUrl = `wss://localhost:${options.tls.port}/claw/workers`;
+  if (options.tls?.loopback) config.worker.dispatcherUrl = `wss://${FIXTURE_LOOPBACK_TLS_HOST}:${options.tls.port}/claw/workers`;
   for (const project of config.projects) await prepareFixtureProject(project);
   return config;
 }
@@ -343,7 +344,7 @@ export async function startK8sDispatcher(input = {}) {
     installDiagnosticRoute(http, fixture);
     await http.listen();
     if (options.tls) proxy = await startFixtureTlsProxy({
-      ...options.tls, targetPort: port, ...(options.tls.loopback ? { bind: "127.0.0.1" } : {}),
+      ...options.tls, targetPort: port, ...(options.tls.loopback ? { bind: FIXTURE_LOOPBACK_TLS_HOST } : {}),
     });
     await writeFile(path.join(home, FIXTURE_CONTROL_FILE), JSON.stringify(control), { mode: 0o600 });
     return fixture;

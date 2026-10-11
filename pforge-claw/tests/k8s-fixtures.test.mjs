@@ -1,8 +1,9 @@
+import { spawnSync } from "node:child_process";
 import { createHash, X509Certificate } from "node:crypto";
 import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
-import { afterEach, describe, expect, it } from "vitest";
+import { fileURLToPath, pathToFileURL } from "node:url";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { materializeDevConfig } from "../scripts/k8s-e2e-overlay.mjs";
 import { missingFixtureContracts, runK8sE2e, verifyScenarioEvidence } from "../scripts/k8s-e2e.mjs";
 import { validateConfig } from "../src/config.mjs";
@@ -15,6 +16,8 @@ const NAMESPACE = "pforge-claw-e2e-fixture";
 const CONTEXT = "kind-fixture";
 const DISPATCHER_IMAGE = "registry.example/claw/dispatcher:test";
 const WORKER_IMAGE = "registry.example/claw/worker:test";
+const PROCESS_TIMEOUT_MS = 30_000;
+const MAX_DIAGNOSTIC_BYTES = 4096;
 const directories = [];
 const running = [];
 const edges = [];
@@ -196,10 +199,8 @@ describe("Kubernetes fixture application proof fails closed", () => {
     const { createK8sRestEdge } = await import("./helpers/k8s-rest-edge.mjs");
     const { runK8sScenario } = await import("./helpers/k8s-scenario.mjs");
     const home = await workspace();
-    const commandNames = [];
     const edge = createK8sRestEdge({
       namespace: NAMESPACE, home, runWorker: runK8sWorker,
-      onCommand: ({ command, args }) => commandNames.push({ command, operation: args[0] }),
     });
     edges.push(edge);
     const fixture = await startK8sDispatcher({
@@ -211,15 +212,7 @@ describe("Kubernetes fixture application proof fails closed", () => {
     try {
       proof = await runK8sScenario({ control: fixture.control, output: false });
     } catch (error) {
-      const jobs = Object.values(currentJobs(fixture.handles.store)).map(({ id, state, reason, lane }) => ({ id, state, reason, lane }));
-      const completions = jobs.map(({ id }) => {
-        const completed = fixture.registry.completion(id);
-        return { ok: completed?.ok, code: completed?.applicationAck?.code, terminal: {
-          status: completed?.event?.data?.status, error: completed?.event?.data?.error, reason: completed?.event?.data?.reason,
-        } };
-      });
-      const eventTypes = [...fixture.events.entries.values()].flat().map((event) => ({ type: event.type, kind: event.data?.kind }));
-      throw new Error(`${error.message}: ${JSON.stringify({ jobs, commandNames, completions, eventTypes })}`);
+      throw new Error(`${error.message}: ${JSON.stringify(error.diagnostics)}`);
     }
     const job = edge.job(proof.jobName);
     expect(verifyScenarioEvidence({ namespace: NAMESPACE, proof, job, workerImage: WORKER_IMAGE })).toBe(proof.jobName);
@@ -286,7 +279,15 @@ describe("Kubernetes fixture application proof fails closed", () => {
       workerImage: WORKER_IMAGE, k8sApiFactory: edge.apiFactory,
     });
     running.push(fixture);
-    await expect(runK8sScenario({ control: fixture.control, output: false })).rejects.toThrow("K8S_E2E_APPLICATION_UNCONFIRMED");
+    const failure = await runK8sScenario({ control: fixture.control, output: false }).catch((error) => error);
+    expect(failure).toBeInstanceOf(Error);
+    expect(failure.message).toBe("K8S_E2E_APPLICATION_UNCONFIRMED");
+    expect(failure.diagnostics).toMatchObject({
+      schemaVersion: 1, status: "failed", code: "K8S_E2E_APPLICATION_UNCONFIRMED", phase: "worker",
+      jobState: "failed", approvalConsumed: true, receiptPresent: true, grantVerified: true,
+      dispatcherReady: true, receiverReady: true,
+      completion: { present: true, ok: false, applicationAckPresent: true, applicationAckOk: false },
+    });
     await edge.drain();
     const [job] = Object.values(currentJobs(fixture.handles.store));
     expect(job.state).toBe("failed");
@@ -341,4 +342,187 @@ describe("Kubernetes fixture application proof fails closed", () => {
     const source = path.join(home, "pods", proof.jobId, "repo", ".forge", "runs", proof.jobId, "fixture.json");
     expect(JSON.parse(await readFile(source, "utf8")).execution).toEqual({ quorum: "power", resumeFrom: 2 });
   }, 20_000);
+});
+
+describe("bounded fixture scenario failure diagnostics", () => {
+  const canary = "fixture-scenario-provider-credential-canary";
+  const control = {
+    namespace: NAMESPACE, context: CONTEXT, url: "http://127.0.0.1:3191", token: "0".repeat(64),
+  };
+  const snapshot = {
+    schemaVersion: 1, status: "failed", code: "K8S_E2E_WORKER_UNCONFIRMED", phase: "worker",
+    jobState: "running", jobs: 1, approvalConsumed: true, receiptPresent: true, grantVerified: true,
+    dispatcherReady: true, receiverReady: true, connectedWorkers: 1,
+    worker: { created: true, statusRead: true, active: 1, ready: 0, succeeded: 0, failed: 0, complete: false },
+    completion: { present: false, ok: null, applicationAckPresent: false, applicationAckOk: null },
+    events: { observed: 3, artifacts: 1, deltaChunks: 0, terminals: 0, lastSeq: 3, ordered: true, rejected: false },
+    env: { PFORGE_CLAW_JOB_KEY: canary }, provider: { apiKey: canary }, error: canary,
+  };
+
+  it("preserves safe blocked-scenario evidence without admitting a fixture receipt as acceptance", async () => {
+    const { runK8sScenario } = await import("./helpers/k8s-scenario.mjs");
+    const calls = [];
+    const failure = await runK8sScenario({
+      control, output: false, fetchFn: async (url) => {
+        calls.push(url);
+        return new Response(JSON.stringify({ status: "blocked", code: snapshot.code, diagnostics: snapshot }), { status: 409 });
+      },
+    }).catch((error) => error);
+    expect(failure).toBeInstanceOf(Error);
+    expect(failure.message).toBe(snapshot.code);
+    expect(failure.diagnostics).toMatchObject({
+      status: "failed", phase: "worker", jobState: "running", receiptPresent: true,
+      completion: { present: false, applicationAckOk: null },
+    });
+    expect(calls).toEqual([`${control.url}/fixture/k8s/scenario`]);
+    expect(JSON.stringify(failure.diagnostics)).not.toContain(canary);
+    expect(Buffer.byteLength(JSON.stringify(failure.diagnostics))).toBeLessThanOrEqual(MAX_DIAGNOSTIC_BYTES);
+  });
+
+  it("collects an authenticated read-only snapshot after timeout without retrying the scenario", async () => {
+    const { runK8sScenario } = await import("./helpers/k8s-scenario.mjs");
+    const calls = [];
+    const failure = await runK8sScenario({
+      control, output: false, fetchFn: async (url, options) => {
+        calls.push({ url, options });
+        if (url.endsWith("/scenario")) throw new DOMException(canary, "TimeoutError");
+        return new Response(JSON.stringify({ diagnostics: snapshot }));
+      },
+    }).catch((error) => error);
+    expect(failure).toBeInstanceOf(Error);
+    expect(failure.message).toBe("K8S_E2E_SCENARIO_TIMEOUT");
+    expect(failure.diagnostics).toMatchObject({
+      code: "K8S_E2E_SCENARIO_TIMEOUT", phase: "worker", jobState: "running",
+      worker: { active: 1, ready: 0 }, events: { observed: 3, lastSeq: 3 },
+    });
+    expect(calls.map(({ url }) => url)).toEqual([
+      `${control.url}/fixture/k8s/scenario`, `${control.url}/fixture/k8s/diagnostics`,
+    ]);
+    expect(calls[1].options).toMatchObject({
+      method: "POST", body: "{}",
+      headers: {
+        "x-fixture-token": control.token, "x-fixture-namespace": NAMESPACE, "x-fixture-context": CONTEXT,
+      },
+    });
+    expect(JSON.stringify(failure.diagnostics)).not.toContain(canary);
+  });
+
+  it("allows diagnostics only with the existing fixture capability and never starts another scenario", async () => {
+    const { startK8sDispatcher } = await import("./helpers/k8s-dispatcher.mjs");
+    const fixture = await startK8sDispatcher({
+      home: await workspace(), namespace: NAMESPACE, context: CONTEXT, listenPort: 0, workerImage: WORKER_IMAGE,
+      k8sApiFactory: () => createK8sClient({ host: "example.com", request: () => { throw new Error("cluster forbidden"); } }),
+    });
+    running.push(fixture);
+    const headers = {
+      "content-type": "application/json", "x-fixture-token": fixture.control.token,
+      "x-fixture-namespace": NAMESPACE, "x-fixture-context": CONTEXT,
+    };
+    for (const altered of [
+      { "x-fixture-token": "0".repeat(64) }, { "x-fixture-namespace": "pforge-claw-e2e-other" }, { "x-fixture-context": "kind-other" },
+    ]) {
+      const denied = await fetch(`${fixture.control.url}/fixture/k8s/diagnostics`, {
+        method: "POST", body: "{}", headers: { ...headers, ...altered },
+      });
+      expect(denied.status).toBe(401);
+      expect(await denied.json()).not.toHaveProperty("diagnostics");
+    }
+    const invalid = await fetch(`${fixture.control.url}/fixture/k8s/diagnostics`, {
+      method: "POST", body: JSON.stringify({ override: canary }), headers,
+    });
+    expect(invalid.status).toBe(400);
+    const response = await fetch(`${fixture.control.url}/fixture/k8s/diagnostics`, { method: "POST", body: "{}", headers });
+    expect(response.status).toBe(200);
+    expect((await response.json()).diagnostics).toMatchObject({
+      schemaVersion: 1, status: "failed", jobs: 0, jobState: null, dispatcherReady: true, receiverReady: true,
+      receiptPresent: false, grantVerified: false,
+    });
+    expect(fixture.scenarioStarted).toBe(false);
+    expect(Object.values(currentJobs(fixture.handles.store))).toEqual([]);
+  });
+
+  it("stops the owned HTTP scenario poll without waiting for an unconfirmed worker or admitting success", async () => {
+    const { startK8sDispatcher } = await import("./helpers/k8s-dispatcher.mjs");
+    const { createK8sRestEdge } = await import("./helpers/k8s-rest-edge.mjs");
+    const { runK8sScenario } = await import("./helpers/k8s-scenario.mjs");
+    const home = await workspace();
+    let releaseWorker;
+    let markWorkerStarted;
+    const workerExit = new Promise((resolve) => { releaseWorker = resolve; });
+    const workerStarted = new Promise((resolve) => { markWorkerStarted = resolve; });
+    const edge = createK8sRestEdge({
+      namespace: NAMESPACE, home, runWorker: async () => { markWorkerStarted(); return workerExit; },
+    });
+    edges.push(edge);
+    const fixture = await startK8sDispatcher({
+      home, namespace: NAMESPACE, context: CONTEXT, listenPort: 0, workerImage: WORKER_IMAGE, k8sApiFactory: edge.apiFactory,
+    });
+    running.push(fixture);
+    let scenarioFailure;
+    const scenario = runK8sScenario({ control: fixture.control, output: false }).catch((error) => {
+      scenarioFailure = error;
+      return error;
+    });
+    let stopping;
+    try {
+      await workerStarted;
+      stopping = fixture.stop();
+      // One second permits Windows I/O scheduling without waiting the fixture's 60-second scenario deadline.
+      await vi.waitFor(() => expect(scenarioFailure).toBeInstanceOf(Error), { timeout: 1000 });
+      const failure = await scenario;
+      expect(failure.message).toBe("K8S_E2E_SCENARIO_STOPPED");
+      expect(failure.diagnostics).toMatchObject({
+        status: "failed", completion: { applicationAckOk: null }, receiptPresent: false, grantVerified: false,
+      });
+      expect(Object.values(currentJobs(fixture.handles.store)).every((job) => job.state !== "succeeded")).toBe(true);
+    } finally {
+      releaseWorker(1);
+      await scenario;
+      await stopping;
+    }
+  }, 20_000);
+
+  it("emits only the sanitized bounded scenario DTO through the actual CLI error path", async () => {
+    const home = await workspace();
+    await writeFile(path.join(home, ".k8s-fixture-control.json"), JSON.stringify(control), { mode: 0o600 });
+    const preload = path.join(home, "scenario-http-edge.mjs");
+    await writeFile(preload, `globalThis.fetch = async () => new Response(JSON.stringify(${JSON.stringify({
+      status: "blocked", code: snapshot.code, diagnostics: snapshot,
+    })}), { status: 409 });`, { mode: 0o600 });
+    const execution = spawnSync(process.execPath, [path.join(PACKAGE_ROOT, "tests", "helpers", "k8s-scenario.mjs")], {
+      cwd: PACKAGE_ROOT, encoding: "utf8", timeout: PROCESS_TIMEOUT_MS,
+      env: { ...process.env, PFORGE_CLAW_HOME: home, NODE_OPTIONS: `--import ${JSON.stringify(pathToFileURL(preload).href)}` },
+    });
+    expect(execution.error).toBeUndefined();
+    expect(execution.status).toBe(1);
+    expect(execution.stdout).toBe("");
+    expect(execution.stderr).not.toContain(canary);
+    const lines = execution.stderr.trim().split("\n");
+    expect(lines[0]).toBe(snapshot.code);
+    expect(lines[1]).toMatch(/^K8S_E2E_SCENARIO_DIAGNOSTIC /);
+    expect(JSON.parse(lines[1].slice("K8S_E2E_SCENARIO_DIAGNOSTIC ".length))).toMatchObject({
+      schemaVersion: 1, status: "failed", phase: "worker", jobState: "running",
+    });
+    expect(Buffer.byteLength(execution.stderr)).toBeLessThanOrEqual(MAX_DIAGNOSTIC_BYTES);
+  });
+
+  it("rejects arbitrary error text, state, and counter payloads at the diagnostic boundary", async () => {
+    const { normalizeScenarioDiagnostics } = await import("./helpers/k8s-scenario.mjs");
+    expect(typeof normalizeScenarioDiagnostics).toBe("function");
+    const normalized = normalizeScenarioDiagnostics({
+      ...snapshot, code: `K8S_E2E_${canary.toUpperCase()}`, phase: canary, jobState: canary,
+      jobs: canary, connectedWorkers: -1,
+      worker: { active: canary, ready: -1, statusRead: canary },
+      completion: { ok: canary, applicationAckOk: canary, terminalStatus: canary },
+      events: { observed: canary, lastSeq: canary, ordered: canary },
+    });
+    expect(normalized).toMatchObject({
+      code: "K8S_E2E_SCENARIO_FAILED", phase: "unknown", jobState: null, jobs: null, connectedWorkers: null,
+      worker: { active: null, ready: null, statusRead: null },
+      completion: { ok: null, applicationAckOk: null, terminalStatus: null },
+      events: { observed: null, lastSeq: null, ordered: null },
+    });
+    expect(JSON.stringify(normalized)).not.toContain(canary);
+    expect(JSON.stringify(normalized)).not.toContain(canary.toUpperCase());
+  });
 });

@@ -12,6 +12,7 @@ import { resolveRuntimeId } from "../src/runtime/agent-runtime.mjs";
 import { byokProviderReference } from "../src/runtime/byok.mjs";
 import { validateConfig } from "../src/config.mjs";
 import { buildJobEgressPolicy } from "../src/k8s/egress-policy.mjs";
+import { normalizeScenarioDiagnostics, SCENARIO_DIAGNOSTIC_PREFIX } from "../tests/helpers/k8s-scenario.mjs";
 
 const MAX_COMMAND_BYTES = 1_048_576;
 const COMMAND_TIMEOUT_MS = 180_000;
@@ -59,6 +60,8 @@ const FIXTURE_SOURCES = Object.freeze([
 ]);
 const PROOF_PATH = "/data/k8s-e2e-result.json";
 const PROOF_READ = `import { readFileSync } from 'node:fs'; process.stdout.write(readFileSync('${PROOF_PATH}', 'utf8'));`;
+const SCENARIO_ENTRY_PATH = "/app/tests/helpers/k8s-scenario.mjs";
+const SCENARIO_ARGUMENT_COUNT = 7;
 
 function parseOptions(argv) {
   const options = {};
@@ -191,6 +194,31 @@ function stderrHint({ stderrSample, spawnErrorCode }) {
   return STDERR_HINTS.find(({ pattern }) => pattern.test(sample))?.hint ?? "STDERR_SUPPRESSED";
 }
 
+function isScenarioCommand(command, args) {
+  const selected = args.slice(args[0] === "--context" ? 2 : 0);
+  return command === "kubectl" && selected.length === SCENARIO_ARGUMENT_COUNT
+    && selected[0] === "exec" && selected[1] === "-n"
+    && selected[3] === "deployment/pforge-claw-dispatcher"
+    && selected[4] === "--" && selected[5] === "node" && selected[6] === SCENARIO_ENTRY_PATH;
+}
+
+function scenarioFailureDetails({ command, args, stderrSample }) {
+  if (!isScenarioCommand(command, args)) return {};
+  const markers = stderrSample.toString("utf8").split(/\r?\n/)
+    .filter((line) => line.startsWith(SCENARIO_DIAGNOSTIC_PREFIX));
+  if (markers.length === 0) return {};
+  const rejected = { scenarioDiagnosticRejected: true };
+  if (markers.length !== 1) return rejected;
+  let candidate;
+  try {
+    candidate = JSON.parse(markers[0].slice(SCENARIO_DIAGNOSTIC_PREFIX.length));
+  } catch {
+    return rejected;
+  }
+  if (!candidate || candidate.schemaVersion !== 1 || candidate.status !== "failed") return rejected;
+  return { scenarioFailure: normalizeScenarioDiagnostics(candidate) };
+}
+
 class K8sE2eCommandError extends Error {
   constructor(code, { command, args, exitCode = null, signal = null, stderrSample, stderrBytes, spawnErrorCode }) {
     super(code);
@@ -201,6 +229,7 @@ class K8sE2eCommandError extends Error {
       signal: DIAGNOSTIC_SIGNALS.has(signal) ? signal : null,
       stderrHint: stderrHint({ stderrSample, spawnErrorCode }),
       stderrTruncated: stderrBytes > MAX_DIAGNOSTIC_STDERR_BYTES,
+      ...scenarioFailureDetails({ command, args, stderrSample }),
     };
   }
 }
@@ -394,7 +423,7 @@ async function resumeProbe({ kubectl, namespace, name }) {
 
 async function runDeployedScenario({ kubectl, namespace, workerImage, config }) {
   const pod = ["-n", namespace, "deployment/pforge-claw-dispatcher", "--", "node"];
-  await kubectl(["exec", ...pod, "/app/tests/helpers/k8s-scenario.mjs"]);
+  await kubectl(["exec", ...pod, SCENARIO_ENTRY_PATH]);
   const proof = JSON.parse(await kubectl(["exec", ...pod, "--input-type=module", "-e", PROOF_READ]));
   if (typeof proof?.jobName !== "string" || !JOB_DNS_NAME.test(proof.jobName)) throw new Error("K8S_E2E_SCENARIO_PROOF_INVALID");
   await kubectl(["wait", "--for=condition=complete", `job/${proof.jobName}`, "-n", namespace, "--timeout=90s"]);

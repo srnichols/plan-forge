@@ -16,7 +16,7 @@ import { QUORUM_MODES } from "../../src/approvals.mjs";
 import approvalsFeature from "../../src/features/approvals.mjs";
 import workersFeature from "../../src/features/workers.mjs";
 import { materializeDevConfig, PACKAGE_ROOT, FIXTURE_TLS_CERT_ENV, FIXTURE_TLS_KEY_ENV } from "../../scripts/k8s-e2e-overlay.mjs";
-import { collectScenarioEvidence } from "./k8s-scenario.mjs";
+import { collectScenarioDiagnostics, collectScenarioEvidence, SCENARIO_PHASE, scenarioErrorCode } from "./k8s-scenario.mjs";
 import { fixtureSystemEnvironment } from "./k8s-worker.mjs";
 import { startFakeTelegram } from "./fake-telegram.mjs";
 import { startFixtureTlsProxy } from "./k8s-tls-proxy.mjs";
@@ -90,9 +90,10 @@ function recordEvents(bus) {
   return { entries, rejected, stop: () => bus.off("lane.event", listener) };
 }
 
-async function waitUntil(predicate, code) {
+async function waitUntil(predicate, code, signal) {
   const expires = Date.now() + FIXTURE_TIMEOUT_MS;
   while (Date.now() < expires) {
+    if (signal?.aborted) throw new Error("K8S_E2E_SCENARIO_STOPPED");
     const match = await predicate();
     if (match) return match;
     await new Promise((resolve) => setTimeout(resolve, POLL_INTERVAL_MS));
@@ -155,35 +156,41 @@ function installJobRoutes(http, fixture) {
 async function approvedScenario(fixture) {
   if (fixture.scenarioStarted) throw new Error("K8S_E2E_SCENARIO_SINGLE_USE");
   fixture.scenarioStarted = true;
+  fixture.scenarioPhase = SCENARIO_PHASE.APPROVAL;
+  const wait = (predicate, code) => waitUntil(predicate, code, fixture.scenarioStop.signal);
   const project = fixture.config.projects[0];
   const chat = project.channel;
   if (fixture.scenario.type === "plan") await requestFixturePlan(fixture, project);
   else fixture.telegram.pushMessage({
     userId: "1", chatId: chat.chatId, threadId: chat.topicId, text: "/task Write a disposable Kubernetes fixture artifact",
   });
-  const job = await waitUntil(() => Object.values(currentJobs(fixture.handles.store))
+  const job = await wait(() => Object.values(currentJobs(fixture.handles.store))
     .find((entry) => entry.projectId === project.id && entry.state === "awaiting-approval"), "K8S_E2E_APPROVAL_UNCONFIRMED");
+  fixture.scenarioJobId = job.id;
   await approvalsFeature.tick();
   const card = await fixture.telegram.waitForCall("sendMessage", (args) =>
     args.reply_markup?.inline_keyboard?.flat().some((button) => button.callback_data?.startsWith(`a:${job.id.slice(0, JOB_SHORT_ID_LENGTH)}:`)));
   const callback = card.args.reply_markup.inline_keyboard.flat().find((button) =>
     button.callback_data?.startsWith("a:") && (fixture.scenario.type !== "plan" || button.callback_data.endsWith(`:${fixture.scenario.quorum}`)));
   if (!callback) throw new Error("K8S_E2E_APPROVAL_UNCONFIRMED");
+  fixture.scenarioPhase = SCENARIO_PHASE.WORKER;
   fixture.telegram.pushCallback({
     userId: "1", chatId: chat.chatId, threadId: chat.topicId, messageId: card.result?.message_id, data: callback.callback_data,
   });
-  const terminal = await waitUntil(() => {
+  const terminal = await wait(() => {
     const latest = currentJobs(fixture.handles.store)[job.id];
     return TERMINAL.includes(latest?.state) && latest;
   }, "K8S_E2E_WORKER_UNCONFIRMED");
   if (terminal.state !== "succeeded") throw new Error("K8S_E2E_APPLICATION_UNCONFIRMED");
+  fixture.scenarioPhase = SCENARIO_PHASE.COMPLETION;
   await fixture.registry.waitForCompletion({ jobId: job.id, timeoutMs: FIXTURE_TIMEOUT_MS });
   const jobName = fixture.jobNames.get(job.id);
-  await waitUntil(async () => {
+  await wait(async () => {
     const status = await fixture.apis.get(FIXTURE_LANE).getJob(fixture.control.namespace, jobName);
     return status?.status?.succeeded === 1;
   }, "K8S_E2E_WORKER_UNCONFIRMED");
   if (fixture.events.rejected.has(job.id)) throw new Error("K8S_E2E_EVENTS_INVALID");
+  fixture.scenarioPhase = SCENARIO_PHASE.PROOF;
   return collectScenarioEvidence({
     namespace: fixture.control.namespace, handles: fixture.handles, registry: fixture.registry,
     receipt: fixture.receipts.get(job.id), events: fixture.events.entries.get(job.id) ?? [], jobId: job.id, jobName,
@@ -226,9 +233,22 @@ function installScenarioRoute(http, fixture) {
     try {
       jsonResponse(response, FIXTURE_HTTP_STATUS.OK, await approvedScenario(fixture));
     } catch (error) {
-      const code = /^K8S_E2E_[A-Z_]+$/.test(error?.message ?? "") ? error.message : "K8S_E2E_SCENARIO_FAILED";
-      jsonResponse(response, FIXTURE_HTTP_STATUS.CONFLICT, { status: "blocked", code });
+      const code = scenarioErrorCode(error);
+      const diagnostics = await collectScenarioDiagnostics({ fixture, code });
+      jsonResponse(response, FIXTURE_HTTP_STATUS.CONFLICT, { status: "blocked", code, diagnostics });
     }
+  });
+}
+
+function installDiagnosticRoute(http, fixture) {
+  http.route("POST", `${FIXTURE_PREFIX}/diagnostics`, async ({ request, response, body }) => {
+    if (!scopeAuthorized(request, fixture.control) || !sameFixtureToken(fixture.control.token, request.headers["x-fixture-token"])) {
+      jsonResponse(response, FIXTURE_HTTP_STATUS.UNAUTHORIZED, { code: "K8S_E2E_CONTROL_UNAUTHORIZED" });
+      return;
+    }
+    if (body !== "{}") { jsonResponse(response, FIXTURE_HTTP_STATUS.BAD_REQUEST, { code: "K8S_E2E_CONTROL_INPUT_INVALID" }); return; }
+    const diagnostics = await collectScenarioDiagnostics({ fixture });
+    jsonResponse(response, FIXTURE_HTTP_STATUS.OK, { diagnostics });
   });
 }
 
@@ -272,13 +292,17 @@ export async function startK8sDispatcher(input = {}) {
   const telegram = await startFakeTelegram();
   const logger = options.logger ?? { info() {}, warn() {}, error() {} };
   const control = { namespace: options.namespace, context: options.context, url: `http://127.0.0.1:${port}`, token: randomBytes(SECRET_BYTES).toString("hex") };
-  const fixture = { home, control, telegram, receipts: new Map(), jobNames: new Map(), apis: new Map(), scenarioStarted: false, scenario };
+  const fixture = {
+    home, control, telegram, receipts: new Map(), jobNames: new Map(), apis: new Map(),
+    scenarioStarted: false, scenarioPhase: SCENARIO_PHASE.REQUEST, scenarioStop: new AbortController(), scenario,
+  };
   let http;
   let proxy;
   let stopped = false;
   fixture.stop = async () => {
     if (stopped) return;
     stopped = true;
+    fixture.scenarioStop.abort();
     fixture.events?.stop();
     await proxy?.stop();
     await http?.close();
@@ -304,6 +328,7 @@ export async function startK8sDispatcher(input = {}) {
     http = createHttpServer({ bind: "127.0.0.1", port, maxBodyBytes: FIXTURE_MAX_BYTES });
     installJobRoutes(http, fixture);
     installScenarioRoute(http, fixture);
+    installDiagnosticRoute(http, fixture);
     await http.listen();
     if (options.tls) proxy = await startFixtureTlsProxy({
       ...options.tls, targetPort: port, ...(options.tls.loopback ? { bind: "127.0.0.1" } : {}),

@@ -226,10 +226,12 @@ childProcess.spawn = (command, args, options) => {
   const operation = command === "kind" ? "image-load" : ({
     "get namespace": "namespace-check", "create namespace": "namespace-create",
     "apply -k": "overlay-apply", "delete namespace": "namespace-cleanup",
+    "rollout status": "rollout-ready", "patch job": "probe-release",
+    "wait --for=condition=complete": "probe-complete", "exec -n": "scenario",
   })[args.slice(offset, offset + 2).join(" ")];
   if (!operation || !["kubectl", "kind"].includes(command)) throw new Error("Unexpected native command");
   appendFileSync(${JSON.stringify(trace)}, JSON.stringify(operation) + "\\n");
-  const reply = failures[operation] ?? { code: 0, stdout: "", stderr: "" };
+  const reply = { code: 0, stdout: "", stderr: "", ...failures[operation] };
   if (reply.missingExecutable) return nativeSpawn(${JSON.stringify(path.join(directory, "fixture-missing-native-credential-canary"))}, [], options);
   const replyFile = join(${JSON.stringify(directory)}, operation + ".json");
   writeFileSync(replyFile, JSON.stringify(reply), { mode: 0o600 });
@@ -349,6 +351,66 @@ describe("hosted Kubernetes command failure diagnostics", () => {
     code: 23, stdout: canary,
     stderr: `Error from server (Invalid): error when creating generated Secret: {"data":{"token":"${canary}"}}\n`,
   };
+
+  it("relays only the bounded failed scenario measurements and preserves the native exec failure", async () => {
+    const failure = {
+      schemaVersion: 1, status: "failed", code: "K8S_E2E_APPLICATION_UNCONFIRMED",
+      phase: "completion", jobState: "running", jobs: 1, approvalConsumed: true,
+      receiptPresent: true, grantVerified: true, connectedWorkers: 1,
+      worker: { created: true, active: 1 },
+      completion: { present: false, applicationAckPresent: false },
+      events: { observed: 4, lastSeq: 4 },
+      providerText: canary, token: canary, rawEvent: { data: canary },
+    };
+    const execution = await failedNativeCli({
+      scenario: {
+        code: 29, stdout: canary,
+        stderr: `K8S_E2E_APPLICATION_UNCONFIRMED\nK8S_E2E_SCENARIO_DIAGNOSTIC ${JSON.stringify(failure)}\n`,
+      },
+      "namespace-cleanup": { code: 31, stderr: `Error from server (Forbidden): ${canary}\n` },
+    });
+    const diagnostic = JSON.parse(execution.stderr.trim().split("\n").at(-1));
+    expect(diagnostic).toMatchObject({
+      command: "kubectl", operation: "exec", exitCode: 29,
+      scenarioFailure: {
+        schemaVersion: 1, status: "failed", code: "K8S_E2E_APPLICATION_UNCONFIRMED",
+        phase: "completion", jobState: "running", jobs: 1, approvalConsumed: true,
+        completion: { present: false, applicationAckPresent: false, applicationAckOk: null },
+        events: { observed: 4, lastSeq: 4, ordered: null },
+      },
+      cleanupFailure: { operation: "delete", exitCode: 31 },
+    });
+    expect(execution.stderr).not.toContain(canary);
+    expect(diagnostic.scenarioFailure).not.toHaveProperty("providerText");
+    expect(diagnostic.scenarioFailure).not.toHaveProperty("token");
+    expect(diagnostic.scenarioFailure).not.toHaveProperty("rawEvent");
+    expect(Buffer.byteLength(execution.stderr)).toBeLessThanOrEqual(MAX_CLI_DIAGNOSTIC_BYTES);
+  });
+
+  it.each([
+    "{", "[]", '{"schemaVersion":2,"status":"failed"}', '{"schemaVersion":1,"status":"passed"}',
+  ])("rejects malformed or success-shaped scenario diagnostics without echoing them: %s", async (input) => {
+    const execution = await failedNativeCli({
+      scenario: { code: 29, stderr: `K8S_E2E_SCENARIO_DIAGNOSTIC ${input}\n${canary}\n` },
+    });
+    const diagnostic = JSON.parse(execution.stderr.trim().split("\n").at(-1));
+    expect(diagnostic).toMatchObject({ command: "kubectl", operation: "exec", exitCode: 29, scenarioDiagnosticRejected: true });
+    expect(diagnostic).not.toHaveProperty("scenarioFailure");
+    expect(execution.stderr).not.toContain(canary);
+  });
+
+  it("does not accept a scenario marker emitted by a different native command", async () => {
+    const execution = await failedNativeCli({
+      "overlay-apply": {
+        code: 23,
+        stderr: 'K8S_E2E_SCENARIO_DIAGNOSTIC {"schemaVersion":1,"status":"failed","phase":"proof","jobs":1}\n',
+      },
+    });
+    const diagnostic = JSON.parse(execution.stderr.trim().split("\n").at(-1));
+    expect(diagnostic).toMatchObject({ command: "kubectl", operation: "apply", exitCode: 23 });
+    expect(diagnostic).not.toHaveProperty("scenarioFailure");
+    expect(diagnostic).not.toHaveProperty("scenarioDiagnosticRejected");
+  });
 
   it("identifies the failing kind image-load command and exit without exposing native output", async () => {
     const execution = await failedNativeCli({

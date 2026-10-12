@@ -338,7 +338,8 @@ function traceNativeStartupLaunch(command, args, options) {
   return [command, forwarded, options];
 }
 
-function collectNativeBootStages(stream, stages) {
+function collectNativeBootStages(stream, startup) {
+  const { nativeBootStages: stages, nativeBootReceivedMs } = startup;
   const pending = Buffer.alloc(NATIVE_BOOT_LINE_LIMIT);
   let length = 0;
   let isOverlong = false;
@@ -348,7 +349,10 @@ function collectNativeBootStages(stream, stages) {
         if (!isOverlong) {
           const line = pending.subarray(0, length).toString("utf8").trim();
           const stage = NATIVE_BOOT_STAGES.find((name) => line === `${NATIVE_BOOT_PREFIX}${name}`);
-          if (stage && !stages.includes(stage)) stages.push(stage);
+          if (stage && !stages.includes(stage)) {
+            stages.push(stage);
+            nativeBootReceivedMs[stage] = nativeStartupAge(startup);
+          }
         }
         length = 0;
         isOverlong = false;
@@ -363,16 +367,20 @@ function collectNativeBootStages(stream, stages) {
 
 function nativeStartup() {
   return Object.defineProperty(
-    { hostQueries: [], roots: [], nativeBootStages: [], events: [], elapsedMs: {} },
+    { hostQueries: [], roots: [], nativeBootStages: [], nativeBootReceivedMs: {}, events: [], elapsedMs: {} },
     "startedAt", { value: performance.now() },
   );
+}
+
+function nativeStartupAge(startup) {
+  // Rounded receipt ages allow equal milliseconds (rounding tolerance); they are not child execution time or authority.
+  return Math.round(performance.now() - startup.startedAt);
 }
 
 function recordNativeStartup(startup, event) {
   if (startup.events.includes(event)) return;
   startup.events.push(event);
-  // Ages permit equal milliseconds (rounding tolerance); they never certify native settlement.
-  startup.elapsedMs[event] = Math.round(performance.now() - startup.startedAt);
+  startup.elapsedMs[event] = nativeStartupAge(startup);
 }
 
 function observeNativeRoot({ child, options, startup }) {
@@ -382,7 +390,7 @@ function observeNativeRoot({ child, options, startup }) {
     nativeExitObserved: false, closedObserved: false, errorObserved: false,
   };
   startup.roots.push(phase);
-  collectNativeBootStages(child.stderr, startup.nativeBootStages);
+  collectNativeBootStages(child.stderr, startup);
   const send = child.send;
   child.send = (...args) => {
     const frame = args[0];
@@ -417,12 +425,79 @@ describe("native startup diagnostic framing", () => {
     ["padded overlong line", [" ".repeat(NATIVE_BOOT_LINE_LIMIT) + marker]],
   ])("discards %s through its newline before accepting a genuine marker", (_, chunks) => {
     const stream = new EventEmitter();
-    const stages = [];
-    collectNativeBootStages(stream, stages);
+    const startup = nativeStartup();
+    collectNativeBootStages(stream, startup);
     for (const chunk of chunks) stream.emit("data", Buffer.from(chunk));
-    expect(stages).toEqual([]);
+    expect(startup.nativeBootStages).toEqual([]);
+    expect(startup.nativeBootReceivedMs).toEqual({});
     stream.emit("data", Buffer.from(`${NATIVE_BOOT_PREFIX}${NATIVE_BOOT_STAGES[1]}\n`));
-    expect(stages).toEqual([NATIVE_BOOT_STAGES[1]]);
+    expect(startup.nativeBootStages).toEqual([NATIVE_BOOT_STAGES[1]]);
+    expect(Object.keys(startup.nativeBootReceivedMs)).toEqual([NATIVE_BOOT_STAGES[1]]);
+    expect(startup.nativeBootReceivedMs.imports).toBeGreaterThanOrEqual(0);
+  });
+
+  it("times only the first complete fragmented marker and omits duplicate or forged stage values", () => {
+    const clock = vi.spyOn(performance, "now").mockReturnValue(20_000);
+    const startup = nativeStartup();
+    const stream = new EventEmitter();
+    collectNativeBootStages(stream, startup);
+    clock.mockReturnValue(20_001);
+    stream.emit("data", Buffer.from(`${NATIVE_BOOT_PREFIX}run`));
+    expect(startup.nativeBootStages).toEqual([]);
+    expect(startup.nativeBootReceivedMs).toEqual({});
+    clock.mockReturnValue(20_005);
+    stream.emit("data", Buffer.from("time\n"));
+    clock.mockReturnValue(29_000);
+    stream.emit("data", Buffer.from(`${NATIVE_BOOT_PREFIX}runtime\n`));
+    stream.emit("data", Buffer.from(`${NATIVE_BOOT_PREFIX}__proto__\n${NATIVE_BOOT_PREFIX}ready:raw-canary\n`));
+    stream.emit("data", Buffer.from("raw-canary argv env path\n"));
+    expect(startup.nativeBootStages).toEqual(["runtime"]);
+    expect(startup.nativeBootReceivedMs).toEqual({ runtime: 5 });
+    expect(Object.keys(startup.nativeBootReceivedMs).length).toBeLessThanOrEqual(NATIVE_BOOT_STAGES.length);
+    expect(JSON.stringify(startup)).not.toContain("raw-canary");
+    expect(JSON.stringify(startup)).not.toContain("20000");
+    expect(Buffer.byteLength(JSON.stringify(startup))).toBeLessThanOrEqual(1024);
+  });
+
+  it("records first boot marker receipt ages after STOP on the same parent clock without granting authority", () => {
+    const clock = vi.spyOn(performance, "now").mockReturnValue(10_000);
+    const startup = nativeStartup();
+    const child = Object.assign(new EventEmitter(), {
+      pid: 1234, stderr: new EventEmitter(), send: vi.fn(() => true),
+    });
+    observeNativeRoot({ child, options: { stdio: ["ignore", "pipe", "pipe", "ipc"] }, startup });
+    clock.mockReturnValue(10_023);
+    child.emit("spawn");
+    clock.mockReturnValue(10_350.4);
+    child.stderr.emit("data", Buffer.from(`${NATIVE_BOOT_PREFIX}runtime\n`));
+    clock.mockReturnValue(11_150.1);
+    child.stderr.emit("data", Buffer.from(`${NATIVE_BOOT_PREFIX}imports\n`));
+    clock.mockReturnValue(15_000);
+    expect(child.send({ v: 1, t: NATIVE_SUPERVISOR_STOP_MESSAGE })).toBe(true);
+    clock.mockReturnValue(15_690.6);
+    child.stderr.emit("data", Buffer.from(`${NATIVE_BOOT_PREFIX}subreaper\n`));
+    clock.mockReturnValue(15_757.3);
+    child.stderr.emit("data", Buffer.from(`${NATIVE_BOOT_PREFIX}ready\n`));
+    clock.mockReturnValue(15_869.4);
+    child.emit("exit");
+    child.emit("close");
+    expect(startup.nativeBootReceivedMs).toEqual({
+      runtime: 350, imports: 1150, subreaper: 5691, ready: 5757,
+    });
+    expect(startup.nativeBootStages).toEqual(NATIVE_BOOT_STAGES);
+    expect(startup.elapsedMs).toEqual({
+      [NATIVE_EVENTS.SPAWN]: 23, [NATIVE_EVENTS.STOP]: 5000,
+      [NATIVE_EVENTS.EXIT]: 5869, [NATIVE_EVENTS.CLOSE]: 5869,
+    });
+    expect(startup.nativeBootReceivedMs.ready).toBeGreaterThan(startup.elapsedMs[NATIVE_EVENTS.STOP]);
+    expect(startup.roots[0].identityFrameObserved).toBe(false);
+    for (const event of [NATIVE_EVENTS.READY, NATIVE_EVENTS.ACQUIRED, NATIVE_EVENTS.START, NATIVE_EVENTS.RESULT])
+      expect(startup.events).not.toContain(event);
+    expect(hasNativeSettlementProof(startup)).toBe(false);
+    const serialized = JSON.stringify(startup);
+    for (const value of ["startedAt", "1234", "10000", "15757"])
+      expect(serialized).not.toContain(value);
+    expect(Buffer.byteLength(serialized)).toBeLessThanOrEqual(1024);
   });
 });
 

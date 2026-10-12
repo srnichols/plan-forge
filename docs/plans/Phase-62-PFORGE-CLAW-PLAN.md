@@ -573,6 +573,41 @@ trace capture was not established. These are source-derived necessary-condition
 results, not an exhaustive impossibility claim or physical macOS acceptance.
 No privileged or global host changes were made.
 
+**Native validation provenance correction (#354):** the local Linux fixture
+put the Node executable directory before the extracted PowerShell runtime.
+Its bundled executable is PowerShell 7.4.6 on .NET 8, whereas the intended
+archive is 7.6.6 on .NET 10. A post-suite version query of the archive did not
+prove which binary the native launcher selected. Preserve the earlier local
+counts, but do not reuse their 7.6.6 labels as exact-runtime acceptance.
+The corrected fixture places the pinned runtime first and checks the real
+native launcher's resolution under each target Node environment without
+launching a PowerShell warmup process. With that gate, both Node 22.12/24
+packets pass 108 original native cases with three OS skips and unchanged
+deadlines/four workers. This repairs validation provenance, not production
+command resolution or the current hosted timeout.
+
+The single current, correctly selected 7.6.6 four-root profile passed all
+four cases with genuine zero-owned-child and original-root exit evidence.
+Parent READY receipt was 1.002-1.091 seconds; the first writer/options
+construction was 1.009-1.358 milliseconds and the complete READY factory
+70-95 milliseconds in a separate producer clock domain. No constructor
+bottleneck, avoidable dependency or original hosted cause was established.
+The bounded five-run health audit has no slice-retry denominator and does
+not justify a native rewrite, deadline increase, warmup or serialization.
+Current Linux/Node 24 still has two original five-second gate failures;
+older green attempts and this local profile do not replace that CI result.
+
+The next diagnostic-only test records first complete boot-marker receipt ages
+for the existing four stages on the same parent clock as spawn, STOP and exit.
+Fragmented, overlong, duplicate and forged marker controls retain bounded
+framing; a marker received after STOP grants no readiness or settlement
+authority. The original PowerShell annotation function, stage/event registries
+and full FRC-03 statement remain unchanged. Actual omission red preceded
+28 passing owned cases on each Windows Node cohort; guarded PowerShell 7.6.6
+integration passes 110 cases with three OS skips on each Linux Node cohort.
+This improves the next hosted failure evidence, not the underlying runtime,
+original deadlines or platform acceptance. New committed-head CI is required.
+
 _Original decisions were resolved at hardening on 2026-10-07; verification evidence is in Assumptions. D29 and D30 are the operator-approved review/release-preparation extensions from 2026-10-08 and 2026-10-10._
 
 ## Acceptance Criteria

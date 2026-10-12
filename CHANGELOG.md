@@ -7,6 +7,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+## [3.33.0] — 2026-10-12 — Forge-Master context, insights, and review guidance
+
 ### Added
 
 - `forge_master_ask` accepts optional `caller`, `responseFormat`, `untrustedContext`, `contextBlocks`, and `proposeActions` inputs, and returns a `usage` block. These changes are additive; existing response fields are unchanged.

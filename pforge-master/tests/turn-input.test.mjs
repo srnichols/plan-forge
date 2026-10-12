@@ -1,4 +1,6 @@
 import { describe, expect, it } from "vitest";
+import { TOOL_METADATA } from "../../pforge-mcp/capabilities.mjs";
+import { validateProposals } from "../src/proposed-actions.mjs";
 
 import {
   CHANNELS,
@@ -9,6 +11,33 @@ import {
   buildUsage,
   normalizeTurnInput,
 } from "../src/turn-input.mjs";
+
+describe("Guard: forge_master_ask metadata matches the opt-in contract", () => {
+  const { input, output } = TOOL_METADATA.forge_master_ask.example;
+
+  it("documents every optional input with a valid example", () => {
+    for (const field of ["caller", "responseFormat", "untrustedContext", "contextBlocks", "proposeActions"]) {
+      expect(Object.hasOwn(input, field), field).toBe(true);
+    }
+    expect(input.proposeActions).toBe(true);
+    expect(input.untrustedContext).toHaveLength(1);
+    expect(input.contextBlocks).toHaveLength(1);
+    expect(normalizeTurnInput(input).ok).toBe(true);
+  });
+
+  it("documents opt-in truncation and valid, untrusted action proposals", () => {
+    expect(output.truncated).toEqual({ budget: false, reply: false, context: false, untrusted: false });
+    expect(output.proposedActions).toHaveLength(1);
+    const validated = validateProposals(output.proposedActions, {
+      role: input.caller.role,
+      projectId: input.caller.projectId,
+      untrusted: true,
+    });
+    expect(validated.dropped).toBe(0);
+    expect(validated.actions).toEqual(output.proposedActions);
+    expect(output.proposedActionsMessage).toContain("Forge-Master does not execute them");
+  });
+});
 
 describe("normalizeTurnInput", () => {
   it("returns the original reference on the legacy fast path", () => {

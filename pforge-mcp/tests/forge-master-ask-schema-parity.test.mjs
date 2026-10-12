@@ -4,10 +4,7 @@ import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 
 import { TOOLS } from "../server/tool-definitions.mjs";
-import { TOOL_METADATA } from "../capabilities/tool-metadata.mjs";
 import { _buildForgeMasterTurnInput } from "../server/tool-handlers/platform.mjs";
-import { normalizeTurnInput } from "../../pforge-master/src/turn-input.mjs";
-import { validateProposals } from "../../pforge-master/src/proposed-actions.mjs";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const masterServerSource = readFileSync(join(__dirname, "../../pforge-master/server.mjs"), "utf8");
@@ -52,33 +49,6 @@ describe("Guard: both forge_master_ask schemas declare the same properties", () 
       const mcpEnum = parents.reduce((value, key) => value[key], mcpSchema.properties)[property].enum;
       expect(masterEnum).toEqual(mcpEnum);
     }
-  });
-});
-
-describe("Guard: forge_master_ask metadata matches the opt-in contract", () => {
-  const { input, output } = TOOL_METADATA.forge_master_ask.example;
-
-  it("documents every optional input with a valid example", () => {
-    for (const field of ["caller", "responseFormat", "untrustedContext", "contextBlocks", "proposeActions"]) {
-      expect(Object.hasOwn(input, field), field).toBe(true);
-    }
-    expect(input.proposeActions).toBe(true);
-    expect(input.untrustedContext).toHaveLength(1);
-    expect(input.contextBlocks).toHaveLength(1);
-    expect(normalizeTurnInput(input).ok).toBe(true);
-  });
-
-  it("documents opt-in truncation and valid, untrusted action proposals", () => {
-    expect(output.truncated).toEqual({ budget: false, reply: false, context: false, untrusted: false });
-    expect(output.proposedActions).toHaveLength(1);
-    const validated = validateProposals(output.proposedActions, {
-      role: input.caller.role,
-      projectId: input.caller.projectId,
-      untrusted: true,
-    });
-    expect(validated.dropped).toBe(0);
-    expect(validated.actions).toEqual(output.proposedActions);
-    expect(output.proposedActionsMessage).toContain("Forge-Master does not execute them");
   });
 });
 

@@ -14,6 +14,20 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 - A structured `forge-master-insight` event and paginated observer status.
 - `forge_master_observe` is now registered on `pforge-mcp` as a proxy to the Forge-Master studio child, so any MCP client connected to a project can start/stop the observer and page insights (`limit`, `cursor`). There is no in-process fallback; an unreachable child returns `FORGE_MASTER_UNAVAILABLE`. Listed in the `liveguard` tool profile.
 - Memory provenance (`origin`, `tags`, `visibility`) and recall fencing, including fencing of untrusted recall.
+- Rolling conversation summaries retain earlier decisions and conclusions after turns leave the prompt window. Summary generation runs after the reply, and its usage is charged to the next successful turn.
+- Planning and review guidance now covers software entropy, knowledge-level DRY, resource ownership, domain language, decision revisions, and shared contracts. Design references and approval evidence travel with affected slices and handoffs; these are agent-side checks, not new runtime approval enforcement.
+
+### Fixed
+
+- The `forge_master_ask` capability example now includes every optional context/proposal input, a complete proposed action, and `proposedActionsMessage`. Its `truncated` value uses the four-flag object required when optional inputs are supplied, rather than the legacy boolean. Regression tests validate the example against the shipped input and proposal contracts. (#326)
+
+### Security
+
+- Raised the MCP SDK minimum to 1.31.0 and Sharp to 0.35.5, and refreshed the workspace and standalone MCP locks for compatible security patches, including `proxy-addr` 2.0.8 and `source-map-js` 1.2.2. This addresses the MCP OAuth advisory, Sharp/librsvg advisory, proxy-address spoofing, and indexed-source-map denial of service without raising the Node.js floor.
+
+### Known developer-tool audit findings
+
+- The contributor workspace audit still reports 13 high and 2 moderate findings through `braces` and `postcss-selector-parser`. `braces` has no upstream patch; the PostCSS fix requires a major dependency change, and npm proposes a Tailwind 4 migration. The committed Tailwind 3 toolchain is preserved rather than force-upgraded. Production dependencies and the complete standalone MCP dependency lock audit with zero findings. Developer-tool remediation remains separate follow-up work.
 
 ## [3.32.0] — 2026-10-07 — Analyze and diagnose from the CLI, .NET gates on Microsoft.Testing.Platform
 
@@ -7484,4 +7498,3 @@ Every SKILL.md now follows the full Skill Blueprint format: Frontmatter → Trig
 - Setup wizard with auto-detection (`setup.ps1` / `setup.sh`)
 - Validation scripts (`validate-setup.ps1` / `validate-setup.sh`)
 - Worked examples for TypeScript, .NET, and Python
-

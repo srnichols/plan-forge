@@ -105,6 +105,8 @@
     { "label": "Planning guidance carries design references (3.33.0)", "path": ".github/prompts/step3-execute-slice.prompt.md", "contains": "Contract Refs" },
     { "label": "MCP package requires the patched MCP SDK (3.33.0)", "path": "pforge-mcp/package.json", "contains": "\"@modelcontextprotocol/sdk\": \"^1.31.0\"" },
     { "label": "Forge-Master requires the patched MCP SDK (3.33.0)", "path": "pforge-master/package.json", "contains": "\"@modelcontextprotocol/sdk\": \"^1.31.0\"" },
-    { "label": "MCP package requires the patched Sharp (3.33.0)", "path": "pforge-mcp/package.json", "contains": "\"sharp\": \"^0.35.5\"" }
+    { "label": "MCP package requires the patched Sharp (3.33.0)", "path": "pforge-mcp/package.json", "contains": "\"sharp\": \"^0.35.5\"" },
+    { "label": "Installed tests gate maintainer planning guidance by its source asset (3.33.0)", "path": "pforge-mcp/vitest.config.mjs", "contains": "\"../templates/.github/agents/specifier.agent.md\": [\"tests/planning-guidance.test.mjs\"]" },
+    { "label": "Installed tests gate maintainer review guidance by its source asset (3.33.0)", "path": "pforge-mcp/vitest.config.mjs", "contains": "\"../presets/shared/skills/code-review/SKILL.md\": [\"tests/review-guidance.test.mjs\"]" }
   ]
 }

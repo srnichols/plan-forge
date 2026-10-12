@@ -22,6 +22,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 ### Fixed
 
 - The `forge_master_ask` capability example now includes every optional context/proposal input, a complete proposed action, and `proposedActionsMessage`. Its `truncated` value uses the four-flag object required when optional inputs are supplied, rather than the legacy boolean. Regression tests validate the example against the shipped input and proposal contracts. (#326)
+- Repository-only planning and review guidance tests now run only when their maintainer template and preset assets exist. Installed projects no longer fail `npm test` because those source-only assets are absent; the complete checks still run in the Plan Forge repository.
 
 ### Security
 

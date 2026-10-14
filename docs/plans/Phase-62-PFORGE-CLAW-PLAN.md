@@ -2717,6 +2717,31 @@ The operator approved the D29 scope extension after the reboot recovery review:
   production release is claimed. This continuation does not mark the phase
   Complete.
 
+### Post-reboot review repairs — 2026-10-14
+
+- Fresh independent review reproduced four product defects in the integrated
+  candidate: persisted/approval-mode plan estimates were absent from budget
+  admission, terminal task/skill usage could escape the unknown-use guard,
+  unrelated worker capacity could strand remote placement, and `/abort`
+  incorrectly required new-session runtime admission.
+- All four now have targeted failing-before/passing-after regressions. Budget
+  admission reuses the consumed approval and existing approved-choice contract;
+  terminal usage remains null-not-zero and scoped to a durable terminal job.
+  Per-project remote health reuses the registry's lease-eligibility predicate,
+  without exposing project lists. Cancellation retains current role and
+  exact project/chat/topic checks without granting a runtime session.
+- The repaired Windows Node 24.11.1 packet passes 2,289 Claw unit tests with
+  52 existing platform skips, and all 35 offline end-to-end tests. The full
+  integrated workspace passes 8,858 MCP, 942 Forge-Master, 608 SDK and 2,289
+  Claw tests. Direct Claw lint has zero errors and zero per-rule increases
+  against the preserved integrated-source baseline.
+- The pre-fix CI at `136a9b5b` remains recorded, not replaced by local passes:
+  kind and Linux/24 passed; Windows/24 had a native broker disposal assertion,
+  Windows/22.12 had a provenance-test timeout and cleanup failure, and
+  Linux/22.12 had two native-start deadline failures. Native macOS still failed.
+  Current-head cross-platform evidence and a bounded independent repair review
+  remain required before treating this as an accepted testing candidate.
+
 ## Validation Gates (phase-level)
 
 ```bash

@@ -309,6 +309,12 @@ GHCP (`copilot-sdk`) is the default runtime. An operator must use their own seat
 
 By default, only `owner` identities may trigger GHCP-backed jobs. `approver` and `viewer` identities cannot use another person's Copilot seat; non-owners may trigger work only with a configured BYOK runtime, otherwise they are limited to read-only `ask`. The `policy.ghcpRoles` and `policy.nonOwnerRuntime` settings are configurable, but each operator is responsible for their own license terms.
 
+Cancellation is separate from starting runtime work. A currently allowlisted
+owner or approver can use `/abort` for a job in the authorized project/chat/topic
+even if its runtime credentials are unavailable or its GHCP session belongs to
+the requesting owner. This does not let an approver start GHCP-backed work;
+viewers and revoked identities remain unable to cancel.
+
 ## Service install
 
 Install, inspect, or remove the host service with `pforge claw service install`, `pforge claw service status`, or `pforge claw service uninstall`. Service integration uses launchd on macOS, systemd on Linux, and Task Scheduler on Windows. Review the generated service configuration and home path before installation; services run with the host account's privileges.
@@ -318,6 +324,13 @@ Install, inspect, or remove the host service with `pforge claw service install`,
 Enroll a worker on the dispatcher with `pforge claw worker enroll --lane <lane-id>`, then join it once with `pforge claw worker join --code <code>`. Revoke it with `pforge claw worker revoke <worker-id>`. Enrollment codes are single-use and expire; worker credentials are generated and stored by the worker, not typed into configuration.
 
 Workers dial outbound to the dispatcher. Use `wss://` for remote connections; plain `ws://` is permitted only for loopback unless the explicit insecure-LAN option is enabled, which is warned on every connection. Provide TLS through an ingress/reverse proxy or a private overlay network such as Tailscale or WireGuard. Worker hosts do not expose listening ports.
+
+Placement checks the requested project's advertised worker eligibility as well
+as lane connectivity, publication-fence support, labels and opt-in policy.
+An online worker advertising another project does not cause the job to be
+leased into an unread pending queue. The job stays approved and waiting until
+eligible capacity is available; ordinary lane status does not reveal project
+lists.
 
 ## Kubernetes
 
@@ -330,6 +343,19 @@ Plain Kubernetes `NetworkPolicy` rules match IP blocks, not hostnames. Hostname 
 Mutating work requires an approval bound to both the requesting chat and the approving allowlisted identity. Approval tokens are hashed, single-use, time-limited, and cannot be issued by Forge-Master. Budget policy tracks reported USD and premium requests separately; usage that a runtime does not report stays `null`, never `0`. Once the configured unknown-usage threshold is exceeded, further mutating work is held. Budget holds require an owner-authorized release.
 
 A requesting owner may explicitly approve their own job; a second person is not required. Exact-expiry, current-role, chat/topic, forged-token and replay checks still apply. A fanout approval covers only the declared children, not any job that copies its parent ID. If a budget-hold card expires, an owner can retrieve a fresh same-topic card with `/budget`; retrieval never releases the hold automatically.
+
+Plan admission uses the persisted tool-backed estimate for the quorum mode
+actually selected by the consumed approval, without rewriting the original
+request. A missing selected-mode estimate is not a free run: a configured USD
+cap holds it with `estimate-unavailable`. An explicitly reported zero remains
+zero.
+
+Task and skill completion also accounts for usage when no cost event arrived.
+The authoritative, project-matched terminal event supplies reported financial
+fields or one unknown session entry. Duplicate completion/restart delivery
+does not create another fallback entry, and an unknown fallback never replaces
+an existing reported session record. Plan actuals keep their separate native
+run attribution.
 
 Plan actuals are collected through the job workspace's own `forge_cost_report` and correlated with that run's summary before cleanup. Aggregate spend or a canonical home's latest run is not attributed to a job by guesswork. Missing or mismatched actuals remain unknown. Operator auto-approval of development tools does not change Forge-Claw's application approvals or SDK permission policy.
 

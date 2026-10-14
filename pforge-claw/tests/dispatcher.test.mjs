@@ -4,6 +4,7 @@ import { EventEmitter } from "node:events";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { createApprovalService } from "../src/approvals.mjs";
 import { createBudgetService } from "../src/budget.mjs";
+import budgetFeature from "../src/features/budget.mjs";
 import { createDispatcher } from "../src/dispatcher.mjs";
 import { createJob, currentJobs, JOBS_STREAM, transition } from "../src/jobs/model.mjs";
 import { createLaneDirectory } from "../src/lanes/directory.mjs";
@@ -67,7 +68,7 @@ function makeContext({ laneKind = "remote", registerLane = true, budgetConfig = 
 }
 
 function addJob(fixture, {
-  id = "a0000001", type = "task", readOnly = false, state = "approved", quorum,
+  id = "a0000001", type = "task", readOnly = false, state = "approved", quorum, estimate, approvedQuorum,
 } = {}) {
   const created = createJob({
     id, type, projectId: "project-1", readOnly, parentId: null,
@@ -76,6 +77,7 @@ function addJob(fixture, {
     adapter: "telegram", chatId: "chat-1", threadId: null };
   created.event = { ...created.event, job: created.job };
   if (quorum) created.job.quorum = quorum;
+  if (estimate !== undefined) created.job.estimate = estimate;
   fixture.store.append(JOBS_STREAM, created.event);
   let job = created.job;
   if (type !== "skill" || !readOnly) {
@@ -87,7 +89,7 @@ function addJob(fixture, {
       });
       fixture.approvals.issue({ ...job, chatId: "chat-1", callerId: "requester-1" }, { approval });
       fixture.approvals.decide({
-        payload: approval.approve.slice(2),
+        payload: (approvedQuorum === undefined ? approval.approve : approval.quorum(approvedQuorum)).slice(2),
         caller: { role: "owner", userId: "owner-1" },
         chatId: "chat-1",
         threadId: null,
@@ -141,6 +143,7 @@ afterEach(async () => {
   vi.useRealTimers();
   for (const { dispatcher } of setupStores.splice(0)) await dispatcher?.stop?.();
   await Promise.all(integrationFixtures.splice(0).map((fixture) => fixture.cleanup()));
+  await budgetFeature.stop();
   for (const directory of directories.splice(0)) rmSync(directory, { recursive: true, force: true });
 });
 
@@ -190,6 +193,25 @@ async function realFanout(f) {
 }
 
 describe("G1 dispatcher final authority and family integration", () => {
+  it("carries local terminal session usage to the budget even without cost events", async () => {
+    const f = await realDispatchFixture();
+    const run = f.ctx.runtime.run.getMockImplementation();
+    f.ctx.runtime.run.mockImplementation(async (input) => ({
+      ...await run(input), usage: { costUSD: 0, premiumRequests: null },
+    }));
+    const job = await approveJob(f, { id: "a9000010", type: "task" });
+    const finished = [];
+    f.bus.on("job.finished", (event) => { if (event.jobId === job.id) finished.push(event); });
+    await budgetFeature.start(f.ctx);
+    await realDispatcher(f).start();
+    await vi.waitFor(() => expect(currentJobs(f.store)[job.id].state).toBe("succeeded"));
+    expect(finished).toHaveLength(1);
+    expect(finished[0].usage).toMatchObject({ costUSD: 0, premiumRequests: null });
+    const usage = [...f.store.read("budget")].map(({ record }) => record)
+      .filter((record) => record.jobId === job.id && record.kind === "usage");
+    expect(usage).toEqual([expect.objectContaining({ source: "session", costUSD: 0, premiumRequests: null })]);
+  });
+
   it("leases an explicitly approved scheduled skill through its actual configured owner channel", async () => {
     const f = await realDispatchFixture();
     const job = await approveJob(f, {
@@ -374,6 +396,70 @@ describe("G1 dispatcher final authority and family integration", () => {
 });
 
 describe("dispatcher", () => {
+  it("waits without a pending lease on unrelated project capacity, then dispatches when its home reconnects", async () => {
+    const fixture = makeContext({ registerLane: false });
+    fixture.config.projects.push({ id: "project-2", homeLane: "other" });
+    fixture.config.lanes.push({ id: "other", kind: "remote", enabled: true });
+    fixture.directory.configure(fixture.config.lanes);
+    const registry = createWorkerRegistry();
+    const unrelatedFrames = [];
+    const homeFrames = [];
+    fixture.directory.register(createRemoteLane({ id: "worker", registry }));
+    fixture.directory.register(createRemoteLane({ id: "other", registry }));
+    registry.connect("unrelated", {
+      laneId: "other", capabilities: { projects: ["project-2"] },
+      publicationFence: true, send: (packet) => unrelatedFrames.push(packet),
+    });
+    const job = addJob(fixture);
+    const { dispatcher } = startDispatcher(fixture);
+    try {
+      await dispatcher.start();
+      expect(currentJobs(fixture.store)[job.id].state).toBe("approved");
+      expect(unrelatedFrames).toEqual([]);
+      expect(registry.snapshot().byLane.other.pending).toBe(0);
+      registry.connect("home-worker", {
+        laneId: "worker", capabilities: { projects: ["project-1"] }, publicationFence: true,
+        send(packet) {
+          homeFrames.push(packet);
+          if (packet.t !== "lease") return;
+          queueMicrotask(() => {
+            const identity = { workerId: "home-worker", leaseId: packet.leaseId, attempt: packet.attempt };
+            registry.onAck(identity);
+            registry.onEvent({ ...identity, event: makeEvent(job.id, "started", {}, 1) });
+            registry.onEvent({ ...identity, event: makeEvent(job.id, "finished", { status: "succeeded" }, 2) });
+          });
+        },
+      });
+      await dispatcher.sweep();
+      await flushJobs(() => currentJobs(fixture.store)[job.id].state === "succeeded");
+      expect(homeFrames.filter((frame) => frame.t === "lease")).toHaveLength(1);
+      expect(currentJobs(fixture.store)[job.id].lane).toBe("worker");
+      expect(unrelatedFrames).toEqual([]);
+    } finally {
+      registry.close();
+      await dispatcher.stop();
+    }
+  });
+
+  it.each([null, { costUSD: 0, premiumRequests: null }])("accounts for remote terminal session usage without cost events: %j", async (usage) => {
+    const fixture = makeContext();
+    const job = addJob(fixture, { type: "skill" });
+    fixture.lane.submit.mockImplementation(async function* (leased) {
+      yield makeEvent(leased.id, "started");
+      yield makeEvent(leased.id, "finished", { status: "succeeded", usage }, 2);
+    });
+    await budgetFeature.start(fixture.ctx);
+    const { dispatcher } = startDispatcher(fixture);
+    await dispatcher.start();
+    await flushJobs(() => currentJobs(fixture.store)[job.id].state === "succeeded");
+    const rows = [...fixture.store.read("budget")].map(({ record }) => record)
+      .filter((record) => record.kind === "usage" && record.jobId === job.id);
+    expect(rows).toEqual([expect.objectContaining({
+      source: "session", project: job.projectId, costUSD: usage?.costUSD ?? null, premiumRequests: null,
+    })]);
+    await dispatcher.stop();
+  });
+
   it("settles a remote job exactly once", async () => {
     const fixture = makeContext();
     addJob(fixture);
@@ -401,6 +487,44 @@ describe("dispatcher", () => {
     await dispatcher.start();
     expect(currentJobs(fixture.store).a0000001.state).toBe("held-budget");
     expect(fixture.lane.submit).not.toHaveBeenCalled();
+    await dispatcher.stop();
+  });
+
+  it.each([
+    { quorum: "power", approvedQuorum: undefined },
+    { quorum: "auto", approvedQuorum: "power" },
+  ])("holds an over-cap persisted plan before leasing with $quorum / $approvedQuorum", async (choices) => {
+    const fixture = makeContext({ budgetConfig: { budget: { dailyUSD: 5 } } });
+    const estimate = {
+      recommended: "auto",
+      auto: { estimatedCostUSD: 1 },
+      power: { estimatedCostUSD: 100 },
+    };
+    addJob(fixture, { type: "plan", estimate, ...choices });
+    const { dispatcher } = startDispatcher(fixture);
+    await dispatcher.start();
+    expect(currentJobs(fixture.store).a0000001.state).toBe("held-budget");
+    expect(fixture.lane.submit).not.toHaveBeenCalled();
+    expect(transitionsFor(fixture.store, "a0000001").some((event) => event.to === "leased")).toBe(false);
+    expect(currentJobs(fixture.store).a0000001.quorum).toBe(choices.quorum);
+    await dispatcher.stop();
+  });
+
+  it("uses an approved lower-cost mode without rewriting the persisted request", async () => {
+    const fixture = makeContext({ budgetConfig: { budget: { dailyUSD: 5 } } });
+    addJob(fixture, {
+      type: "plan", quorum: "power", approvedQuorum: "auto",
+      estimate: { recommended: "power", auto: { estimatedCostUSD: 1 }, power: { estimatedCostUSD: 100 } },
+    });
+    fixture.lane.submit.mockImplementation(async function* (job) {
+      yield makeEvent(job.id, "started");
+      yield makeEvent(job.id, "finished", { status: "succeeded" }, 2);
+    });
+    const { dispatcher } = startDispatcher(fixture);
+    await dispatcher.start();
+    await flushJobs(() => currentJobs(fixture.store).a0000001.state === "succeeded");
+    expect(fixture.lane.submit.mock.calls[0][0].quorum).toBe("auto");
+    expect(currentJobs(fixture.store).a0000001.quorum).toBe("power");
     await dispatcher.stop();
   });
 

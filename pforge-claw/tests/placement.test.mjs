@@ -24,6 +24,21 @@ afterEach(() => {
 });
 
 describe("placeJob table", () => {
+  it("does not confuse lane connectivity with eligibility for the requested project", () => {
+    const project = { id: "one", homeLane: "home" };
+    const lanes = [{ id: "home", kind: "remote" }, { id: "other", kind: "remote" }];
+    const unavailable = placeJob({
+      project, lanes,
+      health: { home: { ok: false }, other: { ok: true, projectEligible: false } },
+    });
+    expect(unavailable).toMatchObject({ ok: false, error: PLACEMENT_ERRORS.NO_ELIGIBLE_LANE });
+    expect(unavailable.skipped).toContainEqual({ id: "other", reason: "project unavailable" });
+    expect(placeJob({
+      project, lanes,
+      health: { home: { ok: false }, other: { ok: true, projectEligible: true } },
+    })).toMatchObject({ ok: true, laneId: "other" });
+  });
+
   it.each([
     {
       name: "chooses the preferred lane",

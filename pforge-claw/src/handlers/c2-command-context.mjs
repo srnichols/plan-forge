@@ -89,7 +89,7 @@ function admissionLane({ config, project, store, lanes }) {
   const placement = placeJob({
     project, projects: config.projects, lanes: config.lanes ?? [],
     laneState: store?.readJson?.("lanes.json"),
-    health: lanes?.snapshot?.(),
+    health: lanes?.snapshot?.({ projectId: project.id }),
   });
   return placement.ok ? config.lanes.find((lane) => lane.id === placement.laneId) : undefined;
 }
@@ -122,7 +122,7 @@ function refused(reason, text) {
 
 function commandRuntimeDecision({ config, command, authority, context }) {
   if (!command.mutating) return { ok: true, caller: authority };
-  if (command.name === "lane") return { ok: true, caller: authority };
+  if (command.name === "lane" || command.name === "abort") return { ok: true, caller: authority };
   // Fanout owns target parsing; each declared target must pass this same producer policy.
   if (command.name === "fanout" && context.scope === "general") {
     if (authority.role !== ROLES[0] && config?.policy?.nonOwnerRuntime !== "byok-only") {

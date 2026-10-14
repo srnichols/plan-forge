@@ -134,6 +134,11 @@ class WorkerRegistry {
     return worker.capabilities.projects.includes(entry.payload.projectId);
   }
 
+  hasEligibleWorker({ laneId, projectId }) {
+    const entry = { kind: "job", laneId, jobId: null, payload: { projectId } };
+    return [...this.workers.values()].some((worker) => this.eligible(worker, entry));
+  }
+
   expire(lease, departedWorker) {
     if (this.leases.get(lease.leaseId) !== lease) return;
     this.removeLease(lease);
@@ -644,7 +649,7 @@ export function createWorkerRegistry(options = {}) {
   const registry = new WorkerRegistry(options);
   const ports = [
     "connect", "disconnect", "enqueue", "dispatch", "onAck", "onEvent", "onHeartbeat", "cancel", "revoke",
-    "close", "snapshot", "hasActiveJob", "registerPending", "waitForCompletion", "onPublication",
+    "close", "snapshot", "hasEligibleWorker", "hasActiveJob", "registerPending", "waitForCompletion", "onPublication",
   ];
   return {
     ...Object.fromEntries(ports.map((name) => [name, registry[name].bind(registry)])),

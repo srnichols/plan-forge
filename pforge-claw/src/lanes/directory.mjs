@@ -20,7 +20,7 @@ export function createLaneDirectory() {
     return lane;
   }
 
-  function snapshot() {
+  function snapshot({ projectId } = {}) {
     const health = {};
     for (const lane of configured) {
       const registered = lanes.get(lane.id);
@@ -29,7 +29,7 @@ export function createLaneDirectory() {
         continue;
       }
       try {
-        health[lane.id] = registered.health();
+        health[lane.id] = projectId === undefined ? registered.health() : registered.health({ projectId });
       } catch (error) {
         health[lane.id] = {
           ok: false, id: lane.id, kind: lane.kind,

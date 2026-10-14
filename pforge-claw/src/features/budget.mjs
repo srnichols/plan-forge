@@ -1,5 +1,5 @@
-import { bindBudgetService, BUDGET_UNITS, createBudgetService, USAGE_SOURCES } from "../budget.mjs";
-import { currentJobs } from "../jobs/model.mjs";
+import { bindBudgetService, BUDGET_UNITS, createBudgetService, normalizeUsage, USAGE_SOURCES } from "../budget.mjs";
+import { currentJobs, TERMINAL } from "../jobs/model.mjs";
 import { normalizePlanActuals, PLAN_ACTUALS_UNCONFIRMED } from "../jobs/runner-lifecycle.mjs";
 
 const PLAN_ACTUAL_SOURCE = USAGE_SOURCES[2];
@@ -34,7 +34,7 @@ function recordSessionUsage(activeService, event, ctx) {
   }
 }
 
-function matchingPlanJob(ctx, event) {
+function matchingJob(ctx, event) {
   const job = currentJobs(ctx.store)[event.jobId];
   return job?.projectId === event.projectId ? job : null;
 }
@@ -48,7 +48,7 @@ function recordPlanActual(activeService, event, ctx) {
   if (activeService.hasUsage({
     source: PLAN_ACTUAL_SOURCE, projectId: event.projectId, jobId: event.jobId,
   })) return;
-  const actuals = normalizePlanActuals({ job: matchingPlanJob(ctx, event), actuals: event.planActuals });
+  const actuals = normalizePlanActuals({ job: matchingJob(ctx, event), actuals: event.planActuals });
   activeService.recordUsage({
     source: PLAN_ACTUAL_SOURCE,
     projectId: event.projectId,
@@ -59,14 +59,29 @@ function recordPlanActual(activeService, event, ctx) {
   warnUnconfirmed(ctx, actuals);
 }
 
-function beginPlanActual(event) {
+function recordTerminalSession(activeService, event, ctx) {
+  const job = matchingJob(ctx, event);
+  if (!job || job.type !== event.type || !TERMINAL.includes(job.state) || job.state !== event.state) {
+    ctx.logger?.warn?.("Terminal usage does not match the stored job", { code: "BUDGET_USAGE_IDENTITY_MISMATCH" });
+    return;
+  }
+  const identity = { source: USAGE_SOURCES[0], projectId: job.projectId, jobId: job.id };
+  if (activeService.hasUsage(identity)) return;
+  const usage = normalizeUsage(event.usage);
+  activeService.recordUsage({ ...identity, usage, at: eventTime(event, ctx.now ?? Date.now) });
+  if (BUDGET_UNITS.every((unit) => usage[unit] === null)) {
+    ctx.logger?.warn?.("Session usage is unreported; recording unknown usage", { code: "BUDGET_USAGE_UNCONFIRMED" });
+  }
+}
+
+function beginTerminalUsage(event, recordUsage) {
   const activeService = service;
   const ctx = context;
   if (!activeService || !ctx || typeof event?.jobId !== "string") return;
   try {
-    recordPlanActual(activeService, event, ctx);
+    recordUsage(activeService, event, ctx);
   } catch (error) {
-    ctx.logger?.error?.("Plan usage could not be recorded", {
+    ctx.logger?.error?.("Job usage could not be recorded", {
       code: error?.code ?? "BUDGET_USAGE_WRITE_FAILED",
     });
   }
@@ -95,7 +110,8 @@ export default {
       if (service) recordSessionUsage(service, event, ctx);
     });
     attach(ctx, "job.finished", (event) => {
-      if (event?.type === "plan") beginPlanActual(event);
+      if (event?.type === "plan") beginTerminalUsage(event, recordPlanActual);
+      else if (event?.type === "task" || event?.type === "skill") beginTerminalUsage(event, recordTerminalSession);
     });
   },
   async stop() {

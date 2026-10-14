@@ -2,6 +2,7 @@ import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
 import { button, keyboard } from "./channels/telegram/format.mjs";
 import { ROLES } from "./enums.mjs";
 import { currentJobs, JOBS_STREAM, transition } from "./jobs/model.mjs";
+import { approvedChoicesFor, consumedApprovalFor } from "./jobs/approval-proof.mjs";
 import { normalizePlanActuals } from "./jobs/runner-lifecycle.mjs";
 
 export const BUDGET_STREAM = "budget";
@@ -183,10 +184,10 @@ function validCap(value) {
 
 function estimateCost(estimate, job) {
   if (typeof estimate === "number") return finiteNonnegative(estimate);
-  if (!estimate || typeof estimate !== "object") return 0;
+  if (!estimate || typeof estimate !== "object") return null;
   const mode = job.quorum ?? estimate.recommended;
   const selected = estimate[mode] ?? estimate;
-  return finiteNonnegative(selected.estimatedCostUSD ?? selected.costUSD) ?? 0;
+  return finiteNonnegative(selected.estimatedCostUSD ?? selected.costUSD);
 }
 
 function capResult({ scope, unit, spent, cap }) {
@@ -196,6 +197,15 @@ function capResult({ scope, unit, spent, cap }) {
 
 function capFor(budget, unit) {
   return validCap(budget?.[unit === "costUSD" ? "dailyUSD" : "dailyPremiumRequests"]);
+}
+
+function projectedCapResult({ scope, unit, spent, cap, estimateUSD }) {
+  if (spent > cap) return capResult({ scope, unit, spent, cap });
+  if (unit === "costUSD" && estimateUSD === null) {
+    return { ok: false, reason: "estimate-unavailable", scope, unit, spent: null, cap };
+  }
+  const projected = spent + (unit === "costUSD" ? estimateUSD : 0);
+  return projected > cap ? capResult({ scope, unit, spent: projected, cap }) : null;
 }
 
 function overrideRows(store) {
@@ -370,7 +380,7 @@ export function createBudgetService({
     };
   }
 
-  function check(job, { estimate } = {}) {
+  function check(job, { estimate = job?.estimate } = {}) {
     if (job?.mutating !== true) return { ok: true };
     const day = dayKey({ epochMs: now(), timeZone });
     const records = overrideRows(store);
@@ -391,8 +401,8 @@ export function createBudgetService({
         const cap = capFor(budget, unit);
         if (cap === null) continue;
         const spent = totals[unit] ?? 0;
-        const projected = spent + (unit === "costUSD" ? estimateUSD : 0);
-        if (spent > cap || projected > cap) return capResult({ scope, unit, spent: projected, cap });
+        const failure = projectedCapResult({ scope, unit, spent, cap, estimateUSD });
+        if (failure) return failure;
       }
       const unknownCap = validCap(budget.maxUnknownPerDay);
       if (unknownCap !== null && totals.unknownUsageJobs > unknownCap) {
@@ -421,7 +431,9 @@ export function createBudgetService({
 
   function checkedBudget(job) {
     try {
-      return check(job);
+      const approval = job.type === "plan" ? consumedApprovalFor({ store, config, job }) : null;
+      const { quorum } = approvedChoicesFor({ job, approval });
+      return check(quorum === null ? job : { ...job, quorum });
     } catch (error) {
       logger?.error?.("Budget check failed; holding job", { code: error?.code ?? "BUDGET_CHECK_FAILED" });
       return { ok: false, reason: "error" };

@@ -20,6 +20,7 @@ export const SKIP = Object.freeze({
   MISSING_LABELS: "missing labels",
   OFFLINE: "offline",
   NOT_DEDICATED: "not dedicated",
+  PROJECT_UNAVAILABLE: "project unavailable",
 });
 
 function usableObject(value) {
@@ -101,7 +102,9 @@ function skippedReason({ lane, id, project, projects, requires, restricted, lane
   if (lane.optIn && laneState?.lanes?.[id]?.on !== true) return SKIP.OPT_IN_OFF;
   if (!hasRequiredLabels(lane, requires)) return SKIP.MISSING_LABELS;
   if (restricted && !laneIsDedicated(id, project, projects)) return SKIP.NOT_DEDICATED;
-  const status = laneStatus({ lane, laneState: laneState?.lanes?.[id], health: healthForLane(health, lane) });
+  const laneHealth = healthForLane(health, lane);
+  if (laneHealth?.projectEligible === false) return SKIP.PROJECT_UNAVAILABLE;
+  const status = laneStatus({ lane, laneState: laneState?.lanes?.[id], health: laneHealth });
   return status.status === "online" ? null : SKIP.OFFLINE;
 }
 
@@ -234,7 +237,7 @@ export function createPlacementService({ store, config = {}, health } = {}) {
           projects: config.projects ?? [],
           lanes: config.lanes,
           laneState: readLaneState(store),
-          health: typeof health === "function" ? health() : health,
+          health: typeof health === "function" ? health({ projectId: project.id }) : health,
         });
       } catch {
         return null;

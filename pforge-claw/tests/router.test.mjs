@@ -222,9 +222,10 @@ describe("identity and topic router", () => {
         const allowed = command.roles.includes(role);
         expect(handler).toHaveBeenCalledTimes(allowed ? 1 : 0);
         if (!allowed) expect(rig.calls.find(({ method }) => method === "send")?.text).toContain("Your role can't run");
-        if (allowed && command.mutating && role === "approver") {
+        if (allowed && command.mutating && role === "approver" && command.name !== "abort") {
           expect(handler.mock.calls[0][1].constraint).toBe("byok-only");
         }
+        if (allowed && command.name === "abort") expect(handler.mock.calls[0][1].constraint).toBeUndefined();
       }
     }
     // Derive the unavailable example from the live registry so later slices flipping `available` never break this test.

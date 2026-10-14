@@ -64,13 +64,14 @@ export function createRemoteLane({ id, registry, capabilities = {} } = {}) {
     return Promise.resolve(registry.cancel(jobId));
   }
 
-  function health() {
+  function health({ projectId } = {}) {
     const lane = registry.snapshot().byLane[id] ?? { connected: 0, pending: 0, active: 0 };
     const { connected, pending, active, publicationCapable = 0 } = lane;
     const readAvailable = connected > 0;
     const ok = publicationCapable > 0;
     return {
       ok, readAvailable, publicationCapable, kind: "remote", id, workers: connected, pending, active,
+      ...(projectId !== undefined ? { projectEligible: registry.hasEligibleWorker({ laneId: id, projectId }) } : {}),
       ...(ok ? {} : { code: readAvailable ? PUBLICATION_ERRORS.DENIED : "NO_WORKER" }),
     };
   }

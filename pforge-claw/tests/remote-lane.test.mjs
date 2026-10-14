@@ -785,6 +785,32 @@ describe("remote lane contract and transport", () => {
     registry.close();
   });
 
+  it("reports project eligibility from the same worker policy used for job leases", () => {
+    const registry = createWorkerRegistry();
+    cleanups.push(() => registry.close());
+    const lane = createRemoteLane({ id: "remote", registry });
+    const directory = createLaneDirectory();
+    directory.configure([{ id: "remote", kind: "remote" }]);
+    directory.register(lane);
+    registry.connect("unrelated", {
+      laneId: "remote", capabilities: { projects: ["p2"] }, publicationFence: true, send: () => {},
+    });
+    expect(lane.health().ok).toBe(true);
+    expect(directory.snapshot({ projectId: "p1" }).remote.projectEligible).toBe(false);
+    registry.connect("read-only", {
+      laneId: "remote", capabilities: { projects: ["p1"] }, publicationFence: false, send: () => {},
+    });
+    registry.connect("different-lane", {
+      laneId: "another", capabilities: { projects: ["p1"] }, publicationFence: true, send: () => {},
+    });
+    expect(lane.health({ projectId: "p1" }).projectEligible).toBe(false);
+    registry.connect("eligible", {
+      laneId: "remote", capabilities: { projects: ["p1"] }, publicationFence: true, send: () => {},
+    });
+    expect(lane.health({ projectId: "p1" }).projectEligible).toBe(true);
+    expect(lane.health()).not.toHaveProperty("projects");
+  });
+
   it("returns a structured timeout and removes an unread queued lease", async () => {
     vi.useFakeTimers();
     try {

@@ -93,6 +93,7 @@ function planAttribution(job, execution) {
 function emitFinished({ ctx, job, state, reason, execution }) {
   ctx.bus?.emit("job.finished", {
     jobId: job.id, projectId: job.projectId, type: job.type, state,
+    usage: execution?.usage ?? null,
     ...(job.branch ? { branch: job.branch } : {}),
     ...(job.prUrl ? { prUrl: job.prUrl } : {}),
     ...(reason ? { reason: safeText(ctx, reason) } : {}),

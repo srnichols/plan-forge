@@ -109,6 +109,7 @@ function emitCompletion(state, { job, to, reason, result, terminalEvent, emitLan
   });
   state.ctx.bus?.emit("job.finished", {
     jobId: job.id, projectId: job.projectId, type: job.type, state: to, ...facts,
+    usage: terminalEvent?.data?.usage ?? null,
     ...(job.branch ? { branch: job.branch } : {}),
     ...(job.prUrl ? { prUrl: job.prUrl } : {}),
     ...(reason ? { reason: safeText(state.ctx, reason) } : {}),
@@ -159,7 +160,7 @@ function chooseLane(state, job) {
   if (!project) return { error: "project-unavailable" };
   const choice = placeJob({
     project, projects: state.ctx.config.projects, lanes: state.ctx.config.lanes ?? [],
-    health: state.directory.snapshot(), laneState: readLaneState(state.ctx.store),
+    health: state.directory.snapshot({ projectId: job.projectId }), laneState: readLaneState(state.ctx.store),
   });
   return choice.ok ? { lane: state.directory.get(choice.laneId), choice } : { error: choice.error, choice };
 }

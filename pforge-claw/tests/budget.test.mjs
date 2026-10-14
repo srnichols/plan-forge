@@ -108,6 +108,16 @@ function nativeActuals(job, overrides = {}) {
   };
 }
 
+function finishJob(store, job, state) {
+  let current = job;
+  for (const to of ["leased", "running", state]) {
+    const updated = transition(current, to);
+    store.append(JOBS_STREAM, updated.event);
+    current = updated.job;
+  }
+  return current;
+}
+
 function nativeHomeReport() {
   return {
     runs: 2,
@@ -216,6 +226,39 @@ describe("budget ledger", () => {
     expect(capped.check({ mutating: true, type: "plan", projectId }, {
       estimate: { recommended: "auto", auto: { estimatedCostUSD: 1.01 } },
     })).toMatchObject({ ok: false, reason: "cap-usd", spent: 10.01 });
+  });
+
+  it("checks the persisted plan estimate when no caller override is supplied", () => {
+    const service = budgetService(makeStore(), {
+      config: { budget: { dailyUSD: 5 }, projects: [{ id: projectId }] },
+    });
+    expect(service.check({
+      type: "plan", mutating: true, projectId, quorum: "power",
+      estimate: { recommended: "auto", auto: { estimatedCostUSD: 1 }, power: { estimatedCostUSD: 100 } },
+    })).toMatchObject({ ok: false, reason: "cap-usd", cap: 5, spent: 100 });
+  });
+
+  it.each([
+    undefined,
+    { recommended: "auto", auto: { estimatedCostUSD: 1 } },
+    { recommended: "power", power: { estimatedCostUSD: null } },
+    { recommended: "power", power: { estimatedCostUSD: -1 } },
+  ])("does not price an unreported selected mode as free under a monetary cap", (estimate) => {
+    const service = budgetService(makeStore(), {
+      config: { budget: { dailyUSD: 5 }, projects: [{ id: projectId }] },
+    });
+    expect(service.check({ type: "plan", mutating: true, projectId, quorum: "power", estimate }))
+      .toMatchObject({ ok: false, reason: "estimate-unavailable" });
+  });
+
+  it("preserves an explicitly reported zero-cost plan estimate", () => {
+    const service = budgetService(makeStore(), {
+      config: { budget: { dailyUSD: 0 }, projects: [{ id: projectId }] },
+    });
+    expect(service.check({
+      type: "plan", mutating: true, projectId, quorum: "false",
+      estimate: { false: { estimatedCostUSD: 0 } },
+    })).toEqual({ ok: true });
   });
 
   it("uses local calendar days across UTC midnight and falls back to UTC for invalid zones", () => {
@@ -939,6 +982,94 @@ describe("budget ledger", () => {
     await budgetFeature.start(ctx);
     expect(bus.listenerCount("job.transition")).toBe(1);
     await budgetFeature.stop();
+  });
+
+  it.each([
+    { type: "task", state: "succeeded" },
+    { type: "task", state: "failed" },
+    { type: "skill", state: "succeeded" },
+    { type: "skill", state: "cancelled" },
+  ])("counts unreported terminal session usage for $type / $state before admitting further work", async ({ type, state }) => {
+    const store = makeStore();
+    const bus = new EventEmitter();
+    const config = { budget: { maxUnknownPerDay: 0 }, projects: [{ id: projectId }] };
+    await budgetFeature.start({ store, bus, config, now: () => NOW });
+    const job = finishJob(store, addJob(store, { type }), state);
+    const event = { type, state, projectId, jobId: job.id, usage: null, ts: new Date(NOW).toISOString() };
+    bus.emit("job.finished", event);
+    bus.emit("job.finished", event);
+    expect(records(store).filter((row) => row.kind === "usage")).toEqual([
+      expect.objectContaining({
+        source: "session", project: projectId, jobId: job.id,
+        costUSD: null, premiumRequests: null,
+      }),
+    ]);
+    expect(getBudgetService().today().global.unknownUsageJobs).toBe(1);
+    const next = addJob(store, { id: "following-mutation" });
+    getBudgetService().gate(next.id);
+    expect(currentJobs(store)[next.id].state).toBe("held-budget");
+  });
+
+  it("keeps terminal session fallback idempotent across a feature/store restart", async () => {
+    const store = makeStore();
+    const bus = new EventEmitter();
+    const job = finishJob(store, addJob(store, { type: "skill" }), "failed");
+    const event = { type: job.type, state: job.state, jobId: job.id, projectId, usage: null };
+    const ctx = { store, bus, now: () => NOW, config: { projects: [{ id: projectId }] } };
+    await budgetFeature.start(ctx);
+    bus.emit("job.finished", event);
+    await budgetFeature.stop();
+    const restarted = createStore(storeDirectories.get(store), { now: () => new Date(NOW) });
+    await budgetFeature.start({ ...ctx, store: restarted });
+    bus.emit("job.finished", event);
+    expect(records(restarted).filter((row) => row.kind === "usage")).toHaveLength(1);
+    expect(getBudgetService().today().global.unknownUsageJobs).toBe(1);
+  });
+
+  it("does not overwrite reported session costs with an unknown terminal fallback", async () => {
+    const store = makeStore();
+    const bus = new EventEmitter();
+    const job = finishJob(store, addJob(store, { type: "task" }), "succeeded");
+    await budgetFeature.start({ store, bus, now: () => NOW });
+    bus.emit("lane.event", {
+      type: "cost", jobId: job.id, data: { costUSD: 0, premiumRequests: 2 },
+    });
+    bus.emit("job.finished", { type: job.type, state: job.state, jobId: job.id, projectId, usage: null });
+    expect(records(store).filter((row) => row.kind === "usage")).toHaveLength(1);
+    expect(getBudgetService().today().global).toEqual({
+      costUSD: 0, premiumRequests: 2, unknownUsageJobs: 0,
+    });
+  });
+
+  it("records reported terminal session usage without persisting provider or private fields", async () => {
+    const store = makeStore();
+    const bus = new EventEmitter();
+    const job = finishJob(store, addJob(store, { type: "skill" }), "succeeded");
+    await budgetFeature.start({ store, bus, now: () => NOW });
+    bus.emit("job.finished", {
+      type: job.type, state: job.state, jobId: job.id, projectId,
+      usage: { costUSD: 0, premiumRequests: null, provider: "private-provider-field" },
+    });
+    expect(records(store).filter((row) => row.kind === "usage")).toEqual([
+      expect.objectContaining({ costUSD: 0, premiumRequests: null }),
+    ]);
+    expect(JSON.stringify(records(store))).not.toContain("private-provider-field");
+    expect(getBudgetService().today().global.unknownUsageJobs).toBe(0);
+  });
+
+  it.each([
+    { projectId: "another-project" },
+    { type: "skill" },
+    { jobId: "missing-job" },
+  ])("refuses terminal session attribution that disagrees with durable job identity: %j", async (override) => {
+    const store = makeStore();
+    const bus = new EventEmitter();
+    const job = finishJob(store, addJob(store, { type: "task" }), "failed");
+    await budgetFeature.start({ store, bus, now: () => NOW });
+    bus.emit("job.finished", {
+      type: job.type, state: job.state, jobId: job.id, projectId, usage: null, ...override,
+    });
+    expect(records(store).filter((row) => row.kind === "usage")).toEqual([]);
   });
 
   it("keeps the compact snapshot under one kilobyte", () => {

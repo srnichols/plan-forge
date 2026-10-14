@@ -18,7 +18,7 @@ import { ClawError } from "../errors.mjs";
  * @property {object} capabilities
  * @property {(job: object) => AsyncIterable<LaneEvent>} submit
  * @property {(jobId: string) => Promise<object>} cancel
- * @property {() => object} health
+ * @property {(options?: {projectId?: string}) => object} health
  */
 
 export const LANE_EVENT_VERSION = 1;

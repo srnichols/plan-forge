@@ -1,13 +1,91 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { EventEmitter } from "node:events";
 import { c2Fixture, cleanupC2Fixtures } from "./c2-fixtures.mjs";
 import {
   runtimeEligibility, authorizeJobRequest, authorizeCommand, createCommandContext,
 } from "../src/handlers/c2-command-context.mjs";
 import task from "../src/commands/task.mjs";
+import abortCommand from "../src/commands/abort.mjs";
+import { bindProgressService, createProgressService } from "../src/progress.mjs";
+import { createJob, JOBS_STREAM, transition } from "../src/jobs/model.mjs";
+
+function runningOwnerJob(fixture, fields = {}) {
+  const created = createJob({ id: "a4000001", type: "task", projectId: fixture.project.id });
+  let job = {
+    ...created.job, callerId: "original-owner", callerRole: "owner", adapter: "telegram",
+    chatId: fixture.deps.chatId, threadId: fixture.deps.threadId, ...fields,
+  };
+  fixture.store.append(JOBS_STREAM, { kind: "job.created", job });
+  for (const to of ["awaiting-approval", "approved", "leased", "running"]) {
+    const updated = transition(job, to, to === "leased" ? { lane: "fixture-lane" } : {});
+    fixture.store.append(JOBS_STREAM, updated.event);
+    job = updated.job;
+  }
+  return job;
+}
 
 afterEach(cleanupC2Fixtures);
 
 describe("C2 current authority and configured runtime admission", () => {
+  it.each(["copilot-sdk", "unavailable-runtime"])("lets a current approver cancel the owner's work without starting %s", async (runtime) => {
+    const f = await c2Fixture({ role: "approver", runtime });
+    const job = runningOwnerJob(f);
+    const cancel = vi.fn(async () => ({ ok: true }));
+    const service = createProgressService({
+      ...f.services, bus: new EventEmitter(), channel: f.channel,
+      lanes: new Map([["fixture-lane", { cancel }]]),
+    });
+    const unbind = bindProgressService(service);
+    try {
+      expect(authorizeCommand({ config: f.config, command: task, caller: f.caller, context: f.context }))
+        .toMatchObject({ ok: false, reason: "runtime-policy" });
+      await f.router.route(f.update({ text: `/abort ${job.id}` }));
+      expect(cancel).toHaveBeenCalledOnce();
+      expect(cancel).toHaveBeenCalledWith(job.id);
+      expect(f.channel.send.mock.calls.at(-1)[0].text).toBe("Cancellation requested.");
+      expect(f.clients.call).not.toHaveBeenCalled();
+    } finally {
+      unbind();
+      await service.stop();
+    }
+  });
+
+  it("keeps cancellation behind current role, availability and project-topic admission", async () => {
+    const f = await c2Fixture({ role: "approver" });
+    const authorize = (command = abortCommand, context = f.context) => authorizeCommand({
+      config: f.config, command, caller: f.caller, context,
+    });
+    expect(authorize({ ...abortCommand, available: false })).toMatchObject({ ok: false, reason: "unavailable" });
+    expect(authorize(abortCommand, { ...f.context, scope: "general" })).toMatchObject({ ok: false, reason: "wrong-scope" });
+    f.config.allowlist[0].role = "viewer";
+    expect(authorize()).toMatchObject({ ok: false, reason: "role" });
+    f.config.allowlist = [];
+    expect(authorize()).toMatchObject({ ok: false, reason: "role" });
+  });
+
+  it.each([
+    { projectId: "another-project" },
+    { chatId: "another-chat" },
+    { threadId: "another-topic" },
+  ])("does not deliver approver cancellation across stored job scope: %j", async (fields) => {
+    const f = await c2Fixture({ role: "approver" });
+    const job = runningOwnerJob(f, fields);
+    const cancel = vi.fn(async () => ({ ok: true }));
+    const service = createProgressService({
+      ...f.services, bus: new EventEmitter(), channel: f.channel,
+      lanes: new Map([["fixture-lane", { cancel }]]),
+    });
+    const unbind = bindProgressService(service);
+    try {
+      await f.router.route(f.update({ text: `/abort ${job.id}` }));
+      expect(cancel).not.toHaveBeenCalled();
+      expect(f.channel.send.mock.calls.at(-1)[0].text).toContain("JOB_NOT_FOUND");
+    } finally {
+      unbind();
+      await service.stop();
+    }
+  });
+
   it("normalizes project > lane > default without arbitrary provider fallback", async () => {
     const f = await c2Fixture({ role: "approver", runtime: "byok:openai" });
     const lane = { ...f.config.lanes[0], runtime: "copilot-sdk" };

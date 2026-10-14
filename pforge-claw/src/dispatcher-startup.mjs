@@ -160,7 +160,7 @@ export async function bootDispatcher(opts = {}) {
     const placementService = (opts.createPlacementService ?? createPlacementService)({
       store,
       config,
-      health: () => lanes.snapshot(),
+      health: (options) => lanes.snapshot(options),
     });
     unbindPlacement = (opts.bindPlacementService ?? bindPlacementService)(placementService);
     app = (opts.createApp ?? createApp)(ctx);

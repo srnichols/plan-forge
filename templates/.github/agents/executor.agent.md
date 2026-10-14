@@ -6,7 +6,7 @@ handoffs:
   - agent: "reviewer-gate"
     label: "Run Review Gate →"
     send: false
-    prompt: "Audit the completed phase for drift, scope compliance, and Project Principles violations. Read docs/plans/AI-Plan-Hardening-Runbook.md and the hardened plan file first."
+    prompt: "Audit the completed phase for drift, scope compliance, and Project Principles violations. Read docs/plans/AI-Plan-Hardening-Runbook.md and the hardened plan file first. Verify each affected slice's exact Contract Refs, Decision Refs, Language Ref and approval evidence against the implementation; report design concerns without expanding scope."
 ---
 You are the **Executor**. Your job is to execute a hardened phase plan one slice at a time, following validation gates and re-anchor checkpoints exactly.
 
@@ -42,6 +42,18 @@ This catches hardening gaps before they cascade into execution errors.
 2. Load matching **prompt templates** from `.github/prompts/` when scaffolding new entities/services/tests
 3. Verify **Depends On** slices are complete
 4. For `[parallel-safe]` slices, note the Parallel Group
+
+### Design-Context Handoff Check
+
+For new or materially revised plans, before each affected slice or delegation:
+1. Load **Contract Refs**, **Decision Refs**, and **Language Ref** from their declared locations, including exact revisions and approval evidence. Reuse existing approved sources for unchanged boundaries; use `not applicable` with a reason where no consequential boundary changes.
+2. Compare requested revisions with the plan's accepted records. Missing, stale, or agent-proposed consequential approval requires a pause and clarification, not a guess or silent substitution of the latest revision.
+3. Carry the references into numbered worker tasks and the handoff, alongside scope, invariants, and conformance gates; the worker reads those sections before coding.
+4. Verify returned work still conforms to the requested revisions and domain meanings. Repeat this check after session resume; report verification gaps explicitly.
+
+If a decision, contract, or domain meaning must change, propose the affected references and slices in an amendment and wait for owner approval even when a scope check passes. Reopen dependent decisions for review; never silently rewrite accepted records.
+
+These are agent-side checks, **not runtime enforcement**. A `crucibleId`, passed gate, or `lockHash` is not design approval; current runtime execution and lock-hash coverage are unchanged.
 
 ### Execute the Slice
 
@@ -113,7 +125,7 @@ If execution reveals a scope change is needed (Runbook Section 11):
    - Does it introduce dependencies not in the Scope Contract? (if so, expand explicitly)
    - Does it remove or weaken any validation gate? (must not)
    - Does it violate Project Principles? (must not)
-4. If the check passes, update remaining slices and resume
+4. If the check passes, update remaining slices and resume; changes to accepted decisions, contract revisions, or domain meanings still require explicit owner approval and dependent-decision review first
 5. If the check fails, ask the user before proceeding
 
 ## Constraints

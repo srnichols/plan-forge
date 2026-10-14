@@ -86,6 +86,27 @@
     { "label": ".NET tempering adapter reads the MTP summary (#318)", "path": "pforge-mcp/tempering/adapters/dotnet.mjs", "contains": "export function parseDotnetSummary" },
     { "label": "analysis-cli.mjs delivered (3.32.0)", "path": "pforge-mcp/orchestrator/analysis-cli.mjs" },
     { "label": "pforge.ps1 has analyze --quorum and diagnose (3.32.0)", "path": "pforge.ps1", "contains": "function Invoke-Diagnose" },
-    { "label": "pforge.sh has analyze --quorum and diagnose (3.32.0)", "path": "pforge.sh", "contains": "cmd_diagnose()" }
+    { "label": "pforge.sh has analyze --quorum and diagnose (3.32.0)", "path": "pforge.sh", "contains": "cmd_diagnose()" },
+    { "label": "Forge-Master turn input validation delivered (3.33.0)", "path": "pforge-master/src/turn-input.mjs" },
+    { "label": "Forge-Master response shaping delivered (3.33.0)", "path": "pforge-master/src/response-shaping.mjs" },
+    { "label": "Forge-Master third-party context fencing delivered (3.33.0)", "path": "pforge-master/src/untrusted.mjs" },
+    { "label": "Forge-Master proposal validation delivered (3.33.0)", "path": "pforge-master/src/proposed-actions.mjs" },
+    { "label": "Forge-Master context blocks delivered (3.33.0)", "path": "pforge-master/src/context-blocks.mjs" },
+    { "label": "Forge-Master rolling summaries run in the background (3.33.0)", "path": "pforge-master/src/session-compaction.mjs", "contains": "export function scheduleSessionCompaction" },
+    { "label": "Forge-Master observer controller delivered (3.33.0)", "path": "pforge-master/src/observer-control.mjs", "contains": "PFORGE_FORGE_MASTER_OBSERVE_DISABLE" },
+    { "label": "Forge-Master bounded insight pagination delivered (3.33.0)", "path": "pforge-master/src/observer-insights.mjs", "contains": "export function paginateInsights" },
+    { "label": "MCP observer proxy reports child unavailability (3.33.0)", "path": "pforge-mcp/server/tool-handlers/forge-master-observe.mjs", "contains": "FORGE_MASTER_UNAVAILABLE" },
+    { "label": "MCP liveguard profile exposes the observer (3.33.0)", "path": "pforge-mcp/server/tool-profiles.mjs", "contains": "\"forge_org_rules\", \"forge_master_observe\"" },
+    { "label": "Memory capture provenance validation delivered (3.33.0)", "path": "pforge-mcp/memory.mjs", "contains": "export function validateProvenanceInput" },
+    { "label": "Forge-Master recall partitions memory provenance (3.33.0)", "path": "pforge-master/src/retrieval.mjs", "contains": "function partitionRecalled" },
+    { "label": "Forge-Master capability example documents proposal results (#326)", "path": "pforge-mcp/capabilities/tool-metadata.mjs", "contains": "proposedActionsMessage: \"1 action(s) proposed." },
+    { "label": "Forge-Master capability example uses opt-in truncation (#326)", "path": "pforge-mcp/capabilities/tool-metadata.mjs", "contains": "truncated: { budget: false, reply: false, context: false, untrusted: false }" },
+    { "label": "Review guidance covers software entropy (3.33.0)", "path": ".github/skills/code-review/SKILL.md", "contains": "Software entropy / broken windows" },
+    { "label": "Planning guidance carries design references (3.33.0)", "path": ".github/prompts/step3-execute-slice.prompt.md", "contains": "Contract Refs" },
+    { "label": "MCP package requires the patched MCP SDK (3.33.0)", "path": "pforge-mcp/package.json", "contains": "\"@modelcontextprotocol/sdk\": \"^1.31.0\"" },
+    { "label": "Forge-Master requires the patched MCP SDK (3.33.0)", "path": "pforge-master/package.json", "contains": "\"@modelcontextprotocol/sdk\": \"^1.31.0\"" },
+    { "label": "MCP package requires the patched Sharp (3.33.0)", "path": "pforge-mcp/package.json", "contains": "\"sharp\": \"^0.35.5\"" },
+    { "label": "Installed tests gate maintainer planning guidance by its source asset (3.33.0)", "path": "pforge-mcp/vitest.config.mjs", "contains": "\"../templates/.github/agents/specifier.agent.md\": [\"tests/planning-guidance.test.mjs\"]" },
+    { "label": "Installed tests gate maintainer review guidance by its source asset (3.33.0)", "path": "pforge-mcp/vitest.config.mjs", "contains": "\"../presets/shared/skills/code-review/SKILL.md\": [\"tests/review-guidance.test.mjs\"]" }
   ]
 }

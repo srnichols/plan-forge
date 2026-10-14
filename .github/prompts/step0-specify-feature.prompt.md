@@ -111,6 +111,14 @@ Before asking any questions, scan the project for Spec Kit artifacts:
 
 Walk me through each section below. After I answer, compile the results into a single specification block I can paste into my Phase Plan.
 
+### Domain Language and Decision Ledger
+
+For new or materially revised specifications, preserve these within the six sections below:
+- **Domain Language** under Problem Statement: identify the bounded context, canonical terms, meanings, allowed aliases, and key distinctions/invariants. Give it a Language Ref such as `L-001@r1`. Reuse confirmed definitions; ask about consequential ambiguities, not every word.
+- **Decision Ledger** under Open Questions: give product choices stable IDs/revisions, such as `D-001@r1`, with choice/options, Rationale / evidence, owner, status/approval evidence, Depends on references, and affected requirements. Keep agent recommendations `proposed`; `accepted` requires explicit owner confirmation or a cited applicable approved source.
+- Interview in dependency order. If an upstream answer changes, reopen dependent decisions rather than reuse stale conclusions. Stop when blocking branches are resolved; do not interrogate to satisfy a question count.
+- Use the host's structured question/approval tool when available. Do not invent approvals, defaults, or resolutions. Technical interface design remains the hardener's job; this step captures WHAT and WHY.
+
 ---
 
 ### 1. PROBLEM STATEMENT
@@ -184,6 +192,12 @@ After collecting my answers, compile them into this format:
 ### Problem Statement
 (compiled from section 1)
 
+#### Domain Language
+Language Ref: L-001@r1 (illustrative; replace with the real reference, owner, and location)
+| Bounded context | Term | Meaning | Allowed aliases | Distinctions / invariants |
+|-----------------|------|---------|-----------------|--------------------------|
+| (context) | (term) | (confirmed meaning or clarification marker) | (aliases or none) | (observable distinction) |
+
 ### User Scenarios
 (compiled from section 2)
 
@@ -202,6 +216,11 @@ After collecting my answers, compile them into this format:
 
 ### Open Questions
 - [NEEDS CLARIFICATION: ...] (from section 6, if any)
+
+#### Decision Ledger
+| Ref | Choice / options | Rationale / evidence | Owner | Status / approval evidence | Depends on | Affects |
+|-----|------------------|----------------------|-------|----------------------------|------------|---------|
+| D-001@r1 | (choice) | (source or uncertainty) | (owner) | proposed | (refs or none) | (requirements) |
 
 ### Complexity Estimate
 - Estimated effort: Micro / Small / Medium / Large
@@ -233,6 +252,10 @@ Place this XML block at the end of the specification, after the Markdown format.
 by Step 2 (Harden) to auto-generate validation gates from MUST criteria. If you prefer Markdown
 only, the XML block can be omitted — the pipeline works with either format.
 
+Keep the Domain Language and Decision Ledger with the Markdown specification when handing it to the hardener. The XML acceptance summary is not a design-approval record; do not claim these new Markdown records are runtime-enforced.
+
+Effort classification is not risk approval: even Micro/Small work that changes a consequential interface, persisted format, or business meaning needs the applicable approved design context and validation. Do not use "skip the pipeline" to bypass unresolved decisions or approval.
+
 **Complexity classification** (include in the output):
 - **Micro** (<30 min, 1 file): Direct commit — skip the pipeline
 - **Small** (30–120 min, 1–3 files): Optional — Scope Contract + Definition of Done only
@@ -240,6 +263,8 @@ only, the XML block can be omitted — the pipeline works with either format.
 - **Large** (1+ days, 10+ files): Full pipeline + branch-per-slice
 
 ---
+
+The examples below illustrate requirements quality; accompany a new plan with the Domain Language and Decision Ledger from the compilation template.
 
 <examples>
 <example index="1" label="Strong specification">

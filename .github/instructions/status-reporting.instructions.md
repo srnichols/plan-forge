@@ -129,7 +129,13 @@ Use when transferring context between sessions (e.g., Session 1 → Session 2, o
 **Open risks:** <known issues or uncertainties>
 **Next step:** <specific action for the receiving agent>
 **Context files to read:** <list of files the next agent should load>
+**Contract Refs:** <exact accepted IDs@revisions and source locations, or not applicable with a reason>
+**Decision Refs:** <exact IDs@revisions and dependencies relevant to the next work>
+**Language Ref:** <bounded-context vocabulary ID@revision and source location>
+**Approval evidence:** <owner confirmation or cited applicable approved policy/contract; list unresolved or stale approval>
 ```
+
+Use these design-context fields for new or materially revised work with consequential boundaries. Do not invent IDs or approvals or silently replace requested revisions with newer ones. These are agent-side checks, not runtime enforcement; a provenance tag or lock hash is not approval evidence.
 
 ---
 

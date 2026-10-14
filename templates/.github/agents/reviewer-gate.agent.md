@@ -37,6 +37,13 @@ Review all changes against the hardened plan and guardrail files:
 8. **Security** — Input validation? No secrets in code?
 9. **Project Principles** — If `docs/plans/PROJECT-PRINCIPLES.md` exists: Core Principles respected? Forbidden Patterns absent? Technology commitments followed?
 10. **Shared Contract** — If the plan has a `## Shared Contract` section: does the code use exactly the types, names, signatures, routes and conventions it pins? Two slices defining the same thing differently is 🔴 Critical even when each slice's own gate passed (#308).
+11. **Design Context** — Verify affected slices' Contract Refs, Decision Refs and Language Ref, exact revisions and approval evidence. Missing or stale consequential approval is a gap; agent proposals and provenance tags do not constitute acceptance.
+12. **Domain Language** — Check Domain Language meanings, bounded contexts, invariants and approved aliases across specification, APIs, code and tests. Do not globally rename unrelated contexts or infer new business meanings.
+13. **Deep modules** — Identify the coherent complexity a boundary hides and what callers no longer need to know. Preserve single responsibility, legitimate thin adapters and module-size gates; more files, wrappers or lower LOC alone are not improvement.
+
+These are agent-side checks, **not runtime enforcement**. Current execution and lock-hash coverage are unchanged. Reuse existing approved sources for unchanged legacy boundaries; do not invent IDs or approvals.
+
+Missing or stale approval for a consequential change is a **blocking verification gap**: withhold PASS until resolved, without inventing a technical defect to represent missing evidence.
 
 For each finding, assign severity:
 - 🔴 **Critical** — Must fix before merge (security, data loss, scope violation)
@@ -62,6 +69,16 @@ Output Part B:
 
 | File | Issue | Violated Section |
 |------|-------|------------------|
+
+### Design Concerns (read-only feedback)
+
+Report observed design friction, not a quota. Reuse existing issue/smelt references or propose follow-up for owner approval; do not create issues, plans, or refactors during this read-only review.
+
+| Concern / evidence | Owner | Disposition | Issue / smelt or proposed follow-up | Revisit trigger | Closure validation |
+|--------------------|-------|-------------|------------------------------------|-----------------|--------------------|
+| (observed concern) | (owner or unassigned) | fix now / plan later / accept risk | (reference or proposal) | (specific change or event) | (behavioral or caller-simplicity proof) |
+
+Current blockers still prevent PASS; they cannot be relabeled as accepted debt. Owner-approved deferrals need a revisit trigger, and closure needs relevant validation, not just fewer warnings. Keep future work outside current scope. Zero concerns is valid when coverage is stated.
 
 ### Combined Summary
 
@@ -94,7 +111,7 @@ changes (shared interfaces, database schema). If in doubt, do a full review.
 
 ## Pass Protocol
 
-If no critical findings and no drift:
+If no critical findings, no drift, and no blocking verification gaps:
 
 1. Verdict = **PASS**
 2. The **Ship It** handoff button will appear to switch to the Shipper agent

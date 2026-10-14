@@ -158,6 +158,22 @@ Before suggesting code changes, verify:
 
 ---
 
+## Design Context for Planning and Handoffs
+
+For new or materially revised plans, keep design context in the existing specification and plan, not a second registry. Reuse existing IDs and approved sources; do not backfill completed plans or require a new contract for every private helper.
+
+- **Domain Language**: record a bounded context, canonical terms, meanings, allowed aliases, and important distinctions or invariants. Give the vocabulary a **Language Ref**, such as `L-001@r1`, with its location and owner. Keep specification, API, code, and test meanings aligned without globally renaming unrelated contexts.
+- **Decision Ledger**: use stable revision references such as `D-001@r1`. Record the choice and alternatives, rationale/evidence, owner, status, approval evidence, dependencies, and affected contracts/slices. An agent recommendation is `proposed`, not `accepted`; acceptance requires explicit owner approval or a cited, applicable approved policy/contract. Only non-blocking, out-of-scope choices may be `deferred`, with an owner and revisit trigger.
+- When an upstream decision or assumption changes, **reopen dependent decisions**, including transitive dependents, until their continued validity is checked. Preserve the old revision, record the impact, and refresh affected contract and slice references. Do not silently substitute the latest revision.
+- **Shared Contract**: for new or changed public interfaces, persisted formats, or shared worker boundaries, pin a revision such as `C-001@r1`, owner, approval evidence, decision dependencies, inputs/outputs and null semantics, failures/side effects, invariants/lifecycle expectations, compatibility, and conformance tests. Unchanged boundaries may reference an existing approved contract.
+- **Deep modules**: state what complexity a boundary hides and what callers no longer need to know. Preserve single responsibility, module-size gates, and legitimate thin adapters; extra wrappers or lower LOC alone do not prove a better design.
+- Each affected slice and handoff carries **Contract Refs**, **Decision Refs**, and **Language Ref**, with exact revisions and source locations. Load and compare them before delegating and on resume; missing or stale consequential approval blocks the agent handoff pending clarification.
+- **Design Concerns**: report observed friction with evidence, owner, disposition (`fix now`, `plan later`, or `accept risk`), existing issue/smelt reference or proposed follow-up, revisit trigger, and validation needed for closure. Existing blockers cannot be reclassified as accepted debt. Do not create issues, plans, or unrelated refactors without approval.
+
+These are agent-side checks, **not runtime enforcement**. A `crucibleId`, passing test, or `lockHash` is not approval evidence for a design revision; current runtime execution and lock-hash coverage are unchanged.
+
+---
+
 ## Temper Guards
 
 Common shortcuts agents take that still produce compiling code but erode architecture quality:
@@ -171,7 +187,7 @@ Common shortcuts agents take that still produce compiling code but erode archite
 | "Adding an interface for one implementation is over-engineering" | Interfaces enable testing, future swaps, and dependency injection. The cost is one file — the benefit is permanent testability. |
 | "I'll skip the repository and query directly from the service" | Services with data access can't be unit tested without a database. The repository boundary exists to make testing fast and reliable. |
 | "Hardcoding a string from a stable-small-set in code?" | STOP — import from `pforge-mcp/enums.mjs`. Hook names, quorum modes, model tiers, cost sources, watcher modes, and error codes all have canonical frozen arrays there. Hand-typed literals drift silently; the frozen arrays are checked by CI guards. |
-| "It's only two copies — I'll deduplicate later if a third appears" | **DRY violation.** Two is already enough to drift. The Phase 41 enums-centralization had to chase the same string literals across 50+ files because two became four became fifty over time. If the same value, regex, or 3+ line block appears in two places, extract to a named constant or helper **now** — the cost is one symbol; the benefit is one place to fix bugs. Run `/clean-code-review` to surface duplicates via `jscpd`. |
+| "It's only two copies — I'll deduplicate later if a third appears" | **DRY protects shared knowledge.** Two copies of the same policy or fact can already drift; centralize that knowledge now, including canonical enum values. First establish common ownership and reasons to change: similar text or equal literals from independent policies must not be coupled just to reduce duplication counts. Run `/clean-code-review` for candidates and `/code-review` for semantic judgment. |
 | `"routing.copilotSdk defaults to off — I'll flip it later once the SDK is proven"` | The default flip IS the observable contract change for operators. Keeping `"off"` means any operator who never reads `.forge.json` never receives the SDK path, regardless of how many slices prove it correct. Flip the default in the same slice that proves cost parity (within 5%), document the opt-out (`routing.copilotSdk: "off"`), and call out the `engines.node` floor bump in the release notes — those three items ship together or not at all. |
 
 ### Tool-surface (ACI) temper guards
@@ -241,6 +257,8 @@ Nothing in an inner circle may know anything about an outer circle. Data crossin
 > "Leave the code cleaner than you found it." — Robert C. Martin
 
 Every commit that touches a file must leave it in a better state: rename a confusing variable, extract a guard clause, add a missing type, delete a dead comment. Accumulated Boy Scout passes are how large-scale cleanup happens safely without dedicated refactor sprints.
+
+Assess the actual improvement, not a warning-count quota: a surgical correctness fix or clearer invariant can improve touched code without reducing lint totals. Keep unrelated cleanup out of scope. Compare per-rule changes and severity; suppressing warnings or moving debt outside the scan scope is not an improvement. Existing blocking gates and the following corollaries still apply.
 
 **Corollary**: If you are forced to touch a file that has an active ESLint error (`complexity-error`, `max-lines-per-function-error`), fix that error in the same commit.
 

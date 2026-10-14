@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import { existsSync, readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { SOURCE_ONLY_EXCLUDES } from "../vitest.config.mjs";
@@ -28,5 +28,31 @@ describe("consumer test surface (#249)", () => {
       s => !existsSync(fileURLToPath(new URL(`../${s}`, import.meta.url))),
     );
     expect(missing, `exclusion map references test files that do not exist`).toEqual([]);
+  });
+
+  it("excludes maintainer guidance checks only when their source assets are absent", async () => {
+    const missingAssets = new Set([
+      fileURLToPath(new URL("../../templates/.github/agents/specifier.agent.md", import.meta.url)),
+      fileURLToPath(new URL("../../presets/shared/skills/code-review/SKILL.md", import.meta.url)),
+    ]);
+    vi.doMock("node:fs", async (importOriginal) => {
+      const original = await importOriginal();
+      return {
+        ...original,
+        existsSync: (file) => missingAssets.has(file) ? false : original.existsSync(file),
+      };
+    });
+    vi.resetModules();
+    try {
+      const { SOURCE_ONLY_EXCLUDES: consumerExcludes } = await import("../vitest.config.mjs");
+      expect(consumerExcludes).toContain("tests/planning-guidance.test.mjs");
+      expect(consumerExcludes).toContain("tests/review-guidance.test.mjs");
+      expect(consumerExcludes).not.toContain("tests/forge-master-ask-schema-parity.test.mjs");
+      expect(consumerExcludes).not.toContain("tests/forge-master-observe-proxy.test.mjs");
+      expect(consumerExcludes).not.toContain("tests/memory-provenance.test.mjs");
+    } finally {
+      vi.doUnmock("node:fs");
+      vi.resetModules();
+    }
   });
 });

@@ -53,19 +53,21 @@ tags: [clean-code-review]
 
 ## When you spot duplication (DRY)
 
-Two copies is already drift. Don't wait for a third.
+DRY protects one source of truth for the same knowledge, not identical text. Before extracting, identify the shared fact and its owner; similar code with independent reasons to change should remain separate. Two copies of the same policy can drift even when their implementations look different.
 
 | Pattern | Action |
 |---------|--------|
-| Same string/numeric literal in ≥2 sites | Extract to a `const`. If it's from a stable small set (hook names, modes, tiers, error codes), import from `pforge-mcp/enums.mjs` — never re-type |
-| Same 3+ line code block in ≥2 sites | Extract to a helper function in the nearest shared module |
-| Same regex / format string in ≥2 sites | Extract to a named `const` so a fix lands in one place |
-| Same config shape constructed in ≥2 sites | Extract a factory function returning the shape |
-| Parallel switch/if chains over the same values in ≥2 functions | Extract a single mapping object or strategy table |
+| Same string/numeric literal representing the same fact in ≥2 sites | Extract to a `const`. For canonical hook names, modes, tiers, or error codes, import from `pforge-mcp/enums.mjs` — never re-type |
+| Same 3+ line block encoding the same responsibility in ≥2 sites | Extract a helper in the nearest shared module |
+| Same regex / format string with the same semantics in ≥2 sites | Extract a named `const` so the rule changes in one place |
+| Same configuration contract constructed in ≥2 sites | Extract a factory when the consumers share ownership and reasons to change |
+| Parallel switch/if chains encoding the same mapping in ≥2 functions | Extract a single mapping object or strategy table |
+| Same policy expressed differently across code, config, schemas, or docs | Establish an authoritative definition and keep its representations consistent; keep test expectations independent of the implementation |
+| Similar syntax or equal literals belonging to independent policies | Keep responsibilities separate; record the distinction when triaging a scanner match |
 
 **Why so strict?** The Phase 41 enums centralization had to chase the same hook-name string across 50+ files because "just two copies" became fifty over a year. Catching duplication at copy #2 is one extract; catching it at #50 is a multi-slice migration phase.
 
-`/clean-code-review` runs `jscpd` to surface inline duplicates mechanically — but the literal/symbol duplicates above won't trigger jscpd unless the surrounding code matches. Catch those by hand at review time.
+`/clean-code-review` surfaces duplication candidates mechanically; `/code-review` determines whether they duplicate knowledge. A smaller duplication count alone does not justify an abstraction.
 
 ---
 
@@ -147,6 +149,8 @@ a regression that does not exist.
 > "Leave the code cleaner than you found it."
 
 Every commit touching a file earns one Boy Scout improvement: a better name, a guard clause extraction, a deleted dead comment. See the full rule and its corollaries in `.github/instructions/architecture-principles.instructions.md` under **Boy Scout Rule**.
+
+The improvement can be a surgical correctness fix without a lower warning count. Review per-rule changes, severity, and scope; do not suppress or relocate debt to improve metrics, introduce new violations, or require unrelated cleanup. Existing blocking gates still apply.
 
 ---
 

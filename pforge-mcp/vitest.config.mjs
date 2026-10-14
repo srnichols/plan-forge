@@ -72,6 +72,8 @@ const SOURCE_ONLY_SUITES = {
   // smith-golden compares smith's output on this repository with a recorded golden.
   "../scripts/release": ["tests/release-harness.test.mjs", "tests/release-ship.test.mjs", "tests/smith-golden.test.mjs"],
   "../scripts/build-agent-plugin.mjs": ["tests/agent-plugin.test.mjs"],
+  "../templates/.github/agents/specifier.agent.md": ["tests/planning-guidance.test.mjs"],
+  "../presets/shared/skills/code-review/SKILL.md": ["tests/review-guidance.test.mjs"],
   "../pforge-master": [
     "tests/auditor-automation-baseline.test.mjs",
     "tests/forge-master.advisory.test.mjs",

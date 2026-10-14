@@ -58,6 +58,8 @@ function normalize(text) {
       .replace(/\b\d+\.\d+\.\d+(?:\.\S+)?\b/g, "<version>")
       // Cache age: "(cached 95m ago)" → "(cached <age>)"
       .replace(/\(cached \d+[smhd]+ ago\)/g, "(cached <age>)")
+      // A cache-hit hint is optional after a cold lookup.
+      .replace(/^[^\S\n]*\(cached <age>\)\n/gm, "")
       // Auto-update status: cache age and last-check time change every run
       .replace(/Cache age: -?\d+m/g, "Cache age: <age>")
       .replace(/Last check: [^\n|]+/g, "Last check: <time>")
@@ -151,6 +153,21 @@ function getSmithOutput() {
   }
   return _smithOutput;
 }
+
+describe("smith-golden cache normalization", () => {
+  const cold = "Version Currency:\n  Up to date (v3.33.0)\n\nAuto-update:\n  disabled\n";
+
+  it("compares cold and warm cache output identically", () => {
+    const warm = cold.replace("\n\nAuto-update:", "\n    (cached 12m ago)\n\nAuto-update:");
+    expect(normalize(warm)).toBe(normalize(cold));
+  });
+
+  it("keeps non-cache diagnostic lines", () => {
+    const diagnostic = cold.replace("\n\nAuto-update:", "\n    Warning: package versions disagree\n\nAuto-update:");
+    expect(normalize(diagnostic)).toContain("Warning: package versions disagree");
+    expect(normalize(diagnostic)).not.toBe(normalize(cold));
+  });
+});
 
 describe("smith-golden: pforge smith output stability", () => {
   it.skipIf(!canRun)(

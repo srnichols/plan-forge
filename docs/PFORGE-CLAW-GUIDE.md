@@ -4,6 +4,40 @@
 
 Forge-Claw is an experimental, opt-in, host-level chat front door for Plan Forge. It receives Telegram messages, routes allowed requests through Forge-Master for reasoning, and dispatches governed work to configured execution lanes. It is not installed, configured, or started by `setup`; operators explicitly initialize and run it from a Plan Forge framework checkout. It is additive to the existing remote notification bridge.
 
+## Testing candidate
+
+A Phase-62 testing archive is a framework checkout, not a completed production
+release. Extract it into a new directory, away from existing projects, and
+install its locked workspace dependencies:
+
+```powershell
+npm ci --no-audit --no-fund
+npm test --workspace=pforge-claw
+npm run test:e2e --workspace=pforge-claw
+node pforge-claw\cli.mjs init --example single-host --out <test-home>
+node pforge-claw\cli.mjs doctor --json --home <test-home>
+```
+
+The same commands work from Bash with `pforge-claw/cli.mjs`. The generated
+configuration contains placeholders: replace them with your test project's
+paths and an explicit allowlisted owner, then provide credentials through
+environment variables or the host-level secrets store. Do not put credentials
+in the archive or committed configuration. Doctor must report actual readiness
+before starting a dispatcher or worker.
+
+Use disposable repositories and explicit approval cards for mutating tests.
+The offline suite does not require a Telegram token or a live provider. A real
+Telegram/GHCP run, reference-host topology and native macOS worker acceptance
+remain separate checks; a passing offline run must not be reported as those
+checks passing. Native macOS execution currently fails closed as described
+below.
+
+`setup` and project `update` still install only the project-facing Plan Forge
+runtime packages. They do not install or start the host-level Claw daemon.
+The testing archive carries Claw itself and its deployment assets. Stable
+`pforge self-update` remains on the latest published stable release until a
+separate production release is approved.
+
 ## Architecture
 
 The Telegram `ChannelAdapter` receives messages and renders replies, progress, and approval cards. A dispatcher authorizes each caller and chooses a lane. `AgentRuntime` abstracts GHCP and BYOK providers. Local, remote, or Kubernetes lanes execute jobs; project MCP calls use that project's home lane. The home lane owns its checkout and canonical `.forge` history. Remote workers connect outbound to the dispatcher and never expose a listener. The composition root in `pforge claw start` builds the shared context, starts available features, builds lanes, then starts dispatch.

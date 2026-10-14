@@ -86,6 +86,27 @@ describe("CHANGELOG.md — release marker presence", () => {
   });
 });
 
+describe("CHANGELOG.md — Phase-62 release attribution", () => {
+  const sections = changelog.split(/^## \[/m).slice(1).map((entry) => {
+    const end = entry.indexOf("]");
+    return { version: entry.slice(0, end), body: entry.slice(end + 1) };
+  });
+  const released = sections.find((section) => section.version === "3.33.0");
+
+  it("keeps the published Forge-Master release separate from unshipped Claw features", () => {
+    expect(released).toBeDefined();
+    expect(released.body).toContain("forge_master_ask");
+    expect(released.body).not.toContain("Experimental Forge-Claw package");
+    expect(released.body).not.toContain("Native Claw lifecycle proof");
+  });
+
+  it("attributes the Claw package to its own unreleased or later candidate entry", () => {
+    const feature = sections.find((section) => section.body.includes("Experimental Forge-Claw package"));
+    expect(feature).toBeDefined();
+    expect(feature.version).not.toBe("3.33.0");
+  });
+});
+
 describe("VERSION and package.json consistency", () => {
   // Don't hardcode a target version — that creates a drift trap on every
   // release. Instead enforce the actual cross-file invariant: VERSION must

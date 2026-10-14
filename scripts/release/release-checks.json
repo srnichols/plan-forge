@@ -107,6 +107,9 @@
     { "label": "Forge-Master requires the patched MCP SDK (3.33.0)", "path": "pforge-master/package.json", "contains": "\"@modelcontextprotocol/sdk\": \"^1.31.0\"" },
     { "label": "MCP package requires the patched Sharp (3.33.0)", "path": "pforge-mcp/package.json", "contains": "\"sharp\": \"^0.35.5\"" },
     { "label": "Installed tests gate maintainer planning guidance by its source asset (3.33.0)", "path": "pforge-mcp/vitest.config.mjs", "contains": "\"../templates/.github/agents/specifier.agent.md\": [\"tests/planning-guidance.test.mjs\"]" },
-    { "label": "Installed tests gate maintainer review guidance by its source asset (3.33.0)", "path": "pforge-mcp/vitest.config.mjs", "contains": "\"../presets/shared/skills/code-review/SKILL.md\": [\"tests/review-guidance.test.mjs\"]" }
+    { "label": "Installed tests gate maintainer review guidance by its source asset (3.33.0)", "path": "pforge-mcp/vitest.config.mjs", "contains": "\"../presets/shared/skills/code-review/SKILL.md\": [\"tests/review-guidance.test.mjs\"]" },
+    { "label": "PowerShell dispatcher exposes opt-in Claw (Phase-62 testing candidate)", "path": "pforge.ps1", "contains": "pforge-claw" },
+    { "label": "Bash dispatcher exposes opt-in Claw (Phase-62 testing candidate)", "path": "pforge.sh", "contains": "pforge-claw" },
+    { "label": "MCP CLI schema describes Claw without installing its daemon (Phase-62 testing candidate)", "path": "pforge-mcp/capabilities/schemas.mjs", "contains": "claw" }
   ]
 }

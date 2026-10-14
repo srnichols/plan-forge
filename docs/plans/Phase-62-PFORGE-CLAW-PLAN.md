@@ -12,6 +12,7 @@ relatedIssues: []
 > **Review scope (operator-approved 2026-10-08)**: review, fix confirmed blockers and validate; stop before merge, release or deployment. D29 records the narrowly expanded audit/source-tracking scope.
 > **Tracks**: `pforge-claw/` (new workspace package), `pforge.ps1` / `pforge.sh` (`claw` subcommand), root `package.json` (workspaces), `scripts/audit/dep-boundaries.mjs`, `pforge-mcp/capabilities/schemas.mjs` + `surface.mjs` (metadata only), `.github/workflows/pforge-claw.yml`, `docs/PFORGE-CLAW-GUIDE.md` (new), `docs/PFORGE-CLAW-THREAT-MODEL.md` (new), `docs/manual/forge-claw.html` (new), and the doc sweep set in Slice 29.
 > **Pipeline**: Specify -> Harden -> Experimental implementation checkpoint -> Review in progress -> Ship not authorized
+> **Completion continuation (operator, 2026-10-14)**: resume the existing implementation, close confirmed gaps, and prepare a testable build. This authorizes isolated feature integration, validation and a clearly labeled testing archive; it does not waive D31, certify native macOS or operator live acceptance, or authorize production deployment. The platform-scope form returned unavailable, not approval.
 > **Depends on**: [Phase-61-FORGE-MASTER-CLAW-AWARE-PLAN.md](./Phase-61-FORGE-MASTER-CLAW-AWARE-PLAN.md), the Forge-Master contract (`caller`, `responseFormat`, `untrustedContext`, `contextBlocks`, `proposeActions` → `proposedActions`, `usage`, observer insights pulled via `forge_master_observe status` per D27). Run it first, or in parallel with Slices 1–5 here. Slice 6 onward requires it complete.
 > **Manual steps**: a few tasks need a human (creating the Telegram bot, live runs on real hardware, confirming CI after a push). They are labelled **MANUAL (operator)**: the agent prepares everything, writes a handoff note, and stops; no gate depends on them.
 > **Cost estimate** (`forge_estimate_quorum`, 2026-10-07, historical calibration; re-run after hardening): this plan (after hardening): auto **$14.45** (27/29 slices quorum, recommended) · speed $15.49 · power $207.27 · off $0.44. Companion FORGE-MASTER-CLAW-AWARE: auto **$4.30** · speed $5.34 · power $71.47 · off $0.15. The 25 % budget stop condition is measured against the mode actually chosen.
@@ -2692,6 +2693,29 @@ The operator approved the D29 scope extension after the reboot recovery review:
 - **Cold MCP preparation:** the CLI schema is intentionally ignored generated output, not a missing runtime module. The fresh copy first fails `--check` on that absent artifact; the existing `node pforge-mcp/server.mjs --validate` then generates it in the disposable copy only, and `--check` passes with 107 tools. Its CLI schema matches the frozen hash and its regenerated tool JSON has identical contract content. The original worktree's inventory/rules remain byte-identical and are not regenerated.
 - **Candidate persistence and release boundary:** secret-scanner indicators over the real frozen-base diff are retained and triaged with unchanged thresholds, not relabelled as clean. D30 now authorizes Claw's version synchronization and manifest-only release allowlist repair plus gated branch promotion; five new regression cases failed before the repair and the complete 28-test version/release suites pass afterward. No version bump, tag, production release or unspecified deployment is included. Platform/live CI and a fresh independent final review remain prerequisites for promotion.
 - **Acceptance remains open:** no cross-platform CI, live kind topology, real Telegram/GHCP or reference-host evidence is inferred from offline passes. `/forget` remains a documented unavailable command. Do not mark the phase Complete or merge/release/deploy from this review scope.
+
+### Completion continuation — 2026-10-14
+
+- The isolated completion branch integrates `planning/main` and the published
+  v3.33.0 fixes at `b11758d8`, retaining the existing Claw source and synchronizing
+  every framework workspace to `3.34.0-dev`. The original feature worktree and its
+  two untracked test fixtures are untouched.
+- On Windows Node 24.11.1, the integrated Claw unit gate passes 2,258 tests with
+  52 existing platform skips; all 35 offline end-to-end tests pass. The full
+  workspace gate passes 8,856 MCP, 942 Forge-Master, 608 SDK and 2,258 Claw tests.
+  Those counts are per gate, not additional independent phase assertions.
+- Direct Claw ESLint reports zero errors. The unchanged-rule Boy Scout comparison
+  against current `planning/main` reports zero regressions. Production dependencies
+  and the complete standalone MCP lock audit with zero findings. Existing
+  contributor-tool advisories and untouched oversized core modules remain
+  separately reported.
+- A fresh independent final review and archive installation/update rehearsal
+  remain in progress. The guide now explains isolated testing and the distinction
+  between host-level Claw delivery and ordinary project setup/update.
+- D31 and the original native macOS CI assertions remain required. No approved
+  platform amendment, authenticated Telegram/reference-host acceptance or
+  production release is claimed. This continuation does not mark the phase
+  Complete.
 
 ## Validation Gates (phase-level)
 

@@ -7,33 +7,13 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
-## [3.33.0] — 2026-10-12 — Forge-Master context, insights, and review guidance
+## [3.34.0] — 2026-10-14 — Forge-Claw testing candidate (not a production release)
 
 ### Added
 
 - **Experimental Forge-Claw package** (`pforge-claw`) — opt-in, host-level Telegram front door for governed execution lanes and Forge-Master reasoning. It is not installed or started by `setup`; it has not been published to npm. See the [Forge-Claw operator guide](docs/PFORGE-CLAW-GUIDE.md).
 - **`pforge claw` CLI** — adds `init`, `doctor`, `status`, `start`, `worker`, `service`, `dev`, and `commands` subcommands.
-- **Forge-Claw platform support** — dispatcher and workers target macOS, Windows, and Linux; live/platform matrix results remain pending.
-- `forge_master_ask` accepts optional `caller`, `responseFormat`, `untrustedContext`, `contextBlocks`, and `proposeActions` inputs, and returns a `usage` block. These changes are additive; existing response fields are unchanged.
-- `proposedActions` and `proposedActionsMessage` provide up to three role-filtered, proposal-only suggestions; Forge-Master does not execute them.
-- A structured `forge-master-insight` event and paginated observer status.
-- `forge_master_observe` is now registered on `pforge-mcp` as a proxy to the Forge-Master studio child, so any MCP client connected to a project can start/stop the observer and page insights (`limit`, `cursor`). There is no in-process fallback; an unreachable child returns `FORGE_MASTER_UNAVAILABLE`. Listed in the `liveguard` tool profile.
-- Memory provenance (`origin`, `tags`, `visibility`) and recall fencing, including fencing of untrusted recall.
-- Rolling conversation summaries retain earlier decisions and conclusions after turns leave the prompt window. Summary generation runs after the reply, and its usage is charged to the next successful turn.
-- Planning and review guidance now covers software entropy, knowledge-level DRY, resource ownership, domain language, decision revisions, and shared contracts. Design references and approval evidence travel with affected slices and handoffs; these are agent-side checks, not new runtime approval enforcement.
-
-### Fixed
-
-- The `forge_master_ask` capability example now includes every optional context/proposal input, a complete proposed action, and `proposedActionsMessage`. Its `truncated` value uses the four-flag object required when optional inputs are supplied, rather than the legacy boolean. Regression tests validate the example against the shipped input and proposal contracts. (#326)
-- Repository-only planning and review guidance tests now run only when their maintainer template and preset assets exist. Installed projects no longer fail `npm test` because those source-only assets are absent; the complete checks still run in the Plan Forge repository.
-
-### Security
-
-- Raised the MCP SDK minimum to 1.31.0 and Sharp to 0.35.5, and refreshed the workspace and standalone MCP locks for compatible security patches, including `proxy-addr` 2.0.8 and `source-map-js` 1.2.2. This addresses the MCP OAuth advisory, Sharp/librsvg advisory, proxy-address spoofing, and indexed-source-map denial of service without raising the Node.js floor.
-
-### Known developer-tool audit findings
-
-- The contributor workspace audit still reports 13 high and 2 moderate findings through `braces` and `postcss-selector-parser`. `braces` has no upstream patch; the PostCSS fix requires a major dependency change, and npm proposes a Tailwind 4 migration. The committed Tailwind 3 toolchain is preserved rather than force-upgraded. Production dependencies and the complete standalone MCP dependency lock audit with zero findings. Developer-tool remediation remains separate follow-up work.
+- **Forge-Claw testing guidance** — isolated archive installation, locked dependencies, offline validation and explicit operator configuration are documented. Windows/Linux native execution has recorded validation; native macOS workers and authenticated reference-topology acceptance remain open.
 
 ### Fixed
 
@@ -56,6 +36,35 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 - **Shipped runtime security floors** — existing packages now require MCP SDK 1.31+ and sharp 0.35.5+; root and standalone locks also resolve patched proxy-addr and source-map-js versions. Regression guards check declared, locked and each workspace's actually installed versions so a stale install, nested Master/Claw SDK or standalone lock cannot hide behind MCP/root-workspace success. No package names, Node floor, runtime models, tool schemas or permission defaults are added or changed.
 - **Runtime installer source portability** — both setup shells apply runtime cache exclusions relative to each package, so framework checkouts beneath `.forge`, `node_modules` or `coverage` still deliver the MCP, Master and SDK modules. Package-local cache directories remain excluded, and Claw remains separately configured and opt-in.
 - **Custom-preset installed tests** — core classifier, worker and gate tests now load without optional hook/prompt files that a custom preset intentionally omits. Only the three explicitly optional guidance assets can authorize conditional pending tests; required runbooks, broken links, invalid configuration, missing standard-preset assets and missing source-repository assets still fail. No classifier, hook policy, assertion or audit threshold is weakened.
+
+### Known acceptance gaps
+
+- This is a testing candidate, not a completed Phase-62 or production release. Native macOS execution still fails closed; its required CI assertions have not been waived. Live Telegram/GHCP and reference-host validation remain separate operator gates. `/forget` is available only when the configured upstream exposes a verified deletion capability. Existing contributor-tool advisories remain documented; production and standalone MCP dependency audits are clean.
+
+## [3.33.0] — 2026-10-12 — Forge-Master context, insights, and review guidance
+
+### Added
+
+- `forge_master_ask` accepts optional `caller`, `responseFormat`, `untrustedContext`, `contextBlocks`, and `proposeActions` inputs, and returns a `usage` block. These changes are additive; existing response fields are unchanged.
+- `proposedActions` and `proposedActionsMessage` provide up to three role-filtered, proposal-only suggestions; Forge-Master does not execute them.
+- A structured `forge-master-insight` event and paginated observer status.
+- `forge_master_observe` is now registered on `pforge-mcp` as a proxy to the Forge-Master studio child, so any MCP client connected to a project can start/stop the observer and page insights (`limit`, `cursor`). There is no in-process fallback; an unreachable child returns `FORGE_MASTER_UNAVAILABLE`. Listed in the `liveguard` tool profile.
+- Memory provenance (`origin`, `tags`, `visibility`) and recall fencing, including fencing of untrusted recall.
+- Rolling conversation summaries retain earlier decisions and conclusions after turns leave the prompt window. Summary generation runs after the reply, and its usage is charged to the next successful turn.
+- Planning and review guidance now covers software entropy, knowledge-level DRY, resource ownership, domain language, decision revisions, and shared contracts. Design references and approval evidence travel with affected slices and handoffs; these are agent-side checks, not new runtime approval enforcement.
+
+### Fixed
+
+- The `forge_master_ask` capability example now includes every optional context/proposal input, a complete proposed action, and `proposedActionsMessage`. Its `truncated` value uses the four-flag object required when optional inputs are supplied, rather than the legacy boolean. Regression tests validate the example against the shipped input and proposal contracts. (#326)
+- Repository-only planning and review guidance tests now run only when their maintainer template and preset assets exist. Installed projects no longer fail `npm test` because those source-only assets are absent; the complete checks still run in the Plan Forge repository.
+
+### Security
+
+- Raised the MCP SDK minimum to 1.31.0 and Sharp to 0.35.5, and refreshed the workspace and standalone MCP locks for compatible security patches, including `proxy-addr` 2.0.8 and `source-map-js` 1.2.2. This addresses the MCP OAuth advisory, Sharp/librsvg advisory, proxy-address spoofing, and indexed-source-map denial of service without raising the Node.js floor.
+
+### Known developer-tool audit findings
+
+- The contributor workspace audit still reports 13 high and 2 moderate findings through `braces` and `postcss-selector-parser`. `braces` has no upstream patch; the PostCSS fix requires a major dependency change, and npm proposes a Tailwind 4 migration. The committed Tailwind 3 toolchain is preserved rather than force-upgraded. Production dependencies and the complete standalone MCP dependency lock audit with zero findings. Developer-tool remediation remains separate follow-up work.
 
 ## [3.32.0] — 2026-10-07 — Analyze and diagnose from the CLI, .NET gates on Microsoft.Testing.Platform
 

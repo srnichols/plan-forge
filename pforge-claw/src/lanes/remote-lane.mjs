@@ -1,11 +1,14 @@
 import { ClawError } from "../errors.mjs";
-import { assertLane } from "./lane.mjs";
+import { assertLane, LANE_PROJECT_UNAVAILABLE } from "./lane.mjs";
 import { READ_ERRORS, PUBLICATION_ERRORS } from "../protocol/messages.mjs";
 
 export function createRemoteLane({ id, registry, capabilities = {} } = {}) {
   if (typeof id !== "string" || !id || !registry) throw new ClawError("LANE_BAD_CONFIG");
 
   async function* submit(job) {
+    if (!registry.hasEligibleWorker({ laneId: id, projectId: job.projectId })) {
+      throw new ClawError(LANE_PROJECT_UNAVAILABLE);
+    }
     const { iterator } = registry.enqueue(id, { kind: "job", job });
     const source = iterator[Symbol.asyncIterator]();
     try {

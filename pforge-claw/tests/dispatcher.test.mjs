@@ -396,6 +396,47 @@ describe("G1 dispatcher final authority and family integration", () => {
 });
 
 describe("dispatcher", () => {
+  it("fails boundedly rather than queueing an unread lease if its worker disconnects during preparation", async () => {
+    const fixture = makeContext({ registerLane: false });
+    fixture.config.lanes.push({ id: "fallback", kind: "remote", enabled: true });
+    fixture.directory.configure(fixture.config.lanes);
+    const registry = createWorkerRegistry();
+    const began = g1Deferred();
+    const prepared = g1Deferred();
+    const sent = [];
+    fixture.directory.register(wrapPreparedLane(createRemoteLane({ id: "worker", registry }), async (job) => {
+      began.resolve();
+      await prepared.promise;
+      return { ...job };
+    }));
+    fixture.directory.register(createRemoteLane({ id: "fallback", registry }));
+    for (const laneId of ["worker", "fallback"]) {
+      registry.connect(laneId, {
+        laneId, capabilities: { projects: ["project-1"] }, publicationFence: true,
+        send: (packet) => sent.push(packet),
+      });
+    }
+    const job = addJob(fixture);
+    const { dispatcher } = startDispatcher(fixture);
+    try {
+      await dispatcher.start();
+      await began.promise;
+      registry.disconnect("worker");
+      prepared.resolve();
+      await flushJobs(() => currentJobs(fixture.store)[job.id].state === "failed");
+      await dispatcher.sweep();
+      expect(transitionsFor(fixture.store, job.id).at(-1).reason).toBe("LANE_PROJECT_UNAVAILABLE");
+      expect(registry.snapshot().byLane.worker.pending).toBe(0);
+      expect(sent.filter((packet) => packet.t === "lease")).toEqual([]);
+      expect(fixture.directory.snapshot({ projectId: job.projectId }).fallback.projectEligible).toBe(true);
+      expect(() => fixture.directory.get("worker").submit(job)).toThrowError("LEASE_NOT_PREPARED");
+    } finally {
+      prepared.resolve();
+      registry.close();
+      await dispatcher.stop();
+    }
+  });
+
   it("waits without a pending lease on unrelated project capacity, then dispatches when its home reconnects", async () => {
     const fixture = makeContext({ registerLane: false });
     fixture.config.projects.push({ id: "project-2", homeLane: "other" });

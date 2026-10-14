@@ -811,6 +811,26 @@ describe("remote lane contract and transport", () => {
     expect(lane.health()).not.toHaveProperty("projects");
   });
 
+  it("refuses unavailable job admission when a worker disconnects before the first stream read", async () => {
+    const registry = createWorkerRegistry();
+    registry.connect("eligible", {
+      laneId: "remote", capabilities: { projects: ["p1"] }, publicationFence: true, send: () => {},
+    });
+    const lane = createRemoteLane({ id: "remote", registry });
+    const stream = lane.submit({ id: "disconnected-before-submit", projectId: "p1" });
+    registry.disconnect("eligible");
+    const next = stream.next().then((value) => ({ value }), (error) => ({ error }));
+    try {
+      await Promise.resolve();
+      expect(registry.snapshot().byLane.remote.pending).toBe(0);
+      expect((await next).error).toMatchObject({ code: "LANE_PROJECT_UNAVAILABLE" });
+    } finally {
+      registry.close();
+      await next;
+      await stream.return();
+    }
+  });
+
   it("returns a structured timeout and removes an unread queued lease", async () => {
     vi.useFakeTimers();
     try {

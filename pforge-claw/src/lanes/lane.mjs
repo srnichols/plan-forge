@@ -22,6 +22,7 @@ import { ClawError } from "../errors.mjs";
  */
 
 export const LANE_EVENT_VERSION = 1;
+export const LANE_PROJECT_UNAVAILABLE = "LANE_PROJECT_UNAVAILABLE";
 
 export function createLaneEvent({ jobId, seq, type, data = {}, now = Date.now }) {
   if (!LANE_EVENT_TYPES.includes(type)) {

@@ -2741,6 +2741,13 @@ The operator approved the D29 scope extension after the reboot recovery review:
   Linux/22.12 had two native-start deadline failures. Native macOS still failed.
   Current-head cross-platform evidence and a bounded independent repair review
   remain required before treating this as an accepted testing candidate.
+- The bounded repair review found a residual R3 disconnect-during-preparation
+  race. Two valid-payload regressions failed before adding post-preparation and
+  first-stream-read admission checks. Unavailable prepared payloads are discarded;
+  an already-leased job fails explicitly without an unread registry entry or
+  automatic cross-lane retargeting. All 103 focused placement/lease/recovery cases
+  and the 2,291-test Claw unit packet pass afterward. The initial fixture's missing
+  payload failure is preserved but is not treated as evidence of the race.
 
 ## Validation Gates (phase-level)
 

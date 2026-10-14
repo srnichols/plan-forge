@@ -8,6 +8,7 @@ import { approvedChoicesFor, consumedApprovalFor, currentJobCaller, fanoutProofF
 import { failureReason, normalizePlanActuals, PLAN_ACTUALS_UNCONFIRMED } from "./jobs/runner-lifecycle.mjs";
 import { normalizeRuntimeId } from "./runtime/agent-runtime.mjs";
 import { applicationIdentity } from "./protocol/l2-ack.mjs";
+import { LANE_PROJECT_UNAVAILABLE } from "./lanes/lane.mjs";
 
 export const DISPATCHABLE_TYPES = Object.freeze(JOB_TYPES.filter((type) => !READ_TYPES.includes(type)));
 const ACTIVE_STATES = Object.freeze(["leased", "running", "needs-input"]);
@@ -227,6 +228,9 @@ function assertBeforeSubmit(state, { job, lane, entry, payload }) {
     throw new ClawError("JOB_CANCELLED");
   }
   if (!approvalProof(state, current)) throw new ClawError("LEASE_PROOF_MISSING");
+  if (lane.health({ projectId: job.projectId })?.projectEligible === false) {
+    throw new ClawError(LANE_PROJECT_UNAVAILABLE);
+  }
   const verdict = runtimeVerdict(state, current, lane);
   if (!verdict.ok || !preparedRuntimeMatches(verdict, payload)) throw new ClawError(verdict.code ?? "RUNTIME_POLICY_DENIED");
 }
@@ -283,6 +287,15 @@ async function consume(state, { job, lane, stream, entry }) {
   });
 }
 
+async function discardUnavailableLease(state, entry, error) {
+  if (error?.code !== LANE_PROJECT_UNAVAILABLE) return;
+  try {
+    await entry.lane.cancel(entry.job.id);
+  } catch (cleanupError) {
+    logFailure(state, "Unavailable prepared lease cleanup failed", cleanupError);
+  }
+}
+
 async function pump(state, { job, lane }) {
   const entry = { job, lane, controller: new AbortController(), promise: null, finished: false, result: {}, lastSeq: 0 };
   state.inFlight.set(job.id, entry);
@@ -292,6 +305,7 @@ async function pump(state, { job, lane }) {
     const stream = await lane.submit(job);
     await consume(state, { job, lane, stream, entry });
   } catch (error) {
+    await discardUnavailableLease(state, entry, error);
     logFailure(state, "Dispatcher lane submission failed", error);
     settle(state, {
       jobId: job.id, to: entry.controller.signal.aborted ? "cancelled" : "failed",

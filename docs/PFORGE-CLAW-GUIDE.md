@@ -332,6 +332,13 @@ leased into an unread pending queue. The job stays approved and waiting until
 eligible capacity is available; ordinary lane status does not reveal project
 lists.
 
+Eligibility is checked again after asynchronous lease preparation and immediately
+before remote queue admission. If capacity disappears after the job was leased,
+the prepared payload is cleared and the job fails with
+`LANE_PROJECT_UNAVAILABLE` instead of remaining in an unread queue. Retry is an
+explicit governed action; the same lease is not silently retargeted to another
+worker or lane.
+
 ## Kubernetes
 
 Deploy the example Kustomize overlay from `pforge-claw/deploy/k8s/overlays/example`. Review namespace, images, storage, ingress, resource limits, secrets, and egress policy before applying. RBAC is namespace-scoped and limited to the required jobs and pods resources.

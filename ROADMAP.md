@@ -3,6 +3,10 @@
 > **Purpose**: Public roadmap for the Plan Forge framework itself.
 > **Not to be confused with**: `docs/plans/DEPLOYMENT-ROADMAP.md` — that's the template your project uses for feature tracking.
 
+## Experimental (unreleased)
+
+- **Forge-Claw** — experimental, opt-in host-level Telegram front door for Forge-Master reasoning and governed local, remote, or Kubernetes execution lanes. No release version or npm publication is assigned. See the [operator guide](docs/PFORGE-CLAW-GUIDE.md).
+
 ---
 
 ## Current Release
@@ -330,4 +334,3 @@ No committed timeline — evaluating based on community feedback.
 1. **Vote on existing issues** — 👍 reactions help us prioritize
 2. **Open a feature request** — [GitHub Issues](https://github.com/srnichols/plan-forge/issues) with the `enhancement` label
 3. **Contribute directly** — See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines
-

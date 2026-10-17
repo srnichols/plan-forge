@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: pforge-claw-dispatcher
+  namespace: pforge-claw
+spec:
+  type: ClusterIP
+  selector:
+    app: pforge-claw
+    component: dispatcher
+  ports:
+    - name: http
+      port: 3190
+      targetPort: http
+      protocol: TCP

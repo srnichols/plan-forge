@@ -3,18 +3,18 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Capabilities — Plan Forge | 105 MCP Tools, 48+ CLI Commands, Quorum Mode, Autonomous Execution, Live Dashboard</title>
-  <meta name="description" content="Complete capability reference for Plan Forge — 105 MCP tools (core + LiveGuard + Watcher + Crucible + Tempering + Bug Registry + Testbed + Forge-Master + Lattice + Anvil + Hallmark + Sync + Memory + Notify + Doctor + Auditor/Observer), 48+ CLI commands, 91+ REST endpoints, Quorum Mode (multi-model consensus), DAG-based orchestrator, cost tracking, OTLP telemetry, OpenBrain memory, 21 reviewer agents, 4 slash-command skills, REST API for external integration, and a live dashboard." />
+  <title>Capabilities — Plan Forge | 107 MCP Tools, Forge-Claw, Quorum Mode, Autonomous Execution, Live Dashboard</title>
+  <meta name="description" content="Complete capability reference for Plan Forge — 107 MCP tools, experimental opt-in Forge-Claw chat front door, Forge-Master reasoning and observer insights, CLI commands, REST endpoints, quorum execution, OpenBrain memory, and dashboard." />
   <meta property="og:title" content="Plan Forge Capabilities — Full Tool & Feature Reference" />
   <meta property="og:description" content="The AI-Native SDLC Forge Shop — four stations (Smelt, Forge, Guard, Learn). 105 MCP tools, 48+ CLI commands, autonomous plan execution, cost tracking, live dashboard, OTLP traces, OpenBrain memory, REST API for OpenClaw &amp; external agents." />
   <meta property="og:type" content="website" />
   <meta property="og:url" content="https://planforge.software/capabilities.html" />
   <meta property="og:image" content="https://planforge.software/assets/brand/og-card-v2.webp" />
   <meta name="twitter:card" content="summary_large_image" />
-  <meta name="twitter:title" content="Plan Forge Capabilities — 105 MCP Tools + 48+ CLI Commands + Watcher + Crucible + Tempering + Bug Registry + Testbed + Forge-Master + Lattice + Anvil + Hallmark + Copilot Memory Sync" />
-  <meta name="twitter:description" content="Complete capability reference: 105 MCP tools, 91+ REST endpoints, orchestrator, dashboard, telemetry, memory, 21 agents, 4 slash-command skills." />
+  <meta name="twitter:title" content="Plan Forge Capabilities — 107 MCP Tools + Forge-Claw + Forge-Master + CLI + Dashboard" />
+  <meta name="twitter:description" content="Complete capability reference: 107 MCP tools, experimental opt-in Forge-Claw, Forge-Master observer insights, orchestrator, dashboard, telemetry, and memory." />
   <link rel="canonical" href="https://planforge.software/capabilities.html" />
-  <meta name="keywords" content="AI coding guardrails, MCP tools, plan execution, DAG scheduler, cost tracking, OTLP traces, OpenBrain, VS Code Copilot, Claude, GPT, autonomous development, quorum mode, multi-model consensus, A/B testing" />
+  <meta name="keywords" content="AI coding guardrails, MCP tools, Forge-Claw, Telegram, governed agent lanes, Forge-Master, plan execution, DAG scheduler, cost tracking, OpenBrain, quorum mode" />
   <script type="application/ld+json">
   {"@context":"https://schema.org","@type":"WebPage","name":"Plan Forge Capabilities","url":"https://planforge.software/capabilities.html","description":"The AI-Native SDLC Forge Shop — four-station capability reference (Smelt, Forge, Guard, Learn)","isPartOf":{"@type":"WebSite","name":"Plan Forge","url":"https://planforge.software"}}
   </script>
@@ -432,6 +432,12 @@
         </div>
       </div>
 
+      <nav aria-label="Capability sections" class="mb-5 flex flex-wrap gap-4 text-sm">
+        <a href="#forge-master" class="text-amber-400 hover:underline">Forge-Master contract</a>
+        <a href="#forge-claw" class="text-cyan-400 hover:underline">Forge-Claw companion</a>
+        <a href="#forge-claw-cli" class="text-cyan-400 hover:underline">Forge-Claw CLI</a>
+      </nav>
+
       <!-- Forge-Master tools preview -->
       <div id="forge-master" class="mt-6 rounded-xl border border-amber-700/30 bg-amber-950/10 p-5 scroll-mt-24">
         <div class="flex items-center gap-2 mb-3">
@@ -445,11 +451,23 @@
              class="w-full rounded-lg border border-amber-700/20 mb-3" />
         <p class="text-xs text-slate-500 mb-3">A read-only reasoning orchestrator. Classifies user intent into one of 8 lanes (build, operational, troubleshoot, advisory, offtopic, tempering, principle-judgment, meta-bug-triage), retrieves OpenBrain memory context, and orchestrates other forge tools on the agent's behalf. <strong class="text-amber-300">Phase-43</strong> flipped the CTO defaults on (observer enabled, L3 memory enabled, autoEscalate on, quorumAdvisory=auto), shipped lane-specific system-prompt overlays (advisory-cto, build-interviewer, troubleshoot-sre), and added the closed-loop <code class="text-amber-400">forge_master_audit</code> tool plus the <code class="text-amber-400">pforge audit</code> CLI. Phase-29 added the <strong class="text-amber-300">Forge-Master Studio</strong> dashboard tab with a curated prompt gallery, streaming chat, and a live tool-call trace pane. 📖 <a href="manual/forge-master.html" class="text-amber-400 hover:underline">Manual: Forge-Master</a> · 🗺️ <a href="manual/forge-master.html" class="text-amber-400 hover:underline">Diagram: 3-stage intent classifier</a>.</p>
         <div class="grid gap-2 md:grid-cols-2">
-          <div class="bg-slate-800/40 rounded-lg p-3"><code class="text-amber-400 text-xs">forge_master_ask</code><p class="text-xs text-slate-500 mt-1">Accepts a freeform message. Returns a structured reasoning response built from intent classification, lane-specific prompt overlay, memory retrieval, and allowlist-gated read-only tool calls (≈38 read tools restored in Phase-43).</p></div>
+          <div class="bg-slate-800/40 rounded-lg p-3"><code class="text-amber-400 text-xs">forge_master_ask</code><p class="text-xs text-slate-500 mt-1">Accepts message plus optional <code>caller</code>, <code>responseFormat</code>, trusted <code>contextBlocks</code>, and fenced <code>untrustedContext</code>. Optional <code>proposeActions</code> returns validated <code>proposedActions</code>, an explicit empty-proposal message, nullable usage, and truncation metadata. Proposals are never executed by Forge-Master.</p></div>
           <div class="bg-slate-800/40 rounded-lg p-3"><code class="text-amber-400 text-xs">forge_master_audit</code> <span class="text-amber-300">(Phase-43)</span><p class="text-xs text-slate-500 mt-1">Holistic CTO audit. Pulls drift, cost, open bugs, watcher alerts, deploy journal, and Crucible smelts; returns bounded report: summary, top 3 risks with evidence, P0/P1/P2 actions (≤5), cost note. Drives the weekly digest and incident-triggered review.</p></div>
           <div class="bg-slate-800/40 rounded-lg p-3"><code class="text-amber-400 text-xs">Studio tab · prompt gallery · chat stream · tool-call trace</code><p class="text-xs text-slate-500 mt-1">Dashboard UI at <code class="text-amber-400">localhost:3100/dashboard</code>. Also available as CLI via <code class="text-amber-400">pforge forge-master status|logs</code> and the new <code class="text-amber-400">pforge audit [--since --tier --schedule --on-incident]</code>.</p></div>
         </div>
+        <p class="text-xs text-slate-500 mt-3">Observer insights are retrieved through bounded, paginated <code>forge_master_observe</code> pulls; the dashboard does not execute proposals. See the <a href="manual/forge-master.html#front-door-contract" class="text-amber-400 hover:underline">front-door contract</a>.</p>
       </div>
+
+      <section id="forge-claw" class="mt-6 rounded-xl border border-cyan-700/30 bg-cyan-950/10 p-5 scroll-mt-24">
+        <div class="flex items-center gap-2 mb-3">
+          <span class="text-cyan-400">🦀</span>
+          <h2 class="text-lg font-bold text-cyan-300">Forge-Claw (experimental, opt-in)</h2>
+        </div>
+        <p class="text-sm text-slate-400">A host-level native Telegram front door that calls Forge-Master for reasoning and dispatches authorized jobs to governed local, remote, or Kubernetes lanes. It is not installed or started by <code>setup</code>. OpenClaw remains an alternative external integration.</p>
+        <p class="text-sm text-slate-400 mt-2">The capability entry is <code>forgeMaster.companions.forgeClaw</code>; it describes the <code>@pforge/pforge-claw</code> package, caller-filtered chat commands, <code>PFORGE_CLAW_HOME/config.json</code>, schema, insight pull, and internal bus events. There is no <code>forge_claw_*</code> MCP tool family.</p>
+        <h3 id="forge-claw-cli" class="text-sm font-semibold text-cyan-300 mt-4"><code>pforge claw</code> CLI</h3>
+        <p class="text-sm text-slate-400">Eight subcommands: <code>init</code>, <code>doctor</code>, <code>status</code>, <code>start</code>, <code>worker</code>, <code>service</code>, <code>dev</code>, and <code>commands</code>. The registered <code>/forget</code> chat command is currently unavailable. See the <a href="manual/forge-claw.html" class="text-cyan-300 hover:underline">Forge-Claw manual chapter</a> and the <a href="https://github.com/srnichols/plan-forge/blob/planning/main/docs/PFORGE-CLAW-GUIDE.md" rel="noopener" class="text-cyan-300 hover:underline">operator guide on GitHub</a>.</p>
+      </section>
 
       <!-- Collaboration + dashboard tools preview -->
       <div class="mt-6 rounded-xl border border-slate-700/40 bg-slate-900/40 p-5">

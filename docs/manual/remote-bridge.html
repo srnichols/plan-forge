@@ -105,7 +105,7 @@
     "enabled": true,
     "channels": {
       "telegram": {
-        "chatId": "-1001234567890",
+        "chatId": "&lt;chat-id&gt;",
         "severityFloor": "medium"
       },
       "slack": {
@@ -134,6 +134,9 @@
 
         <h2 id="openclaw">OpenClaw — The Agent-to-Agent Channel</h2>
         <p>OpenClaw is the exception: it's not for humans. When <code>openclaw.endpoint</code> is configured, the <code>PreAgentHandoff</code> hook posts a snapshot (drift, MTTR, open incidents) to OpenClaw before the next agent takes the turn. This lets a separate coordinator service inject context across agents in multi-agent mode, Claude to Codex, Codex to Cursor, and so on. Skipped automatically when <code>PFORGE_QUORUM_TURN</code> is set.</p>
+
+        <h2 id="forge-claw">Forge-Claw — Native inbound chat</h2>
+        <p>Forge-Claw is the experimental native inbound side: Telegram requests enter a role-checked dispatcher, are reasoned over by Forge-Master where appropriate, and become governed lane jobs only after the required authorization. The Remote Bridge remains the outbound event-notification path. OpenClaw remains an alternative external coordinator, not a synonym for Forge-Claw. Read the <a href="forge-claw.html">Forge-Claw manual chapter</a> or the <a href="https://github.com/srnichols/plan-forge/blob/planning/main/docs/PFORGE-CLAW-GUIDE.md" rel="noopener">guide on GitHub</a>.</p>
 
         <h2 id="pairing">Pairing With the Watcher</h2>
         <p>A recommended pattern: the <a href="watcher.html">Watcher</a> (Chapter 19) runs on a long execution, emitting anomaly events into the hub. The Remote Bridge filters those events by severity and forwards the interesting ones to Telegram. Together they give you safe, phone-friendly observation of a forge running on another box.</p>

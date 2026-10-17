@@ -1,0 +1,10 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: pforge-claw-data
+spec:
+  resources:
+    requests:
+      storage: 10Gi
+  # Uncomment and set for a non-default storage class:
+  # storageClassName: <storage-class>

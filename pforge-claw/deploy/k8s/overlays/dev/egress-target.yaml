@@ -1,0 +1,51 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: pforge-claw-egress-target
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: pforge-claw-egress-target
+  template:
+    metadata:
+      labels:
+        app: pforge-claw-egress-target
+    spec:
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: target
+          image: pforge-claw-worker-node:dev
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          ports:
+            - containerPort: 3190
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: 3190
+          command:
+            - node
+            - --input-type=module
+            - -e
+            - "import { createServer } from 'node:http'; createServer((request, response) => { response.writeHead(200); response.end('fixture target'); }).listen(3190, '0.0.0.0');"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: pforge-claw-egress-target
+spec:
+  selector:
+    app: pforge-claw-egress-target
+  ports:
+    - protocol: TCP
+      port: 3190
+      targetPort: 3190

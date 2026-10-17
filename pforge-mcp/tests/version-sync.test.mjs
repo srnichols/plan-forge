@@ -39,6 +39,7 @@ describe("sync-versions.mjs", () => {
     write("package.json", '{\r\n  "name": "plan-forge",\r\n  "version": "0.9.0",\r\n  "devDependencies": { "x": { "version": "9.9.9" } }\r\n}\r\n');
     write("pforge-mcp/package.json", '{\n  "name": "plan-forge-mcp",\n  "version": "1.0.0-dev"\n}\n');
     write("pforge-master/package.json", '{\n    "name": "@pforge/pforge-master",\n    "version": "0.8.1"\n}\n');
+    write("pforge-claw/package.json", '{\r\n  "name": "@pforge/pforge-claw",\r\n  "version": "0.6.0",\r\n  "private": true\r\n}\r\n');
     write("pforge-sdk/package.json", '{\n  "name": "pforge-sdk",\n  "version": "0.12.0"\n}\n');
     write("package-lock.json", `${JSON.stringify({
       name: "plan-forge", version: "0.9.0", lockfileVersion: 3,
@@ -46,6 +47,7 @@ describe("sync-versions.mjs", () => {
         "": { name: "plan-forge", version: "0.9.0" },
         "pforge-mcp": { name: "plan-forge-mcp", version: "0.7.0" },
         "pforge-master": { name: "@pforge/pforge-master", version: "0.8.1" },
+        "pforge-claw": { name: "@pforge/pforge-claw", version: "0.6.0" },
         "pforge-sdk": { version: "0.12.0" },
         "node_modules/x": { version: "9.9.9" },
       },
@@ -60,7 +62,9 @@ describe("sync-versions.mjs", () => {
     expect(r.status).toBe(1);
     expect(r.stderr).toContain("package.json version is 0.9.0");
     expect(r.stderr).toContain("pforge-master/package.json version is 0.8.1");
+    expect(r.stderr).toContain("pforge-claw/package.json version is 0.6.0");
     expect(r.stderr).toContain('package-lock.json packages["pforge-mcp"].version is 0.7.0');
+    expect(r.stderr).toContain('package-lock.json packages["pforge-claw"].version is 0.6.0');
     expect(r.stderr).not.toContain("pforge-sdk");
   });
 
@@ -70,9 +74,12 @@ describe("sync-versions.mjs", () => {
     expect(read("VERSION")).toBe("2.0.0");
     expect(read("package.json")).toBe('{\r\n  "name": "plan-forge",\r\n  "version": "2.0.0",\r\n  "devDependencies": { "x": { "version": "9.9.9" } }\r\n}\r\n');
     expect(read("pforge-master/package.json")).toBe('{\n    "name": "@pforge/pforge-master",\n    "version": "2.0.0"\n}\n');
+    expect(read("pforge-claw/package.json")).toBe('{\r\n  "name": "@pforge/pforge-claw",\r\n  "version": "2.0.0",\r\n  "private": true\r\n}\r\n');
     expect(JSON.parse(read("pforge-sdk/package.json")).version).toBe("0.12.0");
     const lock = JSON.parse(read("package-lock.json"));
-    expect([lock.version, lock.packages[""].version, lock.packages["pforge-mcp"].version, lock.packages["pforge-master"].version]).toEqual(["2.0.0", "2.0.0", "2.0.0", "2.0.0"]);
+    expect([lock.version, lock.packages[""].version, lock.packages["pforge-mcp"].version,
+      lock.packages["pforge-master"].version, lock.packages["pforge-claw"].version])
+      .toEqual(["2.0.0", "2.0.0", "2.0.0", "2.0.0", "2.0.0"]);
     expect(lock.packages["pforge-sdk"].version).toBe("0.12.0");
     expect(lock.packages["node_modules/x"].version).toBe("9.9.9");
     expect(JSON.parse(read("pforge-mcp/package-lock.json")).packages[""].version).toBe("2.0.0");
@@ -83,6 +90,8 @@ describe("sync-versions.mjs", () => {
     expect(run(["--root", root]).status).toBe(0);
     expect(read("VERSION")).toBe("1.0.0-dev");
     expect(JSON.parse(read("package.json")).version).toBe("1.0.0-dev");
+    expect(JSON.parse(read("pforge-claw/package.json")).version).toBe("1.0.0-dev");
+    expect(JSON.parse(read("package-lock.json")).packages["pforge-claw"].version).toBe("1.0.0-dev");
     expect(run(["--root", root]).stdout).toContain("already 1.0.0-dev");
   });
 
@@ -95,7 +104,22 @@ describe("sync-versions.mjs", () => {
 
   it("skips packages a checkout does not have", () => {
     rmSync(join(root, "pforge-master"), { recursive: true });
+    rmSync(join(root, "pforge-claw"), { recursive: true });
     expect(run(["3.0.0", "--root", root]).status).toBe(0);
     expect(existsSync(join(root, "pforge-master"))).toBe(false);
+    expect(existsSync(join(root, "pforge-claw"))).toBe(false);
+  });
+
+  it("keeps release and bump-back Claw versions synchronized without changing dependency versions", () => {
+    for (const version of ["2.1.0", "2.2.0-dev"]) {
+      const synced = run([version, "--root", root]);
+      expect(synced.status, synced.stderr).toBe(0);
+      expect(run(["--check", "--root", root]).status).toBe(0);
+      expect(JSON.parse(read("pforge-claw/package.json")).version).toBe(version);
+      const lock = JSON.parse(read("package-lock.json"));
+      expect(lock.packages["pforge-claw"].version).toBe(version);
+      expect(lock.packages["pforge-sdk"].version).toBe("0.12.0");
+      expect(lock.packages["node_modules/x"].version).toBe("9.9.9");
+    }
   });
 });

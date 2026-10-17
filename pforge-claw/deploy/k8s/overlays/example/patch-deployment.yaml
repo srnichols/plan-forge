@@ -1,0 +1,28 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: pforge-claw-dispatcher
+spec:
+  template:
+    spec:
+      containers:
+        - name: dispatcher
+          resources:
+            requests:
+              cpu: 250m
+              memory: 256Mi
+            limits:
+              cpu: 2
+              memory: 1Gi
+          volumeMounts:
+            - name: config
+              mountPath: /data/config.json
+              subPath: config.json
+              readOnly: true
+      volumes:
+        - name: config
+          configMap:
+            name: pforge-claw-config
+            items:
+              - key: config.json
+                path: config.json

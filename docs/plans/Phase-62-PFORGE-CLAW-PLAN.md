@@ -8,9 +8,10 @@ relatedIssues: []
 ---
 # Phase-62: PFORGE-CLAW — A chat-native, always-on front door for Plan Forge, powered by GHCP models
 
-> **Status**: 🔬 **HARDENED 2026-10-07** — Step-2 complete. Required Decisions D1–D26 are resolved (no TBDs); verification evidence is in **Assumptions**. Ready for `pforge run-plan` once the **Execution Hold** is lifted.
+> **Status**: **In progress (review remediation).** The experimental implementation reached checkpoint `c8c2af3d`; reviewer, cross-platform and live acceptance are not complete. See [What actually shipped](#what-actually-shipped) and [Review remediation](#review-remediation).
+> **Review scope (operator-approved 2026-10-08)**: review, fix confirmed blockers and validate; stop before merge, release or deployment. D29 records the narrowly expanded audit/source-tracking scope.
 > **Tracks**: `pforge-claw/` (new workspace package), `pforge.ps1` / `pforge.sh` (`claw` subcommand), root `package.json` (workspaces), `scripts/audit/dep-boundaries.mjs`, `pforge-mcp/capabilities/schemas.mjs` + `surface.mjs` (metadata only), `.github/workflows/pforge-claw.yml`, `docs/PFORGE-CLAW-GUIDE.md` (new), `docs/PFORGE-CLAW-THREAT-MODEL.md` (new), `docs/manual/forge-claw.html` (new), and the doc sweep set in Slice 29.
-> **Pipeline**: Specify ✅ (this doc) → Harden ⏳ → Execute → Review → Ship
+> **Pipeline**: Specify -> Harden -> Experimental implementation checkpoint -> Review in progress -> Ship not authorized
 > **Depends on**: [Phase-61-FORGE-MASTER-CLAW-AWARE-PLAN.md](./Phase-61-FORGE-MASTER-CLAW-AWARE-PLAN.md), the Forge-Master contract (`caller`, `responseFormat`, `untrustedContext`, `contextBlocks`, `proposeActions` → `proposedActions`, `usage`, observer insights pulled via `forge_master_observe status` per D27). Run it first, or in parallel with Slices 1–5 here. Slice 6 onward requires it complete.
 > **Manual steps**: a few tasks need a human (creating the Telegram bot, live runs on real hardware, confirming CI after a push). They are labelled **MANUAL (operator)**: the agent prepares everything, writes a handoff note, and stops; no gate depends on them.
 > **Cost estimate** (`forge_estimate_quorum`, 2026-10-07, historical calibration; re-run after hardening): this plan (after hardening): auto **$14.45** (27/29 slices quorum, recommended) · speed $15.49 · power $207.27 · off $0.44. Companion FORGE-MASTER-CLAW-AWARE: auto **$4.30** · speed $5.34 · power $71.47 · off $0.15. The 25 % budget stop condition is measured against the mode actually chosen.
@@ -102,7 +103,19 @@ Explicit non-metrics: this phase does not aim to be a general life assistant (em
 - **(i) `pforge claw` CLI subcommand** in **both** `pforge.ps1` and `pforge.sh`, registered in the CLI schema (`pforge-mcp/capabilities/schemas.mjs` → `cli-schema.json`), plus `pforge claw init` config generator, JSON Schema for the config, and example configs.
 - **(k) Portability**: everything in the Portability & Configurability Contract; cross-platform CI (ubuntu / windows / macos + kind); a Tested Platforms matrix the community can extend.
 - **(l) Memory (L2/L3) integration**: project-scoped captures through each project's MCP with provenance; optional direct OpenBrain client for cross-project reads and a bot namespace; automatic task-outcome capture; untrusted captures confirmed and tagged; restricted projects kept out of shared recall; worktree / remote / pod `.forge` history merged back to each project's canonical L2 home.
-- **(j) Docs and capabilities sweep after all code is built**: guide, threat model, architecture doc, README, `docs/capabilities.md` / `.html`, `forge_capabilities` surface, CLI guide, manual chapters, glossary, event catalog, CHANGELOG, ROADMAP (Slice 29).
+- **(j) Docs and capabilities sweep after all code is built**: operator guide (`docs/PFORGE-CLAW-GUIDE.md`), threat model, architecture doc, README, `docs/capabilities.md` / `.html`, `forge_capabilities` surface, CLI guide, manual chapters, glossary, event catalog, CHANGELOG, ROADMAP (Slice 29).
+- **(m) Owner-approved review remediation (D29)**: correct the root-only stale-dashboard ignore in `.gitignore` so required `pforge-claw/src/mcp/` source is tracked; include the workspace in `scripts/audit/eslint-clean-code.config.mjs` and `scripts/audit/run-eslint-clean-code.mjs`; enforce unchanged rules in the existing Claw CI workflow; add focused guard tests. The existing `pforge-mcp/tests/__baselines__/capabilities.snapshot.json` CLI-count update and `pforge-mcp/tests/forge-master.integration.test.mjs` companion-description assertion are permitted metadata regression support, not runtime/tool changes.
+- **(n) Owner-approved release preparation (D30)**: extend `scripts/sync-versions.mjs` for Claw's manifest/root-lock version fields and `scripts/release/ship.mjs` for its manifest-only release commit allowlist; add tests in the existing version-sync/release-ship suites and directly related documentation. Preserve the independently versioned SDK, checkouts without Claw and all source-quality gates. This is not a version bump, npm publication, production release or change to automatic installation/startup.
+- **(o) Native ownership remediation (D31)**: replace snapshot-only publication settlement with per-job OS-native ownership established before literal argv, using own source, the existing Node/PowerShell runtime and OS APIs. Add platform-scoped adapters, capability/error reporting, real detached-child/independent-process/concurrent regressions and directly related documentation. Preserve ordinary callers, authenticated current-lease publication, separate canonical-history ACKs, original deadlines and the no-TypeScript/no-new-third-party-dependency contract. No host elevation, global service/security/cgroup changes or unsupported-capability success fallback.
+- **(p) Bounded runtime security maintenance (D32)**: under the autonomous build-completion continuation, raise only existing MCP SDK and sharp dependency floors and reconcile existing root/standalone locks for the reviewed runtime advisories. Add a focused declared/locked/installed-version regression. Preserve package names, workspace membership, framework/SDK versions, Node floor, public tool artifacts, permissions and audit policy. No new dependency names, major audit-tool upgrades, platform waiver or release/deployment is included.
+- **(q) Consumer delivery closeout (D33)**: resolve the recorded installer/source-path and custom-preset installed-test blockers (#346/#347) as existing delivery repairs. Keep runtime-local cache exclusions and both-shell parity; do not reject a valid framework source merely because an ancestor is named `.forge`, `node_modules` or `coverage`. Installed custom presets may omit optional guidance, but core classifier/worker/gate tests must still run; present assets, standard installs and the source repository must retain required coverage. Preserve the custom asset choice, opt-in Claw installation, production classifiers, rules, baselines and permissions. Commit installer behavior and test-only optional-asset guards separately with before/after evidence.
+
+The exact D33 paths below enumerate that existing repair scope for automated
+scope checks; they do not authorize additional implementation:
+
+- Runtime installer repair: `setup.ps1`, `setup.sh`, `pforge-mcp/vitest.config.mjs`, `pforge-mcp/tests/runtime-install-source-path.test.mjs`.
+- Test-only guidance repair: `pforge-mcp/tests/helpers/optional-guidance.mjs`, `pforge-mcp/tests/optional-guidance.test.mjs`, `pforge-mcp/tests/diff-classify.test.mjs`, `pforge-mcp/tests/hook-precommit-master.test.mjs`, `pforge-mcp/tests/precommit-chain.test.mjs`, `pforge-mcp/tests/issue-258-gate-cannot-fail.test.mjs`, `pforge-mcp/tests/step0-prompt-speckit.test.mjs`.
+- Related delivery documentation: `CHANGELOG.md`, `docs/RELEASE-CHECKLIST.md`, `docs/plans/Phase-62-PFORGE-CLAW-PLAN.md`.
 
 ### Out of Scope
 
@@ -388,8 +401,214 @@ Plan Forge is open source. Forge-Claw ships as a **generic, configurable** capab
 | D28 | Composition root, dispatch loop, lease proof | `pforge claw start` has one composition root: `bootDispatcher` in `src/cli/start.mjs`. It builds the shared `ctx` and a live lane directory (`ctx.lanes`, which exists before any feature starts), binds the placement service, starts the feature app, builds the lanes, and then starts the dispatcher (`src/dispatcher.mjs`). The dispatcher is not a feature, because it must start after the budget, workers and chat features. It is the only component that moves a job to `leased`. Before leasing it re-runs the budget gate (and fails closed if the gate is unavailable, D9), requires a consumed approval for the job or its fan-out parent in `approvals.jsonl` (D6), and places the job with `placeJob` (Slice 23). It then records the lane on the `leased` transition and submits the job. Local lanes run `jobs/runners.mjs` against the dispatcher store. Remote and K8s lanes receive a lease grant: an HMAC over the job id, lane, subject, a digest of the allow-listed job payload, and the approval proof. Long-lived remote workers verify it with their per-worker secret. K8s Job pods never receive a lane-wide credential: the dispatcher derives `jobKey = HMAC-SHA256(laneSecret, "pforge-claw/job/v1:" + jobId)` and puts only `jobKey`, `jobId` and the dispatcher URL in that Job's pod env. The one-shot worker authenticates with a job-scoped HMAC challenge using `jobKey`. The dispatcher accepts that connection only for that `jobId`, and only for that job's lease, events, sync and ack. The worker verifies a grant signed with `jobKey`. A pod therefore cannot authenticate as the lane, see or claim other jobs, or forge grants. `jobKey` is readable by anyone with Job or Pod read access in the claw namespace, and is valid only for its one job until that job ends or reaches its deadline. Workers and pods run the same runners (a worktree, or a pod clone, then a PR) against a lease-scoped job record, so the dispatcher stays the single writer of `jobs.jsonl` and settles remote jobs from LaneEvents. Lanes own `lane.event` fan-out. The dispatcher emits `job.transition` and `job.finished` only for transitions it writes. On start, orphaned `leased`, `running` and `needs-input` jobs fail with `reason: orphaned`, and the operator retries them. On stop, in-flight jobs are cancelled. Tests substitute the runtime by dependency injection on `bootDispatcher` only, never through an environment variable. |
 | D21 | Memory integration | Project-scoped writes only through the project's MCP (`forge_memory_capture`), inheriting Plan Forge's queue, dedupe, dead-letter and Hallmark behaviour. Optional direct OpenBrain client only for cross-project reads and the bot namespace. No channel user ids or names in shared memory. `/remember` asks for the type with buttons (`decision` · `lesson` · `convention` · `pattern` · `gotcha`). Content from forwards, links or transcripts is written only after an explicit confirm card, with `origin: "untrusted"`. Per-project `memory.l3` and `visibility` decide what reaches shared L3. |
 | D22 | L2 consolidation | **Verified:** pforge-mcp has no `.forge` directory override, so jobs in worktrees, remote workers and pods produce L2 history outside the operator's checkout. Forge-Claw merges each job's `.forge` delta back into the project's canonical L2 home (`repo.forgeHome`): verbatim copies of orchestrator-produced artifacts, append-only, idempotent. Pods drain the OpenBrain queue and ship leftovers before exit. Upstreaming a `.forge` override or a `pforge import-runs` command is a follow-up. |
+| D29 | Review source tracking and audit coverage | **Decided 2026-10-08 (operator):** permit the narrowly related ignore-rule correction, Claw ESLint config/runner coverage, CI lint gate, focused regression tests and metadata test-support scope listed above. Keep existing lint rules, thresholds and baselines unchanged. Capture before/after findings; commit audit-coverage wiring separately from product behavior fixes. Stop before merge, release or deployment. |
+| D30 | Release preparation and gated branch promotion | **Decided 2026-10-10 (operator):** approve the narrow release metadata extension above, feature-branch publication, CI and reviewed consumer promotion for dev/staging. The existing consumer target is `master`; phase plans and dev-only artifacts remain on `planning/main`. Promotion waits for required CI and independent review; no protection bypass, force-push, tag, production release or unspecified environment deployment is authorized by this preparation. |
+| D31 | Per-job native ownership | **Continuation directed 2026-10-10 (operator):** resolve the confirmed shared-OS snapshot ambiguity autonomously using scoped native ownership/authoritative lineage before command execution, rather than false proof or global test serialization. Own-source adapters may use existing PowerShell/Node and OS APIs under the current account. Ordinary execution, literal argument arrays, approved choices, current-lease authority and distinct history application ACKs remain unchanged. Native absence/failure is explicit and cannot certify settlement. No added third-party dependency, privileged/global host mutation, platform reduction, deadline increase or weakened permission/quality gate is authorized. Final acceptance requires the original concurrent/full/floor/actual kind gates and fresh review on committed source. |
+| D32 | Existing runtime security patch floors | **Autonomous completion continuation 2026-10-11:** use verified existing-package floors MCP SDK `^1.31.0` and sharp `^0.35.5`; reconcile existing proxy-addr/source-map-js occurrences to patched versions in both locks. The resolved SDK remains in major 1. The actual lock delta must add no package names and preserve unrelated runtime/model versions. Affected declared/locked/installed floors fail before remediation; root runtime-only and full standalone audits plus consumer regressions must pass afterward. Full root development-tool advisories remain reported separately, never suppressed. This is not a native-macOS scope decision or authorization to merge/tag/release/deploy. |
+| D33 | Existing consumer delivery blockers | **Autonomous build-closeout continuation 2026-10-11:** the latest instruction directs completion of remaining shipping gates. Repair the already-reproduced #346 runtime-copy ancestor bug without adding cache/secret delivery; separately repair #347 test loading for intentionally absent installed-custom guidance. Do not skip core runtime tests or mask missing standard/source assets, alter classifier logic or lower audit thresholds. Source, standard and custom before/after counts plus independent classifier-contract review are required. This does not waive native macOS, approve a privileged helper, alter automatic Claw installation, bump the actual release version or authorize release/deployment. |
 
-_All decisions were resolved at hardening on 2026-10-07; verification evidence is in Assumptions._
+**D31 recovery status (2026-10-11):** Windows and Linux have actual native
+ownership evidence under their execution accounts. The published Linux fixture
+image also proved native zero-child/root-exit settlement as UID 10001 without
+network access or added privileges. A symlinked validation projection produced
+two false integration failures; an exact physical copy passed both original
+suites (28 tests) without a product fix or assertion/deadline change. Final
+global/floor/platform/cold-source review gates remain separate. Authoritative
+macOS ownership is still unavailable and blocks promotion; its hosted probe
+measures capabilities, not settlement acceptance. An unavailable user-input
+fallback does not approve a platform cut or additional dependency.
+
+The stopped compiler-free Linux recovery replaces per-root C# compilation
+with fixed emitted libc import metadata and one PowerShell readiness loop.
+A real compiler-refusal regression failed before the change; current native
+floor/LTS controls require genuine `ECHILD`, birth-qualified ownership and the
+retained parent root wait. Independent review also checked import metadata,
+strict private-frame types, fragmented transport and unchanged parent-side
+proof functions. Local full Windows and physical, unprivileged two-CPU Linux
+floor/LTS suites pass with the original four workers and deadlines. Those
+results do not certify the older published CI, the newly built kind image or
+native macOS; current committed-source, hosted and release gates remain separate.
+
+The stopped direct-native-actor recovery removes the second Node supervisor
+before Linux readiness. A real held-loader dependency regression failed before
+the change; the native PowerShell root now reports readiness after its own
+capability/listener setup, and literal actor execution still requires verified
+attachment and START. Existing Node-supervisor baselines check command lookup,
+argv, environment, signal, status and safe-error parity; native zero-child and
+exact original-root-exit proof remain separate. Shared diagnostic anchors track
+the new readiness boundary without treating a milestone as authority.
+Independent review, final current-source/floor/full/kind and committed-source
+gates remain mandatory; the deliberately held loader is not asserted to explain
+the exact hosted timeout. No public API, permission, dependency, deadline or
+macOS requirement change is authorized by this internal optimization.
+
+The current `455f7bd1` hosted gate passed Windows floor/LTS, Ubuntu floor and
+real kind, but Ubuntu LTS has one original 5,000 ms FRC-03 timeout. Its READY
+marker and identity-frame observations continue through cleanup; they do not
+establish that readiness preceded interruption. Diagnostic-only regression
+controls now distinguish a matching-PID non-READY frame and actual late READY
+after private STOP, preserving native uncertainty. Fixed, bounded parent
+event order and monotonic ages identify READY receipt, verified acquisition,
+START, result, STOP and original-root exit/close without logging raw payloads.
+They do not alter deadlines, execution, permissions or settlement proof. The
+bounded cold four-worker/two-CPU producer cohort passed its three genuine
+native-settlement cases and one deliberately unconfirmed private-STOP case.
+The original output was recovered without rerunning the cohort: first READY
+serialization measured 136.7-176.1 ms and complete native lifetime measured
+1.56-1.64 seconds. No interval exceeded the original deadline or reproduced
+hosted scheduling pressure. Neither a causal serialization bottleneck nor
+the exact hosted cause is established; this is not a runtime-fix claim.
+
+The subsequent `81c07bce` hosted diagnostics establish the failure before
+readiness: Ubuntu floor sent STOP at 5,000 ms and received READY at 5,757 ms,
+without acquisition or START; Ubuntu LTS never received READY before exit.
+The stopped D31 candidate removes the avoidable Utility JSON/environment
+cmdlet dependency using shipped .NET JSON facilities. Its real external
+utility-refusal test failed before product edits, and literal lone-surrogate
+parity regressions caught and corrected an initial compatibility defect.
+Strict lexical integers, bounded private frames, literal argv, peer identity,
+native `ECHILD` and the retained original-root wait remain required. Targeted
+floor/LTS results are not hosted closure. One earlier LTS packet's detached
+creator PID assertion failed and remains recorded; its original event history
+is unavailable. A deterministic fixture-only gate reproduced sampling before
+the live creator exits. The corrected test requires that pinned creator
+generation to exit and the same-birth leaf to be adopted before retaining the
+original PPID and native settlement assertions. Publication, capture, release
+and adoption share the original single one-second observation budget.
+Independent native/fixture review and current Windows/Linux floor/LTS full
+regression gates pass: Windows has 2,240 passing units with 52 OS skips and
+Linux has 2,274 with 19 OS skips; each cohort passes all 35 offline scenarios.
+The first physical Linux projection's four shell-parity failures were exact
+Windows CRLF copies; restoring only three projected shells to their verified
+Git LF blobs passed the original assertions without a product change. Fresh
+committed-source proof and actual CI at `93870758` passed the Windows/Linux
+floor/LTS and real kind gates. Both native macOS jobs still fail; neither
+capability measurement nor an unavailable owner-input fallback waives them.
+Release and authenticated operator acceptance remain separate blockers.
+
+**D33 current delivery evidence (2026-10-11):** source-stopped installer repairs
+pass 12 real-shell layout cases, each checking 46 delivered assets and 18 local
+cache exclusions, plus two explicit Bash traversal-failure cases. The source MCP
+suite passes 8,807 tests on each Node 22.12/24 cohort with 27 skips. Actual standard
+consumer installs made by both shells each pass 7,914 installed tests on both
+Node cohorts with 48 skips and one todo. The actual custom consumer passes 7,840
+on each cohort with 101 skips and one todo. Its targeted guidance packet retains
+32 core tests and 12 helper tests; 52 optional hook/prompt checks and one existing
+source-template check remain explicitly pending. Removing a required custom
+runbook still fails five assertions; removing a standard step2 prompt also fails
+five, with no added standard skips. Independent review closed the reproduced
+required-runbook and broken-link omission bugs. Installer product and test-only
+guards must be committed separately; fresh final committed delivery/update
+proof, current quality closure and new-head CI remain required. This evidence
+does not mark the phase Complete or authorize release/deployment.
+
+**D33 committed delivery closeout (2026-10-11):** installer `6c89d68e` and
+test-only `ac12bc5b` are separate local commits, with related documentation in
+`0fd85778`. A fresh exact committed checkout installed 608 locked packages and
+verified all 362 Claw blobs, 318 ESM modules and 1,446 relative imports with no
+missing files or line-ending conversions. Documented generation of the ignored
+CLI schema then passed the own-root MCP check (107 tools); both earlier bootstrap
+failures are retained. All 14 installer/traversal and strict source/installed
+guards passed in the 134-test cold floor packet. The actual committed archive
+contains the project MCP client and all nine preset `AGENTS.md` templates, but
+no root maintainer `AGENTS.md` or development plans.
+
+Real PowerShell and Bash updates from verified stable tag `v3.32.0` preserve
+consumer configuration, customized guidance, application VERSION and
+package-local configuration while recursively delivering the new test helper.
+These are explicitly allowed developer-source updates, not a stable release
+rehearsal. Each updated standard consumer passes 7,914 tests on Node 22.12/24
+with 48 skips and one todo. A fresh committed custom install passes 7,861 on
+each cohort with 101 skips and one todo. Its 21 additional passes are two
+`coverage`-named suites formerly omitted by the absolute-path filter; the
+earlier overlaid-consumer result of 7,840 remains historical evidence.
+The exact consumer snapshot is 478 staged paths, not committed or published.
+Unchanged canonical scanning reports 4,327 raw indicators at threshold 4;
+all 62 new exact contexts are reviewed, with no confirmed credentials or
+pending contexts. The nine-file lint and test-smell delta has no new findings.
+The Windows jscpd wrapper's invalid lint-row output is recorded in #349;
+direct invocation of the installed detector produced 45 genuine clone pairs.
+Actual required CI `38178351389` at `6f47e847` passes all Windows/Linux
+floor/LTS jobs and real kind, including the exact canonical-history application
+ACK and cleanup. Overall CI still fails macOS: Node 24 has 52 native-dependent
+failures; Node 22.12 has 53, including a separate in-memory remote replay
+failure tracked in #352. That extra failure is not attributed to native
+ownership absence. A bounded controlled close/abort/authenticated-resume
+witness and ten immediate-release copies did not reproduce its missing event
+or failed terminal; the original terminal code and cause remain unknown.
+Diagnostic-only safe terminal-code and bounded lifecycle capture may improve
+the next meaningful current-head evidence, but does not authorize changing
+transport behavior, cancellation, assertions or original clocks. Native macOS,
+the independent replay defect, development-tool release disposition, the clean
+stable-release rehearsal and authenticated operator acceptance remain open.
+
+The stopped replay diagnostic test now records allowlisted code/error values,
+separate field-presence flags and a sticky observer-failure flag. It samples
+eight events and at most 32 lifecycle entries within the tested 8,192-byte
+payload bound; raw frames, credentials, arbitrary error text and heartbeat
+chatter are excluded. Actual diagnostic omission regressions failed before
+repair (seven initial failures, then twelve attestation failures). All 35 owned
+transport/diagnostic cases pass on Windows and physical Linux Node 22.12/24.
+The original immediate terminate/release order, sequence/uniqueness assertions,
+socket bounds and production cancellation/publication logic remain unchanged.
+An auxiliary Linux LTS PowerShell version probe failed after the 35 passing
+tests because private scratch was mounted `noexec`; that failure is retained,
+and only the isolated floor fixture's executable scratch mount was corrected.
+This is diagnostic readiness, not recovery of the original Mac failure code
+or cause. The next exact committed-head CI remains a separate required gate.
+
+**Actionable macOS diagnostics (#353):** a doctor regression reproduced a
+generic PowerShell-provisioning hint for the unsupported native macOS adapter
+before the displayed hint was corrected. The five existing native-doctor cases
+remain active; the combined doctor/CLI wrapper packet passes 22 cases on each
+Windows/Linux Node 22.12/24 cohort. Only that platform-specific hint changed:
+failure status, error code, probe and native settlement requirements retain
+their original ASTs. This is not a native adapter fix or a platform waiver.
+The owner's latest scope form again returned unavailable, not explicit approval
+to reduce platforms. Pinned XNU headers also reject kqueue automatic child
+tracking as unsupported. The bounded sandbox-label and tracing investigations
+also found no admissible proof: no supported current-user immutable membership
+label/readback contract was established, and automatic compulsory descendant
+trace capture was not established. These are source-derived necessary-condition
+results, not an exhaustive impossibility claim or physical macOS acceptance.
+No privileged or global host changes were made.
+
+**Native validation provenance correction (#354):** the local Linux fixture
+put the Node executable directory before the extracted PowerShell runtime.
+Its bundled executable is PowerShell 7.4.6 on .NET 8, whereas the intended
+archive is 7.6.6 on .NET 10. A post-suite version query of the archive did not
+prove which binary the native launcher selected. Preserve the earlier local
+counts, but do not reuse their 7.6.6 labels as exact-runtime acceptance.
+The corrected fixture places the pinned runtime first and checks the real
+native launcher's resolution under each target Node environment without
+launching a PowerShell warmup process. With that gate, both Node 22.12/24
+packets pass 108 original native cases with three OS skips and unchanged
+deadlines/four workers. This repairs validation provenance, not production
+command resolution or the current hosted timeout.
+
+The single current, correctly selected 7.6.6 four-root profile passed all
+four cases with genuine zero-owned-child and original-root exit evidence.
+Parent READY receipt was 1.002-1.091 seconds; the first writer/options
+construction was 1.009-1.358 milliseconds and the complete READY factory
+70-95 milliseconds in a separate producer clock domain. No constructor
+bottleneck, avoidable dependency or original hosted cause was established.
+The bounded five-run health audit has no slice-retry denominator and does
+not justify a native rewrite, deadline increase, warmup or serialization.
+Current Linux/Node 24 still has two original five-second gate failures;
+older green attempts and this local profile do not replace that CI result.
+
+The next diagnostic-only test records first complete boot-marker receipt ages
+for the existing four stages on the same parent clock as spawn, STOP and exit.
+Fragmented, overlong, duplicate and forged marker controls retain bounded
+framing; a marker received after STOP grants no readiness or settlement
+authority. The original PowerShell annotation function, stage/event registries
+and full FRC-03 statement remain unchanged. Actual omission red preceded
+28 passing owned cases on each Windows Node cohort; guarded PowerShell 7.6.6
+integration passes 110 cases with three OS skips on each Linux Node cohort.
+This improves the next hosted failure evidence, not the underlying runtime,
+original deadlines or platform acceptance. New committed-head CI is required.
+
+_Original decisions were resolved at hardening on 2026-10-07; verification evidence is in Assumptions. D29 and D30 are the operator-approved review/release-preparation extensions from 2026-10-08 and 2026-10-10._
 
 ## Acceptance Criteria
 
@@ -419,6 +638,8 @@ _All decisions were resolved at hardening on 2026-10-07; verification evidence i
 ## Stack Boundary
 
 Node.js ESM (`.mjs`), no build step, Node `>=22.12.0`, vitest with the repo's existing config conventions. Deployment assets are YAML (Kustomize), Dockerfiles, a launchd plist, a systemd unit, and paired `install-service.ps1` / `install-service.sh`. No changes to `pforge-mcp/` runtime code or `pforge-master/` runtime code in this phase; the only edits outside `pforge-claw/` are the root `package.json` workspaces entry, `pforge.ps1` / `pforge.sh` dispatch, `scripts/audit/dep-boundaries.mjs` / `layer-policy.json`, CLI-schema registration (`pforge-mcp/capabilities/schemas.mjs` + regenerated `cli-schema.json`), the Forge-Claw entry in the capabilities surface (`pforge-mcp/capabilities/surface.mjs`, Slice 29, metadata only), a new CI workflow (`.github/workflows/pforge-claw.yml`), `CHANGELOG.md`, `ROADMAP.md`, `README.md`, and docs (incl. `docs/manual/`). Supported platforms: macOS, Windows and Linux (x64 + arm64) for dispatcher and workers; any conformant Kubernetes cluster for M2/M3.
+
+**Review-remediation exception (D29):** the closed outside-package list above also permits `.gitignore`, the two named ESLint audit files, the existing Claw workflow's lint wiring/path filters, and the two named metadata regression-support files. No MCP tool or runtime changes are authorized by this exception.
 
 ## Security Posture
 
@@ -2409,6 +2630,69 @@ node -e 'const c=require("fs").readFileSync("docs/plans/Phase-62-PFORGE-CLAW-PLA
 - **After Slice 28**: the CI matrix is green on all three OSes plus kind; the Tested Platforms matrix is seeded.
 - **Before Slice 29**: all code is frozen; the doc sweep documents what actually shipped, not what was planned.
 
+## What actually shipped
+
+Slices 1–31 delivered the experimental Forge-Claw package, its governed execution system, offline validation, and the documentation and capability surface:
+
+1. **Package and CLI foundation** — `pforge-claw/package.json`, `pforge-claw/cli.mjs`, shell dispatchers, package boundaries, and CLI tests.
+2. **Configuration and setup** — `pforge-claw/config.schema.json`, `src/config.mjs`, `src/secrets.mjs`, `src/registry.mjs`, initialization, and doctor.
+3. **Durable state** — `src/state/store.mjs`, `src/jobs/model.mjs`, and persistence tests.
+4. **Telegram channel** — the channel-adapter contract, Telegram client, formatter, poller, and rate limiter.
+5. **Identity and commands** — `src/router.mjs`, command and callback handlers, role checks, and caller-filtered help.
+6. **Project Q&A** — the project MCP client, Forge-Master ask handler, and chat integration.
+7. **Capture and memory commands** — remember/recall, idea and bug capture, and associated handlers.
+8. **Local execution** — lane and runtime contracts, local lane, GHCP/BYOK adapters, and job queues.
+9. **Governed jobs** — worktrees, permission policy, runners, bootstrap, and run/skill/task commands.
+10. **Approvals** — identity-bound approval callbacks, feature wiring, and approval tests.
+11. **Budget controls** — usage tracking, budget commands, holds, and budget tests.
+12. **Progress and recovery** — job progress, abort/retry commands, and recovery callbacks.
+13. **Scheduling** — scheduler, digest generation, and scheduling feature integration.
+14. **Alerts** — alert relay, stale-work nudges, and alert callbacks.
+15. **Message capture** — forwarded content, links, photos, voice, and speech-to-text handling.
+16. **Cross-project operations** — general-topic status, fan-out, and scoped cross-project behavior.
+17. **Host services** — launchd, systemd, and Task Scheduler packaging, status commands, and single-host smoke coverage.
+18. **Remote workers** — worker protocol, remote lane, enrollment/join/revoke CLI, and worker features.
+19. **Dispatcher deployment** — container packaging and Telegram webhook mode.
+20. **Kubernetes manifests** — dispatcher and worker resources under `pforge-claw/deploy/k8s/`.
+21. **Worker images** — base and platform variants with PowerShell/Bash image-build scripts.
+22. **Kubernetes jobs** — `src/lanes/k8s-job-lane.mjs`, Kubernetes API access, and lane tests.
+23. **Network and placement policy** — job egress policy, label placement, lane controls, and policy tests.
+24. **Memory integration** — OpenBrain client, memory feature wiring, capture, provenance, recall, and `/forget` registration.
+25. **Canonical history sync** — `src/memory/l2-sync.mjs`, worker-agent integration, and remote/Kubernetes history tests.
+26. **Security hardening** — `docs/PFORGE-CLAW-THREAT-MODEL.md`, router safeguards, and security end-to-end tests.
+27. **End-to-end validation** — offline scenario tests, test helpers, development topology, Kubernetes test overlay, and the operator live-test runbook.
+28. **Cross-platform validation** — the three-OS CI workflow and a Tested Platforms matrix that remains pending operator evidence.
+29. **Documentation and capabilities** — the operator guide, Forge-Master companion metadata, capabilities docs, manual chapters, CLI guide, architecture, roadmap, and changelog.
+30. **Composition root and local dispatch** — dispatcher boot, feature/lane wiring, and real local execution through the shared job path.
+31. **Remote and one-shot execution** — runner-based remote and Kubernetes job execution with grants, lease boundaries, and canonical result/history handling.
+
+**Deviations:** The command registry is `pforge-claw/src/commands/index.mjs`, not the plan's `src/commands.mjs` path. Forge-Claw capability metadata is nested at `forgeMaster.companions.forgeClaw` to preserve the exact top-level capabilities snapshot; promoting it to a top-level key is a follow-up once that snapshot can be updated.
+
+**Known limitations:** `/forget` is registered but unavailable; Tested Platforms entries are still pending; there are no `forge_claw_*` MCP tools and no npm publish.
+
+## Review remediation
+
+The operator approved the D29 scope extension after the reboot recovery review:
+
+- **Recovered baseline:** Windows Node 24.11.1; 967 tests passed, two expected host/cluster skips, zero failures. Server inventory, capabilities docs and manual checks passed. This proves only the executed offline assertions, not every phase acceptance claim.
+- **Source tracking:** the required project MCP client existed locally but was ignored and absent from the checkpoint commit (#342). The stale dashboard ignore is now root-only; source tracking and cold-source verification must close before handoff.
+- **Audit coverage:** the unchanged rules initially exposed 75 errors in 44 committed Claw files only through matching virtual filenames. Applying the same rules to actual workspace paths exposed 76 errors, including the previously ignored client (#340). Four new coverage/ignore regressions failed before the metadata fix, then passed; the CI gate has its own red/green guard.
+- **Behavioral review:** execution review identified gaps in foreground plan invocation, canonical history application/cleanup, remote-home routing, worker enrollment/recovery, signed runtime choices, SDK request/resource handling, cancellation, and Kubernetes lifecycle validation. Each repair requires a targeted failing regression and independent green evidence.
+- **Parallel ownership:** execution/dispatcher integration, worker protocol/credentials, signed runtime/SDK boundaries and Kubernetes deployment each have a single writer. Shared signed-payload and application-level history-ACK contracts are integrated serially. Receipt of an event is not proof of canonical history application.
+- **Coordinator regressions (2026-10-09):** the real PowerShell foreground wrapper returned zero after a failed orchestrator child; its regression went from seven passes/one failure to eight paired-shell passes after explicit exit-code propagation. Job success metadata also overwrote protected lifecycle, identity, governance and runtime fields: seven new regressions failed before enforcing the existing `branch`/`prUrl` result boundary; all 16 job-model tests now pass and the model's complexity error is cleared. These are targeted, uncommitted results, not final integrated acceptance.
+- **Foundation quality packet:** behavior-preserving config, progress, snapshot and STT refactors passed 94 targeted tests, including 40 characterizations run before and after extraction. Unchanged-rule owned errors fell from nine to zero and warnings from 25 to 17; test bodies remain outside the existing clean-code lint configuration. The narrow STT `finally` return-selection follow-up then reproduced six missing-cleanup-flag failures and passed all 27 focused tests after updating the selected result object. Primary transcription outcomes, awaited cleanup, unflagged missing-file cleanup and sanitized error logs remain unchanged.
+- **History integration prerequisite:** G2's core receiver, transfer identity and application-ACK contract passed 32 tests across four focused files after four new ACK regressions failed. That tested core is frozen for G1/G4 integration. Final credential/signed-configuration, one-shot cleanup and global regression work remains open; no transport receipt is accepted as canonical application proof.
+- **Kubernetes diagnostics repaired offline:** two wiring guards reproduced the CI failure path that described pods and would print literal per-job credential environment values. The workflow now pipes Pod JSON through the bounded, canary-tested status-only helper; two wiring guards and six helper canary/error cases pass. Missing fixture/image and live Kubernetes gates remain separate. No live secret exposure or deployment occurred during this recovery.
+- **Control repairs targeted-verified (2026-10-10):** approval validity/current-identity tests pass 49 cases, budget routing and explicit held-job recovery pass 53, preservation-first state recovery passes 50, and exact scheduled-slot preparation passes 56. Each packet clears its owned blocking lint with unchanged rules. Native plan-actual attribution, producer consumers, remaining control/runtime integration and the quiescent whole-M1 regression remain open; overlapping focused test counts are not added into a phase total.
+- **Generic configuration gate:** eight home-kind/schema failures and two configured-secret/voice-schema failures were reproduced before repairs. Home transport is selected by configured lane kind rather than ID; lane/project runtimes, provider endpoints, bootstrap modes and optional voice settings are declared in the normative schema. All shipped example and Kubernetes-overlay configurations validate in 38 focused tests. This proves configuration conformance, not provider authentication or live deployment.
+- **Final offline repair gate (2026-10-10):** all exclusive repair writers have stopped. The integrated Claw unit suite passes 1,828 tests across 101 files, with zero failures and one explicitly unrun Unix service-installer test on Windows. All 35 offline end-to-end tests across 13 files pass; the live Kubernetes test is not enabled. The affected 13 MCP/CLI/Forge-Master/bridge consumer suites pass 124 tests. These are separate, overlapping gates, not a summed phase total.
+- **Current-authority and native progress:** recovery retains the actual approved quorum/resume/model choices, rechecks current requester scope and runtime eligibility before replay, and recovers committed children after a partial receipt or restart. Native plan progress is derived from scoped, declared passed-slice outcomes, not stdout percentages or a home's latest run. A reproduced fast-child race is covered by one bounded final native watch before cleanup; timeout, loss and cancellation remain unknown rather than fabricated completion.
+- **Unchanged quality standards:** direct Claw source ESLint has zero errors and 301 advisory warnings; test bodies remain outside its existing clean-code configuration. The error-level test-smell scan covers 114 files with zero findings. Actual source duplication analysis covers 145 files at the unchanged 75-token threshold and reports zero clones. Two load-bearing workspace/history/runtime import cycles were removed with shared lower-level helpers and exact compatibility exports; the unchanged help-registry cycle remains explicitly recorded as advisory debt. The committed Boy Scout delta has 54 improved files, 80 clean files, zero regressions, 76 new files and eight unchanged-count advisories, including error-to-warning severity improvements. Existing package and paired-shell audits have zero blocking errors; their broader advisories are not silently erased.
+- **Committed-source proof:** local product commit `6657440e` contains the 238 exact validated product paths, including the required project MCP client and 81 new files. Separate quality commit `52f162f3` clears the two measured new warning regressions with 95 characterizations passing before and after. A fresh archive from `52f162f3` verifies all 330 Claw Git blobs, 286 ESM modules and 1,217 relative imports; only Git's Windows CRLF-to-LF canonicalization is accepted. An independent `npm ci --ignore-scripts --offline --no-audit --no-fund` restores 608 locked packages. The complete cold-copy unit and offline end-to-end gates reproduce the 1,828/35 pass counts without using hidden local product source.
+- **Cold MCP preparation:** the CLI schema is intentionally ignored generated output, not a missing runtime module. The fresh copy first fails `--check` on that absent artifact; the existing `node pforge-mcp/server.mjs --validate` then generates it in the disposable copy only, and `--check` passes with 107 tools. Its CLI schema matches the frozen hash and its regenerated tool JSON has identical contract content. The original worktree's inventory/rules remain byte-identical and are not regenerated.
+- **Candidate persistence and release boundary:** secret-scanner indicators over the real frozen-base diff are retained and triaged with unchanged thresholds, not relabelled as clean. D30 now authorizes Claw's version synchronization and manifest-only release allowlist repair plus gated branch promotion; five new regression cases failed before the repair and the complete 28-test version/release suites pass afterward. No version bump, tag, production release or unspecified deployment is included. Platform/live CI and a fresh independent final review remain prerequisites for promotion.
+- **Acceptance remains open:** no cross-platform CI, live kind topology, real Telegram/GHCP or reference-host evidence is inferred from offline passes. `/forget` remains a documented unavailable command. Do not mark the phase Complete or merge/release/deploy from this review scope.
+
 ## Validation Gates (phase-level)
 
 ```bash
@@ -2416,6 +2700,7 @@ node pforge-mcp/server.mjs --check
 node -e "process.chdir('pforge-claw'); require('child_process').execSync('npx vitest run', {stdio:'inherit',shell:true});"
 node -e "process.chdir('pforge-claw'); require('child_process').execSync('npm run test:e2e', {stdio:'inherit',shell:true});"
 node scripts/audit/dep-boundaries.mjs
+node node_modules/eslint/bin/eslint.js --config scripts/audit/eslint-clean-code.config.mjs pforge-claw
 node scripts/generate-capabilities-doc.mjs --check
 node docs/manual/maintain.mjs --audit
 node -e "process.chdir('pforge-mcp'); require('child_process').execSync('npx vitest run tests/bridge.test.mjs', {stdio:'inherit',shell:true});"

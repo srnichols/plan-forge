@@ -1,0 +1,32 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: pforge-claw-egress-control
+spec:
+  ttlSecondsAfterFinished: 30
+  backoffLimit: 0
+  template:
+    metadata:
+      labels:
+        app: pforge-claw-egress-control
+    spec:
+      restartPolicy: Never
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: control
+          image: pforge-claw-worker-node:dev
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          command:
+            - node
+            - --input-type=module
+            - -e
+            - "const response = await fetch('http://pforge-claw-egress-target:3190/healthz', { signal: AbortSignal.timeout(5000) }); if (!response.ok) throw new Error('negative target is unavailable, not proof of policy enforcement'); console.log('negative target reachable outside worker policy');"

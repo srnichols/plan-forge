@@ -28,6 +28,7 @@ import { describe, it, expect } from "vitest";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { lintGateCommands } from "../orchestrator/gate-helpers.mjs";
+import { optionalGuidanceUnavailable } from "./helpers/optional-guidance.mjs";
 
 function lintGate(command) {
   return lintGateCommands({ slices: [{ number: "1", validationGate: command }] });
@@ -110,32 +111,33 @@ describe("the self-check asks whether a gate can fail (#258)", () => {
 
   for (const path of templates) {
     const name = path.split(/[\\/]/).pop();
+    const guidanceTest = it.skipIf(optionalGuidanceUnavailable(path));
 
-    it(`${name} asks whether every gate can fail`, () => {
+    guidanceTest(`${name} asks whether every gate can fail`, () => {
       const src = readFileSync(path, "utf-8");
       expect(src).toMatch(/actually\s+fail/i);
     });
 
-    it(`${name} names both measured traps`, () => {
+    guidanceTest(`${name} names both measured traps`, () => {
       const src = readFileSync(path, "utf-8");
       expect(src).toMatch(/passWithNoTests/);
       expect(src).toMatch(/pnpm\s+(?:--filter|run)/);
     });
 
-    it(`${name} says the vitest trap is version-dependent`, () => {
+    guidanceTest(`${name} says the vitest trap is version-dependent`, () => {
       // The report measured exit 0; vitest 4 exits 1. A self-check that states
       // it flatly would teach the wrong thing on a current toolchain.
       const src = readFileSync(path, "utf-8");
       expect(src).toMatch(/vitest 4|version-dependent|installed version/i);
     });
 
-    it(`${name} covers the untracked-file and pre-satisfied-count traps`, () => {
+    guidanceTest(`${name} covers the untracked-file and pre-satisfied-count traps`, () => {
       const src = readFileSync(path, "utf-8");
       expect(src).toMatch(/untracked/i);
       expect(src).toMatch(/git ls-files/);
     });
 
-    it(`${name} asks whether a gate can also PASS (#256)`, () => {
+    guidanceTest(`${name} asks whether a gate can also PASS (#256)`, () => {
       // #256's unsatisfiable gate: it forbade ALTER TABLE while the plan
       // mandated five foreign keys, which Prisma always emits that way.
       const src = readFileSync(path, "utf-8");

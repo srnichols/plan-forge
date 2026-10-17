@@ -30,6 +30,7 @@ const eslintBin = path.join(root, 'node_modules', 'eslint', 'bin', 'eslint.js');
 const scanGlobs = [
   'pforge-mcp/**/*.mjs',
   'pforge-master/**/*.mjs',
+  'pforge-claw/**/*.mjs',
   'scripts/**/*.mjs'
 ];
 

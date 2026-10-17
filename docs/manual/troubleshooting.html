@@ -238,6 +238,22 @@ Result: 15 OK, 3 WARN, 0 FAIL ,  forge is healthy</code></pre>
         <strong>Subsystem catalog</strong>: <a href="failure-mode-catalog.html">Appendix Z &mdash; Failure-Mode Catalog</a> complements this chapter. Where troubleshooting is symptom-driven (you see a red output and look up what it means), Appendix Z is subsystem-organised &mdash; browse by gate, quorum, watcher, OpenBrain, snapshot, model-pool, or hub to see every known failure mode with its symptom, cause, and fix triple.
       </div>
 
+      <h2 id="forge-claw-issues">Forge-Claw: Chat, lanes, and workers</h2>
+      <table class="manual-table">
+        <thead><tr><th>Symptom</th><th>Check</th></tr></thead>
+        <tbody>
+          <tr><td>No bot reply</td><td>Verify the chat and sender are allowlisted. Unknown identities are silently dropped; check the configured secret name with <code>pforge claw doctor</code> without printing secret values.</td></tr>
+          <tr><td>Group free text is missing</td><td>Disable BotFather privacy mode or make the bot an administrator. Privacy mode controls delivery, not authorization; the allowlist remains the security boundary.</td></tr>
+          <tr><td>Wrong project from a forum topic</td><td>Check the chat/topic mapping, project route, and configured home lane.</td></tr>
+          <tr><td>Runtime unavailable</td><td>Check the seat-holder's GHCP login or the selected BYOK provider's environment-variable name; do not put key values in config.</td></tr>
+          <tr><td>Worker enrollment rejected</td><td>Enrollment codes are single-use and short-lived. Enroll the lane again and join using the newly issued code.</td></tr>
+          <tr><td>TLS connection fails</td><td>Use <code>wss://</code> with a valid ingress/reverse-proxy certificate or private overlay. Plain non-loopback <code>ws://</code> is refused by default.</td></tr>
+          <tr><td>Lane is offline</td><td>Confirm the worker is connected, the lane is enabled, opt-in state is on, and placement requirements match its labels.</td></tr>
+          <tr><td>Job is held for budget</td><td>Review reported usage and the unknown-usage counter. A configured unknown-usage cap may hold jobs; only an owner may release a budget hold.</td></tr>
+        </tbody>
+      </table>
+      <p>See the <a href="forge-claw.html">Forge-Claw chapter</a> and the <a href="https://github.com/srnichols/plan-forge/blob/planning/main/docs/PFORGE-CLAW-GUIDE.md" rel="noopener">complete guide on GitHub</a> for setup and policy details.</p>
+
       <h2 id="getting-help">Getting Help</h2>
       <ul>
         <li><strong>GitHub Issues</strong>: <a href="https://github.com/srnichols/plan-forge/issues">github.com/srnichols/plan-forge/issues</a></li>

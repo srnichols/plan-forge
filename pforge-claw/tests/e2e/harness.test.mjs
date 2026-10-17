@@ -1,0 +1,152 @@
+import { access, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
+import { afterEach, describe, expect, it } from "vitest";
+import { createCopilotRuntime } from "../../src/runtime/copilot-session.mjs";
+import { startFakeOpenBrain } from "../helpers/fake-openbrain.mjs";
+import { createFakeClock } from "../helpers/fake-clock.mjs";
+import { createFixtureRepos } from "../helpers/fixture-repos.mjs";
+import { createSessionFactory } from "../helpers/scripted-copilot.mjs";
+import { cleanChildEnvironment, createE2ERig } from "../helpers/e2e-rig.mjs";
+import { createE2EWorkerServer } from "../helpers/e2e-worker.mjs";
+
+let temporary;
+let openbrain;
+let fixtures;
+const rigs = [];
+
+afterEach(async () => {
+  await openbrain?.close();
+  openbrain = undefined;
+  await fixtures?.cleanup();
+  fixtures = undefined;
+  await Promise.all(rigs.splice(0).map((rig) => rig.teardown()));
+  if (temporary) await rm(temporary, { recursive: true, force: true });
+  temporary = undefined;
+});
+
+describe("scenario test-harness contracts", () => {
+  it("boots through the dispatcher, scrubs ambient credentials, and isolates each rig", async () => {
+    const source = await readFile(new URL("../helpers/e2e-rig.mjs", import.meta.url), "utf8");
+    expect(source).not.toContain("createApp");
+    expect(source).not.toContain("chat.stop(");
+    expect(source).not.toContain("runDispatcherWiring");
+    expect(cleanChildEnvironment({
+      PATH: "safe-path",
+      GH_TOKEN: "gh-test-inherited",
+      GITHUB_TOKEN: "github-test-inherited",
+      COPILOT_TOKEN: "copilot-test-inherited",
+      COPILOT_GITHUB_TOKEN: "copilot-github-test-inherited",
+      PFORGE_CLAW_TELEGRAM_TOKEN: "telegram-test-inherited",
+    })).toEqual({ PATH: "safe-path" });
+
+    const first = await createE2ERig();
+    rigs.push(first);
+    const firstHome = first.home;
+    await first.teardown();
+    await expect(access(firstHome)).rejects.toMatchObject({ code: "ENOENT" });
+    rigs.splice(rigs.indexOf(first), 1);
+    const second = await createE2ERig();
+    rigs.push(second);
+    expect(firstHome).not.toBe(second.home);
+  });
+
+  it("keeps fixture repository opt-ins isolated and supports paths with spaces", async () => {
+    temporary = await mkdtemp(path.join(os.tmpdir(), "claw harness with spaces-"));
+    const directory = path.join(temporary, "caller-owned fixtures");
+    await mkdir(directory, { recursive: true });
+    await writeFile(path.join(directory, "keep.txt"), "owned by the test");
+    fixtures = await createFixtureRepos(1, {
+      directory,
+      withForge: true,
+      ghShim: true,
+      visibility: "restricted",
+    });
+
+    const [project] = fixtures.projects;
+    expect(project.visibility).toBe("restricted");
+    expect(await readFile(path.join(project.repoPath, ".forge.json"), "utf8")).toContain('"v": 1');
+    expect(await readFile(path.join(project.repoPath, ".forge", "fm-prefs.json"), "utf8")).toContain('"v": 1');
+    expect(fixtures.ghShim.command).toHaveLength(2);
+
+    await fixtures.cleanup();
+    fixtures = undefined;
+    expect(await readFile(path.join(directory, "keep.txt"), "utf8")).toBe("owned by the test");
+  });
+
+  it("deduplicates OpenBrain writes by idempotency key and exposes offline failure", async () => {
+    openbrain = await startFakeOpenBrain();
+    const first = await fetch(openbrain.endpoint, {
+      method: "POST",
+      headers: { "content-type": "application/json", "idempotency-key": "capture-1" },
+      body: JSON.stringify({ text: "fixture note" }),
+    }).then((response) => response.json());
+    const replay = await fetch(openbrain.endpoint, {
+      method: "POST",
+      headers: { "content-type": "application/json", "idempotency-key": "capture-1" },
+      body: JSON.stringify({ text: "fixture note" }),
+    }).then((response) => response.json());
+    expect(replay.item.id).toBe(first.item.id);
+    expect(openbrain.items).toHaveLength(1);
+    expect(openbrain.requests).toHaveLength(2);
+
+    openbrain.setOnline(false);
+    await expect(fetch(openbrain.endpoint)).rejects.toThrow();
+  });
+
+  it("injects a fake clock and scripts real SDK-event mapping with nullable usage", async () => {
+    const clock = createFakeClock("2026-02-01T00:00:00.000Z");
+    expect(clock.now().toISOString()).toBe("2026-02-01T00:00:00.000Z");
+    expect(clock.advance(1000).toISOString()).toBe("2026-02-01T00:00:01.000Z");
+
+    const sessions = createSessionFactory({
+      defaultEvents: [
+        { type: "assistant.message_delta", data: { deltaContent: "fixture progress" } },
+        { type: "assistant.usage", data: { inputTokens: 4, outputTokens: null } },
+      ],
+    });
+    const runtime = createCopilotRuntime({ createSession: sessions.createSession });
+    const emitted = [];
+    const result = await runtime.run({
+      model: "fixture-model",
+      prompt: "fixture prompt",
+      cwd: process.cwd(),
+      mcpServers: { fixture: { command: process.execPath, args: [] } },
+      emit: (type, data) => emitted.push({ type, data }),
+    });
+    expect(result).toMatchObject({
+      ok: true,
+      usage: { tokensIn: 4, tokensOut: null, model: null },
+    });
+    expect(emitted).toContainEqual({ type: "progress", data: { text: "fixture progress" } });
+    expect(sessions.seq).toBe(2);
+  });
+
+  it("enrols real worker agents into isolated homes and reconnects their WebSocket transport", async () => {
+    temporary = await mkdtemp(path.join(os.tmpdir(), "claw-worker-harness-"));
+    const server = await createE2EWorkerServer({
+      home: path.join(temporary, "dispatcher home"),
+      lanes: ["worker-a"],
+    });
+    try {
+      const worker = await server.startWorker({
+        id: "worker-a",
+        laneId: "worker-a",
+        workerHome: path.join(temporary, "worker home"),
+        capabilities: {
+          os: "linux", arch: "x64", macos: false, toolchains: ["node"], projects: ["fixture-1"],
+        },
+        config: { lanes: [{ id: "worker-a", kind: "local", maxHeavy: 1 }] },
+        runtimeFactory: ({ id }) => ({ id, async run() { return { status: "succeeded" }; } }),
+      });
+      expect(server.registry.current(worker.workerId)).toBeTruthy();
+      expect(worker.env.PFORGE_CLAW_HOME).toBe(worker.home);
+      await worker.killWorker();
+      await worker.reconnectWorker();
+      expect(worker.sockets.length).toBeGreaterThan(1);
+      expect(worker.l2Acks).toEqual([]);
+    } finally {
+      await server.stop();
+    }
+  });
+});

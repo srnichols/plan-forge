@@ -67,6 +67,10 @@
           <strong>Observer narrations vs. Studio</strong>: The Studio tab is pull-based — you ask, Forge-Master answers. Live narrations from <em>observer mode</em> (when enabled) are push-based: they appear on the <strong>main dashboard view</strong>, not in this Studio tab. See <a href="dashboard.html#observer-narrations">Dashboard — Observer Narrations Card</a> for the live feed. Enable the observer in <a href="dashboard-settings.html#settings-forgemaster">Settings → Forge-Master</a>.
         </div>
 
+        <h3 id="proposals-insights">Chat proposals and observer insights</h3>
+        <p>The Forge-Master contract accepts caller metadata, response formatting, trusted context blocks, and separately fenced untrusted context. When requested, it may return validated <code>proposedActions</code> with <code>"No actions proposed — the answer is informational."</code> when the list is empty, plus usage and truncation metadata. These remain proposals: <strong>the dashboard does not execute them</strong>. Forge-Claw or another authorized caller must apply its own role and approval policy before creating a job.</p>
+        <p>Observer insights are retained separately and retrieved with a bounded, paginated <code>forge_master_observe</code> pull. This dashboard does not convert insights into jobs.</p>
+
         <h3 id="studio-timeline">Timeline Source</h3>
         <p>Forge-Master turns are indexed as the <code>fm-turn</code> source in the <a href="dashboard.html#timeline">Timeline tab</a>. Each entry shows the lane, a truncated user message, and turn number. Useful for correlating reasoning decisions with plan execution events.</p>
 

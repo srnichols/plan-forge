@@ -12,6 +12,22 @@ import { DEFAULT_GROK_ADDIN_MODEL, DEFAULT_QUORUM_MODELS, DEFAULT_QUORUM_REVIEWE
 
 export const CLI_SCHEMA = {
   commands: {
+    claw: {
+      description: "Experimental, opt-in, chat-native front door for Forge-Claw",
+      subcommands: {
+        init: { description: "Create a Forge-Claw configuration" },
+        doctor: { description: "Check Forge-Claw prerequisites and configuration" },
+        status: { description: "Show dispatcher and job status" },
+        start: { description: "Start the Forge-Claw dispatcher" },
+        worker: { description: "Manage or run a Forge-Claw worker" },
+        service: { description: "Manage the Forge-Claw system service" },
+        dev: { description: "Run Forge-Claw development scenarios" },
+        commands: { description: "List registered chat commands" },
+      },
+      flags: { "--help": { type: "boolean", description: "Show command help" } },
+      examples: ["pforge claw doctor", "pforge claw init --help"],
+      note: "CLI-only; resolves the Forge-Claw package via PFORGE_CLAW_PATH.",
+    },
     smith: { description: "Diagnose environment + setup health", args: [], flags: {}, examples: ["pforge smith"] },
     check: { description: "Validate setup files", args: [], flags: {}, examples: ["pforge check"] },
     status: { description: "Show phase status from roadmap", args: [], flags: {}, examples: ["pforge status"] },

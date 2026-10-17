@@ -1,0 +1,109 @@
+# D13 host allowlist: api.githubcopilot.com, *.githubcopilot.com,
+# copilot-proxy.githubusercontent.com, copilot-telemetry.githubusercontent.com,
+# github.com, api.github.com, *.github.com, objects.githubusercontent.com,
+# registry.npmjs.org.
+# Plain Kubernetes NetworkPolicy can match IP ranges only, never hostnames.
+# The portable base permits only DNS and the namespace-local dispatcher.
+# Render explicit k8s.egress.allow[] IP/CIDRs with scripts/render-egress.ps1
+# or scripts/render-egress.sh and add the output to the operator overlay.
+#
+# Cilium operators can render k8s.egress.allow[] into a CiliumNetworkPolicy.
+# The toFQDNs entries below illustrate rendering each configured host:
+# apiVersion: cilium.io/v2
+# kind: CiliumNetworkPolicy
+# metadata:
+#   name: pforge-claw-jobs-fqdn
+# spec:
+#   endpointSelector:
+#     matchLabels:
+#       app.kubernetes.io/part-of: pforge-claw
+#       pforge-claw/role: job
+#   egress:
+#     - toFQDNs:
+#         - matchName: api.githubcopilot.com
+#         - matchPattern: "*.githubcopilot.com"
+#         - matchName: copilot-proxy.githubusercontent.com
+#         - matchName: copilot-telemetry.githubusercontent.com
+#         - matchName: github.com
+#         - matchName: api.github.com
+#         - matchPattern: "*.github.com"
+#         - matchName: objects.githubusercontent.com
+#         - matchName: registry.npmjs.org
+#       toPorts:
+#         - ports:
+#             - port: "443"
+#               protocol: TCP
+#     - toEndpoints:
+#         - matchLabels:
+#             k8s:io.kubernetes.pod.namespace: kube-system
+#             k8s:k8s-app: kube-dns
+#       toPorts:
+#         - ports:
+#             - port: "53"
+#               protocol: UDP
+#             - port: "53"
+#               protocol: TCP
+#           rules:
+#             dns:
+#               - matchPattern: "*"
+#     - toEndpoints:
+#         - matchLabels:
+#             k8s:io.kubernetes.pod.namespace: pforge-claw
+#             app: pforge-claw
+#             component: dispatcher
+#       toPorts:
+#         - ports:
+#             - port: "3190"
+#               protocol: TCP
+# Calico hostname rules (domains) require Calico Enterprise or Cloud. On
+# open-source Calico, use ipBlock with GitHub's /meta ranges.
+# A private OpenBrain endpoint needs its explicit CIDR in the configured policy.
+# Policies add up: every additional allow policy widens access.
+# Doctor should warn when the CNI does not enforce NetworkPolicies; that check
+# belongs to Slice 26.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: pforge-claw-jobs-default-deny
+  namespace: pforge-claw
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/part-of: pforge-claw
+      pforge-claw/role: job
+  policyTypes: ["Ingress", "Egress"]
+  ingress: []
+  egress: []
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: pforge-claw-jobs-allow-core
+  namespace: pforge-claw
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/part-of: pforge-claw
+      pforge-claw/role: job
+  policyTypes: ["Egress"]
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+          podSelector:
+            matchLabels:
+              k8s-app: kube-dns
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+    - to:
+        - podSelector:
+            matchLabels:
+              app: pforge-claw
+              component: dispatcher
+      ports:
+        - protocol: TCP
+          port: 3190

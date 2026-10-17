@@ -35,7 +35,7 @@ const ISO_DATE_LENGTH = "YYYY-MM-DD".length;
 /** The files a release or bump-back commit may change. */
 export const RELEASE_FILES = Object.freeze([
   "VERSION", "package.json", "package-lock.json", "pforge-mcp/package.json",
-  "pforge-mcp/package-lock.json", "pforge-master/package.json", "CHANGELOG.md",
+  "pforge-mcp/package-lock.json", "pforge-master/package.json", "pforge-claw/package.json", "CHANGELOG.md",
 ]);
 
 function parseVersion(version) {

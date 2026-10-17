@@ -137,6 +137,9 @@
       <p>If you use Spec Kit for specifications, Plan Forge picks up where your specs end. The setup wizard auto-detects existing Spec Kit files and imports them as context. Extensions marked <code>speckit_compatible</code> work in both frameworks.</p>
 
         <p class="text-sm text-slate-500 mt-8">📄 Full reference: <a href="https://github.com/srnichols/plan-forge/blob/master/AGENT-SETUP.md" rel="noopener">AGENT-SETUP.md on GitHub</a></p>
+      <h2 id="forge-claw-lanes">Forge-Claw execution lanes</h2>
+      <p>Forge-Claw lanes are governed execution capacity: local, outbound remote workers, or ephemeral Kubernetes Jobs. Placement matches configured labels and project home lanes, while role checks, approvals, and budgets apply to each job. They are distinct from Forge-Master reasoning lanes, which classify a prompt for read-only reasoning, and from quorum execution, which runs multiple models against a plan slice. See the <a href="forge-claw.html">Forge-Claw chapter</a> for the host-level chat front door.</p>
+
       <div id="chapter-prev-next" class="chapter-nav"></div>
     </div></main>
   </div>

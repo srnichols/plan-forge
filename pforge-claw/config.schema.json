@@ -1,0 +1,324 @@
+{
+  "$defs": {
+    "identifier": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,80}$",
+      "description": "Use 1-81 ASCII letters, digits, dots, underscores or hyphens, starting with a letter or digit. Rename unsupported IDs and update all matching project/lane references, including homeLane, placement.prefer, worker.laneId, schedules[].project and qualified forgeHome prefixes."
+    },
+    "secretName": {
+      "type": "string",
+      "pattern": "^[A-Z][A-Z0-9_]*$",
+      "description": "Environment-variable name containing the secret value."
+    },
+    "laneSecretName": {
+      "type": "string",
+      "pattern": "^[A-Z][A-Z0-9_]*$",
+      "default": "PFORGE_CLAW_K8S_LANE_SECRET",
+      "description": "Secret name, never a secret value."
+    },
+    "scheduleAt": {
+      "type": "string",
+      "pattern": "^(?:daily (?:[01][0-9]|2[0-3]):[0-5][0-9]|weekly (?:Mon|Tue|Wed|Thu|Fri|Sat|Sun) (?:[01][0-9]|2[0-3]):[0-5][0-9]|monthly (?:[1-9]|1[0-9]|2[0-8]) (?:[01][0-9]|2[0-3]):[0-5][0-9]|every (?:[5-9]|[1-9][0-9]+)m)$"
+    },
+    "role": { "type": "string", "enum": ["owner", "approver", "viewer"] },
+    "visibility": { "type": "string", "enum": ["normal", "restricted"] },
+    "runtime": {
+      "type": "string",
+      "enum": ["copilot-sdk", "anthropic", "openai", "azure", "byok:anthropic", "byok:openai", "byok:azure"]
+    },
+    "bootstrap": {
+      "type": "object",
+      "properties": {
+        "copy": { "type": "array", "items": { "type": "string" } },
+        "env": { "type": "array", "items": { "$ref": "#/$defs/secretName" } },
+        "install": { "type": "string", "enum": ["link", "ci", "npm-ci", "none"] }
+      },
+      "x-known": true
+    },
+    "channelRef": {
+      "type": "object",
+      "properties": {
+        "chatId": { "type": ["string", "integer"], "minLength": 1 },
+        "topicId": { "type": ["string", "integer"], "minLength": 1 }
+      },
+      "required": ["chatId"],
+      "x-known": true
+    },
+    "allowlistEntry": {
+      "type": "object",
+      "properties": {
+        "channel": { "type": "string", "enum": ["telegram"] },
+        "userId": { "type": ["string", "integer"], "minLength": 1 },
+        "role": { "$ref": "#/$defs/role" },
+        "alias": { "type": "string" }
+      },
+      "required": ["channel", "userId", "role"],
+      "x-known": true
+    },
+    "lane": {
+      "type": "object",
+      "properties": {
+        "id": { "$ref": "#/$defs/identifier" },
+        "kind": { "type": "string", "enum": ["local", "remote", "k8s"] },
+        "labels": { "type": "array", "items": { "type": "string" } },
+        "enabled": { "type": "boolean" },
+        "optIn": { "type": "boolean" },
+        "runtime": { "$ref": "#/$defs/runtime" },
+        "k8s": {
+          "type": "object",
+          "properties": {
+            "namespace": { "type": "string" },
+            "defaultImage": { "type": "string" },
+            "deadlineSeconds": { "type": "integer", "minimum": 1 },
+            "ttlSecondsAfterFinished": { "type": "integer", "minimum": 0 },
+            "laneSecret": { "$ref": "#/$defs/laneSecretName" }
+          },
+          "x-known": true
+        }
+      },
+      "required": ["id", "kind"],
+      "x-known": true
+    },
+    "budget": {
+      "type": "object",
+      "properties": {
+        "dailyUSD": { "type": "number", "minimum": 0 },
+        "dailyPremiumRequests": { "type": "integer", "minimum": 0 },
+        "maxUnknownPerDay": { "type": "integer", "minimum": 0 }
+      },
+      "x-known": true
+    },
+    "schedule": {
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "kind": { "type": "string", "enum": ["digest", "skill"] },
+        "at": { "$ref": "#/$defs/scheduleAt" },
+        "project": { "$ref": "#/$defs/identifier" },
+        "skill": { "type": "string" },
+        "preApproved": { "type": "boolean" }
+      },
+      "required": ["id", "kind", "at"],
+      "x-known": true
+    },
+    "project": {
+      "type": "object",
+      "properties": {
+        "id": { "$ref": "#/$defs/identifier" },
+        "displayName": { "type": "string" },
+        "repo": {
+          "type": "object",
+          "properties": {
+            "path": { "type": "string", "minLength": 1 },
+            "remote": { "type": "string" },
+            "baseBranch": { "type": "string" },
+            "forgeHome": {
+              "type": "string",
+              "description": "Canonical L2 directory, optionally <registered-lane-id>:<path>. Exact registered lane prefixes take precedence over Windows drive syntax on every host. If a drive letter is also a registered lane, use <homeLane>:C:\\path\\.forge for a Windows drive home on homeLane. IDs are case-sensitive; the path is preserved verbatim."
+            }
+          },
+          "required": ["path"],
+          "x-known": true
+        },
+        "channel": {
+          "type": "object",
+          "properties": {
+            "adapter": { "type": "string", "enum": ["telegram"] },
+            "chatId": { "type": ["string", "integer"], "minLength": 1 },
+            "topicId": { "type": ["string", "integer"], "minLength": 1 }
+          },
+          "required": ["adapter", "chatId"],
+          "x-known": true
+        },
+        "placement": {
+          "type": "object",
+          "properties": {
+            "prefer": { "type": "array", "items": { "$ref": "#/$defs/identifier" } },
+            "requires": { "type": "array", "items": { "type": "string" } }
+          },
+          "x-known": true
+        },
+        "models": {
+          "type": "object",
+          "properties": { "chat": { "type": "string" }, "work": { "type": "string" } },
+          "x-known": true
+        },
+        "runtime": { "$ref": "#/$defs/runtime" },
+        "bootstrap": { "$ref": "#/$defs/bootstrap" },
+        "homeLane": { "$ref": "#/$defs/identifier" },
+        "keepAlive": { "type": "boolean" },
+        "budget": { "$ref": "#/$defs/budget" },
+        "visibility": { "$ref": "#/$defs/visibility" },
+        "image": { "type": "string" },
+        "memory": {
+          "type": "object",
+          "properties": { "l3": { "type": "string", "enum": ["off", "openbrain"] } },
+          "x-known": true
+        }
+      },
+      "required": ["id", "repo", "channel", "homeLane"],
+      "x-known": true
+    },
+    "runtimeCommand": {
+      "oneOf": [
+        { "const": "auto" },
+        { "type": "array", "minItems": 1, "items": { "type": "string", "minLength": 1 } }
+      ]
+    }
+  },
+  "type": "object",
+  "properties": {
+    "v": { "const": 1 },
+    "instanceId": { "type": "string", "minLength": 1 },
+    "timezone": { "type": "string", "minLength": 1 },
+    "channels": {
+      "type": "object",
+      "properties": {
+        "telegram": {
+          "type": "object",
+          "properties": {
+            "enabled": { "type": "boolean" },
+            "botTokenSecret": { "$ref": "#/$defs/secretName" },
+            "mode": { "type": "string", "enum": ["poll", "webhook"], "default": "poll" },
+            "generalChat": { "$ref": "#/$defs/channelRef" },
+            "webhook": {
+              "type": "object",
+              "properties": {
+                "url": { "type": "string" },
+                "secretTokenSecret": { "$ref": "#/$defs/secretName" }
+              },
+              "x-known": true
+            }
+          },
+          "x-known": true
+        }
+      },
+      "x-known": true
+    },
+    "allowlist": { "type": "array", "items": { "$ref": "#/$defs/allowlistEntry" } },
+    "policy": {
+      "type": "object",
+      "properties": {
+        "ghcpRoles": { "type": "array", "items": { "$ref": "#/$defs/role" }, "default": ["owner"] },
+        "nonOwnerRuntime": { "type": "string", "default": "byok-only" }
+      },
+      "x-known": true
+    },
+    "runtimes": {
+      "type": "object",
+      "properties": {
+        "default": { "$ref": "#/$defs/runtime" },
+        "nonOwnerRuntime": { "type": "string", "default": "byok-only" },
+        "byok": {
+          "type": "object",
+          "properties": {
+            "anthropic": { "type": "object", "properties": { "keySecret": { "$ref": "#/$defs/secretName" }, "endpoint": { "type": "string", "minLength": 1 } }, "x-known": true },
+            "openai": { "type": "object", "properties": { "keySecret": { "$ref": "#/$defs/secretName" }, "endpoint": { "type": "string", "minLength": 1 } }, "x-known": true },
+            "azure": {
+              "type": "object",
+              "properties": {
+                "keySecret": { "$ref": "#/$defs/secretName" },
+                "endpoint": { "type": "string" }
+              },
+              "x-known": true
+            }
+          },
+          "x-known": true
+        },
+        "pforgeCommand": { "$ref": "#/$defs/runtimeCommand" },
+        "ghCommand": { "$ref": "#/$defs/runtimeCommand" }
+      },
+      "x-known": true
+    },
+    "lanes": { "type": "array", "items": { "$ref": "#/$defs/lane" } },
+    "projects": { "type": "array", "items": { "$ref": "#/$defs/project" } },
+    "budget": { "$ref": "#/$defs/budget" },
+    "jobs": {
+      "type": "object",
+      "properties": {
+        "keepFailedWorktreeHours": { "type": "number", "minimum": 0 },
+        "pushOnFailure": { "type": "boolean", "default": false }
+      },
+      "x-known": true
+    },
+    "bootstrap": { "$ref": "#/$defs/bootstrap" },
+    "mcp": {
+      "type": "object",
+      "properties": {
+        "serverName": { "type": "string" },
+        "idleMinutes": { "type": "number", "minimum": 0 },
+        "toolProfile": { "type": "string" }
+      },
+      "x-known": true
+    },
+    "schedules": { "type": "array", "items": { "$ref": "#/$defs/schedule" } },
+    "capture": {
+      "type": "object",
+      "properties": {
+        "voice": {
+          "type": "object",
+          "properties": {
+            "enabled": { "type": "boolean", "default": false },
+            "provider": { "type": "string" },
+            "keySecret": { "$ref": "#/$defs/secretName" },
+            "endpoint": { "type": "string", "minLength": 1 },
+            "model": { "type": "string" }
+          },
+          "x-known": true
+        }
+      },
+      "x-known": true
+    },
+    "memory": {
+      "type": "object",
+      "properties": {
+        "openbrain": {
+          "type": "object",
+          "properties": {
+            "endpoint": { "type": "string" },
+            "tokenSecret": { "$ref": "#/$defs/secretName" },
+            "header": { "type": "string" }
+          },
+          "x-known": true
+        },
+        "botNamespace": { "type": "string" },
+        "captureTaskOutcomes": { "type": "boolean" },
+        "captureApprovals": { "type": "boolean" },
+        "captureInsights": { "type": "boolean" }
+      },
+      "x-known": true
+    },
+    "worker": {
+      "type": "object",
+      "properties": {
+        "dispatcherUrl": { "type": "string" },
+        "laneId": { "$ref": "#/$defs/identifier" },
+        "secretName": { "$ref": "#/$defs/secretName" },
+        "allowInsecureLan": { "type": "boolean", "default": false }
+      },
+      "x-known": true
+    },
+    "http": {
+      "type": "object",
+      "properties": {
+        "bind": { "type": "string", "default": "127.0.0.1" },
+        "port": { "type": "integer", "minimum": 1, "maximum": 65535 }
+      },
+      "x-known": true
+    },
+    "k8s": {
+      "type": "object",
+      "properties": {
+        "egress": {
+          "type": "object",
+          "properties": { "allow": { "type": "array", "items": { "type": "string" } } },
+          "x-known": true
+        }
+      },
+      "x-known": true
+    }
+  },
+  "required": ["v", "instanceId", "timezone", "allowlist", "lanes", "projects"],
+  "x-known": true
+}

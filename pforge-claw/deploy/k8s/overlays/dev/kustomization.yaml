@@ -1,0 +1,28 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - ../../base
+  - egress-probe-job.yaml
+  - egress-control-job.yaml
+  - egress-target.yaml
+images:
+  - name: pforge-claw-dispatcher
+    newTag: dev
+  - name: pforge-claw-worker-node
+    newTag: dev
+patches:
+  - path: patch-deployment.yaml
+    target:
+      group: apps
+      version: v1
+      kind: Deployment
+      name: pforge-claw-dispatcher
+  - path: patch-pvc.yaml
+    target:
+      version: v1
+      kind: PersistentVolumeClaim
+      name: pforge-claw-data
+configMapGenerator:
+  - name: pforge-claw-config
+    files:
+      - config.json

@@ -39,6 +39,10 @@ Plan Forge is one shop with four stations. Each one handles a distinct part of t
 | 🛡️ **Guard** | *Guard the build* | Shipped code → drift scoring, secret scan, dep watch, regression guard, incident capture, remote alerts. | [What is LiveGuard?](docs/manual/what-is-liveguard.html) · [LiveGuard Tools](docs/manual/liveguard-tools.html) |
 | 🧠 **Learn** | *Learn from every run* | Findings → **Hallmark provenance**-stamped OpenBrain memory → **capability-negotiated OpenBrain writes** → Health DNA → self-tuned escalation, cost, and quorum thresholds. **Anvil** deduplicates high-frequency writes; **Lattice** indexes code structure for blast-radius scoring. | [Memory Architecture](docs/manual/memory-architecture.html) · [Bug Registry + Testbed](docs/capabilities.md) |
 
+### Experimental: Forge-Claw
+
+Forge-Claw is an **experimental, opt-in, host-level** Telegram front door for governed jobs, Forge-Master reasoning, and configurable execution lanes. It is not installed or started by `setup`. See the [Forge-Claw operator guide](docs/PFORGE-CLAW-GUIDE.md).
+
 And the **control room** that ties them together: the [live dashboard](docs/manual/dashboard.html) at `localhost:3100/dashboard` with 25 tabs, session replay, WebSocket event hub, cost reports, OTLP traces, and a remote bridge for Telegram / Slack / Discord / OpenClaw.
 
 ---

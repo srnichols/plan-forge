@@ -324,7 +324,7 @@ function buildForgeMasterCapabilities(cwd) {
   } catch { /* fall through to defaults */ }
 
   return {
-    description: "Forge-Master: an in-IDE reasoning assistant that classifies intent, fetches memory context, and orchestrates read-only tool calls on the owner's behalf. Phase-28 MVP.",
+    description: "Forge-Master is the reasoning front door for callers that provide caller, responseFormat, and untrustedContext metadata. It may return proposedActions as proposals only; execution requires a separately authorized Forge-Claw job. Observer insights are available through forge_master_observe.",
     addedIn: "2.61.0",
     tools: TOOL_NAMES.filter((n) => n.startsWith("forge_master_")),
     reasoningModel: config.reasoningModel ?? null,
@@ -337,7 +337,54 @@ function buildForgeMasterCapabilities(cwd) {
       promptCatalogVersion: "1.0.0",
       observerEnabled: config.observerEnabled ?? false,
     },
+    companions: { forgeClaw: buildForgeClawCompanion() },
   };
+}
+
+function buildForgeClawCompanion() {
+  const chatCommands = [
+    { name: "help", summary: "Show commands available in this topic", roles: ["owner", "approver", "viewer"], scope: "both", mutating: false, available: true },
+    { name: "ask", summary: "Ask about the current project", roles: ["owner", "approver", "viewer"], scope: "project", mutating: false, available: true },
+    { name: "new", summary: "Start a fresh Forge-Master conversation in this topic.", roles: ["owner", "approver"], scope: "project", mutating: false, available: true },
+    { name: "run", summary: "Run a plan", roles: ["owner", "approver"], scope: "project", mutating: true, available: true },
+    { name: "skill", summary: "Run a Plan Forge skill", roles: ["owner", "approver"], scope: "project", mutating: true, available: true },
+    { name: "task", summary: "Start an ad-hoc task", roles: ["owner", "approver"], scope: "project", mutating: true, available: true },
+    { name: "status", summary: "Show visible project and job status", roles: ["owner", "approver", "viewer"], scope: "both", mutating: false, available: true },
+    { name: "jobs", summary: "List recent jobs", roles: ["owner", "approver"], scope: "both", mutating: false, available: true },
+    { name: "budget", summary: "Show budget usage", roles: ["owner", "approver"], scope: "both", mutating: false, available: true },
+    { name: "remember", summary: "Save a project memory with type buttons", roles: ["owner", "approver"], scope: "project", mutating: false, available: true },
+    { name: "recall", summary: "Search saved memories in this project", roles: ["owner", "approver"], scope: "both", mutating: false, available: true },
+    { name: "idea", summary: "Capture a project idea and echo its smelt id", roles: ["owner", "approver"], scope: "project", mutating: false, available: true },
+    { name: "bug", summary: "Record a project bug and echo its id or link", roles: ["owner", "approver"], scope: "project", mutating: false, available: true },
+    { name: "abort", summary: "Abort a running job", roles: ["owner", "approver"], scope: "project", mutating: true, available: true },
+    { name: "retry", summary: "Retry a failed job", roles: ["owner", "approver"], scope: "project", mutating: true, available: true },
+    { name: "lane", summary: "Change lane availability", roles: ["owner"], scope: "general", mutating: true, available: true },
+    { name: "lanes", summary: "List configured lanes", roles: ["owner", "approver"], scope: "general", mutating: false, available: true },
+    { name: "fanout", summary: "Run one task across projects", roles: ["owner", "approver"], scope: "general", mutating: true, available: true },
+    { name: "forget", summary: "Forget a saved memory", roles: ["owner"], scope: "project", mutating: true, available: false },
+  ].map((command) => Object.freeze({ ...command, roles: Object.freeze(command.roles) }));
+
+  return Object.freeze({
+    name: "Forge-Claw",
+    package: "@pforge/pforge-claw",
+    status: "experimental",
+    optIn: true,
+    description: "Forge-Claw — native chat front door (Telegram) that dispatches governed jobs to execution lanes and calls Forge-Master for reasoning.",
+    cli: Object.freeze({
+      command: "pforge claw",
+      subcommands: Object.freeze(["init", "doctor", "status", "start", "worker", "service", "dev", "commands"]),
+    }),
+    chatCommands: Object.freeze(chatCommands),
+    configFile: "PFORGE_CLAW_HOME/config.json",
+    configSchema: "pforge-claw/config.schema.json",
+    hubEvents: Object.freeze({
+      consumes: Object.freeze(["forge-master-insight"]),
+      via: "forge_master_observe (paginated pull)",
+      emits: Object.freeze([]),
+    }),
+    internalBusEvents: Object.freeze(["job.transition", "job.finished", "lane.event"]),
+    guide: "docs/PFORGE-CLAW-GUIDE.md",
+  });
 }
 
 // ─── OpenBrain Memory Integration ─────────────────────────────────────
@@ -431,4 +478,3 @@ export function checkGeneratedArtifacts(mcpTools, outputDir) {
 
   return { ok: drift.length === 0, drift };
 }
-

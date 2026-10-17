@@ -14,6 +14,7 @@
 - [ ] Regenerate the shipped-guidance index after the last change to any instruction, prompt, agent, skill, hook, preset, template or runbook file: `node scripts\build-shipped-guidance-hashes.mjs`, then `node scripts\build-shipped-guidance-hashes.mjs --check`. Commit `pforge-mcp/shipped-guidance-hashes.json`. `pforge update` treats a project file whose content is not in this index as customized and keeps it, so a stale index makes the next update report unmodified files as `KEEP`.
 - [ ] Working tree clean OR all staged changes belong to this release.
 - [ ] Audit both the root workspace lock and the standalone `pforge-mcp` lock. Run a fresh standalone install when either changes; root-workspace success alone does not validate the dependency set consumers install. Review findings rather than treating `npm install` exit 0 as a clean security audit.
+- [ ] When runtime dependency floors or locks change, run `node node_modules\vitest\vitest.mjs run pforge-mcp\tests\runtime-dependency-floor.test.mjs pforge-mcp\tests\runtime-dependency-floor-coverage.test.mjs --configLoader runner` after the install. It checks the shipped manifests, both applicable locks and each workspace's actual package resolution; stale Master/Claw copies must fail even when MCP is patched. Report full-root and runtime-only audit results separately; a clean production dependency graph does not erase development-tool advisories.
 
 ---
 
@@ -103,11 +104,25 @@ from a file existing in the source checkout.
 
 For runtime packaging changes, exercise both a fresh install and an update
 from the previous release in temporary consumer projects, in both shells.
+Also exercise a framework source beneath a `.forge` ancestor (#346). Runtime
+copy exclusions must be package-relative: nested cache directories stay out,
+but the location of the framework checkout must not remove every module.
+Cache names apply to directory segments, not benign filenames or substrings.
+Traversal errors must remain visible and fail installation; a partial file
+enumeration is not a completed runtime copy.
 `scripts/release/rehearse.mjs` (§3 Step 3a) does this from the release
 archive; `scripts/release/verify-public.mjs` (§3 Step 8) covers the GitHub
 download.
 Check that newly added modules arrive, moved adapters resolve from their new
 locations, and the consumer's own version and configuration survive updating.
+Run installed suites for both the standard and custom presets (#347).
+Custom may intentionally omit optional prompts/hooks; only those asset-specific
+tests may be unavailable. The narrow omission allowlist is PreCommit, step0
+and step2; required runbooks are not optional. Core classifiers, worker behavior
+and gate checks must remain active. Missing standard/source assets, broken
+asset or ancestor links and invalid configuration must still fail. Record the
+exact passed/failed/skipped counts and keep test-contract
+changes separate from installer product fixes.
 The release archive must retain all three packages but exclude phase plans,
 archives, cleanup findings, and the root maintainer `AGENTS.md`.
 
@@ -145,6 +160,7 @@ These MUST agree at the tagged commit. Mismatch broke `pforge self-update` for w
 | `VERSION` | `2.82.1` (no leading `v`, no trailing newline, no `-dev`) | Tag verification, `release-guard.yml` workflow |
 | `pforge-mcp/package.json` | `"version": "2.82.1"` | npm/MCP server |
 | `pforge-master/package.json`, root `package.json` | `"version": "2.82.1"` | Forge-Master package (ships to consumers), workspace root |
+| `pforge-claw/package.json` (when present) | `"version": "2.82.1"` | Experimental opt-in Claw package in the framework source |
 | `package-lock.json`, `pforge-mcp/package-lock.json` | workspace entries `"version": "2.82.1"` | npm lockfiles |
 | `CHANGELOG.md` | `## [2.82.1] — YYYY-MM-DD — title` | User-visible release notes |
 
@@ -182,7 +198,7 @@ Verify:
 node scripts/sync-versions.mjs --check  # → All package versions match 2.82.1
 ```
 
-The script changes only version values, so key order, indentation and line endings stay as they are. `pforge-sdk/package.json` is versioned independently (`0.x`) and is left alone. `pforge-mcp/tests/version-sync.test.mjs` fails when any of these disagree with `VERSION`.
+The script changes only version values, so key order, indentation and line endings stay as they are. It also updates `package-lock.json#packages["pforge-claw"].version` when present. `pforge-sdk/package.json` is versioned independently (`0.x`) and is left alone. Checkouts without Claw are still supported; adding it to version synchronization does not install or start it. `pforge-mcp/tests/version-sync.test.mjs` fails when any of these disagree with `VERSION`.
 
 ---
 
@@ -228,7 +244,7 @@ node scripts/sync-versions.mjs 3.6.2
 ### Step 3 — Release commit
 
 ```pwsh
-git add VERSION package.json package-lock.json pforge-mcp/package.json pforge-mcp/package-lock.json pforge-master/package.json CHANGELOG.md
+git add VERSION package.json package-lock.json pforge-mcp/package.json pforge-mcp/package-lock.json pforge-master/package.json pforge-claw/package.json CHANGELOG.md
 git commit -m "chore(release): vX.Y.Z" -m "<short summary, bullets per fix>"
 ```
 
@@ -320,7 +336,7 @@ The bump-back is always to the **next likely** release of the same kind. If the 
 # Example: just shipped 3.6.2 (PATCH). Bump to 3.6.3-dev.
 node scripts/sync-versions.mjs 3.6.3-dev
 
-git add VERSION package.json package-lock.json pforge-mcp/package.json pforge-mcp/package-lock.json pforge-master/package.json
+git add VERSION package.json package-lock.json pforge-mcp/package.json pforge-mcp/package-lock.json pforge-master/package.json pforge-claw/package.json
 git commit -m "chore: bump VERSION to 3.6.3-dev"
 git push origin master
 ```
@@ -408,7 +424,7 @@ Fix it BEFORE starting §3 (do not just override in §3 step 2 — also correct 
 # Example: VERSION says 3.7.0-dev, but next release is a hotfix from 3.6.1 → reset to 3.6.2-dev.
 node scripts/sync-versions.mjs 3.6.2-dev
 
-git add VERSION package.json package-lock.json pforge-mcp/package.json pforge-mcp/package-lock.json pforge-master/package.json
+git add VERSION package.json package-lock.json pforge-mcp/package.json pforge-mcp/package-lock.json pforge-master/package.json pforge-claw/package.json
 git commit -m "chore: reset VERSION to 3.6.2-dev (next release is a hotfix, not a minor)"
 git push origin master
 ```

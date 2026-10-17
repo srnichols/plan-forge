@@ -1,0 +1,41 @@
+{
+  "v": 1,
+  "instanceId": "<generated-by-init>",
+  "timezone": "Etc/UTC",
+  "channels": {
+    "telegram": {
+      "enabled": true,
+      "botTokenSecret": "PFORGE_CLAW_TELEGRAM_TOKEN",
+      "mode": "webhook",
+      "generalChat": { "chatId": "<chat-id>" },
+      "webhook": {
+        "url": "https://<host>/telegram/webhook",
+        "secretTokenSecret": "PFORGE_CLAW_TELEGRAM_WEBHOOK_SECRET"
+      }
+    }
+  },
+  "allowlist": [{ "channel": "telegram", "userId": "<user-id>", "role": "owner" }],
+  "policy": { "ghcpRoles": ["owner"], "nonOwnerRuntime": "byok-only" },
+  "runtimes": { "default": "copilot-sdk", "pforgeCommand": "auto", "ghCommand": "auto" },
+  "lanes": [{
+    "id": "k8s-jobs",
+    "kind": "k8s",
+    "labels": ["<cluster-label>"],
+    "enabled": true,
+    "k8s": {
+      "namespace": "pforge-claw",
+      "defaultImage": "<registry>/<namespace>/pforge-claw-worker-node:<tag>",
+      "laneSecret": "PFORGE_CLAW_K8S_LANE_SECRET"
+    }
+  }],
+  "projects": [{
+    "id": "project",
+    "repo": { "path": "/path/to/project" },
+    "channel": { "adapter": "telegram", "chatId": "<chat-id>" },
+    "placement": { "prefer": ["k8s-jobs"], "requires": [] },
+    "homeLane": "k8s-jobs",
+    "image": "<registry>/<namespace>/pforge-claw-worker-node:<tag>"
+  }],
+  "k8s": { "egress": { "allow": ["github.com", "api.github.com"] } },
+  "http": { "bind": "127.0.0.1", "port": 3190 }
+}

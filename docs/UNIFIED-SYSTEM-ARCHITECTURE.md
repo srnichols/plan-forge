@@ -1,6 +1,6 @@
-# Unified System Architecture: Plan Forge + OpenBrain + OpenClaw
+# Unified System Architecture: Plan Forge + Forge-Claw + Optional OpenBrain
 
-> **Purpose**: Architecture reference for integrating Plan Forge, OpenBrain, and OpenClaw into a single automated development system.
+> **Purpose**: Architecture reference for Plan Forge's governed chat front door, execution lanes, Forge-Master reasoning, and optional external integrations.
 >
 > **Full version**: [planforge.software/manual/how-it-works.html](https://planforge.software/manual/how-it-works.html)
 >
@@ -13,32 +13,31 @@
 | Project | Problem Solved | Analogy |
 |---------|---------------|---------|
 | **Plan Forge** | AI agents drift without guardrails | The **blueprint** — what to build, how, and when to stop |
-| **OpenBrain** | Every AI session starts from zero | The **memory** — why we decided, what we learned, what failed |
-| **OpenClaw** | AI is locked inside one tool/surface | The **nervous system** — always-on orchestration across every channel |
+| **Forge-Claw** | Chat requests need governed access to work | The **native front door** — Telegram intake, identity, approvals, and execution lanes |
+| **OpenBrain (optional)** | Every AI session starts from zero | The **shared memory** — why we decided, what we learned, what failed |
+| **OpenClaw (alternative)** | External systems need cross-channel coordination | An **optional coordinator** — separate from Forge-Claw's governed dispatcher |
 
-Together they form a closed-loop system: describe a feature from any device → Plan Forge hardens into execution contract → Copilot builds it → OpenBrain captures every decision → OpenClaw notifies you on Slack/Telegram → fresh session reviews with full history.
+Forge-Claw is Plan Forge's native, experimental inbound chat front door. A Telegram request enters Forge-Claw, which calls Forge-Master for read-only reasoning and places approved work on governed execution lanes. OpenClaw remains an alternative external coordinator and the Remote Bridge remains an outbound notification path. OpenBrain is optional; Plan Forge's local memory and execution do not require it.
 
 ## Architecture (Simplified)
 
 ```
-┌─────────────────────────────────────────────────────────────────┐
-│                   UNIFIED DEVELOPMENT SYSTEM                     │
-│                                                                  │
-│  OpenClaw (orchestrator + reach)                                │
-│    └── Routes requests from any channel, sends notifications     │
-│                                                                  │
-│  Plan Forge (methodology + guardrails)                          │
-│    └── 7-step pipeline, instruction files, validation gates      │
-│                                                                  │
-│  Memory subsystem (v2.95.0)                                     │
-│    ├── Anvil  ─── Δ-only write-through cache (L2 write path)    │
-│    ├── Lattice ── Structural code index (callers, blast radius)  │
-│    └── Hallmark ─ Provenance envelope on every L3 write          │
-│                                                                  │
-│  OpenBrain (memory + context)                                   │
-│    └── Semantic search over prior decisions, cross-session       │
-│        Supports Hallmark provenance (v0.7.0+)                   │
-└─────────────────────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────────────────┐
+│ Telegram → Forge-Claw (experimental, opt-in)                            │
+│                  │                                                      │
+│                  ├── Forge-Master reasoning (proposals only)            │
+│                  ├── identity + approval + budget policy                │
+│                  └── governed lanes: local | outbound workers | K8s Jobs│
+│                                  │                                       │
+│                         project home-lane MCP                            │
+│                                  │                                       │
+│ Plan Forge: hardened plans → validated execution → review and ship      │
+│      ├── per-job worktree / clone; dispatcher-owned audit and budgets   │
+│      └── Anvil + Lattice + Hallmark memory components                   │
+│                                  │                                       │
+│                  Optional OpenBrain (cross-project L3)                  │
+│                  OpenClaw remains an alternative external integration   │
+└─────────────────────────────────────────────────────────────────────────┘
 ```
 
 ## Integration Points
@@ -47,6 +46,9 @@ Together they form a closed-loop system: describe a feature from any device → 
 |-------------|-----|
 | Plan Forge → OpenBrain | Skills run `search_thoughts` before acting, `capture_thought` after completing — wrapped in Hallmark envelope |
 | Plan Forge → OpenClaw | Orchestrator sends webhook notifications on slice completion/failure |
+| Telegram → Forge-Claw | Native inbound messages pass allowlist, role/runtime policy, and governed dispatch |
+| Forge-Claw → Forge-Master | Reasoning requests use caller metadata; proposals remain non-executable until separately authorized |
+| Forge-Claw → execution lanes | Approved jobs run locally, on outbound remote workers, or as namespace-scoped Kubernetes Jobs |
 | Plan Forge Audit Loop | `forge_tempering_drain` iterates scan → triage → fix; findings route to bug registry or Crucible |
 | OpenBrain → Copilot Memory | `forge_sync_memories` generates hints Copilot Memory auto-discovers |
 | OpenClaw → Plan Forge | Routes "build this feature" requests → triggers `forge_run_plan` |
@@ -73,7 +75,7 @@ Together they form a closed-loop system: describe a feature from any device → 
 
 ## Configuration
 
-Plan Forge works standalone. OpenBrain and OpenClaw are optional enhancements:
+Plan Forge works standalone. Forge-Claw is experimental and opt-in; OpenBrain and OpenClaw are optional integrations:
 
 ```json
 // .forge.json

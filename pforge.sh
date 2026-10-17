@@ -10,7 +10,7 @@ find_repo_root() {
     local dir
     dir="$(pwd)"
     while [ "$dir" != "/" ]; do
-        if [ -d "$dir/.git" ]; then
+        if [ -e "$dir/.git" ]; then
             echo "$dir"
             return 0
         fi
@@ -24,6 +24,64 @@ REPO_ROOT="$(find_repo_root)"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # ─── Helpers ───────────────────────────────────────────────────────────
+find_plan_forge_sibling() {
+    local root="$1" parent candidate
+    parent="$(dirname "$root")"
+    for candidate in "$parent/plan-forge" "$parent/Plan-Forge"; do
+        if [ -f "$candidate/VERSION" ]; then
+            (cd "$candidate" && pwd)
+            return 0
+        fi
+    done
+    return 1
+}
+
+resolve_claw_home() {
+    local candidate update_source_pref="auto" sibling_path="" pref_raw=""
+    if [[ ${PFORGE_CLAW_PATH+x} ]]; then
+        candidate="$PFORGE_CLAW_PATH"
+        if [ -f "$candidate/pforge-claw/cli.mjs" ]; then
+            (cd "$candidate" && pwd)
+            return 0
+        fi
+        if [ -f "$candidate/cli.mjs" ] && [ "$(basename "$candidate")" = "pforge-claw" ]; then
+            (cd "$candidate/.." && pwd)
+            return 0
+        fi
+        echo "PFORGE_CLAW_PATH is set but $candidate has no pforge-claw/cli.mjs" >&2
+        return 1
+    fi
+
+    if [ -f "$REPO_ROOT/.forge.json" ]; then
+        pref_raw="$(json_get "$REPO_ROOT/.forge.json" updateSource)"
+        case "$pref_raw" in auto|github-tags|local-sibling) update_source_pref="$pref_raw" ;; esac
+    fi
+
+    case "$update_source_pref" in
+        auto|local-sibling)
+            sibling_path="$(find_plan_forge_sibling "$REPO_ROOT" || true)"
+            if [ -n "$sibling_path" ] && [ -f "$sibling_path/pforge-claw/cli.mjs" ]; then
+                printf '%s\n' "$sibling_path"
+                return 0
+            fi
+            ;;
+    esac
+
+    if [ -f "$REPO_ROOT/pforge-claw/cli.mjs" ]; then
+        printf '%s\n' "$REPO_ROOT"
+        return 0
+    fi
+
+    echo "Forge-Claw is not installed. Clone https://github.com/<owner>/plan-forge (see the project README), set PFORGE_CLAW_PATH to the clone, or keep a sibling plan-forge clone." >&2
+    return 1
+}
+
+cmd_claw() {
+    local claw_home
+    claw_home="$(resolve_claw_home)" || exit 1
+    node "$claw_home/pforge-claw/cli.mjs" "$@"
+    exit $?
+}
 
 # ─── JSON reads (#297) ─────────────────────────────────────────────────
 # Node is a Plan Forge prerequisite; Python is not. In Git Bash on Windows,
@@ -124,7 +182,7 @@ ${end}"
         echo "  ✅ Created .gitignore with plan-forge managed block"
     fi
 
-    if [ -d "$repo_root/.git" ]; then
+    if [ -e "$repo_root/.git" ]; then
         local tracked
         tracked="$(cd "$repo_root" && git ls-files .forge 2>/dev/null | head -1)"
         if [ -n "$tracked" ]; then
@@ -162,6 +220,7 @@ COMMANDS:
   self-update       Check for and install the latest Plan Forge release from GitHub
                       Flags: --force (heal), --downgrade (with --force), --yes/-y, --dry-run, --verify (run check + smith after),
                              --overwrite-customized
+  claw <command>    Experimental, opt-in chat-native Forge-Claw CLI
   analyze <plan>    Cross-artifact analysis — requirement traceability, test coverage, scope compliance
                       Flags: --quorum[=<preset>] or --models m1,m2 (multi-model review, also of source files), --mode plan|file
   diagnose <file>   Multi-model bug investigation — root causes and fixes. Flags: --models m1,m2, --quorum=<preset>
@@ -1550,17 +1609,9 @@ cmd_update() {
             if [ -n "$pref_raw" ]; then update_source_pref="$pref_raw"; fi
         fi
 
-        # Find sibling clone (if any)
         local sibling_path=""
         if [ -z "$source_path" ]; then
-            local parent
-            parent="$(dirname "$REPO_ROOT")"
-            for candidate in "$parent/plan-forge" "$parent/Plan-Forge"; do
-                if [ -f "$candidate/VERSION" ]; then
-                    sibling_path="$(cd "$candidate" && pwd)"
-                    break
-                fi
-            done
+            sibling_path="$(find_plan_forge_sibling "$REPO_ROOT" || true)"
         fi
 
         if [ -z "$source_path" ]; then
@@ -7471,6 +7522,7 @@ case "$COMMAND" in
     smith)        cmd_doctor "$@" ;;
     testbed-happypath) cmd_testbed_happypath "$@" ;;
     self-update)  cmd_self_update "$@" ;;
+    claw)         cmd_claw "$@" ;;
     version-bump) cmd_version_bump "$@" ;;
     pending)      cmd_pending "$@" ;;
     migrate-memory) cmd_migrate_memory "$@" ;;

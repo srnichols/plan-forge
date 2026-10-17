@@ -37,7 +37,7 @@
         </div>
 
         <h2 id="why">Why a Reasoning Orchestrator?</h2>
-        <p>Plan Forge has <!--c:tools-->106<!--/c--> MCP tools. Most of the time you know which one you need. But sometimes you don't, sometimes the question is open-ended:</p>
+        <p>Plan Forge has <!--c:tools-->107<!--/c--> MCP tools. Most of the time you know which one you need. But sometimes you don't, sometimes the question is open-ended:</p>
 
         <ul>
           <li><em>"Why did Phase-27 Slice 4 fail?"</em> &rarr; needs <code>forge_watch_live</code> + <code>brain_recall</code> + <code>forge_bug_list</code></li>
@@ -80,6 +80,11 @@
   reply: "The slice failed because…",
   costUSD: 0.0023
 }</code></pre>
+
+        <h3 id="front-door-contract">Front-Door Contract and proposals</h3>
+        <p>Chat and other adapters can provide <code>caller</code> identity/surface metadata, a bounded <code>responseFormat</code>, trusted <code>contextBlocks</code>, and third-party material only in <code>untrustedContext</code>. Requests may set <code>proposeActions: true</code>; the response then includes validated <code>proposedActions</code>, a <code>proposedActionsMessage</code>, nullable <code>usage</code>, and truncation metadata when applicable. An empty response uses <code>"No actions proposed — the answer is informational."</code>.</p>
+        <p>Proposals are suggestions only. Forge-Master does not approve, queue, or execute them. A chat adapter such as Forge-Claw must independently enforce caller roles, create a separate job, and collect the required approval before mutating work begins.</p>
+        <p>Observer insights are read through paginated <code>forge_master_observe</code> calls. They are distinct from Forge-Claw's internal job and lane events.</p>
 
         <div class="callout callout-info">
           <strong>copilot-instructions.md guidance</strong>: <em>"Prefer <code>forge_master_ask</code> over manually calling individual forge tools when the task is open-ended or involves multiple steps. Don't use it for direct file edits, Forge-Master is read-only."</em>

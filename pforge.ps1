@@ -33,6 +33,18 @@ if ($PSVersionTable.PSEdition -eq 'Desktop' -and $env:PSModulePath) {
     $env:PSModulePath = (($env:PSModulePath -split ';') | Where-Object { $_ -and $_ -notmatch '(^|\\)PowerShell\\' }) -join ';'
 }
 
+function Get-PlanForgeSiblingPath {
+    param([string]$Root)
+    $parent = Split-Path $Root -Parent
+    foreach ($candidate in @(
+        (Join-Path $parent "plan-forge"),
+        (Join-Path $parent "Plan-Forge")
+    )) {
+        if (Test-Path (Join-Path $candidate "VERSION")) { return $candidate }
+    }
+    return $null
+}
+
 # ─── Issue #196: force UTF-8 console output so box-drawing chars (╔═╗║),
 # ─── checkmarks (✓⚠✅⚠️), and other Unicode survive when stdout is captured
 # ─── by execSync/spawn (e.g., orchestrator.mjs::runAutoAnalyze). Without
@@ -280,6 +292,7 @@ function Show-Help {
     Write-Host "  self-update       Check for and install the latest Plan Forge release from GitHub"
     Write-Host "                      Flags: --force (heal), --downgrade (with --force), --yes/-y, --dry-run, --verify (run check + smith after),"
     Write-Host "                             --overwrite-customized"
+    Write-Host "  claw <command>    Experimental, opt-in chat-native Forge-Claw CLI"
     Write-Host "  analyze <plan>    Cross-artifact analysis — requirement traceability, test coverage, scope compliance"
     Write-Host "                      Flags: --quorum[=<preset>] or --models m1,m2 (multi-model review, also of source files), --mode plan|file"
     Write-Host "  diagnose <file>   Multi-model bug investigation — root causes and fixes. Flags: --models m1,m2, --quorum=<preset>"
@@ -1732,16 +1745,7 @@ function Invoke-Update {
         }
 
         # Find sibling clone (if any)
-        $siblingPath = $null
-        if (-not $sourcePath) {
-            $candidates = @(
-                (Join-Path (Split-Path $RepoRoot -Parent) "plan-forge"),
-                (Join-Path (Split-Path $RepoRoot -Parent) "Plan-Forge")
-            )
-            foreach ($c in $candidates) {
-                if (Test-Path (Join-Path $c "VERSION")) { $siblingPath = $c; break }
-            }
-        }
+        $siblingPath = if (-not $sourcePath) { Get-PlanForgeSiblingPath -Root $RepoRoot } else { $null }
 
         if (-not $sourcePath) {
             switch ($updateSourcePref) {
@@ -4576,6 +4580,7 @@ function Invoke-RunPlan {
         }
         Write-Host ""
         & node @nodeArgs
+        exit $LASTEXITCODE
     } else {
         # Background mode — default for interactive use
         if ($assisted) {
@@ -8110,6 +8115,52 @@ try {
     exit $LASTEXITCODE
 }
 
+function Resolve-ClawHome {
+    if (Test-Path Env:PFORGE_CLAW_PATH) {
+        $candidate = [Environment]::GetEnvironmentVariable("PFORGE_CLAW_PATH")
+        if (Test-Path (Join-Path $candidate "pforge-claw/cli.mjs")) {
+            return [System.IO.Path]::GetFullPath($candidate)
+        }
+        if ((Split-Path $candidate -Leaf) -eq "pforge-claw" -and (Test-Path (Join-Path $candidate "cli.mjs"))) {
+            return Split-Path ([System.IO.Path]::GetFullPath($candidate)) -Parent
+        }
+        [Console]::Error.WriteLine("PFORGE_CLAW_PATH is set but $candidate has no pforge-claw/cli.mjs")
+        exit 1
+    }
+
+    $updateSourcePref = "auto"
+    $prefConfigPath = Join-Path $RepoRoot ".forge.json"
+    if (Test-Path $prefConfigPath) {
+        try {
+            $prefConfig = Get-Content $prefConfigPath -Raw | ConvertFrom-Json
+            if ($prefConfig.updateSource -in @("auto", "github-tags", "local-sibling")) {
+                $updateSourcePref = [string]$prefConfig.updateSource
+            }
+        } catch { $updateSourcePref = "auto" }
+    }
+
+    if ($updateSourcePref -in @("auto", "local-sibling")) {
+        $siblingPath = Get-PlanForgeSiblingPath -Root $RepoRoot
+        if ($siblingPath -and (Test-Path (Join-Path $siblingPath "pforge-claw/cli.mjs"))) {
+            return $siblingPath
+        }
+    }
+
+    if (Test-Path (Join-Path $RepoRoot "pforge-claw/cli.mjs")) {
+        return $RepoRoot
+    }
+
+    [Console]::Error.WriteLine("Forge-Claw is not installed. Clone https://github.com/<owner>/plan-forge (see the project README), set PFORGE_CLAW_PATH to the clone, or keep a sibling plan-forge clone.")
+    exit 1
+}
+
+function Invoke-Claw {
+    $clawHome = Resolve-ClawHome
+    $cli = Join-Path $clawHome 'pforge-claw/cli.mjs'
+    & node $cli @Arguments
+    exit $LASTEXITCODE
+}
+
 switch ($Command) {
     'init'         { Invoke-Init }
     'check'        { Invoke-Check }
@@ -8123,6 +8174,7 @@ switch ($Command) {
     'ext'          { Invoke-Ext }
     'update'       { Invoke-Update }
     'self-update'  { Invoke-SelfUpdate }
+    'claw'         { Invoke-Claw }
     'analyze'      { Invoke-Analyze }
     'diagnose'     { Invoke-Diagnose }
     'run-plan'     { Invoke-RunPlan }

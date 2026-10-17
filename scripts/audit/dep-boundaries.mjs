@@ -5,6 +5,7 @@
 //   pforge-mcp/        — MCP server, orchestrator, memory hub, ~100 forge_* tools
 //   pforge-master/     — Forge-Master Studio (read-only reasoning loop)
 //   pforge-sdk/        — SDK consumed by user projects
+//   pforge-claw/       — opt-in chat-native dispatcher
 //   scripts/           — dev tooling (audits, smoke tests, migrations)
 //   extensions/        — community extensions (notify-*, etc.) — must stay leaf
 //
@@ -44,26 +45,28 @@ const OUT_DIR = auditRawDir(ROOT);
 const OUT_FILE = path.join(OUT_DIR, 'dep-boundaries-report.json');
 const POLICY_FILE = path.join(ROOT, 'scripts', 'audit', 'layer-policy.json');
 
-const PACKAGES = ['pforge-mcp', 'pforge-master', 'pforge-sdk', 'scripts', 'extensions'];
+const PACKAGES = ['pforge-mcp', 'pforge-master', 'pforge-sdk', 'pforge-claw', 'scripts', 'extensions'];
 const EXCLUDED_DIRS = new Set(['node_modules', '.forge', '.git', 'dist', 'archive', 'docs', 'ui']);
 
 // PACKAGE_RULES — default policy. true = ALLOWED, false = BLOCKED.
 // Lookup: PACKAGE_RULES[sourcePackage][targetPackage]
 const PACKAGE_RULES = {
-  'scripts':       { 'pforge-mcp': true,  'pforge-master': true,  'pforge-sdk': true,  'extensions': true  },
-  'pforge-master': { 'pforge-mcp': 'whitelist', 'pforge-sdk': true, 'pforge-master': true, 'scripts': false, 'extensions': false },
-  'pforge-mcp':    { 'pforge-master': 'whitelist', 'pforge-sdk': true, 'pforge-mcp': true, 'scripts': false, 'extensions': false },
-  'pforge-sdk':    { 'pforge-mcp': false, 'pforge-master': false, 'pforge-sdk': true, 'scripts': false, 'extensions': false },
-  'extensions':    { 'pforge-mcp': false, 'pforge-master': false, 'pforge-sdk': true, 'extensions': true, 'scripts': false },
+  'scripts':       { 'pforge-mcp': true,  'pforge-master': true,  'pforge-sdk': true,  'pforge-claw': true,  'extensions': true  },
+  'pforge-master': { 'pforge-mcp': 'whitelist', 'pforge-sdk': true, 'pforge-master': true, 'pforge-claw': false, 'scripts': false, 'extensions': false },
+  'pforge-mcp':    { 'pforge-master': 'whitelist', 'pforge-sdk': true, 'pforge-mcp': true, 'pforge-claw': false, 'scripts': false, 'extensions': false },
+  'pforge-sdk':    { 'pforge-mcp': false, 'pforge-master': false, 'pforge-sdk': true, 'pforge-claw': false, 'scripts': false, 'extensions': false },
+  'pforge-claw':   { 'pforge-claw': true, 'pforge-mcp': false, 'pforge-master': false, 'pforge-sdk': false, 'scripts': false, 'extensions': false },
+  'extensions':    { 'pforge-mcp': false, 'pforge-master': false, 'pforge-sdk': true, 'pforge-claw': false, 'extensions': true, 'scripts': false },
 };
 
 const IMPORT_REGEX = /(?:^|\n)\s*(?:import|export)[^;]*?from\s*["']([^"']+)["']/g;
 const DYNAMIC_IMPORT_REGEX = /\bimport\s*\(\s*["']([^"']+)["']\s*\)/g;
 
 function parseArgs(argv) {
-  const args = { includeTests: false };
+  const args = { includeTests: false, json: false };
   for (let i = 0; i < argv.length; i++) {
     if (argv[i] === '--include-tests') args.includeTests = true;
+    if (argv[i] === '--json') args.json = true;
   }
   return args;
 }
@@ -235,6 +238,11 @@ function main() {
 
   fs.mkdirSync(OUT_DIR, { recursive: true });
   fs.writeFileSync(OUT_FILE, JSON.stringify(report, null, 2));
+
+  if (args.json) {
+    console.log(JSON.stringify(report));
+    return;
+  }
 
   console.log(`Dep boundaries: scanned ${files.length} .mjs files across ${PACKAGES.length} packages`);
   console.log(`  errors:   ${counts.error}  (BLOCKED imports)`);

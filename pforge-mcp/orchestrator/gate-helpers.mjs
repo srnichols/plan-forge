@@ -3,7 +3,7 @@
 import { readFileSync, existsSync, readdirSync, statSync } from "node:fs";
 import { execSync } from "node:child_process";
 import { resolve, basename, dirname, join, relative, extname, isAbsolute } from "node:path";
-import { parsePlan, VALIDATION_GATE_MARKER_RE } from "./plan-parser.mjs";
+import { parsePlan, normalizeSliceId, unreadDependencyEntries, VALIDATION_GATE_MARKER_RE } from "./plan-parser.mjs";
 import { lintTaskFilesOutsideScope } from "./task-scope-lint.mjs";
 import { UNIX_TOOLS, resolveGateCommandToken, isGatePrefixAllowed } from "./constants.mjs";
 import { coalesceGateLines, looksLikeProse, runGate, resolveGateTimeoutMs } from "./schedulers.mjs";
@@ -335,6 +335,10 @@ const DEPENDS_DECLARATION_RE =
 const NO_VALUE_RE = /^\s*\(?\s*[-—–]*\s*(?:n\/a|none|nothing|no\b|null)/i;
 /** Phrase that names at least one slice-ish token. */
 const DEPENDS_NAMES_SLICE_RE = /\bslices?\s*\d|\bs\d+\b|^\s*\d+[A-Za-z]?\b/i;
+/** "Slice 4", "Slices 4" or "S4" in prose. Group 1 is the id. */
+const SLICE_MENTION_RE = /\b(?:slices?\s+|s)(\d+(?:\.\d+)?[A-Za-z]?)\b/gi;
+/** "Phase-ANVIL Slice 1" names another plan's slice, which this plan cannot order. */
+const OTHER_PLAN_RE = /\bphases?\b/i;
 
 /**
  * Warn when a slice declares a dependency that the parser did not understand.
@@ -348,28 +352,92 @@ const DEPENDS_NAMES_SLICE_RE = /\bslices?\s*\d|\bs\d+\b|^\s*\d+[A-Za-z]?\b/i;
  * repo's 46 parseable plans there are 211 dependency declarations, of which 17
  * say "nothing"/"none"/"—" — warning on those would be pure noise.
  */
+function _lintUnparsedDependencies(slice, warnings) {
+  const body = [slice.title || "", ...(slice.rawLines || [])];
+  for (const line of body) {
+    const m = String(line).match(DEPENDS_DECLARATION_RE);
+    if (!m) continue;
+    const phrase = (m[1] || "").trim();
+    if (NO_VALUE_RE.test(phrase) || !DEPENDS_NAMES_SLICE_RE.test(phrase)) continue;
+    warnings.push({
+      slice: slice.number,
+      command: null,
+      rule: "depends-not-parsed",
+      severity: "warn",
+      message:
+        `Slice ${slice.number} ("${slice.title}"): dependency declaration "${phrase.slice(0, LINT_EXCERPT_CHARS)}" ` +
+        `produced no parsed dependency. Recognised forms are the heading tag [depends: Slice N] and ` +
+        `a "**Depends On**:" line beginning with a slice id. This slice will fall back to running ` +
+        `after its predecessor.`,
+    });
+    break;
+  }
+}
+
+function _withoutParentheses(text) {
+  let depth = 0;
+  let kept = "";
+  for (const char of text) {
+    if (char === "(") depth++;
+    else if (char === ")") depth = Math.max(0, depth - 1);
+    else if (depth === 0) kept += char;
+  }
+  return kept;
+}
+
+/**
+ * The slices before `slice` that a dependency entry names and the parser did
+ * not record, in the order named. Parentheses are commentary, as they are to the
+ * parser. An entry that says "Phase" is about another plan, and a slice cannot
+ * depend on itself, on a later slice, or on one the plan does not have.
+ */
+function _unrecordedEarlierSlices(entry, slice, positions) {
+  const prose = _withoutParentheses(entry);
+  if (OTHER_PLAN_RE.test(prose)) return [];
+  const here = positions.get(slice.number);
+  const named = [...prose.matchAll(SLICE_MENTION_RE)].map((match) => normalizeSliceId(match[1]));
+  return [...new Set(named)].filter((id) => positions.get(id) < here && !slice.depends.includes(id));
+}
+
+/**
+ * Warn when a `**Depends On**:` list was only half read (meta-bug #368).
+ *
+ * The parser reads a list entry by entry, and an entry yields a dependency only
+ * when it starts with a slice id. "Slice 3 and the generated Slice 4 output" is
+ * read as Slice 3, and the slice can run before Slice 4. `depends-not-parsed`
+ * fires only when nothing parsed, so a list with at least one id raised nothing.
+ *
+ * Scoped to the entries the parser could not read, not to every slice a
+ * declaration names: the second would fire on "Independent of Slice 4" and on
+ * references to another plan's slices, and across docs/plans it did, four times,
+ * all wrong.
+ */
+function _lintUnreadDependencyEntries(slice, positions, warnings) {
+  for (const line of slice.rawLines || []) {
+    const hits = unreadDependencyEntries(line)
+      .map((entry) => ({ entry, ids: _unrecordedEarlierSlices(entry, slice, positions) }))
+      .filter(({ ids }) => ids.length > 0);
+    if (hits.length === 0) continue;
+    const entries = hits.map(({ entry }) => `"${entry.slice(0, LINT_EXCERPT_CHARS)}"`).join(", ");
+    const named = [...new Set(hits.flatMap(({ ids }) => ids))].map((id) => `Slice ${id}`).join(", ");
+    warnings.push({
+      slice: slice.number,
+      command: null,
+      rule: "depends-entry-not-parsed",
+      severity: "warn",
+      message:
+        `Slice ${slice.number} ("${slice.title}"): "Depends On" entry ${entries} names ${named} but does not start with a slice id, ` +
+        `so no dependency on it was recorded and this slice can run before it. ` +
+        `Write each as "Slice N" and put any explanation in parentheses.`,
+    });
+  }
+}
+
 function _lintDependencyDeclarations(plan, warnings) {
+  const positions = new Map(plan.slices.map((slice, index) => [slice.number, index]));
   for (const slice of plan.slices) {
-    if ((slice.depends || []).length > 0) continue;
-    const body = [slice.title || "", ...(slice.rawLines || [])];
-    for (const line of body) {
-      const m = String(line).match(DEPENDS_DECLARATION_RE);
-      if (!m) continue;
-      const phrase = (m[1] || "").trim();
-      if (NO_VALUE_RE.test(phrase) || !DEPENDS_NAMES_SLICE_RE.test(phrase)) continue;
-      warnings.push({
-        slice: slice.number,
-        command: null,
-        rule: "depends-not-parsed",
-        severity: "warn",
-        message:
-          `Slice ${slice.number} ("${slice.title}"): dependency declaration "${phrase.slice(0, LINT_EXCERPT_CHARS)}" ` +
-          `produced no parsed dependency. Recognised forms are the heading tag [depends: Slice N] and ` +
-          `a "**Depends On**:" line beginning with a slice id. This slice will fall back to running ` +
-          `after its predecessor.`,
-      });
-      break;
-    }
+    if ((slice.depends || []).length > 0) _lintUnreadDependencyEntries(slice, positions, warnings);
+    else _lintUnparsedDependencies(slice, warnings);
   }
 }
 

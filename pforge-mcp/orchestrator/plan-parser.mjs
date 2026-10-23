@@ -411,17 +411,39 @@ function extractDependencyRange(phrase) {
 
 /**
  * Split a dependency list into the slice ids it names (read by `toId`) and the
- * ranges it spans.
+ * ranges it spans. `unread` holds the entries that gave neither, so the caller
+ * can tell a list that was read in full from one that was only half read.
  */
 function readDependencyPhrases(text, toId) {
   const ids = [];
   const ranges = [];
+  const unread = [];
   for (const phrase of splitDependencyList(text)) {
     const range = extractDependencyRange(phrase);
-    if (range) ranges.push(range);
-    else ids.push(toId(phrase));
+    if (range) {
+      ranges.push(range);
+      continue;
+    }
+    const id = toId(phrase);
+    ids.push(id);
+    if (!id && phrase.trim()) unread.push(phrase.trim());
   }
-  return { ids, ranges };
+  return { ids, ranges, unread };
+}
+
+/**
+ * The entries of a `**Depends On**:` line that start with no slice id, so no
+ * dependency was recorded for them: "the generated Slice 4 output" in
+ * "Slice 3 and the generated Slice 4 output" (meta-bug #368). The gate linter
+ * warns when one of them names a slice. It reads the line with the regex and
+ * the entry reader the parser uses, so the two cannot disagree.
+ *
+ * @param {string} line - a slice body line
+ * @returns {string[]} empty when the line has no `**Depends On**:` list
+ */
+export function unreadDependencyEntries(line) {
+  const match = String(line).match(BODY_DEPENDS_RE);
+  return match ? readDependencyPhrases(match[1], extractLeadingSliceId).unread : [];
 }
 
 /**
@@ -664,8 +686,11 @@ function applyWorkerTimeout(current, line) {
   if (parsed !== null) current.workerTimeoutMs = parsed;
 }
 
+/** A `**Depends On**:` line in a slice body. Group 1 is the list. */
+const BODY_DEPENDS_RE = /\*\*Depends\s+On:?\*\*:?\s*(.+)/i;
+
 function applyBodyDependencies(current, line) {
-  const dependsBodyMatch = line.match(/\*\*Depends\s+On:?\*\*:?\s*(.+)/i);
+  const dependsBodyMatch = line.match(BODY_DEPENDS_RE);
   if (!dependsBodyMatch) return;
   // Bug #225: split the list, then pull the LEADING slice-id token out of each
   // phrase. The hardener authors prose deps like

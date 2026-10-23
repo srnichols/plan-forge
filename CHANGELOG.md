@@ -15,6 +15,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 - **A partial `rateLimit` turned throttling off** — an injected `rateLimit` naming only `perMinute` or only `windowMs` left the other undefined, so the limiter admitted every message (60 of 60 in a test). A missing member now falls back to the configured or default value, and an unknown member such as a misspelt `perminute` is refused instead of ignored. ([#333](https://github.com/srnichols/plan-forge/issues/333))
 - **Swapped issue references** — the threat model and the forward-provenance guard test cited #333 for forward normalization and #334 for the rate-limit key. They now cite #334 and #333.
+- **A new workspace could silently miss the clean-code audit** — a guard test now fails when a workspace in the root `package.json` is absent from the ESLint config `files`, the audit runner's `scanGlobs` or `dep-boundaries.mjs`, unless it is exempt with a reason. `pforge-sdk` is the one exemption: it is in neither lint list, and covering it first needs a refactor of `validateChunk` (complexity 31) and `validateProvenance` (30). The other audit scripts still scan only `pforge-mcp` and `pforge-master`. ([#340](https://github.com/srnichols/plan-forge/issues/340))
 
 ## [3.34.0] — 2026-10-14 — Forge-Claw testing candidate (not a production release)
 

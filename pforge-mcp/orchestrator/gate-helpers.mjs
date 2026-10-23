@@ -4,6 +4,7 @@ import { readFileSync, existsSync, readdirSync, statSync } from "node:fs";
 import { execSync } from "node:child_process";
 import { resolve, basename, dirname, join, relative, extname, isAbsolute } from "node:path";
 import { parsePlan, VALIDATION_GATE_MARKER_RE } from "./plan-parser.mjs";
+import { lintTaskFilesOutsideScope } from "./task-scope-lint.mjs";
 import { UNIX_TOOLS, resolveGateCommandToken, isGatePrefixAllowed } from "./constants.mjs";
 import { coalesceGateLines, looksLikeProse, runGate, resolveGateTimeoutMs } from "./schedulers.mjs";
 import { recall as brainRecall, loadReviewerConfig, invokeReviewer } from "../brain.mjs";
@@ -570,6 +571,7 @@ export function lintGateCommands(planFilePath, cwd = process.cwd()) {
   _lintDependencyDeclarations(plan, warnings);
   _lintSliceExecutability(plan, errors, warnings);
   _lintIgnoredDeclarations(plan, warnings);
+  warnings.push(...lintTaskFilesOutsideScope(plan));
   _lintParallelCoherence(plan, warnings);
 
   for (const slice of plan.slices) {

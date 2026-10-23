@@ -65,7 +65,7 @@ services:
 |---------|---------|
 | `pnpm build` | Build all packages |
 | `pnpm test` | Run all tests |
-| `pnpm test -- --run` | Run tests without watch |
+| `pnpm exec vitest run` | Run tests without watch |
 | `pnpm lint` | Lint all packages |
 | `pnpm dev` | Start dev servers |
 | `docker compose up -d` | Start all services |

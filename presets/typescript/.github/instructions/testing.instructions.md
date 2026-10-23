@@ -73,7 +73,7 @@ describe('GET /api/users', () => {
 
 ```markdown
 - [ ] `pnpm build` passes with zero errors
-- [ ] `pnpm test -- --run` — all pass
+- [ ] `pnpm exec vitest run` — all pass
 - [ ] `pnpm lint` — no violations
 - [ ] Anti-pattern grep: `grep -rn "as any\|@ts-ignore\|@ts-expect-error" --include="*.ts"` returns zero hits in new files
 

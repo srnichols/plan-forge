@@ -82,7 +82,7 @@ pnpm install                    # Install dependencies
 pnpm dev                        # Start dev servers
 pnpm build                      # Build all packages
 pnpm test                       # Run all tests
-pnpm test -- --run              # Tests without watch
+pnpm exec vitest run            # Tests without watch
 pnpm lint                       # Lint all packages
 docker compose up -d            # Start infrastructure
 ```

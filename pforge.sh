@@ -2173,11 +2173,8 @@ cmd_diagnose() {
 
 # ─── Command: analyze ──────────────────────────────────────────────────
 # The MUST criteria of a plan, one per line, read the way pforge.ps1 reads them
-# (meta-bug #376): "- **MUST**: text" lines and, for a plan with no MUST or SHOULD line
-# at all, the "- [ ] text" items under "## Acceptance Criteria". pforge.ps1 first runs a
-# regex over that section and, when the first line after the heading is a checkbox,
-# never reads the list, so a plan written that way has no criteria there either; this
-# does the same until pforge.ps1 changes (#387). Reads the plan on stdin.
+# (meta-bugs #376, #387): "- **MUST**: text" lines and, for a plan with no MUST or SHOULD
+# line at all, the "- [ ] text" items under "## Acceptance Criteria". Reads the plan on stdin.
 analyze_must_criteria() {
     local plan must should_count
     plan="$(tr -d '\r')"
@@ -2191,26 +2188,14 @@ analyze_must_criteria() {
         return 0
     fi
     printf '%s\n' "$plan" | awk '
-        {
-            line = $0
-            # pforge.ps1 skips the list when the first line after an exact heading is a checkbox.
-            if (waiting && line !~ /^[[:space:]]*$/) {
-                waiting = 0
-                if (line ~ /^[[:space:]]*- \[[ x]\].+/) skip = 1
-            }
-            if (line ~ /## Acceptance Criteria[[:space:]]*$/) waiting = 1
-            if (done) next
-            if (tolower(line) ~ /## acceptance criteria/) {
-                in_section = 1
-            } else if (in_section && (line ~ /^[[:space:]]*---[[:space:]]*$/ || line ~ /^##[[:space:]]/)) {
-                done = 1
-            } else if (in_section && match(line, /^[[:space:]]*-[[:space:]]*\[[ xX]\][[:space:]]*/)) {
-                item = substr(line, RLENGTH + 1)
-                sub(/[[:space:]]+$/, "", item)
-                if (length(item) > 0) items[++count] = item
-            }
+        done { next }
+        tolower($0) ~ /## acceptance criteria/ { in_section = 1; next }
+        in_section && ($0 ~ /^[[:space:]]*---[[:space:]]*$/ || $0 ~ /^##[[:space:]]/) { done = 1; next }
+        in_section && match($0, /^[[:space:]]*-[[:space:]]*\[[ xX]\][[:space:]]*/) {
+            item = substr($0, RLENGTH + 1)
+            sub(/[[:space:]]+$/, "", item)
+            if (length(item) > 0) print item
         }
-        END { if (!skip) for (i = 1; i <= count; i++) print items[i] }
     '
 }
 
@@ -2350,7 +2335,12 @@ cmd_analyze() {
     # pforge-mcp/orchestrator/plan-parser.mjs (/^#{2,4}\s+Slice\s+\d+\b/).
     slice_count=$(echo "$plan_content" | grep -cE '^#{2,4}[[:space:]]+Slice[[:space:]]+[0-9]' || true)
     local total_criteria=$((must_count + should_count))
-
+    # With no MUST or SHOULD line the "- [ ]" items under "## Acceptance Criteria" are the
+    # criteria, all counted as MUST, as in pforge.ps1 (#387).
+    if [ "$total_criteria" -eq 0 ]; then
+        must_count="$(printf '%s\n' "$plan_content" | analyze_must_criteria | grep -c . || true)"
+        total_criteria=$must_count
+    fi
     if [ "$total_criteria" -gt 0 ]; then
         echo "  ✅ $total_criteria acceptance criteria ($must_count MUST, $should_count SHOULD)"
         score_trace=$((25 * total_criteria / total_criteria))  # Full if found

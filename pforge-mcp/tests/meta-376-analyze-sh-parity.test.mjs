@@ -15,6 +15,13 @@ import { dirname, join, resolve } from "node:path";
  * A criterion is tested when some test file contains at least two of its first
  * three words longer than four characters, case-insensitively. The score is
  * floor(25 * tested / MUST), or 15 when the plan has no MUST criteria.
+ *
+ * Meta-bug #387 — the checkbox fallback ("- [ ] item" lines under "## Acceptance
+ * Criteria", read as MUST criteria when a plan has no MUST or SHOULD line) never
+ * ran in pforge.ps1 when the first line under the heading was a checkbox, because
+ * a regex pre-check that filled nothing decided to skip it. Both shells now read
+ * those criteria, in the Traceability step as well as the Test Coverage step: bash
+ * used to leave Traceability at 15 where PowerShell scored 25 for the same plan.
  */
 
 const REPO_ROOT = resolve(import.meta.dirname, "..", "..");
@@ -66,6 +73,8 @@ function testCoverage(result) {
   return section.split("\n").map((line) => line.replace(/^[^A-Za-z0-9]+/, "").trim()).filter(Boolean);
 }
 const testCoverageScore = (result) => Number(/- Test Coverage: (\d+)\/25/.exec(result.stdout)?.[1]);
+const traceabilityScore = (result) => Number(/- Traceability: (\d+)\/25/.exec(result.stdout)?.[1]);
+const consistencyScore = (result) => Number(/Consistency Score: (\d+)\/100/.exec(result.stdout)?.[1]);
 
 const withItemsTest = { "tests/items.test.mjs": `// ${ITEMS}\n` };
 
@@ -100,11 +109,12 @@ const CASES = [
     score: 15,
   },
   {
-    name: "checkbox criteria directly under the heading are not read, as in pforge.ps1",
+    name: "checkbox criteria directly under the heading count as MUST (#387)",
     plan: planWith([`- [ ] ${ITEMS}`, `- [x] ${EXPORTER}`]),
     files: withItemsTest,
-    lines: ["No MUST criteria to trace (plan may use alternate format)", "1 test file(s) found in project"],
-    score: 15,
+    lines: ["1/2 MUST criteria have matching tests", `No test found for: ${EXPORTER}`, "1 test file(s) found in project"],
+    score: 12,
+    trace: 25,
   },
   {
     name: "checkbox criteria after a line of prose count as MUST",
@@ -112,6 +122,47 @@ const CASES = [
     files: withItemsTest,
     lines: ["1/2 MUST criteria have matching tests", `No test found for: ${EXPORTER}`, "1 test file(s) found in project"],
     score: 12,
+    trace: 25,
+  },
+  {
+    name: "checkbox criteria after blank lines, with an upper-case [X], count as MUST (#387)",
+    plan: planWith(["", "", `- [X] ${ITEMS}`, `- [ ] ${EXPORTER}`]),
+    files: withItemsTest,
+    lines: ["1/2 MUST criteria have matching tests", `No test found for: ${EXPORTER}`, "1 test file(s) found in project"],
+    score: 12,
+    trace: 25,
+  },
+  {
+    name: "checkbox criteria under a sub-heading of the section count as MUST (#387)",
+    plan: planWith(["", "### Behaviour", `- [ ] ${ITEMS}`, `- [ ] ${EXPORTER}`]),
+    files: withItemsTest,
+    lines: ["1/2 MUST criteria have matching tests", `No test found for: ${EXPORTER}`, "1 test file(s) found in project"],
+    score: 12,
+    trace: 25,
+  },
+  {
+    name: "checkboxes after the section ends are not criteria (#387)",
+    plan: planWith([`- [ ] ${ITEMS}`, "", "---", "", `- [ ] ${EXPORTER}`]),
+    files: withItemsTest,
+    lines: ["1/1 MUST criteria have matching tests", "1 test file(s) found in project"],
+    score: 25,
+    trace: 25,
+  },
+  {
+    name: "a MUST line wins over checkboxes in the same section (#387)",
+    plan: planWith([MUST(ITEMS), `- [ ] ${EXPORTER}`]),
+    files: withItemsTest,
+    lines: ["1/1 MUST criteria have matching tests", "1 test file(s) found in project"],
+    score: 25,
+    trace: 25,
+  },
+  {
+    name: "a SHOULD line leaves the checkboxes unread (#387)",
+    plan: planWith([`- **SHOULD**: ${ITEMS}`, `- [ ] ${EXPORTER}`]),
+    files: withItemsTest,
+    lines: ["No MUST criteria to trace (plan may use alternate format)", "1 test file(s) found in project"],
+    score: 15,
+    trace: 25,
   },
   {
     name: "there are no test files at all",
@@ -151,11 +202,12 @@ const CASES = [
 ];
 
 describe.skipIf(!BASH)("pforge.sh analyze matches each MUST criterion to a test (#376)", () => {
-  it.each(CASES)("$name", ({ plan, files, lines, score }) => {
+  it.each(CASES)("$name", ({ plan, files, lines, score, trace }) => {
     const dir = seedRepo({ [PLAN_REL]: plan, ...files });
     const result = runSh(dir);
     expect(testCoverage(result), `${result.stdout}\n${result.stderr}`).toEqual(lines);
     expect(testCoverageScore(result)).toBe(score);
+    if (trace !== undefined) expect(traceabilityScore(result), result.stdout).toBe(trace);
   });
 
   it("scores the plan from the reporter's example 87/100, as PowerShell does", () => {
@@ -165,12 +217,15 @@ describe.skipIf(!BASH)("pforge.sh analyze matches each MUST criterion to a test 
   });
 });
 
-describe.skipIf(!BASH || !isWin)("pforge.sh and pforge.ps1 agree on the Test Coverage step (#376)", () => {
+describe.skipIf(!BASH || !isWin)("pforge.sh and pforge.ps1 agree on the Test Coverage step and the scores (#376, #387)", () => {
   it.each(CASES)("$name", ({ plan, files }) => {
     const dir = seedRepo({ [PLAN_REL]: plan, ...files });
     const sh = runSh(dir);
     const ps1 = runPs1(dir);
-    expect(testCoverage(sh), `bash:\n${sh.stdout}\n\npowershell:\n${ps1.stdout}`).toEqual(testCoverage(ps1));
+    const both = `bash:\n${sh.stdout}\n\npowershell:\n${ps1.stdout}`;
+    expect(testCoverage(sh), both).toEqual(testCoverage(ps1));
     expect(testCoverageScore(sh)).toBe(testCoverageScore(ps1));
+    expect(traceabilityScore(sh), both).toBe(traceabilityScore(ps1));
+    expect(consistencyScore(sh), both).toBe(consistencyScore(ps1));
   }, 400_000);
 });

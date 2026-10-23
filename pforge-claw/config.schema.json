@@ -201,7 +201,17 @@
       "type": "object",
       "properties": {
         "ghcpRoles": { "type": "array", "items": { "$ref": "#/$defs/role" }, "default": ["owner"] },
-        "nonOwnerRuntime": { "type": "string", "default": "byok-only" }
+        "nonOwnerRuntime": { "type": "string", "default": "byok-only" },
+        "inboundRateLimit": {
+          "type": "object",
+          "description": "Per-user limit on inbound messages. A user over it is dropped, and the first drop in a window is audited. Read at start-up; callbacks are not counted. Either member may be left out.",
+          "properties": {
+            "perMinute": { "type": "integer", "minimum": 1, "default": 20, "description": "Messages one user may send per window." },
+            "windowMs": { "type": "integer", "minimum": 1, "default": 60000, "description": "Window length in milliseconds." }
+          },
+          "additionalProperties": false,
+          "x-known": true
+        }
       },
       "x-known": true
     },

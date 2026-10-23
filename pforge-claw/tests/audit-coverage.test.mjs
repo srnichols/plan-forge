@@ -71,6 +71,66 @@ describe('Guard: Claw source uses the standard clean-code rules', () => {
   });
 });
 
+// A workspace missing from these lists is silently unlinted: Phase-62 added pforge-claw
+// to the repository and no standard audit covered it until the owner found 75 errors
+// across 44 files (meta-bug #340). An entry here is a decision with a reason, not an omission.
+const LINT_EXEMPT = Object.freeze({
+  'pforge-sdk': 'validateChunk (complexity 31, src/chunker.mjs) and validateProvenance (30, src/hallmark.mjs) exceed the limit of 20, so covering it needs a refactor first',
+});
+
+const workspaces = JSON.parse(readFileSync(join(repoRoot, 'package.json'), 'utf8')).workspaces;
+const globFor = (workspace) => `${workspace}/**/*.mjs`;
+const uncovered = (patterns, { exempt = LINT_EXEMPT, among = workspaces } = {}) =>
+  among.filter((workspace) => !patterns.includes(globFor(workspace)) && !Object.hasOwn(exempt, workspace));
+
+function arrayLiteralStrings(source, declaration) {
+  const match = source.match(new RegExp(`${declaration}\\s*[:=]\\s*\\[([\\s\\S]*?)\\]`));
+  expect(match, `${declaration} should be an array literal`).not.toBeNull();
+  return [...match[1].matchAll(/'([^']+)'/g)].map((entry) => entry[1]);
+}
+
+describe('Guard: every workspace is linted or explicitly exempt', () => {
+  const auditSource = (name) => readFileSync(join(repoRoot, 'scripts', 'audit', name), 'utf8');
+  // Read as text: a relative import out of the package is what the boundaries guard forbids.
+  const lintPatterns = () => [
+    ...arrayLiteralStrings(auditSource('eslint-clean-code.config.mjs'), 'files'),
+  ];
+
+  it('lists each workspace in the ESLint config files, or exempts it with a reason', () => {
+    expect(uncovered(lintPatterns())).toEqual([]);
+  });
+
+  it('scans each workspace in the audit runner, or exempts it with a reason', () => {
+    const globs = arrayLiteralStrings(auditSource('run-eslint-clean-code.mjs'), 'const scanGlobs');
+    expect(uncovered(globs)).toEqual([]);
+  });
+
+  it('gives dep-boundaries a rule set for every workspace', () => {
+    const packages = arrayLiteralStrings(auditSource('dep-boundaries.mjs'), 'const PACKAGES');
+    expect(workspaces.filter((workspace) => !packages.includes(workspace))).toEqual([]);
+  });
+
+  it('keeps an exemption only for a workspace that exists and is still uncovered', () => {
+    const patterns = [
+      ...lintPatterns(),
+      ...arrayLiteralStrings(auditSource('run-eslint-clean-code.mjs'), 'const scanGlobs'),
+    ];
+    for (const [workspace, reason] of Object.entries(LINT_EXEMPT)) {
+      expect(workspaces, `${workspace} is exempt but is not a workspace`).toContain(workspace);
+      expect(patterns, `${workspace} is now linted: drop its exemption`).not.toContain(globFor(workspace));
+      expect(reason.length).toBeGreaterThan(0);
+    }
+  });
+
+  it('would report a workspace that appears in neither list', () => {
+    const among = ['pforge-mcp', 'pforge-claw', 'pforge-new'];
+    const patterns = [globFor('pforge-mcp'), globFor('pforge-claw')];
+    expect(uncovered(patterns, { exempt: {}, among })).toEqual(['pforge-new']);
+    expect(uncovered(patterns, { exempt: { 'pforge-new': 'reason' }, among })).toEqual([]);
+    expect(uncovered([], { exempt: {}, among: [] })).toEqual([]);
+  });
+});
+
 describe('Guard: the retired dashboard ignore does not hide Claw MCP source', () => {
   let fixtureRoot;
 

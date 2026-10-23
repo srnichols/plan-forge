@@ -161,6 +161,9 @@ The host configuration lives at `PFORGE_CLAW_HOME/config.json` (default home: `~
 | `policy` | object | no | — | |
 | `policy.ghcpRoles` | array | no | `["owner"]` | items: enum |
 | `policy.nonOwnerRuntime` | string | no | `"byok-only"` | |
+| `policy.inboundRateLimit` | object | no | — | per-user limit on inbound messages; read at start-up; callbacks are not counted |
+| `policy.inboundRateLimit.perMinute` | integer | no | `20` | minimum=1; messages one user may send per window; a user over it is dropped and the first drop in a window is audited |
+| `policy.inboundRateLimit.windowMs` | integer | no | `60000` | minimum=1; window length in milliseconds |
 | `runtimes` | object | no | — | |
 | `runtimes.default` | string | no | — | |
 | `runtimes.nonOwnerRuntime` | string | no | `"byok-only"` | |

@@ -5,12 +5,39 @@ import { classifyMessage, getTriageService } from "./capture.mjs";
 import { getBudgetService } from "./budget.mjs";
 import { authorizeCommand, createCommandContext, currentCaller } from "./handlers/c2-command-context.mjs";
 import { commandErrorText, sendCommandResult } from "./handlers/c2-command-result.mjs";
+import { ClawError } from "./errors.mjs";
 
 const NEUTRAL_TOPIC_REPLY = "This topic isn't configured.";
 const AUDIT_UNAVAILABLE_REPLY = "Audit unavailable; command not run.";
 const GROUP_CHANNEL = "telegram";
 const DEFAULT_MESSAGES_PER_MINUTE = 20;
 const DEFAULT_RATE_WINDOW_MS = 60_000;
+const RATE_LIMIT_FIELDS = Object.freeze(["perMinute", "windowMs"]);
+
+// A member that is not a positive integer, or not a known member, is refused: the limiter
+// compared against a missing or non-numeric value admitted every message (meta-bug #333).
+function checkedRateLimitMembers(limit, source) {
+  const members = {};
+  for (const [field, value] of Object.entries(limit ?? {})) {
+    if (value === undefined) continue;
+    if (!RATE_LIMIT_FIELDS.includes(field) || !Number.isInteger(value) || value < 1) {
+      throw new ClawError("INVALID_RATE_LIMIT", { field, source });
+    }
+    members[field] = value;
+  }
+  return members;
+}
+
+// The injected option wins over policy.inboundRateLimit, which wins over the defaults; a
+// member left out falls back to the next source.
+function resolveInboundRateLimit({ injected, configured }) {
+  return {
+    perMinute: DEFAULT_MESSAGES_PER_MINUTE,
+    windowMs: DEFAULT_RATE_WINDOW_MS,
+    ...checkedRateLimitMembers(configured, "policy.inboundRateLimit"),
+    ...checkedRateLimitMembers(injected, "rateLimit option"),
+  };
+}
 
 function createInboundLimiter({ perMinute, windowMs, now }) {
   const hits = new Map();
@@ -261,13 +288,16 @@ function commandByName(commands, name) {
 export function createRouter({
   config, channel, store, registry = createRegistry(config), logger, commandRegistry = COMMANDS,
   services = {}, clients,
-  rateLimit = { perMinute: DEFAULT_MESSAGES_PER_MINUTE, windowMs: DEFAULT_RATE_WINDOW_MS },
+  rateLimit,
   now = Date.now,
 } = {}) {
   let currentConfig = config;
   let currentRegistry = registry;
   let indexes = createIndexes(config);
-  const limiter = createInboundLimiter({ ...rateLimit, now });
+  const limiter = createInboundLimiter({
+    ...resolveInboundRateLimit({ injected: rateLimit, configured: config?.policy?.inboundRateLimit }),
+    now,
+  });
   const pending = services.pending instanceof Map ? services.pending : new Map();
   const contextServices = {
     ...services,

@@ -5,6 +5,7 @@ import { mkdir, rm } from "node:fs/promises";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createApprovalService } from "../src/approvals.mjs";
+import { createBudgetService } from "../src/budget.mjs";
 import { callbackFor } from "../src/callbacks/index.mjs";
 import { COMMANDS } from "../src/commands/index.mjs";
 import { createCommandContext } from "../src/handlers/c2-command-context.mjs";
@@ -531,5 +532,35 @@ describe("retry/recovery current-contract governance", () => {
     });
     expect(result.text).toContain("queued");
     expect(rows(f.store, "approvals")).toEqual([]);
+  });
+});
+
+// Meta-bug #384: the budget gate prices a plan job from `job.estimate`, and a recovery job was
+// built from a fixed field list that left it out, so under a USD cap every Retry was held as
+// `estimate-unavailable` and waited for an owner override.
+describe("a recovery job keeps the plan estimate the budget gate prices (#384)", () => {
+  const ESTIMATE = { recommended: "power", power: { mode: "power", estimatedCostUSD: 4.5 } };
+  const budgetFor = (f, dailyUSD) => createBudgetService({
+    store: f.store, bus: f.bus, config: { ...f.config, budget: { dailyUSD } }, now: f.services.now,
+  });
+
+  it("copies the parent's estimate to the retry", async () => {
+    const f = await recoveryFixture({ fields: { estimate: ESTIMATE } });
+    const result = await f.service.createRecoveryJob(f.parent, f.input());
+    expect(result.ok).toBe(true);
+    expect(result.job.estimate).toEqual(ESTIMATE);
+  });
+
+  it("lets a USD cap price the retry instead of holding it as estimate-unavailable", async () => {
+    const f = await recoveryFixture({ fields: { estimate: ESTIMATE } });
+    const { job } = await f.service.createRecoveryJob(f.parent, f.input());
+    expect(budgetFor(f, 10).check(job)).toEqual({ ok: true });
+    expect(budgetFor(f, 4).check(job)).toMatchObject({ ok: false, reason: "cap-usd" });
+  });
+
+  it("adds no estimate when the parent had none", async () => {
+    const f = await recoveryFixture();
+    const { job } = await f.service.createRecoveryJob(f.parent, f.input());
+    expect(job).not.toHaveProperty("estimate");
   });
 });

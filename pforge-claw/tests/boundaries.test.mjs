@@ -1,4 +1,4 @@
-import { mkdtempSync, readdirSync, readFileSync, rmSync } from "node:fs";
+import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -213,14 +213,28 @@ describe("Guard: pforge-claw imports no Plan Forge package source", () => {
 
   it("is clean in the repository dependency-boundary audit", () => {
     const auditScript = path.join(REPO_ROOT, "scripts", "audit", "dep-boundaries.mjs");
-    const result = spawnSync(process.execPath, [auditScript, "--json"], {
-      cwd: REPO_ROOT,
-      encoding: "utf8",
-    });
-    expect(result.error).toBeUndefined();
-    expect(result.status, result.stderr).toBe(0);
-    const report = JSON.parse(result.stdout);
-    expect(report.findings.filter((finding) => finding.sourcePackage === PACKAGE)).toEqual([]);
+    // The audit writes its report into the tracked docs/plans/cleanup-findings/raw directory
+    // unless PFORGE_AUDIT_RAW_DIR redirects it, so a run left a modified tracked file behind
+    // (meta-bug #386).
+    const trackedReport = path.join(REPO_ROOT, "docs", "plans", "cleanup-findings", "raw", "dep-boundaries-report.json");
+    const trackedBefore = existsSync(trackedReport) ? readFileSync(trackedReport, "utf8") : null;
+    const rawDirectory = mkdtempSync(path.join(os.tmpdir(), "claw-boundaries-"));
+    try {
+      const result = spawnSync(process.execPath, [auditScript, "--json"], {
+        cwd: REPO_ROOT,
+        encoding: "utf8",
+        env: { ...process.env, PFORGE_AUDIT_RAW_DIR: rawDirectory },
+      });
+      expect(result.error).toBeUndefined();
+      expect(result.status, result.stderr).toBe(0);
+      const report = JSON.parse(result.stdout);
+      expect(report.findings.filter((finding) => finding.sourcePackage === PACKAGE)).toEqual([]);
+      expect(existsSync(path.join(rawDirectory, "dep-boundaries-report.json")), "the report went to the redirected directory").toBe(true);
+    } finally {
+      rmSync(rawDirectory, { recursive: true, force: true });
+    }
+    const trackedAfter = existsSync(trackedReport) ? readFileSync(trackedReport, "utf8") : null;
+    expect(trackedAfter, "the audit rewrote the tracked dep-boundaries report").toBe(trackedBefore);
   });
 });
 

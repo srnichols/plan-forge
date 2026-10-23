@@ -470,7 +470,7 @@ function recordLockLines(state, lines) {
 
 function handleCodeFenceLine(state, line) {
   if (!line.startsWith("```")) return false;
-  state.inFilesInScopeBlock = false;
+  endListBlocks(state);
 
   if (state.inCodeBlock) {
     if (state.inValidationGate && state.current && state.gateFenceIsShell) {
@@ -521,11 +521,18 @@ function disarmGateCapture(state) {
   state.implicitGateActive = false;
 }
 
+// A fence, heading, slice or gate marker ends any bullet list being collected:
+// the Scope list and the Context Files list.
+function endListBlocks(state) {
+  state.inFilesInScopeBlock = false;
+  state.inContextFilesBlock = false;
+}
+
 function handleSliceHeaderLine(state, line) {
   const sliceMatch = line.match(SLICE_HEADING_RE);
   if (!sliceMatch) return false;
   if (state.current) state.slices.push(state.current);
-  state.inFilesInScopeBlock = false;
+  endListBlocks(state);
   disarmGateCapture(state);
   state.current = createSliceRecord(sliceMatch, line);
   recordLockLines(state, [line]);
@@ -542,7 +549,7 @@ function handlePlanLevelHeading(state, line) {
     state.slices.push(state.current);
     state.current = null;
   }
-  state.inFilesInScopeBlock = false;
+  endListBlocks(state);
   disarmGateCapture(state);
   return true;
 }
@@ -557,7 +564,7 @@ export const VALIDATION_GATE_MARKER_RE = /\*\*(?:Validation Gate|Exit [Gg]ate)\*
 function handleValidationGateLine(state, line) {
   const gateMatch = line.match(VALIDATION_GATE_MARKER_RE);
   if (!gateMatch) return false;
-  state.inFilesInScopeBlock = false;
+  endListBlocks(state);
   recordLockLines(state, [line]);
   const inlineText = (gateMatch[1] || "").trim();
   if (inlineText && state.current) {
@@ -646,14 +653,48 @@ function extractBacktickValues(text) {
   return backticks.map((s) => s.replace(/`/g, "").trim()).filter((s) => s.length > 0);
 }
 
-function applyContextFiles(current, line) {
-  const contextBodyMatch = line.match(/\*\*Context Files:?\*\*:?\s*(.+)/i);
-  if (!contextBodyMatch) return;
-  // Context Files are read-only references, not the editable scope allowlist
-  // (meta-bug #231): keep them out of `scope` so they cannot be modified and
-  // so scope enforcement is not silently widened to instruction docs.
+const CONTEXT_FILES_LABEL_RE = /\*\*Context Files:?\*\*:?\s*(.*)$/i;
+/** The label alone on its line (a bullet or quote marker before it is fine): its files follow as bullets. */
+const CONTEXT_FILES_LABEL_ONLY_RE = /^\s*(?:[-*>]\s*)?\*\*Context Files:?\*\*:?\s*$/i;
+
+/**
+ * Context Files are read-only references, not the editable scope allowlist
+ * (meta-bug #231): keep them out of `scope` so they cannot be modified and
+ * so scope enforcement is not silently widened to instruction docs. The files
+ * follow the label on its line, or, with the label alone on its line, come as one
+ * bullet per file (meta-bug #374). Returns true for a bullet it consumed.
+ */
+function handleContextFiles(state, line) {
+  const labelMatch = line.match(CONTEXT_FILES_LABEL_RE);
+  if (!labelMatch) return continueContextFilesBlock(state, line);
+  const { current } = state;
   if (!current.contextFiles) current.contextFiles = [];
-  appendUniqueValues(current.contextFiles, extractBacktickValues(contextBodyMatch[1]));
+  appendUniqueValues(current.contextFiles, extractBacktickValues(labelMatch[1]));
+  // A bulleted label would otherwise be read as one more entry of an open Scope list.
+  state.inFilesInScopeBlock = false;
+  state.inContextFilesBlock = CONTEXT_FILES_LABEL_ONLY_RE.test(line);
+  state.contextBlockHasBullets = false;
+  return false;
+}
+
+function continueContextFilesBlock(state, line) {
+  if (!state.inContextFilesBlock) return false;
+  const trimmed = line.trim();
+  if (!trimmed) {
+    // Prettier separates the label from its list with a blank line, so only a
+    // blank after the list ends it (as for the Scope list, meta-bug #282).
+    if (state.contextBlockHasBullets) state.inContextFilesBlock = false;
+    return false;
+  }
+  const bulletMatch = trimmed.match(/^[-*]\s+(.+)/);
+  // Prose, or a bullet that is itself a labelled field (`- **Scope**: ...`), ends the list.
+  if (!bulletMatch || /^\*\*/.test(bulletMatch[1])) {
+    state.inContextFilesBlock = false;
+    return false;
+  }
+  appendUniqueValues(state.current.contextFiles, extractBulletScopeCandidates(bulletMatch[1]));
+  state.contextBlockHasBullets = true;
+  return true;
 }
 
 function extractInlineScopeCandidates(rest) {
@@ -748,6 +789,8 @@ export function parseSlices(lines, opts = {}) {
     fenceOpenLine: null,
     inFilesInScopeBlock: false,
     scopeBlockHasBullets: false,
+    inContextFilesBlock: false,
+    contextBlockHasBullets: false,
     implicitGateActive: false,
   };
 
@@ -765,7 +808,7 @@ export function parseSlices(lines, opts = {}) {
     applyStopCondition(state.current, line);
     applyWorkerTimeout(state.current, line);
     applyBodyDependencies(state.current, line);
-    applyContextFiles(state.current, line);
+    if (handleContextFiles(state, line)) continue;
     if (handleFilesHeading(state, line)) continue;
     if (handleFilesInScopeContinuation(state, line)) continue;
     applyTaskLine(state.current, line);

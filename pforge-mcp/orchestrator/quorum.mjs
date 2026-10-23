@@ -7,7 +7,7 @@ import { QUORUM_PRESETS, DEFAULT_GROK_ADDIN_MODEL, DEFAULT_QUORUM_MODELS, DEFAUL
 import { readForgeJsonl } from "./forge-io.mjs";
 import { scoreSliceComplexity } from "./review-watcher.mjs";
 import { spawnWorker, detectWorkers, isCopilotServableModel } from "./worker-spawn.mjs";
-import { buildSlicePrompt } from "./prompt-builders.mjs";
+import { appendPlanContext, buildSlicePrompt } from "./prompt-builders.mjs";
 import { priceSlice as _priceSlice, priceRun as _priceRun } from "../cost-service.mjs";
 
 /**
@@ -147,8 +147,8 @@ export function applyGrokAddIn(config, { includeGrok, grokModel, hasXaiKey, grok
  * Build the dry-run prompt for quorum dispatch.
  * Wraps the original slice prompt with dry-run instructions.
  */
-function buildDryRunPrompt(slice) {
-  const originalPrompt = buildSlicePrompt(slice);
+function buildDryRunPrompt(slice, planContext) {
+  const originalPrompt = appendPlanContext(buildSlicePrompt(slice), slice, planContext);
   return [
     "You are in QUORUM DRY-RUN mode. Do NOT execute any code changes.",
     "Do NOT create, modify, or delete any files.",
@@ -169,8 +169,8 @@ function buildDryRunPrompt(slice) {
 /**
  * Build the reviewer synthesis prompt from dry-run responses.
  */
-function buildReviewerPrompt(dryRunResults, slice) {
-  const originalPrompt = buildSlicePrompt(slice);
+function buildReviewerPrompt(dryRunResults, slice, planContext) {
+  const originalPrompt = appendPlanContext(buildSlicePrompt(slice), slice, planContext);
   const parts = [
     "You are the QUORUM REVIEWER. Three AI models independently analyzed the same coding task",
     "and produced implementation plans. Your job is to synthesize the BEST execution plan.",
@@ -280,13 +280,13 @@ async function executeQuorumLeg({ model, dryPrompt, cwd, timeoutMs, eventBus, sl
  *
  * @param {object} slice - Parsed slice
  * @param {object} config - Quorum config from loadQuorumConfig()
- * @param {object} options - { cwd, eventBus, memoryEnabled, projectName }
+ * @param {object} options - { cwd, eventBus, memoryEnabled, projectName, planContext }
  * @returns {Promise<{ model: string, output: string, tokens: object, duration: number, exitCode: number }[]>}
  */
 export async function quorumDispatch(slice, config, options = {}) {
-  const { cwd = process.cwd(), eventBus = null, memoryEnabled = false, projectName = "" } = options;
+  const { cwd = process.cwd(), eventBus = null, memoryEnabled = false, projectName = "", planContext } = options;
 
-  let dryPrompt = buildDryRunPrompt(slice);
+  let dryPrompt = buildDryRunPrompt(slice, planContext);
 
   // OpenBrain: inject memory search for dry-run agents too
   if (memoryEnabled) {
@@ -327,11 +327,11 @@ export async function quorumDispatch(slice, config, options = {}) {
  * @param {{ successful: object[] }} dispatchResult - Output from quorumDispatch()
  * @param {object} slice - Original slice
  * @param {object} config - Quorum config
- * @param {object} options - { cwd, eventBus }
+ * @param {object} options - { cwd, eventBus, planContext }
  * @returns {Promise<{ enhancedPrompt: string, reviewerTokens: object, reviewerCost: number, modelResponses: object[] }>}
  */
 export async function quorumReview(dispatchResult, slice, config, options = {}) {
-  const { cwd = process.cwd(), eventBus = null } = options;
+  const { cwd = process.cwd(), eventBus = null, planContext } = options;
   const { successful } = dispatchResult;
 
   // Need at least 2 responses for meaningful consensus
@@ -350,7 +350,7 @@ export async function quorumReview(dispatchResult, slice, config, options = {}) 
     };
   }
 
-  const reviewerPrompt = buildReviewerPrompt(successful, slice);
+  const reviewerPrompt = buildReviewerPrompt(successful, slice, planContext);
 
   try {
     const reviewerResult = await spawnWorker(reviewerPrompt, {

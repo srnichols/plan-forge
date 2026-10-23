@@ -3175,9 +3175,10 @@
             "mutation",
             "load-stress",
             "contract",
-            "performance-budget"
+            "performance-budget",
+            "manual"
           ],
-          "description": "Scanner that discovered the bug"
+          "description": "Scanner that discovered the bug, or 'manual' for a defect a person reported (no scanner can re-run it: forge_bug_validate_fix hands it back for manual verification)"
         },
         "severity": {
           "type": "string",
@@ -3269,7 +3270,7 @@
       },
       "SCANNER_NOT_RECOGNIZED": {
         "message": "Scanner name not in known list",
-        "recovery": "Use one of the 9 supported scanner names"
+        "recovery": "Use one of the 10 supported scanner names: nine automated scanners, or 'manual' for a defect a person reported"
       }
     },
     "example": {
@@ -3491,6 +3492,7 @@
     ],
     "sideEffects": [
       "re-runs scanner(s) that discovered the bug",
+      "a bug whose scanner is 'manual' re-runs nothing: verdict 'manual-verification-required', no status change, no attempt recorded",
       "appends bug.validationAttempts[]",
       "on pass: updates bug status to 'fixed'",
       "on pass: dispatches commentValidatedFix to bug-adapter",

@@ -22,7 +22,7 @@ The bug tools surface `skillAdvisory` hints in their responses — this skill is
 | Flag | Required | Default | Description |
 |------|----------|---------|-------------|
 | `--bugId <id>` | No | first `open` bug | Specific bug to work; otherwise picks the highest-severity `open` bug |
-| `--scanner <name>` | No | match all | Filter by scanner (`unit`, `integration`, `ui-playwright`, `visual-diff`, `flakiness`, `mutation`, `load-stress`, `contract`, `performance-budget`) |
+| `--scanner <name>` | No | match all | Filter by scanner (`unit`, `integration`, `ui-playwright`, `visual-diff`, `flakiness`, `mutation`, `load-stress`, `contract`, `performance-budget`, or `manual` for a defect a person reported) |
 | `--no-sweep` | No | off | Skip the post-fix `/test-sweep` — only use for hot-fix paths under time pressure |
 
 ## Steps
@@ -78,6 +78,7 @@ forge_bug_validate_fix --bugId <id>
 |---------|--------|
 | `fixed` | The original scanner now passes. Proceed to Step 7. The response's `skillAdvisory` will point to `/test-sweep`. |
 | `still-failing` | The fix didn't take. Read `attempt.details`, follow the response's `skillAdvisory`, and revise. Do NOT increment fix attempts mechanically — every retry should be a hypothesis-driven change. |
+| `manual-verification-required` | The bug's scanner is `manual` (a person reported it), so nothing was re-run and nothing changed. Verify the fix yourself, then `forge_bug_update_status --newStatus fixed`. To check it with a scanner anyway, pass `scannerOverride`. |
 
 ### 7. Post-fix regression sweep
 

@@ -338,9 +338,10 @@
               "mutation",
               "load-stress",
               "contract",
-              "performance-budget"
+              "performance-budget",
+              "manual"
             ],
-            "description": "Scanner that discovered the bug"
+            "description": "Scanner that discovered the bug, or 'manual' for a defect a person reported (no scanner can re-run it: forge_bug_validate_fix hands it back for manual verification)"
           },
           "severity": {
             "type": "string",

@@ -330,8 +330,8 @@ function _lintCommandLine(line, slice, {
  */
 const DEPENDS_DECLARATION_RE =
   /(?:\*\*Depends\s+On:?\*\*:?|\(\s*depends\b|\bafter\s+slice\b)\s*:?\s*(.*)/i;
-/** Phrase that explicitly asserts there is no dependency — never a defect. */
-const DEPENDS_NONE_RE = /^\s*[-—–]*\s*(?:n\/a|none|nothing|no\b|null)/i;
+/** Phrase that explicitly asserts there is no dependency — never a defect. A leading "(" is allowed: "(none — independent; parallel to Slices 4, 5)". */
+const DEPENDS_NONE_RE = /^\s*\(?\s*[-—–]*\s*(?:n\/a|none|nothing|no\b|null)/i;
 /** Phrase that names at least one slice-ish token. */
 const DEPENDS_NAMES_SLICE_RE = /\bslices?\s*\d|\bs\d+\b|^\s*\d+[A-Za-z]?\b/i;
 

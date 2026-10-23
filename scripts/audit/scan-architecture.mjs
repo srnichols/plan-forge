@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { auditRawDir } from './raw-dir.mjs';
 import { runInstalledBin } from './run-installed-bin.mjs';
+import { auditRoots } from './scan-roots.mjs';
 import { spawnSync } from 'node:child_process';
 
 const root = process.cwd();
@@ -185,7 +186,7 @@ try {
   const combined = new Map();
   const errors = [];
 
-  for (const scanRoot of ['pforge-mcp', 'pforge-master']) {
+  for (const scanRoot of auditRoots('scan-architecture')) {
     const result = runMadge(scanRoot);
     if (result.error) {
       errors.push({ scanRoot, message: result.error, stdout: result.stdout, stderr: result.stderr, exitCode: result.exitCode });

@@ -103,8 +103,8 @@ function globToRegex(glob) {
 }
 
 function eslintCountForSource(source, virtualPath) {
-  // Use --stdin / --stdin-filename so the existing flat config's `files: ['pforge-mcp/**/*.mjs', ...]`
-  // glob still matches via the virtual path; avoids writing temp files outside the project tree.
+  // Use --stdin / --stdin-filename so the flat config's `files` globs (the roots in scan-roots.mjs)
+  // still match via the virtual path; avoids writing temp files outside the project tree.
   const result = run(process.execPath, [
     ESLINT_BIN,
     '--config', ESLINT_CONFIG,

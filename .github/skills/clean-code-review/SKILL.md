@@ -22,7 +22,7 @@ These are mechanical signals, not an entropy score or proof of maintainability. 
 
 | Flag | Required | Default | Description |
 |------|----------|---------|-------------|
-| `--scope <glob>` | No | `pforge-mcp/**/*.mjs,pforge-master/**/*.mjs` | Comma-separated globs limiting the audit scope |
+| `--scope <glob>` | No | `pforge-mcp/**/*.mjs,pforge-master/**/*.mjs,pforge-sdk/**/*.mjs,scripts/**/*.mjs` | Comma-separated globs limiting the audit scope. The roots each script scans are set in `scripts/audit/scan-roots.mjs` |
 | `--fix-suggestions` | No | off | When present, each finding includes a concrete fix suggestion (extract helper, rename, wrap params in options object, etc.) |
 | `--out <path>` | No | stdout (formatted) | Write the full JSON report to this path instead of printing a summary |
 | `--severity <level>` | No | `warn` | Minimum severity to report: `error`, `warn`, or `info` |
@@ -65,10 +65,10 @@ Parse `docs/plans/cleanup-findings/raw/long-param-report.json`. Flag call sites 
 ### 4. Run ESLint with clean-code config
 
 ```bash
-npx eslint --no-eslintrc -c scripts/audit/eslint-clean-code.config.mjs --format json "pforge-mcp/**/*.mjs" "pforge-master/**/*.mjs"
+node scripts/audit/run-eslint-clean-code.mjs
 ```
 
-Parse ESLint JSON output. Categorise violations:
+Parse `docs/plans/cleanup-findings/raw/eslint-report.json` (ESLint's JSON formatter output, which the script writes after resolving the roots from `scripts/audit/scan-roots.mjs`). A failed ESLint run exits 1 and leaves no report, so an empty report always means zero violations. Categorise violations:
 
 | Rule | Category | Severity |
 |------|----------|----------|

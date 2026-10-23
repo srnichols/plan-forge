@@ -48,13 +48,14 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { auditRawDir } from './raw-dir.mjs';
+import { auditRoots } from './scan-roots.mjs';
 
 const ROOT = process.cwd();
 const OUT_DIR = auditRawDir(ROOT);
 const OUT_FILE = path.join(OUT_DIR, 'frozen-arrays-drift-report.json');
 const ENUMS_FILE = path.join(ROOT, 'pforge-mcp', 'enums.mjs');
 
-const DEFAULT_SCAN_DIRS = ['pforge-mcp', 'pforge-master', 'scripts', 'extensions'];
+const DEFAULT_SCAN_DIRS = auditRoots('frozen-arrays-drift');
 const EXCLUDED_DIRS = new Set(['node_modules', '.forge', '.git', 'dist', 'archive', 'docs', 'ui']);
 
 const DEFAULT_ENUMS = ['HOOK_PASCAL', 'ERROR_CODES'];

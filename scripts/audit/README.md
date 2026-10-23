@@ -22,6 +22,25 @@ node scripts/audit/scan-architecture.mjs     # cycles, cross-layer and cross-pac
 node scripts/audit/preset-quality.mjs --php  # preset filler, copied blocks, wrong stack, skill steps, shell/PHP samples (#301; a gate, exits 1)
 ```
 
+## Scan scope
+
+The directories each script reads are set in one place, `scan-roots.mjs`, so the scripts cannot
+disagree about what the audit covers (meta-bug #382). Every npm workspace package is either scanned
+by a script or exempted from it there, with the reason, and
+`pforge-mcp/tests/audit-scan-roots.test.mjs` fails for a package that is neither.
+
+| Script | Scans |
+|--------|-------|
+| `run-eslint-clean-code`, `clean-code-delta`, `measure-modules` | `pforge-mcp`, `pforge-master`, `pforge-sdk`, `scripts` |
+| `grep-matrix`, `long-param-walker`, `run-jscpd`, `scan-architecture` | `pforge-mcp`, `pforge-master`, `pforge-sdk` |
+| `dead-exports` | `pforge-mcp`, `pforge-master`, `scripts`. Not `pforge-sdk`: each of its modules is a public subpath in `package.json` `exports`, so an export nothing here imports is still API |
+| `frozen-arrays-drift` | `pforge-mcp`, `pforge-master`, `pforge-sdk`, `scripts`, `extensions` |
+| `test-smells` | the `tests` directory of each package, and `tests` |
+| `dep-boundaries` | every package, with its own import rules (`PACKAGES` in the script) |
+
+To put a new package under the audit, add it to `PACKAGES` in `scan-roots.mjs`. To leave it out of
+one script, say why in `AUDIT_EXEMPTIONS`.
+
 ## Threshold calibration (from Appendix C.5)
 | Rule | Threshold |
 |------|-----------|

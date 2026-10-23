@@ -22,16 +22,13 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { auditRawDir } from './raw-dir.mjs';
 import { runInstalledBin } from './run-installed-bin.mjs';
+import { auditGlobs } from './scan-roots.mjs';
 
 const root = process.cwd();
 const outFile = path.join(auditRawDir(root), 'eslint-report.json');
 const configPath = path.join(root, 'scripts', 'audit', 'eslint-clean-code.config.mjs');
 
-const scanGlobs = [
-  'pforge-mcp/**/*.mjs',
-  'pforge-master/**/*.mjs',
-  'scripts/**/*.mjs'
-];
+const scanGlobs = auditGlobs('run-eslint-clean-code');
 
 // ESLint exits 1 when it found violations. Any other non-zero status is a failed run.
 const VIOLATIONS_FOUND = 1;

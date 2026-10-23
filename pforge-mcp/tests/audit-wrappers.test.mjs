@@ -3,6 +3,7 @@ import { spawnSync } from "node:child_process";
 import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
+import { auditGlobs, auditRoots } from "../../scripts/audit/scan-roots.mjs";
 
 /**
  * Meta-bugs #341 and #349 — the Windows architecture and duplication audit
@@ -72,15 +73,19 @@ const graphs = ${JSON.stringify(graphsByRoot)};
 process.stdout.write(JSON.stringify(graphs[argv[argv.length - 1]] ?? {}));
 `;
 
+// A graph for every root the script scans, so a test only describes the roots it is about.
+const graphsFor = (overrides = {}) => Object.fromEntries(
+  auditRoots("scan-architecture").map((scanRoot) => [scanRoot, overrides[scanRoot] ?? { "x.mjs": [] }]),
+);
+
 describe("scan-architecture.mjs (#341)", () => {
   let project;
   beforeEach(() => { project = makeProject(); });
 
   it("reads madge's graph through the installed CLI and reports a cycle", () => {
-    installStub(project.root, "madge", madgeStub({
+    installStub(project.root, "madge", madgeStub(graphsFor({
       "pforge-mcp": { "a.mjs": ["b.mjs"], "b.mjs": ["a.mjs"], "c.mjs": [] },
-      "pforge-master": { "x.mjs": [] },
-    }));
+    })));
     const result = run("scan-architecture.mjs", project);
     expect(result.status, result.stderr).toBe(0);
     const report = readReport(project, "architecture-report.json");
@@ -89,7 +94,7 @@ describe("scan-architecture.mjs (#341)", () => {
   });
 
   it("asks madge for .mjs files: its default reads .js only, which is 5 of 756 files here", () => {
-    installStub(project.root, "madge", madgeStub({ "pforge-mcp": { "a.mjs": [] }, "pforge-master": { "x.mjs": [] } }));
+    installStub(project.root, "madge", madgeStub(graphsFor()));
     expect(run("scan-architecture.mjs", project).status).toBe(0);
     const argv = JSON.parse(readFileSync(join(project.root, "madge-argv-pforge-mcp.json"), "utf8"));
     const extensions = argv[argv.indexOf("--extensions") + 1];
@@ -97,14 +102,23 @@ describe("scan-architecture.mjs (#341)", () => {
     expect(argv).toContain("--json");
   });
 
+  it("scans every root of the shared table, pforge-sdk included (#382)", () => {
+    installStub(project.root, "madge", madgeStub(graphsFor()));
+    expect(run("scan-architecture.mjs", project).status).toBe(0);
+    for (const scanRoot of auditRoots("scan-architecture")) {
+      expect(existsSync(join(project.root, `madge-argv-${scanRoot}.json`)), `madge was not run on ${scanRoot}`).toBe(true);
+    }
+    expect(auditRoots("scan-architecture")).toContain("pforge-sdk");
+  });
+
   it("resolves an import that leaves the scanned package against that package's root", () => {
-    installStub(project.root, "madge", madgeStub({
+    installStub(project.root, "madge", madgeStub(graphsFor({
       "pforge-mcp": { "enums.mjs": [] },
       "pforge-master": {
         "src/config.mjs": ["../pforge-mcp/enums.mjs"],
         "../pforge-mcp/enums.mjs": ["../pforge-master/src/config.mjs"],
       },
-    }));
+    })));
     const result = run("scan-architecture.mjs", project);
     expect(result.status, result.stderr).toBe(0);
     const report = readReport(project, "architecture-report.json");
@@ -121,7 +135,7 @@ describe("scan-architecture.mjs (#341)", () => {
     const result = run("scan-architecture.mjs", project);
     expect(result.status).toBe(1);
     const report = readReport(project, "architecture-report.json");
-    expect(report.errors).toHaveLength(2);
+    expect(report.errors).toHaveLength(auditRoots("scan-architecture").length);
     expect(report.errors[0]).toMatchObject({ scanRoot: "pforge-mcp", exitCode: 2, stderr: "boom" });
     expect(report.errors[0].message).toMatch(/madge.*status 2/);
     expect(result.stderr).toMatch(/architecture scan incomplete/i);
@@ -141,7 +155,7 @@ describe("scan-architecture.mjs (#341)", () => {
   });
 
   it("does not take an empty graph for a pass: a scan that found no files proved nothing", () => {
-    installStub(project.root, "madge", madgeStub({ "pforge-mcp": { "a.mjs": [] }, "pforge-master": {} }));
+    installStub(project.root, "madge", madgeStub(graphsFor({ "pforge-master": {} })));
     const result = run("scan-architecture.mjs", project);
     expect(result.status).toBe(1);
     const report = readReport(project, "architecture-report.json");
@@ -192,7 +206,8 @@ describe("run-jscpd.mjs (#349)", () => {
     expect(argv[argv.indexOf("--min-tokens") + 1]).toBe("75");
     expect(argv[argv.indexOf("--reporters") + 1]).toBe("json");
     expect(argv[argv.indexOf("--ignore") + 1]).toBe("**/node_modules/**,**/tests/**,**/ui/**");
-    expect(argv.slice(-4)).toEqual(["pforge-mcp", "pforge-master", "pforge.ps1", "pforge.sh"]);
+    const scanned = [...auditRoots("run-jscpd"), "pforge.ps1", "pforge.sh"];
+    expect(argv.slice(-scanned.length)).toEqual(scanned);
   });
 
   it("reports a genuinely clean scan as clean", () => {
@@ -315,7 +330,8 @@ describe("run-eslint-clean-code.mjs (#370)", () => {
     const argv = JSON.parse(readFileSync(join(project.root, "eslint-argv.json"), "utf8"));
     expect(argv[argv.indexOf("--config") + 1].replace(/\\/g, "/")).toMatch(/scripts\/audit\/eslint-clean-code\.config\.mjs$/);
     expect(argv[argv.indexOf("--format") + 1]).toBe("json");
-    expect(argv.slice(-3)).toEqual(["pforge-mcp/**/*.mjs", "pforge-master/**/*.mjs", "scripts/**/*.mjs"]);
+    const globs = auditGlobs("run-eslint-clean-code");
+    expect(argv.slice(-globs.length)).toEqual(globs);
   });
 
   it("exits 1 and keeps no report when ESLint hits a fatal error (exit 2)", () => {

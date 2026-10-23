@@ -55,6 +55,7 @@ const SOURCE_ONLY_SUITES = {
   "../docs/index.html": ["tests/docs-nav.smoke.test.mjs"],
   "../scripts/audit": [
     "tests/audit-cli-parity.test.mjs",
+    "tests/audit-wrappers.test.mjs",
     "tests/clean-code-delta.test.mjs",
     "tests/clean-code-no-regression.test.mjs",
     "tests/dependency-direction.test.mjs",

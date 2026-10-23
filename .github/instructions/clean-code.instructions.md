@@ -127,10 +127,13 @@ node node_modules/eslint/bin/eslint.js --config scripts/audit/eslint-clean-code.
 node scripts/audit/boyscout-delta.mjs
 ```
 
-> **`scripts/audit/run-eslint-clean-code.mjs` always exits 0.** It is a report
-> generator (writes `docs/plans/cleanup-findings/raw/eslint-report.json`), not a
-> gate. Do not wire it into CI expecting it to block — invoke ESLint directly, or
-> assert on the report contents.
+> **`scripts/audit/run-eslint-clean-code.mjs` reports; it does not gate.** It
+> exits 0 whenever ESLint ran, with or without violations, and writes
+> `docs/plans/cleanup-findings/raw/eslint-report.json`. It exits 1 when ESLint
+> itself failed (a fatal error, a crash, or output that is not a report) and
+> leaves no report behind, so an empty report always means zero violations. Do
+> not wire it into CI expecting it to block on violations — invoke ESLint
+> directly, or assert on the report contents.
 
 To baseline a file before your change (the trick `boyscout-delta.mjs` uses):
 

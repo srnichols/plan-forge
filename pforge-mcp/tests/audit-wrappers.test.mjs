@@ -17,6 +17,10 @@ import { dirname, join, resolve } from "node:path";
  * whenever the scan did not run, so an empty report can no longer pass for a
  * clean one. The wrappers take their project root from the working directory,
  * so these tests run them against a throwaway project with stub CLIs.
+ *
+ * Meta-bug #370 — run-eslint-clean-code.mjs had the same hole: an ESLint that
+ * failed (exit 2, or a crash that still exited 1) was written up as an empty
+ * report and exit 0, replacing whatever findings the report held before.
  */
 
 const AUDIT_DIR = resolve(import.meta.dirname, "..", "..", "scripts", "audit");
@@ -259,5 +263,94 @@ describe("run-jscpd.mjs (#349)", () => {
     expect(result.status).toBe(1);
     expect(readReport(project, "duplication-report.json").error).toMatch(/not a jscpd report/);
     expect(existsSync(join(project.rawDir, "duplication-report.json"))).toBe(true);
+  });
+});
+
+// ESLint's json formatter prints one entry per linted file, and the CLI exits 1 when a file has an error.
+const eslintStub = ({ stdout, exit = 0, stderr = "" } = {}) => `
+const { writeFileSync } = require("node:fs");
+const { join } = require("node:path");
+writeFileSync(join(process.cwd(), "eslint-argv.json"), JSON.stringify(process.argv.slice(2)));
+${stdout === undefined ? "" : `process.stdout.write(${JSON.stringify(stdout)});`}
+${stderr ? `process.stderr.write(${JSON.stringify(stderr)});` : ""}
+process.exit(${exit});
+`;
+
+describe("run-eslint-clean-code.mjs (#370)", () => {
+  let project;
+  beforeEach(() => { project = makeProject(); });
+
+  const findings = (root) => [{
+    filePath: join(root, "pforge-mcp", "a.mjs"),
+    messages: [{ ruleId: "clean-code/complexity-error", severity: 2, message: "too complex", line: 3, column: 1 }],
+    errorCount: 1,
+    warningCount: 0,
+  }];
+  const reportPath = ({ rawDir }) => join(rawDir, "eslint-report.json");
+  const seedEarlierReport = (target) => {
+    mkdirSync(target.rawDir, { recursive: true });
+    writeFileSync(reportPath(target), JSON.stringify(findings(target.root)));
+  };
+
+  it("reports the violations ESLint found and still exits 0: the wrapper reports, it does not gate", () => {
+    installStub(project.root, "eslint", eslintStub({ stdout: JSON.stringify(findings(project.root)), exit: 1 }));
+    const result = run("run-eslint-clean-code.mjs", project);
+    expect(result.status, result.stderr).toBe(0);
+    const report = readReport(project, "eslint-report.json");
+    expect(report).toHaveLength(1);
+    expect(report[0]).toMatchObject({ filePath: "pforge-mcp/a.mjs", errorCount: 1 });
+    expect(result.stdout).toMatch(/1 errors, 0 warnings across 1 files/);
+  });
+
+  it("reports a genuinely clean run as clean", () => {
+    installStub(project.root, "eslint", eslintStub({ stdout: "[]" }));
+    const result = run("run-eslint-clean-code.mjs", project);
+    expect(result.status, result.stderr).toBe(0);
+    expect(readReport(project, "eslint-report.json")).toEqual([]);
+  });
+
+  it("passes the clean-code config, the json formatter and the scan globs", () => {
+    installStub(project.root, "eslint", eslintStub({ stdout: "[]" }));
+    expect(run("run-eslint-clean-code.mjs", project).status).toBe(0);
+    const argv = JSON.parse(readFileSync(join(project.root, "eslint-argv.json"), "utf8"));
+    expect(argv[argv.indexOf("--config") + 1].replace(/\\/g, "/")).toMatch(/scripts\/audit\/eslint-clean-code\.config\.mjs$/);
+    expect(argv[argv.indexOf("--format") + 1]).toBe("json");
+    expect(argv.slice(-3)).toEqual(["pforge-mcp/**/*.mjs", "pforge-master/**/*.mjs", "scripts/**/*.mjs"]);
+  });
+
+  it("exits 1 and keeps no report when ESLint hits a fatal error (exit 2)", () => {
+    seedEarlierReport(project);
+    installStub(project.root, "eslint", eslintStub({ exit: 2, stderr: "Oops! Something went wrong" }));
+    const result = run("run-eslint-clean-code.mjs", project);
+    expect(result.status).toBe(1);
+    expect(result.stderr).toMatch(/ESLint scan failed.*status 2/);
+    expect(result.stderr).toMatch(/Oops! Something went wrong/);
+    expect(existsSync(reportPath(project)), "the earlier run's report must not stand in for this one").toBe(false);
+  });
+
+  it("exits 1 when ESLint exits 1 but printed no report: it died before linting", () => {
+    seedEarlierReport(project);
+    installStub(project.root, "eslint", eslintStub({ exit: 1, stderr: "Error: Cannot find module 'x'" }));
+    const result = run("run-eslint-clean-code.mjs", project);
+    expect(result.status).toBe(1);
+    expect(result.stderr).toMatch(/ESLint scan failed/);
+    expect(existsSync(reportPath(project))).toBe(false);
+  });
+
+  it.each([
+    ["text", "not json"],
+    ["a JSON object", JSON.stringify({ results: [] })],
+  ])("exits 1 when ESLint prints %s instead of a report array", (_label, stdout) => {
+    installStub(project.root, "eslint", eslintStub({ stdout }));
+    const result = run("run-eslint-clean-code.mjs", project);
+    expect(result.status).toBe(1);
+    expect(result.stderr).toMatch(/ESLint scan failed/);
+    expect(existsSync(reportPath(project))).toBe(false);
+  });
+
+  it("exits 1 when ESLint is not installed", () => {
+    const result = run("run-eslint-clean-code.mjs", project);
+    expect(result.status).toBe(1);
+    expect(result.stderr).toMatch(/eslint is not installed/);
   });
 });

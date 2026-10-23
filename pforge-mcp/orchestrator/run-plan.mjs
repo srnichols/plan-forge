@@ -30,7 +30,7 @@ import { API_ALLOWED_ROLES, COST_ANOMALY_MULTIPLIER, CRUCIBLE_STALL_CUTOFF_DAYS,
 import { LogEventHandler, OrchestratorEventBus, appendEvent, writeSilentExitRecord } from "./event-bus.mjs";
 import { buildSlicePrompt } from "./prompt-builders.mjs";
 import { parsePlan, computeLockHash, normalizeSliceId, compareSliceIds, parseOnlySlicesExpr, parseWorkerTimeoutValue, parseSlices, buildDAG, restrictDagToSlices, loadPlanParserConfig } from "./plan-parser.mjs";
-import { resetCliWorkersCache, setGhCopilotProbe, isDirectApiOnlyModel, isCopilotServableModel, isApiOnlyModel, getFoundryAuthScope, detectApiProvider, setSecretsLoader, buildApiMessages, generateImage, loadWorkerCapabilities, compareVersions, detectPackageManager, suggestInstall, classifyProbeFailure, detectWorkers, detectExecutionRuntime, detectClientHost, describeBillingSurface, getRoutingPreference, loadRoutingPreference, resolveRequiredCli, probeQuorumModelAvailability, filterQuorumModels, formatQuorumSummary, assessQuorumViability, detectRuntimes, spawnWorker, detectHelpTextOutput, detectSilentWorkerFailure, detectWorkerLaunchFailure, detectContentFilterBlock, detectKilledBySignal, deriveVendorFromModel, extractTokens, shouldDefaultPremiumRequestsToOne, parseStderrStats, resolveWorkerOutputIdleMs, resolveWorkerTimeoutMs, assertWorkerBackendReady, predictWorkerForModel } from "./worker-spawn.mjs";
+import { resetCliWorkersCache, setGhCopilotProbe, isDirectApiOnlyModel, isCopilotServableModel, isApiOnlyModel, getFoundryAuthScope, detectApiProvider, setSecretsLoader, buildApiMessages, generateImage, loadWorkerCapabilities, compareVersions, detectPackageManager, suggestInstall, classifyProbeFailure, detectWorkers, detectExecutionRuntime, detectClientHost, describeBillingSurface, getRoutingPreference, loadRoutingPreference, resolveRequiredCli, probeQuorumModelAvailability, filterQuorumModels, formatQuorumSummary, assessQuorumViability, detectRuntimes, spawnWorker, detectHelpTextOutput, detectSilentWorkerFailure, detectWorkerLaunchFailure, detectContentFilterBlock, detectWorkerBlockerReport, detectKilledBySignal, deriveVendorFromModel, extractTokens, shouldDefaultPremiumRequestsToOne, parseStderrStats, resolveWorkerOutputIdleMs, resolveWorkerTimeoutMs, assertWorkerBackendReady, predictWorkerForModel } from "./worker-spawn.mjs";
 import { resolveGateTimeoutMs, __resetBashPathCache, resolveBashPath, detectSelfRepairMissed, buildRetryPrompt, coalesceGateLines, editDistance, isPlaceholderToken, suggestAllowedCommand, looksLikeProse, runGate, SequentialScheduler, ParallelScheduler, CompetitiveScheduler, selectWinner, detectScopeConflicts } from "./schedulers.mjs";
 import { ensureForgeDir, pruneForgeRuns, recordModelPerformance, readForgeJson, appendForgeJsonl, readForgeJsonl, auditOrphanForgeFiles, loadModelPerformance, aggregateModelStats, getCostReport, getHealthTrend, emitToolTelemetry, loadGateCheckConfig, registerGateCheckResponder } from "./forge-io.mjs";
 import { extractPlanReleaseVersion, detectVersionCollision, parseValidationGates, lintGateCommands, validateGatePortability, isGateCommandAllowed, regressionGuard } from "./gate-helpers.mjs";
@@ -52,6 +52,8 @@ import { autoTierForSlice, loadAutoTierConfig } from "./auto-tier.mjs";
 import { isRetiredModel, isUnavailableToUser, retirementDate, useLiveCopilotModels } from "../copilot-models.mjs";
 import { availableEscalationChain, discoverCopilotModels } from "./copilot-live-models.mjs";
 import { rewritePlanStatusOnSuccess as _rewritePlanStatusOnSuccess } from "./run-plan/plan-status-update.mjs";
+import { computePlanCoverage, readPassedSlicesFromHistory } from "./run-plan/plan-coverage.mjs";
+import { failNoOpSlice, failIgnoredScopeSlice } from "./run-plan/slice-evidence-checks.mjs";
 
 const [QUORUM_MODE_AUTO, QUORUM_PRESET_POWER, QUORUM_PRESET_SPEED, QUORUM_MODE_FALSE] = QUORUM_MODES;
 export const loadAuditConfig = _loadAuditConfig;
@@ -1174,6 +1176,25 @@ function _runPostAuditorHook(summary, cwd, allPassed, eventBus) {
   } catch { /* never block the run on auditor hook failure */ }
 }
 
+/**
+ * Meta-bug #322: mark the plan Complete only when the run carried every slice.
+ * `allPassed` only covers the slices that executed, so --only-slices and
+ * aborted runs used to rewrite the header of a plan that was mostly never run,
+ * and the rewritten file then rode into the next auto-commit.
+ */
+function _rewritePlanStatusIfCovered({ plan, results, planPath, cwd, shippedAt, abortSignal }) {
+  const coverage = computePlanCoverage({
+    plan,
+    results,
+    priorPassed: readPassedSlicesFromHistory({ cwd, planPath }),
+    aborted: Boolean(abortSignal?.aborted),
+  });
+  if (!coverage.complete) {
+    return { rewrote: false, reason: "partial-run", uncovered: coverage.uncovered, detail: coverage.reason };
+  }
+  return _rewritePlanStatusOnSuccess({ planPath, cwd, shippedAt });
+}
+
 async function _finalizeRunPlan({
   results, plan, runMeta, runDir, planPath, cwd,
   abortSignal, bridge, eventBus, estimate, dryRun, memoryEnabled, projectName,
@@ -1224,9 +1245,8 @@ async function _finalizeRunPlan({
   // Issue #255: record the outcome — a status line the rewriter did not
   // recognise used to be indistinguishable from "already complete".
   if (allPassed && !estimate && !dryRun) {
-    summary.planStatusRewrite = _rewritePlanStatusOnSuccess({
-      planPath,
-      cwd,
+    summary.planStatusRewrite = _rewritePlanStatusIfCovered({
+      plan, results, planPath, cwd, abortSignal,
       shippedAt: summary.endTime || new Date().toISOString(),
     });
   }
@@ -2199,6 +2219,7 @@ function _gateStatus(gateResult) {
 function _executeSliceDetermineStatus({ workerResult, mode, slice, gateResult }) {
   const silentFailure = detectSilentWorkerFailure(workerResult, mode, slice.number);
   const killedBySignal = detectKilledBySignal(workerResult.exitCode);
+  const blockerReport = detectWorkerBlockerReport(workerResult, mode);
   const hadValidationGate = !!slice.validationGate;
   let status;
   let statusReason = null;
@@ -2216,6 +2237,11 @@ function _executeSliceDetermineStatus({ workerResult, mode, slice, gateResult })
   } else if (gateResult.contentFilter) {
     status = "failed";
     statusReason = `content-filtered: ${gateResult.contentFilter}`;
+  } else if (blockerReport) {
+    // Meta-bug #338: a stalled worker exits 0 with nothing for the gate to
+    // reject, so only its own report says the slice was not delivered.
+    status = "failed";
+    statusReason = blockerReport;
   } else if (gateResult.unrunnable) {
     status = "failed";
     statusReason = `gate-unrunnable: ${gateResult.unrunnable.reason}`;
@@ -2230,6 +2256,7 @@ function _executeSliceDetermineStatus({ workerResult, mode, slice, gateResult })
   }
   return { status, statusReason, silentFailure, killedBySignal };
 }
+export { _executeSliceDetermineStatus as determineSliceStatus };
 
 function _executeSliceBillingInfo(workerResult) {
   try {
@@ -2755,6 +2782,8 @@ async function executeSlice(slice, options) {
   _executeSliceFilesModifiedCheck({ sliceResult, slice, cwd, sliceStartHead, eventBus });
   _executeSliceDeletionInversionCheck({ sliceResult, slice, cwd, sliceStartHead, eventBus });
   _executeSliceScopeEscapeCheck({ sliceResult, slice, cwd, sliceStartHead, eventBus });
+  failNoOpSlice({ sliceResult, slice, cwd, sliceStartHead });
+  failIgnoredScopeSlice({ sliceResult, slice, cwd });
   const costRecord = _executeSliceStampCost(sliceResult);
 
   writeFileSync(

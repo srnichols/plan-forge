@@ -2641,6 +2641,41 @@ export function detectContentFilterBlock(workerResult, mode) {
     "The validation gate was skipped: the attempt did no work. The retry escalates to the next model in a fresh session.";
 }
 
+/** Heading of the status-reporting Blocker Report: `## ⚠ Blocker` at any heading level, with or without the emoji selector. */
+const BLOCKER_HEADING_RE = /^#{1,6}[ \t]*\u26A0\uFE0F?[ \t]*Blocker\b.*$/gm;
+const BLOCKER_PROBLEM_RE = /^[ \t]*\*\*Problem:\*\*[ \t]*(.+?)[ \t]*$/m;
+/** A report states its Problem directly under the heading; look no further than this many characters. */
+const BLOCKER_PROBLEM_WINDOW = 600;
+/** How much of the reported problem a failure reason quotes. */
+const BLOCKER_REASON_MAX_CHARS = 240;
+
+/**
+ * Meta-bug #338: detect a worker that stopped on a Blocker Report.
+ *
+ * A worker that stalls writes the status-reporting Blocker Report and exits 0.
+ * Nothing else in the run looks wrong: there is no diff for the gate to reject
+ * and the gate itself may pass vacuously, so the slice was recorded as passed
+ * and its dependents built on work that never happened.
+ *
+ * The heading alone is not enough. A docs slice may quote the template, whose
+ * fields are `<placeholders>`; a real report names a concrete problem.
+ *
+ * @param {{ output?: string, worker?: string }|null} workerResult
+ * @param {string} mode
+ * @returns {string|null} Reason carrying the reported problem, or null when no report was made.
+ */
+export function detectWorkerBlockerReport(workerResult, mode) {
+  if (!workerResult || mode === "assisted" || workerResult.worker === "human") return null;
+  const output = workerResult.output || "";
+  for (const heading of output.matchAll(BLOCKER_HEADING_RE)) {
+    const start = heading.index + heading[0].length;
+    const problem = BLOCKER_PROBLEM_RE.exec(output.slice(start, start + BLOCKER_PROBLEM_WINDOW))?.[1];
+    if (!problem || problem.startsWith("<")) continue;
+    return `worker '${workerResult.worker || "unknown"}' reported a Blocker instead of completing the slice: ${problem.slice(0, BLOCKER_REASON_MAX_CHARS)}`;
+  }
+  return null;
+}
+
 /**
  * Meta-bug #99: detect worker subprocesses killed by a signal / Ctrl+C.
  *

@@ -7,6 +7,12 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+### Fixed
+
+- A slice no longer passes when its worker stops on a `## ⚠ Blocker` report, or when it changes nothing while the files it declares do not exist. Before, a stalled worker that exited 0 behind a gate that passed vacuously was recorded as passed, and dependent slices built on work that never happened. The slice now fails with `worker reported a Blocker` or `no-op-slice` and the reason. Deletion slices, idempotent re-runs and slices that change anything are unaffected. (#338)
+- Re-running part of a plan no longer rewrites its status header to "Complete — shipped". `--only-slices`, an aborted run and a `--resume-from` run with no earlier pass on record now leave the header alone, and the run summary's `planStatusRewrite` reports `reason: "partial-run"` with the slices it could not account for. A run that carries every slice still marks the plan complete. (#322)
+- A slice whose declared file exists but is ignored by `.gitignore` now fails with the file and the rule that hides it. Before, it passed every filesystem-based gate and auto-commit silently left the file out, so a clean checkout could not contain it. (#342)
+
 ## [3.33.0] — 2026-10-12 — Forge-Master context, insights, and review guidance
 
 ### Added

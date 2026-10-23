@@ -839,6 +839,126 @@ export function verifySliceScope({ slice, cwd = process.cwd(), startSha = null }
 }
 
 /**
+ * A declared scope entry that names one specific file: no glob characters, not
+ * a directory, and an extension on the last segment. Entries that could mean a
+ * directory or an optional path are left alone, so the checks built on this
+ * never fail a slice over an ambiguous declaration.
+ *
+ * @param {string} entry
+ * @returns {boolean}
+ */
+export function isConcreteScopeFile(entry) {
+  const path = normalizeRepoPath(entry ?? "");
+  if (!path || path.endsWith("/") || /[\s*?[\]{}]/.test(path)) return false;
+  return /\.[A-Za-z0-9]{1,8}$/.test(path.slice(path.lastIndexOf("/") + 1));
+}
+
+/**
+ * Meta-bug #338 — detect a no-op slice: nothing changed since the slice started
+ * although the slice declares concrete files that do not exist. The Phase-62
+ * Slice 23 worker stopped on a Blocker, changed nothing and exited 0; with a
+ * vacuous gate the slice passed and its dependents built on files that were
+ * never created.
+ *
+ * Conservative on purpose: an idempotent re-run (declared files already exist)
+ * passes, any change at all passes (detectScopeEscape owns "changed the wrong
+ * files"), and deletion slices are skipped because their declared files are
+ * meant to disappear.
+ *
+ * Pure function — `changed` is every path touched since the slice started and
+ * `exists` answers whether a repo-relative path is on disk.
+ *
+ * @param {object} params
+ * @param {{ title?: string, scope?: string[] }} params.slice
+ * @param {string[]} [params.changed]
+ * @param {(path: string) => boolean} [params.exists]
+ * @returns {{ applicable: boolean, noOp: boolean, missing: string[] }}
+ */
+export function detectNoOpSlice({ slice, changed = [], exists = () => true } = {}) {
+  const notApplicable = { applicable: false, noOp: false, missing: [] };
+  if (!slice || isDeletionSliceTitle(slice.title)) return notApplicable;
+  const declared = (Array.isArray(slice.scope) ? slice.scope : []).filter(isConcreteScopeFile).map(normalizeRepoPath);
+  if (declared.length === 0) return notApplicable;
+  if (changed.length > 0) return { applicable: true, noOp: false, missing: [] };
+  const missing = declared.filter((path) => !exists(path));
+  return { applicable: true, noOp: missing.length > 0, missing };
+}
+
+/**
+ * Meta-bug #338 — git-backed wrapper around {@link detectNoOpSlice}. A change is
+ * anything git reports since `startSha`: committed, modified, deleted or
+ * untracked. Never throws; returns `applicable: false` when there is no start
+ * commit or git is unavailable.
+ *
+ * @param {object} params
+ * @param {{ title?: string, scope?: string[] }} params.slice
+ * @param {string} [params.cwd=process.cwd()]
+ * @param {string|null} [params.startSha] — HEAD SHA captured at slice start
+ * @returns {{ applicable: boolean, noOp: boolean, missing: string[] }}
+ */
+export function verifyNoOpSlice({ slice, cwd = process.cwd(), startSha = null } = {}) {
+  const notApplicable = { applicable: false, noOp: false, missing: [] };
+  if (!slice || !startSha) return notApplicable;
+  let changed;
+  try {
+    const git = (args) => execFileSync("git", args, { cwd, encoding: "utf-8", timeout: 5_000, stdio: ["ignore", "pipe", "pipe"] });
+    changed = [
+      ...git(["diff", "--name-only", startSha]).split(/\r?\n/),
+      ...git(["ls-files", "--others", "--exclude-standard"]).split(/\r?\n/),
+    ].filter((line) => line.trim() !== "");
+  } catch {
+    return notApplicable;
+  }
+  return detectNoOpSlice({ slice, changed, exists: (path) => existsSync(join(cwd, path)) });
+}
+
+/** One `git check-ignore -v` line, `<source>:<line>:<pattern>\t<path>`; null for a negated rule, which re-includes the path. */
+function parseCheckIgnoreLine(line) {
+  const tab = line.indexOf("\t");
+  if (tab < 0) return null;
+  const match = /^(.*?):(\d+):(.*)$/.exec(line.slice(0, tab));
+  if (!match || match[3].startsWith("!")) return null;
+  return { path: line.slice(tab + 1).trim(), source: match[1], line: Number(match[2]), pattern: match[3] };
+}
+
+/**
+ * Meta-bug #342 — find declared files that exist on disk but that git ignores
+ * and has never tracked. Auto-commit stages from `git status --porcelain`,
+ * which omits ignored files, so such a deliverable passes every
+ * filesystem-based gate and is then silently left out of the commit. In
+ * Phase-62 an unanchored `mcp/` rule hid `pforge-claw/src/mcp/`, and a clean
+ * checkout could not contain the module that boot, worker and executor imported.
+ *
+ * Tracked files are never reported: git does not ignore what it tracks. Only
+ * concrete files inside the repository are checked, because `git check-ignore`
+ * fails the whole batch on a path outside it. Never throws; returns
+ * `applicable: false` when there is nothing to check or git is unavailable.
+ *
+ * @param {object} params
+ * @param {{ scope?: string[] }} params.slice
+ * @param {string} [params.cwd=process.cwd()]
+ * @returns {{ applicable: boolean, ignored: Array<{ path: string, source: string, line: number, pattern: string }> }}
+ */
+export function verifyScopeFilesTrackable({ slice, cwd = process.cwd() } = {}) {
+  const notApplicable = { applicable: false, ignored: [] };
+  const candidates = (Array.isArray(slice?.scope) ? slice.scope : [])
+    .filter(isConcreteScopeFile)
+    .map(normalizeRepoPath)
+    .filter((path) => !isAbsolute(path) && !path.startsWith("../") && existsSync(join(cwd, path)));
+  if (candidates.length === 0) return notApplicable;
+  let raw;
+  try {
+    raw = execFileSync("git", ["check-ignore", "-v", "--stdin"], {
+      cwd, input: candidates.join("\n"), encoding: "utf-8", timeout: 5_000, stdio: ["pipe", "pipe", "pipe"],
+    });
+  } catch (err) {
+    // Exit 1 means nothing was ignored; any other failure means git could not answer.
+    return err?.status === 1 ? { applicable: true, ignored: [] } : notApplicable;
+  }
+  return { applicable: true, ignored: raw.split(/\r?\n/).map(parseCheckIgnoreLine).filter(Boolean) };
+}
+
+/**
  * After a slice passes, commit any dirty working-tree changes with a
  * deterministic conventional-commit message derived from the slice title.
  * Never commits on `mode === "assisted"` runs.

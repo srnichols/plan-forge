@@ -221,6 +221,11 @@ const GATE_WARN_RULES = Object.freeze([
     message: () => "'pnpm --filter <pkg> <script>' exits 0 when the script does not exist (\"None of the selected packages has a ... script\"), so a typo or a script that only exists in a sibling package reads as a passing gate. Use 'pnpm run <script>' from inside the package directory — it exits 1 with ERR_PNPM_NO_SCRIPT.",
   },
   {
+    rule: "pnpm-forwarded-separator",
+    applies: ({ line }) => /\bpnpm\s+(?:(?:--filter|-F)\s+\S+\s+)?(?:run\s+)?test[\w:.-]*\s+--(?:\s|$)/.test(line),
+    message: () => "'pnpm run test -- <files>' forwards the literal '--' to Vitest, which treats everything after it as pass-through options instead of file filters, so the whole project is collected and the gate runs (and can time out on) far more than the named files. Use 'pnpm exec vitest run <files>' instead.",
+  },
+  {
     rule: "git-diff-misses-untracked",
     applies: ({ line }) => /\bgit\s+diff\b[^\n]*\bHEAD~\d/.test(line),
     message: () => "'git diff ... HEAD~N' never lists untracked files, so a gate counting brand-new files reads 0 until they are committed — and the slice cannot commit on an unrun gate. Use 'git status --porcelain' or 'git ls-files --others --exclude-standard' to include new files.",

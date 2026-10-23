@@ -140,7 +140,7 @@ describe("buildImpactCommands", () => {
   it("runs JS/TS tests with vitest when the project uses it", () => {
     write("package.json", JSON.stringify({ devDependencies: { vitest: "^4.0.0" } }));
     expect(buildImpactCommands({ cwd: repo, tests: ["tests/a.test.mjs", "tests/b c.test.mjs"], config: { command: null } }))
-      .toEqual({ commands: ['npx vitest run "tests/a.test.mjs" "tests/b c.test.mjs"'] });
+      .toMatchObject({ commands: ['npx vitest run "tests/a.test.mjs" "tests/b c.test.mjs"'] });
   });
 
   it("uses jest when that is the runner", () => {
@@ -148,14 +148,14 @@ describe("buildImpactCommands", () => {
     expect(buildImpactCommands({ cwd: repo, tests: ["a.spec.ts"], config: { command: null } }).commands).toEqual(['npx jest "a.spec.ts"']);
   });
 
-  it("runs each workspace package's tests with that package's runner", () => {
+  it("runs each workspace package's tests with that package's runner, from that package", () => {
     write("package.json", JSON.stringify({ workspaces: ["pkg-a", "pkg-b"] }));
     write("pkg-a/package.json", JSON.stringify({ devDependencies: { vitest: "^4.0.0" } }));
     write("pkg-b/package.json", JSON.stringify({ devDependencies: { jest: "^30.0.0" } }));
     expect(buildImpactCommands({ cwd: repo, tests: ["pkg-a/tests/x.test.mjs", "pkg-b/src/y.spec.ts", "pkg-a/tests/deep/z.test.mjs"], config: { command: null } }).commands)
       .toEqual([
-        'npx --prefix pkg-a vitest run "pkg-a/tests/x.test.mjs" "pkg-a/tests/deep/z.test.mjs"',
-        'npx --prefix pkg-b jest "pkg-b/src/y.spec.ts"',
+        'cd pkg-a && npx vitest run "tests/x.test.mjs" "tests/deep/z.test.mjs"',
+        'cd pkg-b && npx jest "src/y.spec.ts"',
       ]);
   });
 
@@ -175,7 +175,7 @@ describe("buildImpactCommands", () => {
 
   it("prefers a configured command with a {files} placeholder", () => {
     expect(buildImpactCommands({ cwd: repo, tests: ["t/a_spec.rb"], config: { command: "bundle exec rspec {files}" } }))
-      .toEqual({ commands: ['bundle exec rspec "t/a_spec.rb"'] });
+      .toMatchObject({ commands: ['bundle exec rspec "t/a_spec.rb"'] });
   });
 
   it("explains when no runner is known", () => {

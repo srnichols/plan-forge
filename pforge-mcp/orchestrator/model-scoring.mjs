@@ -19,6 +19,7 @@
  */
 
 import { loadModelPerformance, aggregateModelStats } from "./forge-io.mjs";
+import { taskHeadline } from "./plan-parser.mjs";
 import { isApiOnlyModel, assessQuorumViability } from "./worker-spawn.mjs";
 import { isRecommendableModel } from "../copilot-models.mjs";
 
@@ -51,7 +52,7 @@ function isAutoPickableModel(model) {
  * @returns {string}
  */
 export function inferSliceType(slice) {
-  const text = [slice.title || "", ...(slice.tasks || [])].join(" ").toLowerCase();
+  const text = [slice.title || "", ...(slice.tasks || []).map(taskHeadline)].join(" ").toLowerCase();
   if (/\b(test|spec|unit test|integration test|e2e|coverage)\b/.test(text)) return "test";
   if (/\b(review|audit|lint|analyze|analyse|check|inspect)\b/.test(text)) return "review";
   if (/\b(migration|migrate|schema|seed|alter table|create table|drop table|dbcontext|ef core)\b/.test(text)) return "migration";

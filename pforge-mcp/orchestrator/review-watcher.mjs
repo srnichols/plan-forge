@@ -19,7 +19,7 @@ import { createHash } from "node:crypto";
 import { WATCHER_MODES } from "../enums.mjs";
 import { buildCrossRunSnapshot } from "../watcher.mjs";
 import { ensureForgeDir } from "./forge-io.mjs";
-import { compareSliceIds } from "./plan-parser.mjs";
+import { compareSliceIds, taskHeadline } from "./plan-parser.mjs";
 import { spawnWorker } from "./worker-spawn.mjs";
 import { recall as brainRecall } from "../brain.mjs";
 import {
@@ -1269,7 +1269,7 @@ export function scoreSliceComplexity(slice, cwd) {
   const depCount = (slice.depends && slice.depends.length) || 0;
   signals.dependencyWeight = Math.min(depCount / 3, 1);
 
-  const allText = [slice.title || "", ...(slice.tasks || []), slice.validationGate || ""].join(" ");
+  const allText = [slice.title || "", ...(slice.tasks || []).map(taskHeadline), slice.validationGate || ""].join(" ");
   const securityHits = (allText.match(SECURITY_KEYWORDS) || []).length;
   signals.securityWeight = Math.min(securityHits / 2, 1);
 

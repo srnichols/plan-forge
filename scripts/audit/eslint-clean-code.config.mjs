@@ -1,4 +1,5 @@
 import { builtinRules } from 'eslint/use-at-your-own-risk';
+import { auditGlobs } from './scan-roots.mjs';
 
 function aliasCoreRule(ruleName) {
   const baseRule = builtinRules.get(ruleName);
@@ -26,7 +27,7 @@ const cleanCodePlugin = {
 
 export default [
   {
-    files: ['pforge-mcp/**/*.mjs', 'pforge-master/**/*.mjs', 'scripts/**/*.mjs'],
+    files: auditGlobs('run-eslint-clean-code'),
     ignores: ['scripts/audit/**', '**/tests/**', '**/node_modules/**', '**/ui/**'],
     languageOptions: {
       ecmaVersion: 'latest',

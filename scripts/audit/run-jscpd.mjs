@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { auditRawDir } from './raw-dir.mjs';
 import { runInstalledBin } from './run-installed-bin.mjs';
+import { auditRoots } from './scan-roots.mjs';
 
 const root = process.cwd();
 const outDir = auditRawDir(root);
@@ -54,8 +55,7 @@ function scanForDuplicates() {
       outDir,
       '--ignore',
       '**/node_modules/**,**/tests/**,**/ui/**',
-      'pforge-mcp',
-      'pforge-master',
+      ...auditRoots('run-jscpd'),
       'pforge.ps1',
       'pforge.sh'
     ]

@@ -1,14 +1,14 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { auditRawDir } from './raw-dir.mjs';
+import { auditRoots } from './scan-roots.mjs';
 
 const root = process.cwd();
 const outFile = path.join(auditRawDir(root), 'module-metrics.json');
-const scanRoots = [
-  { dir: 'pforge-mcp', exclude: new Set(['tests', 'node_modules', 'ui']) },
-  { dir: 'pforge-master', exclude: new Set(['tests', 'node_modules', 'ui']) },
-  { dir: 'scripts', exclude: new Set(['audit']) }
-];
+const scanRoots = auditRoots('measure-modules').map((dir) => ({
+  dir,
+  exclude: new Set(dir === 'scripts' ? ['audit'] : ['tests', 'node_modules', 'ui'])
+}));
 
 function ensureDir(dirPath) {
   fs.mkdirSync(dirPath, { recursive: true });

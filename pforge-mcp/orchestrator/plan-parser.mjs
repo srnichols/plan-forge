@@ -815,9 +815,44 @@ function handleFilesInScopeContinuation(state, line) {
   return true;
 }
 
-function applyTaskLine(current, line) {
+/**
+ * A numbered task is a column-0 `1. ` line. Whatever sits indented beneath it
+ * (sub-bullets, a code sample, a wrapped paragraph) belongs to that task, as in
+ * Markdown, and stays in its text so the worker sees it (meta-bug #377). The
+ * task ends at the first line that is not indented, wherever the line is
+ * handled, so text after a gate or a field never joins the last task. Blank
+ * lines inside a task are kept; those after its last line are dropped.
+ */
+function closeTaskBlockOnOutdent(state, line) {
+  if (state.taskBlockOpen && line.trim() !== "" && !/^\s/.test(line)) state.taskBlockOpen = false;
+}
+
+/**
+ * A task's own line, without the lines written under it. Routing and scoring
+ * heuristics read this, so adding the nested text to a task does not change
+ * what they decide (meta-bug #377).
+ */
+export function taskHeadline(task) {
+  return String(task).split("\n", 1)[0];
+}
+
+function applyTaskLine(state, line) {
   const taskMatch = line.match(/^\d+\.\s+(.+)/);
-  if (taskMatch) current.tasks.push(taskMatch[1].trim());
+  if (taskMatch) {
+    state.current.tasks.push(taskMatch[1].trim());
+    state.taskBlockOpen = true;
+    state.taskBlankLines = 0;
+    return;
+  }
+  if (!state.taskBlockOpen) return;
+  if (line.trim() === "") {
+    state.taskBlankLines++;
+    return;
+  }
+  // Any line that is not indented has already closed the block (closeTaskBlockOnOutdent).
+  const { tasks } = state.current;
+  tasks[tasks.length - 1] += `${"\n".repeat(state.taskBlankLines + 1)}${line.trimEnd()}`;
+  state.taskBlankLines = 0;
 }
 
 /**
@@ -841,9 +876,12 @@ export function parseSlices(lines, opts = {}) {
     inContextFilesBlock: false,
     contextBlockHasBullets: false,
     implicitGateActive: false,
+    taskBlockOpen: false,
+    taskBlankLines: 0,
   };
 
   for (const line of lines) {
+    closeTaskBlockOnOutdent(state, line);
     if (handleCodeFenceLine(state, line)) continue;
     if (handleCodeBlockContentLine(state, line)) continue;
     if (handleSliceHeaderLine(state, line)) continue;
@@ -860,7 +898,7 @@ export function parseSlices(lines, opts = {}) {
     if (handleContextFiles(state, line)) continue;
     if (handleFilesHeading(state, line)) continue;
     if (handleFilesInScopeContinuation(state, line)) continue;
-    applyTaskLine(state.current, line);
+    applyTaskLine(state, line);
   }
 
   if (state.current) state.slices.push(state.current);

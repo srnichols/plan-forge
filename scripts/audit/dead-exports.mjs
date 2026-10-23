@@ -21,6 +21,10 @@
 //   - scripts/audit/*.mjs
 //   - Anything ending in -cli.mjs
 //
+// Scope comes from scan-roots.mjs. pforge-sdk is left out on purpose: every module
+// there is a public subpath in package.json "exports", so an export nothing in this
+// repository imports is still API (the scanner reported createClient and chunkFile).
+//
 // False positives the script tolerates:
 //   - Re-exports (`export { foo } from './bar.mjs'`) — treated as a consumer
 //   - Dynamic `import()` calls — not tracked (rare in this codebase)
@@ -36,12 +40,13 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { auditRawDir } from './raw-dir.mjs';
+import { auditRoots } from './scan-roots.mjs';
 
 const ROOT = process.cwd();
 const OUT_DIR = auditRawDir(ROOT);
 const OUT_FILE = path.join(OUT_DIR, 'dead-exports-report.json');
 
-const DEFAULT_SCOPES = ['pforge-mcp', 'pforge-master', 'scripts'];
+const DEFAULT_SCOPES = auditRoots('dead-exports');
 const EXCLUDED_DIRS = new Set(['node_modules', 'tests', 'ui', 'dist', '.forge', 'docs', 'archive']);
 const ENTRY_POINT_PATTERNS = [
   /^pforge-mcp\/server\.mjs$/,

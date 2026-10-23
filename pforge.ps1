@@ -2465,20 +2465,18 @@ function Invoke-Analyze {
     if ($mustCriteria) { $allCriteria += $mustCriteria }
     if ($shouldCriteria) { $allCriteria += $shouldCriteria }
 
-    # Fix 9: Also parse checkbox format as fallback criteria
+    # Fix 9: Also parse checkbox format as fallback criteria. A regex pre-check used to
+    # skip this loop whenever the first line under the heading was a checkbox, which is
+    # the layout the fallback exists for (meta-bug #387).
     if ($allCriteria.Count -eq 0) {
-        $checkboxCriteria = [regex]::Matches($planContent, '(?m)(?<=## Acceptance Criteria\s*\n)(?:^\s*- \[[ x]\]\s*(.+)\n?)+')
-        if (-not $checkboxCriteria -or $checkboxCriteria.Count -eq 0) {
-            # Try line-by-line within acceptance criteria section
-            $inAC = $false
-            foreach ($line in $planContent -split "`n") {
-                if ($line -match '(?i)## Acceptance Criteria') { $inAC = $true; continue }
-                if ($inAC -and $line -match '^\s*---\s*$|^##\s') { break }
-                if ($inAC -and $line -match '^\s*-\s*\[[ x]\]\s*(.+)') { $allCriteria += $Matches[1].Trim() }
-            }
-            if ($allCriteria.Count -gt 0) {
-                $mustCriteria = $allCriteria  # Treat all checkboxes as MUST for scoring
-            }
+        $inAC = $false
+        foreach ($line in $planContent -split "`n") {
+            if ($line -match '(?i)## Acceptance Criteria') { $inAC = $true; continue }
+            if ($inAC -and $line -match '^\s*---\s*$|^##\s') { break }
+            if ($inAC -and $line -match '^\s*-\s*\[[ x]\]\s*(.+)') { $allCriteria += $Matches[1].Trim() }
+        }
+        if ($allCriteria.Count -gt 0) {
+            $mustCriteria = $allCriteria  # Treat all checkboxes as MUST for scoring
         }
     }
 

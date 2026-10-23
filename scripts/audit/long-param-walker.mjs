@@ -1,6 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { auditRawDir } from './raw-dir.mjs';
+import { auditRoots } from './scan-roots.mjs';
 
 const root = process.cwd();
 const outFile = path.join(auditRawDir(root), 'long-param-report.json');
@@ -109,7 +110,7 @@ function writeJson(payload) {
 
 try {
   const files = [];
-  for (const includeRoot of ['pforge-mcp', 'pforge-master']) {
+  for (const includeRoot of auditRoots('long-param-walker')) {
     const absoluteRoot = path.join(root, includeRoot);
     if (fs.existsSync(absoluteRoot)) {
       walk(absoluteRoot, files);

@@ -15,7 +15,9 @@ export function buildSlicePrompt(slice) {
     "Tasks:",
   ];
   for (const task of slice.tasks) {
-    parts.push(`- ${task}`);
+    // A task keeps the indented lines written under it (meta-bug #377); nest them under its bullet.
+    const [first, ...rest] = String(task).split("\n");
+    parts.push(`- ${first}`, ...rest.map((line) => (line === "" ? line : `  ${line}`)));
   }
   // Scope isolation: tell worker which files to modify
   if (slice.scope && slice.scope.length > 0) {
@@ -110,4 +112,14 @@ export function buildPlanContextBlock(slice, planContext) {
   if (sections.length === 0) return "";
   const body = sections.map((section) => section.join("\n")).join("\n\n");
   return `--- PLAN CONTEXT ---\n${body}\n--- END PLAN CONTEXT ---`;
+}
+
+/**
+ * `prompt` followed by the slice's plan-context block, when it has one. Every
+ * model that plans or executes the slice reads the block the same way: the
+ * executing worker and the quorum legs that plan it first (meta-bug #381).
+ */
+export function appendPlanContext(prompt, slice, planContext) {
+  const block = buildPlanContextBlock(slice, planContext);
+  return block ? `${prompt}\n\n${block}` : prompt;
 }

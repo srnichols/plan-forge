@@ -41,9 +41,10 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
+import { auditGlobs } from './scan-roots.mjs';
 
 const DEFAULTS = Object.freeze({
-  scopeGlobs: ['pforge-mcp/**/*.mjs', 'pforge-master/**/*.mjs', 'scripts/**/*.mjs'],
+  scopeGlobs: auditGlobs('clean-code-delta'),
   warnThresholds: {
     newTodos: 1,
     newLongParams: 1,

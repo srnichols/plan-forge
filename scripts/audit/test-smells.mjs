@@ -29,12 +29,13 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { auditRawDir } from './raw-dir.mjs';
+import { auditRoots } from './scan-roots.mjs';
 
 const ROOT = process.cwd();
 const OUT_DIR = auditRawDir(ROOT);
 const OUT_FILE = path.join(OUT_DIR, 'test-smells-report.json');
 
-const DEFAULT_SCOPES = ['pforge-mcp/tests', 'pforge-master/tests', 'tests'];
+const DEFAULT_SCOPES = auditRoots('test-smells');
 
 const SMELLS = [
   { id: 'FOCUS-LEAK', severity: 'error', regex: /\b(?:it|test|describe|context)\.only\s*\(/g, why: 'Focused test slipped past CI — would skip every other test in the suite if merged' },

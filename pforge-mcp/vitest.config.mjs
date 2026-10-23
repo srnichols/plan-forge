@@ -56,6 +56,7 @@ const SOURCE_ONLY_SUITES = {
     "tests/best-defaults-preset.test.mjs",
     "tests/audit-cli-parity.test.mjs",
     "tests/audit-wrappers.test.mjs",
+    "tests/audit-scan-roots.test.mjs",
     "tests/clean-code-delta.test.mjs",
     "tests/clean-code-no-regression.test.mjs",
     "tests/dependency-direction.test.mjs",

@@ -1,10 +1,11 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { auditRawDir } from './raw-dir.mjs';
+import { auditRoots } from './scan-roots.mjs';
 
 const root = process.cwd();
 const outFile = path.join(auditRawDir(root), 'grep-matrix-report.json');
-const includeRoots = ['pforge-mcp', 'pforge-master'];
+const includeRoots = auditRoots('grep-matrix');
 const excludedDirNames = new Set(['tests', 'node_modules', 'ui']);
 const codeLikePattern = /\b(?:if\s*\(|const\s+|return\s+|function\s+)/;
 

@@ -81,7 +81,8 @@ describe("Depends On lists (#362)", () => {
     expect(depsOf(["1", "**Depends On**: none (foundation)"])["1"]).toEqual([]);
   });
 
-  it("leaves a plural range unparsed rather than ordering the slice after its first id", () => {
+  it("gives a plural range with no slice before it no dependency, rather than ordering the slice after its first id", () => {
+    // A range that spans earlier slices is read as all of them (#375); with none before it there is nothing to name.
     expect(depsOf(["6", "**Depends On**: Slices 1–5"])["6"]).toEqual([]);
     expect(depsOf(["6", "**Depends On**: Slices 1-5"])["6"]).toEqual([]);
     expect(depsOf(["6", "**Depends On**: Slices 1 through 5"])["6"]).toEqual([]);
@@ -112,7 +113,7 @@ describe("depends-not-parsed still reports what the parser cannot read (#362)", 
   const lintSlice = (slice) => lintGateCommands({ slices: [{ number: "5", title: "Join", validationGate: "npm test", ...slice }] });
   const dependsWarnings = (result) => result.warnings.filter((warning) => warning.rule === "depends-not-parsed");
 
-  it("keeps warning on a plural range, which stays unparsed", () => {
+  it("keeps warning on a declaration that produced no dependency, such as a range with no slice before it", () => {
     const found = dependsWarnings(lintSlice({ depends: [], rawLines: ["**Depends On**: Slices 1–5"] }));
     expect(found).toHaveLength(1);
     expect(found[0].message).toContain("Slices 1–5");

@@ -261,6 +261,17 @@ function collectForbiddenActionLines(lines) {
   return collected;
 }
 
+const STATUS_LINE_RE = /\*\*Status\*\*:\s*(.+)/;
+
+/** The first `**Status**:` value among `lines`, or "" when there is none. */
+function firstStatus(lines) {
+  for (const line of lines) {
+    const statusMatch = line.match(STATUS_LINE_RE);
+    if (statusMatch) return statusMatch[1].trim();
+  }
+  return "";
+}
+
 function parseMeta(lines) {
   const meta = { title: "", status: "", branch: "", plan: "" };
   for (const line of lines) {
@@ -269,9 +280,12 @@ function parseMeta(lines) {
       break;
     }
   }
+  // The plan's status is the one in its header, before the first `##` heading. A Status
+  // line further down (an advisory note, a per-section status) used to replace it, so
+  // shipped plans reported "Advisory data for the Step-2 hardener..." (meta-bug #373).
+  const firstSection = lines.findIndex((line) => /^##\s/.test(line));
+  meta.status = firstStatus(firstSection === -1 ? lines : lines.slice(0, firstSection)) || firstStatus(lines);
   for (const line of lines) {
-    const statusMatch = line.match(/\*\*Status\*\*:\s*(.+)/);
-    if (statusMatch) meta.status = statusMatch[1].trim();
     const branchMatch = line.match(/\*\*Feature Branch\*\*:\s*`([^`]+)`/);
     if (branchMatch) meta.branch = branchMatch[1];
   }
@@ -378,6 +392,51 @@ function splitDependencyList(text) {
   return parts;
 }
 
+/**
+ * A range of slice ids: "S0–S8", "Slices 1–5", "Slice 1 through Slice 8". It
+ * is resolved once every slice heading has been read, because the ids it
+ * covers are not all known when the line is (meta-bug #375).
+ */
+const DEPENDENCY_RANGE_RE =
+  /^(?:slices?\s+)?s?(\d+(?:\.\d+)?[A-Za-z]?)\s*(?:[-–—]|\bthrough\b|\bto\b)\s*(?:slices?\s+)?s?(\d+(?:\.\d+)?[A-Za-z]?)\b/i;
+
+function extractDependencyRange(phrase) {
+  const match = String(phrase).trim().match(DEPENDENCY_RANGE_RE);
+  return match ? { from: normalizeSliceId(match[1]), to: normalizeSliceId(match[2]) } : null;
+}
+
+/**
+ * Split a dependency list into the slice ids it names (read by `toId`) and the
+ * ranges it spans.
+ */
+function readDependencyPhrases(text, toId) {
+  const ids = [];
+  const ranges = [];
+  for (const phrase of splitDependencyList(text)) {
+    const range = extractDependencyRange(phrase);
+    if (range) ranges.push(range);
+    else ids.push(toId(phrase));
+  }
+  return { ids, ranges };
+}
+
+/**
+ * Add each slice's ranges to its dependencies: the slices before it whose ids
+ * fall between the ends. A slice cannot depend on itself or on a later slice,
+ * and a reversed range spans nothing, so those add no dependency.
+ */
+function resolveDependencyRanges(slices) {
+  slices.forEach((slice, position) => {
+    const { dependencyRanges } = slice;
+    if (!dependencyRanges) return;
+    delete slice.dependencyRanges;
+    const earlier = slices.slice(0, position).map(({ number }) => number);
+    for (const { from, to } of dependencyRanges) {
+      appendUniqueValues(slice.depends, earlier.filter((id) => compareSliceIds(id, from) >= 0 && compareSliceIds(id, to) <= 0));
+    }
+  });
+}
+
 const DEPENDS_TAG_RE = /\[(?:depends\s+on|depends|dep|needs):\s*([^\]]+)\]/i;
 const PARALLEL_TAG_RE = /\[(?:P|parallel(?:-safe)?)\]/i;
 const COMPETITIVE_TAG_RE = /\[competitive(?::\s*(\d+))?\]/i;
@@ -419,7 +478,9 @@ function createSliceRecord(sliceMatch, rawTags) {
 
   const dependsMatch = rawTags.match(DEPENDS_TAG_RE);
   if (dependsMatch) {
-    current.depends = splitDependencyList(dependsMatch[1]).map((d) => normalizeSliceId(d));
+    const { ids, ranges } = readDependencyPhrases(dependsMatch[1], normalizeSliceId);
+    current.depends = ids;
+    if (ranges.length > 0) current.dependencyRanges = ranges;
   }
 
   if (PARALLEL_TAG_RE.test(rawTags)) current.parallel = true;
@@ -456,7 +517,7 @@ function recordLockLines(state, lines) {
 
 function handleCodeFenceLine(state, line) {
   if (!line.startsWith("```")) return false;
-  state.inFilesInScopeBlock = false;
+  endListBlocks(state);
 
   if (state.inCodeBlock) {
     if (state.inValidationGate && state.current && state.gateFenceIsShell) {
@@ -507,11 +568,18 @@ function disarmGateCapture(state) {
   state.implicitGateActive = false;
 }
 
+// A fence, heading, slice or gate marker ends any bullet list being collected:
+// the Scope list and the Context Files list.
+function endListBlocks(state) {
+  state.inFilesInScopeBlock = false;
+  state.inContextFilesBlock = false;
+}
+
 function handleSliceHeaderLine(state, line) {
   const sliceMatch = line.match(SLICE_HEADING_RE);
   if (!sliceMatch) return false;
   if (state.current) state.slices.push(state.current);
-  state.inFilesInScopeBlock = false;
+  endListBlocks(state);
   disarmGateCapture(state);
   state.current = createSliceRecord(sliceMatch, line);
   recordLockLines(state, [line]);
@@ -528,7 +596,7 @@ function handlePlanLevelHeading(state, line) {
     state.slices.push(state.current);
     state.current = null;
   }
-  state.inFilesInScopeBlock = false;
+  endListBlocks(state);
   disarmGateCapture(state);
   return true;
 }
@@ -543,7 +611,7 @@ export const VALIDATION_GATE_MARKER_RE = /\*\*(?:Validation Gate|Exit [Gg]ate)\*
 function handleValidationGateLine(state, line) {
   const gateMatch = line.match(VALIDATION_GATE_MARKER_RE);
   if (!gateMatch) return false;
-  state.inFilesInScopeBlock = false;
+  endListBlocks(state);
   recordLockLines(state, [line]);
   const inlineText = (gateMatch[1] || "").trim();
   if (inlineText && state.current) {
@@ -595,14 +663,14 @@ function applyBodyDependencies(current, line) {
   // node.depends, which the scheduler could never satisfy → 0-slice phantom run.
   // Meta-bug #362: the list may be joined by "and", and a comma inside
   // parentheses is commentary — "(parallel to Slices 4, 5)" used to leak a
-  // dependency on 5.
-  const bodyDeps = splitDependencyList(dependsBodyMatch[1])
-    .map((d) => extractLeadingSliceId(d))
-    .filter((d) => d && d.length > 0);
-  appendUniqueValues(current.depends, bodyDeps);
+  // dependency on 5. Meta-bug #375: a phrase that is a range ("S0–S8") is kept
+  // for resolveDependencyRanges instead of being read as its first id.
+  const { ids, ranges } = readDependencyPhrases(dependsBodyMatch[1], extractLeadingSliceId);
+  appendUniqueValues(current.depends, ids.filter((id) => id && id.length > 0));
+  if (ranges.length > 0) current.dependencyRanges = [...(current.dependencyRanges ?? []), ...ranges];
 }
 
-/** "Slices 1–5": a range this parser cannot expand. */
+/** "Slices 1 through" with no id after it: a range this parser cannot resolve. */
 const PLURAL_RANGE_RE = /^slices\s+\d+(?:\.\d+)?[A-Za-z]?\s*(?:[-–—]|\bthrough\b)/i;
 
 /**
@@ -611,9 +679,11 @@ const PLURAL_RANGE_RE = /^slices\s+\d+(?:\.\d+)?[A-Za-z]?\s*(?:[-–—]|\bthrou
  * plural a list opens with), "S1", "1", "2.3A".
  * Returns the normalized id, or null when the phrase has no leading slice id
  * (e.g. "none (foundation)", "and Group B merge checkpoint.") or is a plural
- * range. Reading only the first id of "Slices 1–5" would turn "ordered after
- * its predecessor" (no parsed dependency) into "ordered after slice 1", so the
- * range stays unparsed and depends-not-parsed keeps reporting it.
+ * range left open. A range with both ends ("Slices 1–5") never gets here: it is
+ * resolved by resolveDependencyRanges. Reading only the first id of an open one
+ * would turn "ordered after its predecessor" (no parsed dependency) into
+ * "ordered after slice 1", so it stays unparsed and depends-not-parsed keeps
+ * reporting it.
  *
  * @param {string} phrase
  * @returns {string|null}
@@ -632,14 +702,48 @@ function extractBacktickValues(text) {
   return backticks.map((s) => s.replace(/`/g, "").trim()).filter((s) => s.length > 0);
 }
 
-function applyContextFiles(current, line) {
-  const contextBodyMatch = line.match(/\*\*Context Files:?\*\*:?\s*(.+)/i);
-  if (!contextBodyMatch) return;
-  // Context Files are read-only references, not the editable scope allowlist
-  // (meta-bug #231): keep them out of `scope` so they cannot be modified and
-  // so scope enforcement is not silently widened to instruction docs.
+const CONTEXT_FILES_LABEL_RE = /\*\*Context Files:?\*\*:?\s*(.*)$/i;
+/** The label alone on its line (a bullet or quote marker before it is fine): its files follow as bullets. */
+const CONTEXT_FILES_LABEL_ONLY_RE = /^\s*(?:[-*>]\s*)?\*\*Context Files:?\*\*:?\s*$/i;
+
+/**
+ * Context Files are read-only references, not the editable scope allowlist
+ * (meta-bug #231): keep them out of `scope` so they cannot be modified and
+ * so scope enforcement is not silently widened to instruction docs. The files
+ * follow the label on its line, or, with the label alone on its line, come as one
+ * bullet per file (meta-bug #374). Returns true for a bullet it consumed.
+ */
+function handleContextFiles(state, line) {
+  const labelMatch = line.match(CONTEXT_FILES_LABEL_RE);
+  if (!labelMatch) return continueContextFilesBlock(state, line);
+  const { current } = state;
   if (!current.contextFiles) current.contextFiles = [];
-  appendUniqueValues(current.contextFiles, extractBacktickValues(contextBodyMatch[1]));
+  appendUniqueValues(current.contextFiles, extractBacktickValues(labelMatch[1]));
+  // A bulleted label would otherwise be read as one more entry of an open Scope list.
+  state.inFilesInScopeBlock = false;
+  state.inContextFilesBlock = CONTEXT_FILES_LABEL_ONLY_RE.test(line);
+  state.contextBlockHasBullets = false;
+  return false;
+}
+
+function continueContextFilesBlock(state, line) {
+  if (!state.inContextFilesBlock) return false;
+  const trimmed = line.trim();
+  if (!trimmed) {
+    // Prettier separates the label from its list with a blank line, so only a
+    // blank after the list ends it (as for the Scope list, meta-bug #282).
+    if (state.contextBlockHasBullets) state.inContextFilesBlock = false;
+    return false;
+  }
+  const bulletMatch = trimmed.match(/^[-*]\s+(.+)/);
+  // Prose, or a bullet that is itself a labelled field (`- **Scope**: ...`), ends the list.
+  if (!bulletMatch || /^\*\*/.test(bulletMatch[1])) {
+    state.inContextFilesBlock = false;
+    return false;
+  }
+  appendUniqueValues(state.current.contextFiles, extractBulletScopeCandidates(bulletMatch[1]));
+  state.contextBlockHasBullets = true;
+  return true;
 }
 
 function extractInlineScopeCandidates(rest) {
@@ -734,6 +838,8 @@ export function parseSlices(lines, opts = {}) {
     fenceOpenLine: null,
     inFilesInScopeBlock: false,
     scopeBlockHasBullets: false,
+    inContextFilesBlock: false,
+    contextBlockHasBullets: false,
     implicitGateActive: false,
   };
 
@@ -751,13 +857,14 @@ export function parseSlices(lines, opts = {}) {
     applyStopCondition(state.current, line);
     applyWorkerTimeout(state.current, line);
     applyBodyDependencies(state.current, line);
-    applyContextFiles(state.current, line);
+    if (handleContextFiles(state, line)) continue;
     if (handleFilesHeading(state, line)) continue;
     if (handleFilesInScopeContinuation(state, line)) continue;
     applyTaskLine(state.current, line);
   }
 
   if (state.current) state.slices.push(state.current);
+  resolveDependencyRanges(state.slices);
   return state.slices;
 }
 

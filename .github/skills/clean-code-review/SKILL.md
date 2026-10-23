@@ -206,7 +206,7 @@ When `--fix-suggestions` is present, append a concrete remediation for each find
 | Function >300 LOC | "Extract `<identified-block>` into a helper function `<suggested-name>` in the same module" |
 | Complexity >20 | "Replace nested conditionals at line N with early-return guard clauses" |
 | >6 positional params | "Wrap parameters into an `options` object: `{ paramA, paramB, ... }`" |
-| TODO/FIXME marker | "Convert to a tracked issue via `forge_bug_file` or remove if resolved" |
+| TODO/FIXME marker | "Convert to a tracked issue via `forge_bug_register` or remove if resolved" |
 | Commented-out code | "Delete lines N–M; the code is preserved in git history (`git log -p -- <file>`)" |
 | Module >3,000 LOC | "Split by responsibility: extract `<cohesive-group>` into `<suggested-file>.mjs`" |
 | Magic number | "Extract `<value>` at line N to a named constant: `const <SUGGESTED_NAME> = <value>`" |

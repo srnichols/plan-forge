@@ -57,7 +57,7 @@ function suggestParamFix(finding) {
 }
 
 function suggestMarkerFix(marker) {
-  return `Convert to a tracked issue via forge_bug_file or remove if resolved: ${marker.file}:${marker.line}`;
+  return `Convert to a tracked issue via forge_bug_register or remove if resolved: ${marker.file}:${marker.line}`;
 }
 
 function suggestCommentedCodeFix(block) {

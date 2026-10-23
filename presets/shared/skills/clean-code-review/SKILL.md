@@ -488,7 +488,7 @@ Append a concrete remediation for each finding:
 | Function >300 LOC | "Extract `<identified-block>` into a helper function `<suggested-name>` in the same module" |
 | Complexity threshold exceeded | "Replace nested conditionals at line N with early-return guard clauses; consider extracting `<block>` into a named function" |
 | >4 positional params | "Wrap parameters into an `options` object: `{ paramA, paramB, ... }`" |
-| TODO/FIXME marker | "Convert to a tracked issue (e.g. `forge_bug_file` if Plan Forge is configured) or remove if resolved" |
+| TODO/FIXME marker | "Convert to a tracked issue (e.g. `forge_bug_register` if Plan Forge is configured) or remove if resolved" |
 | Commented-out code | "Delete lines N–M; the code is preserved in git history (`git log -p -- <file>`)" |
 | Module >3,000 LOC | "Split by responsibility: extract `<cohesive-group>` into `<suggested-file>`" |
 | Magic number | "Extract `<value>` at line N to a named constant: `const <SUGGESTED_NAME> = <value>`" |
@@ -497,7 +497,7 @@ Append a concrete remediation for each finding:
 | Duplicated regex (Step 5.3) | "If `<pattern>` expresses the same validation or formatting rule, extract one shared definition. Otherwise retain separate rules with independent ownership" |
 | `empty-catch` | "At `<file>:<line>` — at minimum log the error: `catch (e) { logger.error('<context>', e); throw; }`. Empty catches hide root causes. If the swallow is intentional, add a comment explaining why and a typed guard on `e`" |
 | `exec-injection` | "Replace `` exec(`cmd ${arg}`) `` with `spawn('cmd', [arg])` (or `subprocess.run(['cmd', arg], shell=False)` in Python). Args-array form bypasses the shell entirely — no quoting, no injection" |
-| `disabled-test` | "At `<file>:<line>` — either re-enable the test (preferred) or delete it. A disabled test is a lie: CI is green while behavior is unverified. If the underlying bug is real, file it via `forge_bug_file` and reference the issue in a commit message explaining the removal" |
+| `disabled-test` | "At `<file>:<line>` — either re-enable the test (preferred) or delete it. A disabled test is a lie: CI is green while behavior is unverified. If the underlying bug is real, file it via `forge_bug_register` and reference the issue in a commit message explaining the removal" |
 | `hardcoded-secret` | "Move `<token-shape>` at `<file>:<line>` to an env var or secret manager NOW. Then rotate the secret — assume it's compromised by virtue of being in source control. Run `git log -p -- <file>` to confirm what historical commits expose it" |
 | `sql-injection` | "Replace `` `SELECT ... ${x}` `` with a parameterized query: `db.query('SELECT ... WHERE id = ?', [x])`. Never interpolate user input into SQL strings — this is OWASP A03" |
 | `dynamic-import` | "Replace `` import(`./${name}`) `` with an explicit switch/map of static imports: `{ foo: () => import('./foo'), bar: () => import('./bar') }[name]?.()`. Static paths survive refactors; computed paths break silently" |

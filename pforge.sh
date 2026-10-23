@@ -2172,6 +2172,113 @@ cmd_diagnose() {
 }
 
 # ─── Command: analyze ──────────────────────────────────────────────────
+# The MUST criteria of a plan, one per line, read the way pforge.ps1 reads them
+# (meta-bug #376): "- **MUST**: text" lines and, for a plan with no MUST or SHOULD line
+# at all, the "- [ ] text" items under "## Acceptance Criteria". pforge.ps1 first runs a
+# regex over that section and, when the first line after the heading is a checkbox,
+# never reads the list, so a plan written that way has no criteria there either; this
+# does the same until pforge.ps1 changes (#387). Reads the plan on stdin.
+analyze_must_criteria() {
+    local plan must should_count
+    plan="$(tr -d '\r')"
+    must="$(printf '%s\n' "$plan" | sed -nE 's/^[[:space:]]*[-*][[:space:]]*\*\*MUST\*\*[[:space:]:]+(.+)$/\1/p' | sed -E 's/[[:space:]]+$//')"
+    if [ -n "$must" ]; then
+        printf '%s\n' "$must"
+        return 0
+    fi
+    should_count="$(printf '%s\n' "$plan" | grep -cE '^[[:space:]]*[-*][[:space:]]*\*\*SHOULD\*\*[[:space:]:]+.' || true)"
+    if [ "$should_count" -gt 0 ]; then
+        return 0
+    fi
+    printf '%s\n' "$plan" | awk '
+        {
+            line = $0
+            # pforge.ps1 skips the list when the first line after an exact heading is a checkbox.
+            if (waiting && line !~ /^[[:space:]]*$/) {
+                waiting = 0
+                if (line ~ /^[[:space:]]*- \[[ x]\].+/) skip = 1
+            }
+            if (line ~ /## Acceptance Criteria[[:space:]]*$/) waiting = 1
+            if (done) next
+            if (tolower(line) ~ /## acceptance criteria/) {
+                in_section = 1
+            } else if (in_section && (line ~ /^[[:space:]]*---[[:space:]]*$/ || line ~ /^##[[:space:]]/)) {
+                done = 1
+            } else if (in_section && match(line, /^[[:space:]]*-[[:space:]]*\[[ xX]\][[:space:]]*/)) {
+                item = substr(line, RLENGTH + 1)
+                sub(/[[:space:]]+$/, "", item)
+                if (length(item) > 0) items[++count] = item
+            }
+        }
+        END { if (!skip) for (i = 1; i <= count; i++) print items[i] }
+    '
+}
+
+# The files pforge.ps1 treats as the project's tests: everything under the usual test
+# directories, plus any file named like a test. -prune keeps find out of dependency and
+# build trees instead of walking them (meta-bug #319); the directory list mirrors
+# $script:AnalyzeSkipDirs in pforge.ps1.
+analyze_test_files() {
+    local test_dir
+    {
+        for test_dir in tests test __tests__ spec Tests Test src/test src/tests; do
+            [ -d "$REPO_ROOT/$test_dir" ] || continue
+            find "$REPO_ROOT/$test_dir" \( -type d \( -name node_modules -o -name .git -o -name bin -o -name obj -o -name dist -o -name vendor \) -prune \) -o -type f -print 2>/dev/null || true
+        done
+        find "$REPO_ROOT" \( -type d \( -name node_modules -o -name .git -o -name bin -o -name obj -o -name dist -o -name vendor \) -prune \) -o -type f \( -iname "*.test.*" -o -iname "*.spec.*" -o -iname "*Tests.cs" -o -iname "*Test.java" -o -iname "*_test.go" -o -iname "test_*.py" -o -iname "*_test.py" \) -print 2>/dev/null || true
+    } | sort -fu
+}
+
+# The criteria no test file matches, in plan order (meta-bug #376). A criterion is tested
+# when some test file contains at least two of its first three words longer than four
+# characters, case-insensitively: the rule of Get-UntestedMustCriteria in pforge.ps1.
+# $1 is a file of criteria, $2 a file listing the test files; everything is read inside
+# one awk process, so the number of files never reaches an argument-length limit.
+analyze_untested_criteria() {
+    awk -v criteria_file="$1" -v tests_file="$2" '
+        BEGIN {
+            count = 0
+            while ((getline criterion < criteria_file) > 0) {
+                count++
+                text[count] = criterion
+                cleaned = criterion
+                gsub(/[^[:alnum:]_[:space:]]/, "", cleaned)
+                words = split(cleaned, parts, /[[:space:]]+/)
+                keywords[count] = 0
+                for (w = 1; w <= words && keywords[count] < 3; w++) {
+                    if (length(parts[w]) > 4) {
+                        keywords[count]++
+                        key[count, keywords[count]] = tolower(parts[w])
+                    }
+                }
+                tested[count] = 0
+            }
+            close(criteria_file)
+            remaining = count
+            while (remaining > 0 && (getline path < tests_file) > 0) {
+                for (i = 1; i <= count; i++) for (k = 1; k <= 3; k++) found[i, k] = 0
+                while ((getline line < path) > 0) {
+                    lower = tolower(line)
+                    for (i = 1; i <= count; i++) {
+                        if (tested[i]) continue
+                        for (k = 1; k <= keywords[i]; k++) {
+                            if (!found[i, k] && index(lower, key[i, k]) > 0) found[i, k] = 1
+                        }
+                    }
+                }
+                close(path)
+                for (i = 1; i <= count; i++) {
+                    if (tested[i]) continue
+                    hits = 0
+                    for (k = 1; k <= keywords[i]; k++) hits += found[i, k]
+                    if (hits >= 2) { tested[i] = 1; remaining-- }
+                }
+            }
+            for (i = 1; i <= count; i++) if (!tested[i]) print text[i]
+        }
+    '
+}
+
 cmd_analyze() {
     parse_analysis_args "$@"
     if [ -z "$ANALYSIS_TARGET" ]; then
@@ -2306,28 +2413,48 @@ cmd_analyze() {
     echo ""
 
     # ═══════════════════════════════════════════════════════════════
-    # 3. TEST COVERAGE
+    # 3. CRITERION → TEST TRACEABILITY
     # ═══════════════════════════════════════════════════════════════
     echo "Test Coverage:"
 
-    # -prune keeps find out of dependency/build trees; "! -path" still walked every
-    # file under them, which is what timed analyze out on a .NET solution (meta-bug #319).
-    # The directory list mirrors $script:AnalyzeSkipDirs in pforge.ps1.
-    local test_file_count=0
-    test_file_count=$(find "$REPO_ROOT" \( -type d \( -name node_modules -o -name .git -o -name bin -o -name obj -o -name dist -o -name vendor \) -prune \) -o -type f \( -name "*.test.*" -o -name "*.spec.*" -o -name "*Tests.cs" -o -name "*Test.java" -o -name "*_test.go" -o -name "test_*.py" -o -name "*_test.py" \) -print 2>/dev/null | wc -l | tr -d ' ')
+    # Twin of the pforge.ps1 step (meta-bug #376): a MUST criterion counts only when a
+    # test file matches it. This used to count test files and MUST criteria and score
+    # any plan with at least one of each 25/25.
+    local criteria_file tests_file must_total test_file_count tested_must untested untested_count criterion
+    criteria_file="$(mktemp)"
+    tests_file="$(mktemp)"
+    printf '%s\n' "$plan_content" | analyze_must_criteria > "$criteria_file"
+    analyze_test_files > "$tests_file"
+    must_total="$(wc -l < "$criteria_file" | tr -d ' ')"
+    test_file_count="$(wc -l < "$tests_file" | tr -d ' ')"
+
+    if [ "$must_total" -gt 0 ]; then
+        untested="$(analyze_untested_criteria "$criteria_file" "$tests_file")"
+        untested_count=0
+        if [ -n "$untested" ]; then
+            untested_count="$(printf '%s\n' "$untested" | wc -l | tr -d ' ')"
+        fi
+        tested_must=$((must_total - untested_count))
+        echo "  ✅ $tested_must/$must_total MUST criteria have matching tests"
+        while IFS= read -r criterion; do
+            [ -n "$criterion" ] || continue
+            if [ "${#criterion}" -gt 70 ]; then
+                criterion="${criterion:0:70}..."
+            fi
+            echo "  ⚠️  No test found for: $criterion"
+        done <<< "$untested"
+        score_tests=$((25 * tested_must / must_total))
+    else
+        echo "  ⚠️  No MUST criteria to trace (plan may use alternate format)"
+        score_tests=15
+    fi
 
     if [ "$test_file_count" -gt 0 ]; then
         echo "  ✅ $test_file_count test file(s) found in project"
-        score_tests=20
     else
         echo "  ⚠️  No test files found"
-        score_tests=5
     fi
-
-    if [ "$must_count" -gt 0 ]; then
-        echo "  ✅ $must_count MUST criteria to verify against tests"
-        [ "$test_file_count" -gt 0 ] && score_tests=25
-    fi
+    rm -f "$criteria_file" "$tests_file"
 
     echo ""
 

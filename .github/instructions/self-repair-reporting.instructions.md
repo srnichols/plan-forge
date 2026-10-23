@@ -15,11 +15,11 @@ priority: LOW
 | | Project Bug | Meta Bug (Self-Repair) |
 |---|---|---|
 | **What** | Bug in the code you're building | Bug in Plan Forge itself |
-| **Tool** | `forge_bug_file` / tempering | `forge_meta_bug_file` |
+| **Tool** | `forge_bug_register` / tempering | `forge_meta_bug_file` |
 | **Target repo** | Workspace `git remote` | `.forge.json#meta.selfRepairRepo` → fallback `srnichols/plan-forge` |
 | **Labels** | `bug`, severity | `self-repair`, class label |
 
-If the defect is in user project code, use `forge_bug_file`. If the defect is in Plan Forge's own plans, orchestrator, CLI, or prompts — use `forge_meta_bug_file`.
+If the defect is in user project code, use `forge_bug_register` (`scanner: "manual"` for a defect you found by hand). If the defect is in Plan Forge's own plans, orchestrator, CLI, or prompts — use `forge_meta_bug_file`.
 
 ---
 
@@ -91,7 +91,7 @@ A step-N prompt emitted unsafe output, an instruction file is missing a rule tha
 
 ## When NOT to Fire
 
-- **Project code bugs** — test failures, logic errors, or crashes in the code you're building. Use `forge_bug_file` or the tempering flow.
+- **Project code bugs** — test failures, logic errors, or crashes in the code you're building. Use `forge_bug_register` or the tempering flow.
 - **CI red flags in user code** — build failures caused by the project, not Plan Forge.
 - **Test failures in features under development** — expected during TDD red-green cycles.
 

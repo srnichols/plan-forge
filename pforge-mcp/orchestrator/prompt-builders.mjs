@@ -15,7 +15,9 @@ export function buildSlicePrompt(slice) {
     "Tasks:",
   ];
   for (const task of slice.tasks) {
-    parts.push(`- ${task}`);
+    // A task keeps the indented lines written under it (meta-bug #377); nest them under its bullet.
+    const [first, ...rest] = String(task).split("\n");
+    parts.push(`- ${first}`, ...rest.map((line) => (line === "" ? line : `  ${line}`)));
   }
   // Scope isolation: tell worker which files to modify
   if (slice.scope && slice.scope.length > 0) {

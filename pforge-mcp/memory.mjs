@@ -334,6 +334,8 @@ export function isOpenBrainConfigured(cwd) {
  * @returns {string} Memory context block to prepend to prompt
  */
 export function buildMemorySearchBlock(projectName, slice) {
+  // A task can hold the lines written under it (#377); the query takes its first line only.
+  const firstTaskLine = String(slice.tasks?.[0] ?? "").split("\n")[0];
   return `
 --- MEMORY CONTEXT (OpenBrain) ---
 Before starting work, search for relevant prior decisions:
@@ -343,7 +345,7 @@ Before starting work, search for relevant prior decisions:
    project: "${projectName}", type: "convention", limit: 5
 
 2. Search for prior lessons on similar work:
-   Use the search_thoughts tool with query: "${slice.title} ${slice.tasks?.[0] || ''}"
+   Use the search_thoughts tool with query: "${slice.title} ${firstTaskLine}"
    project: "${projectName}", limit: 5
 
 Apply any relevant findings. Do NOT repeat mistakes documented in prior thoughts.

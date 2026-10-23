@@ -104,13 +104,26 @@ export function findRelatedTests({ cwd, changedFiles, trackedFiles, blastRadius 
 
 const quote = (p) => `"${p}"`;
 
-/** "vitest run" / "jest" when the package.json in `dir` declares that runner, else null. */
+/** "vitest run" / "jest" when `script` runs that runner, else null. */
+function runnerInScript(script) {
+  const text = String(script ?? "");
+  if (/\bvitest\b/.test(text)) return "vitest run";
+  return /\bjest\b/.test(text) ? "jest" : null;
+}
+
+/**
+ * "vitest run" / "jest" when the package.json in `dir` declares that runner as a
+ * dependency, or runs it from its test script. A workspace package can run a runner
+ * it never declares, because it is hoisted from the repo root, so `pforge-sdk`
+ * (`"test": "npx vitest run"`, no dependencies) went undetected (meta-bug #371).
+ */
 function declaredJsRunner(cwd, dir) {
   try {
     const pkg = JSON.parse(readFileSync(join(cwd, dir, "package.json"), "utf8"));
     const deps = { ...pkg.dependencies, ...pkg.devDependencies };
     if (deps.vitest) return "vitest run";
     if (deps.jest) return "jest";
+    return runnerInScript(pkg.scripts?.test);
   } catch { /* no package.json here */ }
   return null;
 }
@@ -121,6 +134,22 @@ function jsRunnerFor(cwd, testFile) {
     const runner = declaredJsRunner(cwd, dir);
     if (runner) return { dir, runner };
     if (dir === "." || dir === "") return null;
+  }
+}
+
+const E2E_CONFIG_NAME = /^(?:playwright|cypress)\.config\.[cm]?[jt]s$/;
+const SPEC_FILE_NAME = /\.spec\.[^/]+$/i;
+
+/**
+ * A `*.spec.*` file at or below a Playwright or Cypress config belongs to that runner.
+ * vitest cannot execute it, so handing it over failed the slice on a test that never
+ * ran (meta-bug #372). Any other `*.spec.*` file, a vitest unit spec, is unaffected.
+ */
+function ownedByE2eRunner(cwd, testFile) {
+  if (!SPEC_FILE_NAME.test(testFile)) return false;
+  for (let dir = posix.dirname(testFile); ; dir = posix.dirname(dir)) {
+    if (readdirSafe(join(cwd, dir)).some((name) => E2E_CONFIG_NAME.test(name))) return true;
+    if (dir === "." || dir === "") return false;
   }
 }
 
@@ -147,7 +176,9 @@ function suiteConfigFor(cwd, dir, packageRelativeTest) {
 function jsCommands(cwd, tests) {
   const groups = new Map();
   const unrunnable = [];
+  const e2e = [];
   for (const test of tests) {
+    if (ownedByE2eRunner(cwd, test)) { e2e.push(test); continue; }
     const found = jsRunnerFor(cwd, test);
     if (!found) { unrunnable.push(test); continue; }
     const file = found.dir === "." ? test : posix.relative(found.dir, test);
@@ -160,7 +191,7 @@ function jsCommands(cwd, tests) {
     command: `npx ${runner}${config ? ` --config ${config}` : ""} ${files.map(quote).join(" ")}`,
     workdir: dir === "." ? null : dir,
   }));
-  return { runs, unrunnable };
+  return { runs, unrunnable, e2e };
 }
 
 /** Nearest *.csproj at or above the test file's directory, inside cwd. */
@@ -226,6 +257,18 @@ const GROUP_COMMANDS = Object.freeze({
 /** A run as a person would type it: `cd pkg && npx vitest run ...` when it belongs in a package. */
 const displayCommand = ({ command, workdir }) => (workdir ? `cd ${workdir} && ${command}` : command);
 
+/** Why some related tests were not run, or "" when all were. */
+function skippedMessage({ unrunnable, e2e }) {
+  const reasons = [];
+  if (unrunnable.length > 0) {
+    reasons.push(`no test runner detected for ${unrunnable.join(", ")}; set impactGate.command in .forge.json (e.g. "bundle exec rspec {files}")`);
+  }
+  if (e2e.length > 0) {
+    reasons.push(`${e2e.join(", ")} run under Playwright or Cypress, not vitest; set impactGate.command to run them`);
+  }
+  return reasons.join("; ");
+}
+
 /**
  * @returns {{ commands: string[], runs: Array<{ command: string, workdir: string|null }>, skipped?: string }}
  *   `runs` is what executes (a command and the project-relative directory it
@@ -238,19 +281,17 @@ export function buildImpactCommands({ cwd, tests, config }) {
   }
   const runs = [];
   const unrunnable = [];
+  const e2e = [];
   for (const [group, files] of Object.entries(groupTests(tests))) {
     if (files.length === 0) continue;
     const out = GROUP_COMMANDS[group](cwd, files);
     runs.push(...out.runs);
     unrunnable.push(...out.unrunnable);
+    e2e.push(...(out.e2e ?? []));
   }
   const commands = runs.map(displayCommand);
-  if (unrunnable.length === 0) return { commands, runs };
-  return {
-    commands,
-    runs,
-    skipped: `no test runner detected for ${unrunnable.join(", ")}; set impactGate.command in .forge.json (e.g. "bundle exec rspec {files}")`,
-  };
+  const skipped = skippedMessage({ unrunnable, e2e });
+  return skipped ? { commands, runs, skipped } : { commands, runs };
 }
 
 function trackedFiles(cwd) {

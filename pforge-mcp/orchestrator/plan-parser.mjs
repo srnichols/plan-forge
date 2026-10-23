@@ -261,6 +261,17 @@ function collectForbiddenActionLines(lines) {
   return collected;
 }
 
+const STATUS_LINE_RE = /\*\*Status\*\*:\s*(.+)/;
+
+/** The first `**Status**:` value among `lines`, or "" when there is none. */
+function firstStatus(lines) {
+  for (const line of lines) {
+    const statusMatch = line.match(STATUS_LINE_RE);
+    if (statusMatch) return statusMatch[1].trim();
+  }
+  return "";
+}
+
 function parseMeta(lines) {
   const meta = { title: "", status: "", branch: "", plan: "" };
   for (const line of lines) {
@@ -269,9 +280,12 @@ function parseMeta(lines) {
       break;
     }
   }
+  // The plan's status is the one in its header, before the first `##` heading. A Status
+  // line further down (an advisory note, a per-section status) used to replace it, so
+  // shipped plans reported "Advisory data for the Step-2 hardener..." (meta-bug #373).
+  const firstSection = lines.findIndex((line) => /^##\s/.test(line));
+  meta.status = firstStatus(firstSection === -1 ? lines : lines.slice(0, firstSection)) || firstStatus(lines);
   for (const line of lines) {
-    const statusMatch = line.match(/\*\*Status\*\*:\s*(.+)/);
-    if (statusMatch) meta.status = statusMatch[1].trim();
     const branchMatch = line.match(/\*\*Feature Branch\*\*:\s*`([^`]+)`/);
     if (branchMatch) meta.branch = branchMatch[1];
   }

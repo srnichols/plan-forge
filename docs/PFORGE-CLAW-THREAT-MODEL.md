@@ -44,7 +44,7 @@ with `origin: "untrusted"` and must remain data rather than instructions.
 | Tampering, including poisoned memory | Telegram text, forwards, callbacks, and memory recall | Forwarded normalized updates are fail-closed into capture; memory provenance is retained, fenced, and proposal actions are marked untrusted | 3, 9, 10, 15, 24, 25, 26 | `pforge-claw/tests/security-e2e.test.mjs`; companion recall fence: `pforge-master/tests/recall-fencing.test.mjs` | **blocked** |
 | Repudiation | Command, approval, and state transitions | Append-only audit and job records record accepted, refused, throttled, and approval actions | 3, 5, 10, 12 | `pforge-claw/tests/security-e2e.test.mjs`, `approvals.test.mjs` | tested |
 | Information disclosure | Logs, L2 state, Telegram output, snapshots, and secret-backed requests | Secret resolver redaction is applied at state and Telegram boundaries; error responses are sanitized; approval nonces are not persisted | 2, 4, 15/16, 23, 24, 26 | `pforge-claw/tests/security-e2e.test.mjs`, `secrets.test.mjs` | tested |
-| Denial of service | Authenticated inbound messages and callback traffic | Synchronous per-user sliding-window admission bounds regular messages and audits only the first drop in a window | 11, 22, 26 | `pforge-claw/tests/security-e2e.test.mjs`, `telegram-rate-limiter.test.mjs` | tested |
+| Denial of service | Authenticated inbound messages and callback traffic | Synchronous per-user sliding-window admission bounds regular messages and audits only the first drop in a window; operators tune the limit with `policy.inboundRateLimit` (default 20 messages per 60 s, read at start-up) | 11, 22, 26 | `pforge-claw/tests/security-e2e.test.mjs`, `telegram-rate-limiter.test.mjs`, `inbound-rate-limit-config.test.mjs` | tested |
 | Elevation of privilege | Mutating commands, callbacks, and worker tool permissions | Role/scope policy, stored approval transitions, callback verification, and per-job permission rules constrain execution | 5, 8, 9, 10, 18, 20, 22, 23 | `pforge-claw/tests/permission-policy.test.mjs`, `approvals.test.mjs`, `router.test.mjs` | **blocked** |
 
 ## Residual risks
@@ -52,7 +52,7 @@ with `origin: "untrusted"` and must remain data rather than instructions.
 - Forward normalization and typed untrusted-context repairs are
   targeted-verified offline: source type is retained without original sender
   identity, and captured bytes are not placed in trusted instructions.
-  [#333](https://github.com/srnichols/plan-forge/issues/333) and
+  [#334](https://github.com/srnichols/plan-forge/issues/334) and
   [#335](https://github.com/srnichols/plan-forge/issues/335) remain acceptance
   references until the quiescent whole-suite and live evidence are recorded.
 - Dispatcher workspace, authenticated home routing, application-ACK wiring
@@ -64,9 +64,6 @@ with `origin: "untrusted"` and must remain data rather than instructions.
   provider/reference-topology acceptance reference.
 - Callback traffic is not covered by the inbound message rate limiter; callback
   spam remains a residual denial-of-service vector.
-- The default inbound rate limit has no discoverable config key. The router
-  option is injectable, but configuration remains a follow-up in
-  [#334](https://github.com/srnichols/plan-forge/issues/334).
 - Worker command policy permits indirect execution paths through `npm` and
   `npx`; command permission checks do not eliminate risks in package scripts.
 - Kubernetes `NetworkPolicy` enforcement depends on the cluster's CNI.

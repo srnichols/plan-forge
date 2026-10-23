@@ -7,6 +7,15 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+### Added
+
+- **Configurable inbound rate limit** — `policy.inboundRateLimit` (`perMinute`, `windowMs`; default 20 messages per user per 60 s) tunes the per-user limit on inbound messages. It is read at start-up and either member may be left out. A value that is not a positive integer is refused by config validation and by the router (`INVALID_RATE_LIMIT`). Callbacks are still not counted. ([#333](https://github.com/srnichols/plan-forge/issues/333))
+
+### Fixed
+
+- **A partial `rateLimit` turned throttling off** — an injected `rateLimit` naming only `perMinute` or only `windowMs` left the other undefined, so the limiter admitted every message (60 of 60 in a test). A missing member now falls back to the configured or default value, and an unknown member such as a misspelt `perminute` is refused instead of ignored. ([#333](https://github.com/srnichols/plan-forge/issues/333))
+- **Swapped issue references** — the threat model and the forward-provenance guard test cited #333 for forward normalization and #334 for the rate-limit key. They now cite #334 and #333.
+
 ## [3.34.0] — 2026-10-14 — Forge-Claw testing candidate (not a production release)
 
 ### Added

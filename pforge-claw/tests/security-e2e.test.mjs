@@ -343,7 +343,7 @@ describe.each(DELIVERY_MODES)("Guard: injection corpus delivered as %s", (mode) 
   });
 });
 
-describe("Guard: forward provenance survives normalize (meta-bug #333 fixed in Slice 30)", () => {
+describe("Guard: forward provenance survives normalize (meta-bug #334 fixed in Slice 30)", () => {
   it("keeps the forwarded flag without sender identity and never routes it as directly typed text", async () => {
     const ask = vi.fn(async (_ctx, args) => ({ text: args.argsText }));
     const commandRegistry = COMMANDS.map((command) => command.name === "ask"

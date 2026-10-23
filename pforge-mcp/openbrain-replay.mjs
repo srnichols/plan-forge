@@ -333,7 +333,8 @@ export async function roundTrip(client, opts = {}) {
 
 /**
  * Replay a batch of records into OpenBrain via capture_thought.
- * Rate-limited; retries on any thrown error up to maxRetries.
+ * Rate-limited; retries on any thrown error, up to maxRetries retries after the
+ * first attempt (0 tries once).
  *
  * @param {object} client
  * @param {Array<object|null>} records  - pre-normalized capture payloads (or nulls to skip)
@@ -354,16 +355,27 @@ function recordPreview(rec) {
   return rec.content.slice(0, 80);
 }
 
+const DEFAULT_MAX_RETRIES = 3;
+
+// maxRetries counts retries after the first attempt, so 0 still tries once; it
+// used to be the attempt count, and 0 made no request while reporting a failure
+// with no error (#348). NaN and Infinity fall back to the default, never to
+// zero attempts or an endless loop.
+function normalizeMaxRetries(maxRetries) {
+  return Number.isFinite(maxRetries) ? Math.max(0, Math.floor(maxRetries)) : DEFAULT_MAX_RETRIES;
+}
+
 async function captureReplayRecord(client, rec, maxRetries, retryDelayMs) {
+  const attempts = 1 + normalizeMaxRetries(maxRetries);
   let attempt = 0;
   let lastErr = null;
-  while (attempt < maxRetries) {
+  while (attempt < attempts) {
     attempt += 1;
     try {
       return { ok: true, response: await client.capture(rec) };
     } catch (e) {
       lastErr = String(e?.message || e);
-      if (attempt < maxRetries) {
+      if (attempt < attempts) {
         await delay(retryDelayMs * Math.pow(2, attempt - 1));
       }
     }

@@ -18,6 +18,8 @@ const ID_PREFIX_LENGTH = 8;
 const RECOVERY_MODES = Object.freeze(["retry", "resume", "suggestion"]);
 const RECOVERY_FIELDS = Object.freeze([
   "description", "plan", "planPath", "skill", "args", "model", "models", "resumeFrom", "readOnly", "origin",
+  // The budget gate prices a plan job from its estimate; without it a USD cap holds every retry (#384).
+  "estimate",
 ]);
 const RECOVERY_SCOPE_FIELDS = Object.freeze(["projectId", "callerId", "chatId", "threadId"]);
 const MAX_SUGGESTIONS = 5;

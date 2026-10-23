@@ -5,8 +5,17 @@ import { isAbsolute, relative, resolve, sep } from "node:path";
 const MAX_FORBIDDEN_ITEMS = 20;
 const MAX_FORBIDDEN_ITEM_CHARS = 300;
 const MAX_CONTEXT_FILES = 20;
+// Sized from the Stop Conditions sections in docs/plans: the longest line is about 510 characters, the longest section about 3,100.
+const MAX_STOP_CONDITION_LINE_CHARS = 600;
+const MAX_STOP_CONDITION_CHARS = 4000;
 // "none", "N/A" and "None — …" are placeholders; "Nothing outside src/ may change" is a real rule.
 const PLACEHOLDER_ITEM_RE = /^(?:none|nothing|n\/a|tbd)(?:\s*[—–:-].*)?$/i;
+/** A bullet or number in front of a line: the "- " of "- None". */
+const LIST_MARKER_RE = /^(?:[-*+]|\d+[.)])\s+/;
+// The Blocker Report is the one stop signal the orchestrator acts on: a worker that writes it fails the slice (meta-bug #338).
+const STOP_CONDITIONS_HEADING =
+  "Stop conditions from the plan. If one occurs, do not work around it: follow the recovery the plan gives. " +
+  'If it gives none, or you cannot recover, stop and report a Blocker: a "## \u26A0 Blocker" heading, then a "**Problem:** <what happened>" line.';
 
 export function buildSlicePrompt(slice) {
   const parts = [
@@ -59,7 +68,8 @@ function projectRelativePlanFile(planPath, cwd) {
 /**
  * What every slice of a plan shares and the worker needs but the slice record
  * does not carry: where the plan lives, its Scope Contract Forbidden items,
- * and whether it has a Shared Contract section (meta-bug #320).
+ * whether it has a Shared Contract section (meta-bug #320), and the lines of
+ * its plan-level Stop Conditions section (meta-bug #365).
  */
 export function buildPlanContext({ plan, planPath, cwd }) {
   return {
@@ -68,6 +78,9 @@ export function buildPlanContext({ plan, planPath, cwd }) {
       .map((item) => String(item).trim())
       .filter((item) => !isPlaceholderItem(item)),
     hasSharedContract: plan?.hasSharedContract === true,
+    stopConditions: (plan?.stopConditions ?? [])
+      .map((line) => String(line).trimEnd())
+      .filter((line) => !isPlaceholderItem(line.trim().replace(LIST_MARKER_RE, ""))),
   };
 }
 
@@ -78,37 +91,73 @@ function boundedList(items, max, overflowLabel) {
 }
 
 /**
+ * The stop-condition lines, as the plan wrote them, up to the character budget.
+ * A line past it is dropped whole, not cut mid-sentence, and the block says how
+ * many lines it left out.
+ */
+function boundedStopConditions(lines) {
+  const kept = [];
+  let used = 0;
+  for (const line of lines) {
+    const text = clip(line, MAX_STOP_CONDITION_LINE_CHARS);
+    if (used + text.length > MAX_STOP_CONDITION_CHARS) break;
+    kept.push(text);
+    used += text.length;
+  }
+  const omitted = lines.length - kept.length;
+  if (omitted > 0) kept.push(`(+${omitted} more lines in the plan's Stop Conditions section)`);
+  return kept;
+}
+
+function planPointerSection(planContext) {
+  if (!planContext?.planFile) return null;
+  const pointer = [
+    `Plan file: ${planContext.planFile}`,
+    'If this slice cites a plan decision or section by name (for example "per D7"), open that section in the plan file and follow it. The rest of the plan is not needed.',
+  ];
+  if (planContext.hasSharedContract) {
+    pointer.push('The plan has a "Shared Contract" section pinning the names, types and signatures shared across slices. Read it before editing.');
+  }
+  return pointer;
+}
+
+function contextFilesSection(slice) {
+  const contextFiles = slice?.contextFiles ?? [];
+  if (contextFiles.length === 0) return null;
+  return [
+    "Read before editing (references only, not part of your edit scope):",
+    ...boundedList(contextFiles, MAX_CONTEXT_FILES, "in the slice's Context Files"),
+  ];
+}
+
+function forbiddenSection(planContext) {
+  const forbidden = (planContext?.forbidden ?? []).map((item) => clip(item, MAX_FORBIDDEN_ITEM_CHARS));
+  if (forbidden.length === 0) return null;
+  return [
+    "Forbidden by the plan's Scope Contract (do NOT do any of these):",
+    ...boundedList(forbidden, MAX_FORBIDDEN_ITEMS, "in the plan's Scope Contract"),
+  ];
+}
+
+function stopConditionsSection(planContext) {
+  const lines = planContext?.stopConditions ?? [];
+  if (lines.length === 0) return null;
+  return [STOP_CONDITIONS_HEADING, ...boundedStopConditions(lines)];
+}
+
+/**
  * The plan-level context a worker would otherwise never see: the slice's
- * Context Files, the plan's Forbidden list, and a pointer to the plan file
- * for sections the slice cites ("per D7", "per the Shared Contract").
- * Returns "" when there is nothing to add.
+ * Context Files, the plan's Forbidden list, the plan's Stop Conditions, and a
+ * pointer to the plan file for sections the slice cites ("per D7", "per the
+ * Shared Contract"). Returns "" when there is nothing to add.
  */
 export function buildPlanContextBlock(slice, planContext) {
-  const sections = [];
-  if (planContext?.planFile) {
-    const pointer = [
-      `Plan file: ${planContext.planFile}`,
-      'If this slice cites a plan decision or section by name (for example "per D7"), open that section in the plan file and follow it. The rest of the plan is not needed.',
-    ];
-    if (planContext.hasSharedContract) {
-      pointer.push('The plan has a "Shared Contract" section pinning the names, types and signatures shared across slices. Read it before editing.');
-    }
-    sections.push(pointer);
-  }
-  const contextFiles = slice?.contextFiles ?? [];
-  if (contextFiles.length > 0) {
-    sections.push([
-      "Read before editing (references only, not part of your edit scope):",
-      ...boundedList(contextFiles, MAX_CONTEXT_FILES, "in the slice's Context Files"),
-    ]);
-  }
-  const forbidden = (planContext?.forbidden ?? []).map((item) => clip(item, MAX_FORBIDDEN_ITEM_CHARS));
-  if (forbidden.length > 0) {
-    sections.push([
-      "Forbidden by the plan's Scope Contract (do NOT do any of these):",
-      ...boundedList(forbidden, MAX_FORBIDDEN_ITEMS, "in the plan's Scope Contract"),
-    ]);
-  }
+  const sections = [
+    planPointerSection(planContext),
+    contextFilesSection(slice),
+    forbiddenSection(planContext),
+    stopConditionsSection(planContext),
+  ].filter(Boolean);
   if (sections.length === 0) return "";
   const body = sections.map((section) => section.join("\n")).join("\n\n");
   return `--- PLAN CONTEXT ---\n${body}\n--- END PLAN CONTEXT ---`;

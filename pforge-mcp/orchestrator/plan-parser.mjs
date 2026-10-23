@@ -4,6 +4,7 @@ import { readFileSync, existsSync } from "node:fs";
 import { resolve } from "node:path";
 import { createHash } from "node:crypto";
 import { resolveGateCommandToken, isGatePrefixAllowed } from "./constants.mjs";
+import { parseStopConditions } from "./plan-stop-conditions.mjs";
 
 /**
  * Parse a workerTimeoutMs value from a plan body line.
@@ -193,7 +194,10 @@ export function parsePlan(planPath, cwd = process.cwd()) {
   // #308: gate lint checks parallel slices over one artifact against this section.
   const hasSharedContract = /^#{2,4}\s+Shared Contract\b/im.test(content);
 
-  return { meta, scopeContract, slices, dag, hasSharedContract };
+  // #365: the plan-level section belongs to no slice, so it travels with each one's plan context.
+  const stopConditions = parseStopConditions(lines);
+
+  return { meta, scopeContract, slices, dag, hasSharedContract, stopConditions };
 }
 
 /**
@@ -641,8 +645,15 @@ function applyTestCommand(current, line) {
   if (testMatch) current.testCommand = testMatch[1];
 }
 
+/**
+ * A slice's own stop condition, on the label's line. The hardener writes the
+ * label in several spellings — plural, any case, the colon inside the bold — and
+ * only the exact `**Stop Condition**:` used to be read (meta-bug #365).
+ */
+const STOP_CONDITION_LABEL_RE = /\*\*Stop\s+Conditions?(?:\s*:\*\*|\*\*\s*:)\s*(\S.*)/i;
+
 function applyStopCondition(current, line) {
-  const stopMatch = line.match(/\*\*Stop Condition\*\*:\s*(.+)/);
+  const stopMatch = line.match(STOP_CONDITION_LABEL_RE);
   if (stopMatch) current.stopCondition = stopMatch[1].trim();
 }
 

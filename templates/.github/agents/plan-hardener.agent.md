@@ -41,7 +41,7 @@ Add all **6 Mandatory Template Blocks** from the runbook:
 3. **Execution Slices** — 30–120 min each with:
    - `Depends On` (which slices must complete first)
    - `Context Files` (only instruction files whose domain matches the slice — not all 17)
-   - Parallelism tag: `[parallel-safe]` with group or `[sequential]`
+   - Parallelism tag: exactly `[parallel-safe]` (name the Parallel Group in the slice body, not inside the brackets) or `[sequential]`
    - Validation gates (build, test, manual checks)
 4. **Re-anchor Checkpoints** — Lightweight 4-question check by default, full re-anchor every 3rd slice
 5. **Definition of Done** — Measurable criteria including "Reviewer Gate passed (zero 🔴 Critical)"

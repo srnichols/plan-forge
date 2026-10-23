@@ -378,6 +378,23 @@ function splitDependencyList(text) {
   return parts;
 }
 
+const DEPENDS_TAG_RE = /\[(?:depends\s+on|depends|dep|needs):\s*([^\]]+)\]/i;
+const PARALLEL_TAG_RE = /\[(?:P|parallel(?:-safe)?)\]/i;
+const COMPETITIVE_TAG_RE = /\[competitive(?::\s*(\d+))?\]/i;
+const SCOPE_TAG_RE = /\[scope:\s*([^\]]+)\]/i;
+const KNOWN_HEADING_TAG_RES = [DEPENDS_TAG_RE, PARALLEL_TAG_RE, COMPETITIVE_TAG_RE, SCOPE_TAG_RE];
+
+/**
+ * Bracket tags in a slice heading that no parser rule above reads. A tag such
+ * as `[parallel-safe, group P1]` is silently ignored, so the slice runs
+ * sequentially; gate lint reports the ones that name parallelism (meta-bug #320).
+ */
+function unrecognizedHeadingTags(heading) {
+  return [...heading.matchAll(/\[([^\]]*)\]/g)]
+    .filter(([tag]) => !KNOWN_HEADING_TAG_RES.some((re) => re.test(tag)))
+    .map(([, inner]) => inner.trim());
+}
+
 function createSliceRecord(sliceMatch, rawTags) {
   const rawNumber = sliceMatch[1];
   const rawTitle = sliceMatch[2].trim();
@@ -397,22 +414,23 @@ function createSliceRecord(sliceMatch, rawTags) {
     workerTimeoutMs: null,
     tasks: [],
     rawLines: [],
+    unrecognizedTags: unrecognizedHeadingTags(rawTags),
   };
 
-  const dependsMatch = rawTags.match(/\[(?:depends\s+on|depends|dep|needs):\s*([^\]]+)\]/i);
+  const dependsMatch = rawTags.match(DEPENDS_TAG_RE);
   if (dependsMatch) {
     current.depends = splitDependencyList(dependsMatch[1]).map((d) => normalizeSliceId(d));
   }
 
-  if (/\[(?:P|parallel(?:-safe)?)\]/i.test(rawTags)) current.parallel = true;
+  if (PARALLEL_TAG_RE.test(rawTags)) current.parallel = true;
 
-  const competitiveMatch = rawTags.match(/\[competitive(?::\s*(\d+))?\]/i);
+  const competitiveMatch = rawTags.match(COMPETITIVE_TAG_RE);
   if (competitiveMatch) {
     current.competitive = true;
     if (competitiveMatch[1]) current.competitiveVariants = parseInt(competitiveMatch[1], 10);
   }
 
-  const scopeMatch = rawTags.match(/\[scope:\s*([^\]]+)\]/i);
+  const scopeMatch = rawTags.match(SCOPE_TAG_RE);
   if (scopeMatch) current.scope = scopeMatch[1].split(",").map((s) => s.trim());
   if (rawTitle.includes("✅") || rawTags.includes("✅")) current.status = "completed";
 

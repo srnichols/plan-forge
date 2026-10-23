@@ -28,7 +28,7 @@ import { inspectGithubStack as _inspectGithubStackDefault } from "../github-intr
 import { buildIssueBody as _buildIssueBodyDefault, dispatchSlice as _dispatchSliceDefault, pollPullRequest as _pollPullRequestDefault, DEFAULT_POLL_INTERVAL_MS, DEFAULT_TIMEOUT_MS } from "../workers/copilot-coding-agent.mjs";
 import { API_ALLOWED_ROLES, COST_ANOMALY_MULTIPLIER, CRUCIBLE_STALL_CUTOFF_DAYS, DEFAULT_ESCALATION_CHAIN, DEFAULT_GATE_TIMEOUT_MS, DEFAULT_ROUTING_MODEL, DEFAULT_WORKER_OUTPUT_IDLE_MS, DEFAULT_WORKER_TIMEOUT_MS, EVENT_SOURCE, GATE_ALLOWED_PREFIXES, GATE_SUGGESTION_AUTO_INJECT_THRESHOLD, POSTMORTEM_RETENTION_COUNT, PROPOSED_FIX_DIR, QUORUM_PRESETS, REVIEW_RESOLUTIONS, REVIEW_SEVERITIES, REVIEW_SOURCES, REVIEW_STATUSES, SECURITY_RISK, SECURITY_RISK_FOR_TYPE, SUPPORTED_AGENTS, UNIX_TOOLS, WORKER_LAUNCH_RETRY_BACKOFF_MS } from "./constants.mjs";
 import { LogEventHandler, OrchestratorEventBus, appendEvent, writeSilentExitRecord } from "./event-bus.mjs";
-import { buildSlicePrompt } from "./prompt-builders.mjs";
+import { buildSlicePrompt, buildPlanContext, buildPlanContextBlock } from "./prompt-builders.mjs";
 import { parsePlan, computeLockHash, normalizeSliceId, compareSliceIds, parseOnlySlicesExpr, parseWorkerTimeoutValue, parseSlices, buildDAG, restrictDagToSlices, loadPlanParserConfig } from "./plan-parser.mjs";
 import { resetCliWorkersCache, setGhCopilotProbe, isDirectApiOnlyModel, isCopilotServableModel, isApiOnlyModel, getFoundryAuthScope, detectApiProvider, setSecretsLoader, buildApiMessages, generateImage, loadWorkerCapabilities, compareVersions, detectPackageManager, suggestInstall, classifyProbeFailure, detectWorkers, detectExecutionRuntime, detectClientHost, describeBillingSurface, getRoutingPreference, loadRoutingPreference, resolveRequiredCli, probeQuorumModelAvailability, filterQuorumModels, formatQuorumSummary, assessQuorumViability, detectRuntimes, spawnWorker, detectHelpTextOutput, detectSilentWorkerFailure, detectWorkerLaunchFailure, detectContentFilterBlock, detectWorkerBlockerReport, detectKilledBySignal, deriveVendorFromModel, extractTokens, shouldDefaultPremiumRequestsToOne, parseStderrStats, resolveWorkerOutputIdleMs, resolveWorkerTimeoutMs, assertWorkerBackendReady, predictWorkerForModel } from "./worker-spawn.mjs";
 import { resolveGateTimeoutMs, __resetBashPathCache, resolveBashPath, detectSelfRepairMissed, buildRetryPrompt, coalesceGateLines, editDistance, isPlaceholderToken, suggestAllowedCommand, looksLikeProse, runGate, SequentialScheduler, ParallelScheduler, CompetitiveScheduler, selectWinner, detectScopeConflicts } from "./schedulers.mjs";
@@ -470,7 +470,7 @@ function _handlePassedSliceResult(result, slice, ctx) {
 async function _runPlanSliceCallback(slice, ctx) {
   const { cwd, artifactCwd, dryRunWorker, effectiveModel, modelRouting, mode, runDir, maxRetries,
     memoryEnabled, projectName, planPath, quorumConfig, escalationChain, eventBus,
-    worker, _dispatchSlice, _pollPullRequest, planMeta } = ctx;
+    worker, _dispatchSlice, _pollPullRequest, planMeta, planContext } = ctx;
   // Bug #123: capture HEAD before the slice so we can deterministically
   // detect commits made by the worker itself (gh-copilot, claude CLI).
   let startSha = null;
@@ -493,7 +493,7 @@ async function _runPlanSliceCallback(slice, ctx) {
     cwd, artifactCwd, model: effectiveModel, modelRouting, mode, runDir, maxRetries,
     memoryEnabled, projectName, planName: basename(planPath, ".md"),
     quorumConfig, escalationChain, eventBus,
-    worker, _dispatchSlice, _pollPullRequest,
+    worker, _dispatchSlice, _pollPullRequest, planContext,
     networkAllowed: planMeta?.networkAllowed ?? null,
     networkEnforce: planMeta?.networkEnforce ?? false,
     toolsDeny: planMeta?.toolsDeny ?? null,
@@ -1543,6 +1543,7 @@ export async function runPlan(planPath, options = {}) {
       cwd, dryRunWorker, effectiveModel, modelRouting, mode, runDir, maxRetries,
       memoryEnabled, projectName, planPath, quorumConfig, escalationChain, eventBus,
       worker, _dispatchSlice, _pollPullRequest, planMeta: plan.meta,
+      planContext: buildPlanContext({ plan, planPath, cwd }),
     },
   });
 
@@ -1988,10 +1989,12 @@ function _executeSliceEscalateModel({ attempt, currentModel, escalationChain, sl
   return nextModel;
 }
 
-function _executeSliceBuildInstructions({ slice, useQuorum, quorumResult, memoryEnabled, projectName, planName, autoSkillContextBlock, teardownGuardConfig, lastFailureContext }) {
+function _executeSliceBuildInstructions({ slice, useQuorum, quorumResult, memoryEnabled, projectName, planName, autoSkillContextBlock, teardownGuardConfig, lastFailureContext, planContext }) {
   let sliceInstructions = (useQuorum && quorumResult)
     ? quorumResult.enhancedPrompt
     : buildSlicePrompt(slice);
+  const planContextBlock = buildPlanContextBlock(slice, planContext);
+  if (planContextBlock) sliceInstructions += `\n\n${planContextBlock}`;
   if (memoryEnabled) {
     sliceInstructions = buildMemorySearchBlock(projectName, slice) + "\n" + sliceInstructions;
     sliceInstructions += "\n" + buildMemoryCaptureBlock(projectName, slice, planName);
@@ -2615,7 +2618,7 @@ async function _executeSliceAttemptLoop(ctx) {
     _dispatchSlice, _pollPullRequest, networkAllowed, networkEnforce,
     eventBus, useQuorum, quorumResult, memoryEnabled, projectName, planName,
     autoSkillContextBlock, teardownGuardConfig, escalationChain,
-    startTime, sliceStartHead, finalizeSliceResult,
+    startTime, sliceStartHead, finalizeSliceResult, planContext,
   } = ctx;
   let attempt = 0;
   let workerResult = null;
@@ -2634,7 +2637,7 @@ async function _executeSliceAttemptLoop(ctx) {
     currentModel = _executeSliceEscalateModel({ attempt, currentModel, escalationChain, slice, eventBus });
     const sliceInstructions = _executeSliceBuildInstructions({
       slice, useQuorum, quorumResult, memoryEnabled, projectName, planName,
-      autoSkillContextBlock, teardownGuardConfig, lastFailureContext,
+      autoSkillContextBlock, teardownGuardConfig, lastFailureContext, planContext,
     });
 
     try {
@@ -2722,6 +2725,7 @@ async function executeSlice(slice, options) {
     networkAllowed = null,
     networkEnforce = false,
     toolsDeny = null,
+    planContext,
   } = options;
   void toolsDeny;
   const startTime = Date.now();
@@ -2758,7 +2762,7 @@ async function executeSlice(slice, options) {
     _dispatchSlice, _pollPullRequest, networkAllowed, networkEnforce,
     eventBus, useQuorum, quorumResult, memoryEnabled, projectName, planName,
     autoSkillContextBlock, teardownGuardConfig, escalationChain,
-    startTime, sliceStartHead, finalizeSliceResult, finalModel,
+    startTime, sliceStartHead, finalizeSliceResult, finalModel, planContext,
   });
   if (loopResult.earlyReturn) return loopResult.earlyReturn;
   const { workerResult, gateResult, attempt, currentModel, copilotDispatchData } = loopResult;

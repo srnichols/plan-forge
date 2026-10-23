@@ -212,8 +212,9 @@ These are agent-side checks, not runtime enforcement. A crucibleId, passed gate 
 lockHash is not design approval; existing runtime execution and lock-hash coverage are unchanged.
 
 For each Execution Slice:
-- Tag as [parallel-safe] (with Parallel Group) or [sequential]
-- Include relevant .github/instructions/*.instructions.md files in Context Files
+- Tag as `[parallel-safe]` or `[sequential]`. A parallel tag is exactly `[parallel-safe]` (or `[P]`) with nothing else inside the brackets: the parser ignores `[parallel-safe, group A]`, so the slice runs sequentially and gate lint warns. Name the Parallel Group in the slice body (`**Parallel Group**: A`)
+- Declare scope on a bold `**Files**:` line (backtick paths) or with a `[scope: path]` heading tag. A plain `Files:` or `Scope:` line is not read: the slice runs with no scope check and gate lint warns
+- Include relevant .github/instructions/*.instructions.md files in Context Files, as backtick paths on the `**Context Files**:` line. The worker prompt lists them under "Read before editing", and appends the plan file path and the Scope Contract's Forbidden items
 - List only instruction files whose domain matches the slice (not all 17 — each consumes context budget)
 - Add a Parallel Merge Checkpoint after each parallel group
 - When parallel slices build one artifact (their [scope:] paths share a root), add a "## Shared Contract" section pinning the shared types, names, signatures, routes and conventions, and a coherence slice that depends on all of them and builds or tests the artifact as a whole. Gate lint warns when either is missing.

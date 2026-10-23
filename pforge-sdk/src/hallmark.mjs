@@ -20,6 +20,50 @@ const ISO_UTC_RE = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z$/;
 // Hash format: sha256:<64 lowercase hex chars>
 const HASH_RE = /^sha256:[0-9a-f]{64}$/;
 
+const isString = (value) => typeof value === 'string';
+const isHash = (value) => isString(value) && HASH_RE.test(value);
+
+// [start, endExclusive]: two integers, 0 <= start <= end
+const isByteRange = (value) => Array.isArray(value)
+  && value.length === 2
+  && Number.isInteger(value[0])
+  && Number.isInteger(value[1])
+  && value[0] >= 0
+  && value[1] >= 0
+  && value[0] <= value[1];
+
+// Each rule maps a record to the error messages it produced.
+const required = (field, isValid, message) => (record) => (isValid(record[field]) ? [] : [message]);
+
+const optional = (field, isValid, message) => (record) => {
+  const value = record[field];
+  return value === undefined || isValid(value) ? [] : [message];
+};
+
+// additionalProperties: false — reject unknown keys
+function unknownProperties(record) {
+  return Object.keys(record)
+    .filter((key) => !ALLOWED_KEYS.has(key))
+    .map((key) => `unknown property: "${key}" (additionalProperties is false)`);
+}
+
+// The order here is the order errors are reported in.
+const PROVENANCE_RULES = [
+  required('schemaVersion', (value) => value === HALLMARK_SCHEMA_VERSION, `schemaVersion must be "${HALLMARK_SCHEMA_VERSION}"`),
+  required('toolName', (value) => isString(value) && value.length > 0, 'toolName is required and must be a non-empty string'),
+  required(
+    'capturedAt',
+    (value) => isString(value) && ISO_UTC_RE.test(value),
+    'capturedAt must be an ISO 8601 UTC date-time string ending in Z (e.g. 2026-05-16T07:28:45Z)',
+  ),
+  optional('byteRange', isByteRange, 'byteRange must be [start, endExclusive] with 0 <= start <= end (integers)'),
+  optional('contentHash', isHash, 'contentHash must match pattern sha256:<64 lowercase hex chars>'),
+  optional('codeHash', isHash, 'codeHash must match pattern sha256:<64 lowercase hex chars>'),
+  optional('sourceFile', isString, 'sourceFile must be a string'),
+  optional('toolVersion', isString, 'toolVersion must be a string'),
+  unknownProperties,
+];
+
 /**
  * Validate a provenance record against the hallmark/v1 schema.
  * Pure — no I/O, no throws. Always returns a structured result.
@@ -32,66 +76,7 @@ export function validateProvenance(record) {
     return { ok: false, errors: ['record must be a plain object'] };
   }
 
-  const errors = [];
-
-  // schemaVersion: must be exactly HALLMARK_SCHEMA_VERSION
-  if (record.schemaVersion !== HALLMARK_SCHEMA_VERSION) {
-    errors.push(`schemaVersion must be "${HALLMARK_SCHEMA_VERSION}"`);
-  }
-
-  // toolName: required non-empty string
-  if (typeof record.toolName !== 'string' || record.toolName.length === 0) {
-    errors.push('toolName is required and must be a non-empty string');
-  }
-
-  // capturedAt: required ISO 8601 UTC string ending in Z
-  if (typeof record.capturedAt !== 'string' || !ISO_UTC_RE.test(record.capturedAt)) {
-    errors.push('capturedAt must be an ISO 8601 UTC date-time string ending in Z (e.g. 2026-05-16T07:28:45Z)');
-  }
-
-  // byteRange: optional [start, endExclusive] — two non-negative integers, start ≤ end
-  if (record.byteRange !== undefined) {
-    const br = record.byteRange;
-    if (
-      !Array.isArray(br) || br.length !== 2 ||
-      !Number.isInteger(br[0]) || !Number.isInteger(br[1]) ||
-      br[0] < 0 || br[1] < 0 || br[0] > br[1]
-    ) {
-      errors.push('byteRange must be [start, endExclusive] with 0 <= start <= end (integers)');
-    }
-  }
-
-  // contentHash: optional sha256:<64 hex chars>
-  if (record.contentHash !== undefined) {
-    if (typeof record.contentHash !== 'string' || !HASH_RE.test(record.contentHash)) {
-      errors.push('contentHash must match pattern sha256:<64 lowercase hex chars>');
-    }
-  }
-
-  // codeHash: optional sha256:<64 hex chars>
-  if (record.codeHash !== undefined) {
-    if (typeof record.codeHash !== 'string' || !HASH_RE.test(record.codeHash)) {
-      errors.push('codeHash must match pattern sha256:<64 lowercase hex chars>');
-    }
-  }
-
-  // sourceFile: optional string
-  if (record.sourceFile !== undefined && typeof record.sourceFile !== 'string') {
-    errors.push('sourceFile must be a string');
-  }
-
-  // toolVersion: optional string
-  if (record.toolVersion !== undefined && typeof record.toolVersion !== 'string') {
-    errors.push('toolVersion must be a string');
-  }
-
-  // additionalProperties: false — reject unknown keys
-  for (const key of Object.keys(record)) {
-    if (!ALLOWED_KEYS.has(key)) {
-      errors.push(`unknown property: "${key}" (additionalProperties is false)`);
-    }
-  }
-
+  const errors = PROVENANCE_RULES.flatMap((rule) => rule(record));
   return errors.length > 0 ? { ok: false, errors } : { ok: true };
 }
 

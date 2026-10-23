@@ -125,7 +125,7 @@ For each failure mode or portability issue identified above, propose a concrete,
 - **Evidence** — which log entry or memory note supports this change
 
 Do NOT propose patches for:
-- Changes outside Plan Forge's own files (project code bugs belong in `forge_bug_file`)
+- Changes outside Plan Forge's own files (project code bugs belong in `forge_bug_register`)
 - Style or formatting changes with no functional impact
 - More than 5 patches — prioritize highest-impact items
 

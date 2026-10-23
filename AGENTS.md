@@ -205,7 +205,7 @@ When tempted: stop, re-read [`docs/plans/PROJECT-PRINCIPLES.md`](docs/plans/PROJ
 
 When executing a plan slice or reporting progress, use the templates in [`.github/instructions/status-reporting.instructions.md`](.github/instructions/status-reporting.instructions.md): Progress Update, Slice Complete, Blocker Report, Failure / Recovery, Run Summary, Handoff Summary.
 
-When a defect in Plan Forge ITSELF blocks you (plan defect, orchestrator defect, prompt defect), file via `forge_meta_bug_file` — see [`.github/instructions/self-repair-reporting.instructions.md`](.github/instructions/self-repair-reporting.instructions.md). Defects in *user* code go through `forge_bug_file`.
+When a defect in Plan Forge ITSELF blocks you (plan defect, orchestrator defect, prompt defect), file via `forge_meta_bug_file` — see [`.github/instructions/self-repair-reporting.instructions.md`](.github/instructions/self-repair-reporting.instructions.md). Defects in *user* code go through `forge_bug_register`.
 
 ---
 

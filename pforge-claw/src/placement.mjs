@@ -38,8 +38,17 @@ function isOnline(lane, health) {
   return lane?.kind === "local" || (lane?.kind === "k8s" && lane.enabled !== false);
 }
 
+/**
+ * A function health returns the whole health map, keyed by lane id (the lane
+ * directory's `snapshot`), so it is called once per decision. It used to be
+ * called as health(laneId, lane) and read as one lane's health, which made
+ * `/lanes` show a healthy remote lane offline (meta-bug #385).
+ */
+function healthMap(health, options) {
+  return typeof health === "function" ? health(options) : health;
+}
+
 function healthForLane(health, lane) {
-  if (typeof health === "function") return health(lane.id, lane);
   if (health instanceof Map) return health.get(lane.id);
   return health?.[lane.id];
 }
@@ -110,7 +119,7 @@ function skippedReason({ lane, id, project, projects, requires, restricted, lane
 
 /**
  * Selects a launchable lane without relaxing project label or restricted-lane rules.
- * @param {{project: object, projects?: object[], lanes: object[], laneState?: object, health?: object|Map|Function}} options Placement inputs.
+ * @param {{project: object, projects?: object[], lanes: object[], laneState?: object, health?: object|Map|Function}} options Placement inputs; a function health returns the health map.
  * @returns {{ok: true, laneId: string, skipped: {id: string, reason: string}[], explanation: string}|{ok: false, error: string, skipped: {id: string, reason: string}[], explanation: string}}
  */
 export function placeJob({
@@ -124,10 +133,11 @@ export function placeJob({
   const dedicatedCandidates = restricted
     ? candidateIds.filter((id) => laneById.has(id) && laneIsDedicated(id, project, projects))
     : candidateIds;
+  const laneHealth = healthMap(health, { projectId: project?.id });
 
   for (const id of candidateIds) {
     const lane = laneById.get(id);
-    const reason = skippedReason({ lane, id, project, projects, requires, restricted, laneState, health });
+    const reason = skippedReason({ lane, id, project, projects, requires, restricted, laneState, health: laneHealth });
     if (reason === null) return {
         ok: true,
         laneId: id,
@@ -220,10 +230,11 @@ export function createPlacementService({ store, config = {}, health } = {}) {
     config,
     listStatuses() {
       const state = readLaneState(store);
+      const byLane = healthMap(health, {});
       return (config.lanes ?? []).map((lane) => laneStatus({
         lane,
         laneState: state.lanes[lane.id],
-        health: healthForLane(health, lane),
+        health: healthForLane(byLane, lane),
       }));
     },
     findLane(laneId) {
@@ -237,7 +248,7 @@ export function createPlacementService({ store, config = {}, health } = {}) {
           projects: config.projects ?? [],
           lanes: config.lanes,
           laneState: readLaneState(store),
-          health: typeof health === "function" ? health({ projectId: project.id }) : health,
+          health,
         });
       } catch {
         return null;

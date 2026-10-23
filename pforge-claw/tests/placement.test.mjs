@@ -9,6 +9,7 @@ import {
   setLaneOptIn,
 } from "../src/placement.mjs";
 import { createStore } from "../src/state/store.mjs";
+import { createLaneDirectory } from "../src/lanes/directory.mjs";
 import { g1DirectorySync } from "./g1-runner-fixture.mjs";
 
 const directories = [];
@@ -223,5 +224,52 @@ describe("lane opt-in state", () => {
       laneState: readLaneState(store),
       health: { worker: { ok: true } },
     })).toMatchObject({ ok: false, error: PLACEMENT_ERRORS.NO_ELIGIBLE_LANE });
+  });
+});
+
+// Meta-bug #385: `listStatuses` called a function-typed health as health(laneId, lane) and read
+// one lane's health from the result, while dispatcher-startup wires `(options) =>
+// directory.snapshot(options)`, which returns the whole map. So /lanes showed every healthy
+// remote lane as offline with no queue depth, and an unhealthy local lane as online.
+describe("lane statuses from the lane directory the dispatcher wires in (#385)", () => {
+  const fakeLane = (id, kind, health) => ({
+    id, kind, capabilities: {}, submit: async function* submit() {}, cancel: async () => ({ ok: true }), health: () => health,
+  });
+  const LANES = [
+    { id: "remote-1", kind: "remote", enabled: true },
+    { id: "remote-2", kind: "remote", enabled: true },
+    { id: "home", kind: "local", enabled: true },
+  ];
+
+  function wire(store) {
+    const directory = createLaneDirectory();
+    directory.configure(LANES);
+    directory.register(fakeLane("remote-1", "remote", { ok: true, pending: 2 }));
+    directory.register(fakeLane("remote-2", "remote", { ok: false, pending: 0 }));
+    directory.register(fakeLane("home", "local", { ok: false, queued: 3 }));
+    return createPlacementService({ store, config: { lanes: LANES }, health: (options) => directory.snapshot(options) });
+  }
+
+  it("lists each lane with its own health: online with a queue depth, or offline", () => {
+    const { store } = makeStore();
+    expect(wire(store).listStatuses()).toEqual([
+      { id: "remote-1", kind: "remote", labels: [], status: "online", queueDepth: 2 },
+      { id: "remote-2", kind: "remote", labels: [], status: "offline", queueDepth: 0 },
+      { id: "home", kind: "local", labels: [], status: "offline", queueDepth: 3 },
+    ]);
+  });
+
+  it("places a job on a healthy remote lane when health is a function returning the map", () => {
+    const placed = placeJob({
+      project: { id: "p", homeLane: "remote-1" },
+      lanes: LANES,
+      health: () => ({ "remote-1": { ok: true, pending: 0 }, "remote-2": { ok: false } }),
+    });
+    expect(placed).toMatchObject({ ok: true, laneId: "remote-1" });
+  });
+
+  it("still previews with the same wiring, as before", () => {
+    const { store } = makeStore();
+    expect(wire(store).preview({ project: { id: "p", homeLane: "remote-1" } })).toMatchObject({ ok: true, laneId: "remote-1" });
   });
 });

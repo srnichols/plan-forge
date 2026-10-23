@@ -1,12 +1,15 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { auditRawDir } from './raw-dir.mjs';
+import { runInstalledBin } from './run-installed-bin.mjs';
 import { spawnSync } from 'node:child_process';
 
 const root = process.cwd();
 const outFile = path.join(auditRawDir(root), 'architecture-report.json');
 const policyPath = path.join(root, 'scripts', 'audit', 'layer-policy.json');
 const ninetyDayThreshold = '90 days ago';
+// madge reads .js only by default, which is 5 of the 756 source files in pforge-mcp.
+const MADGE_EXTENSIONS = 'js,mjs,cjs';
 
 function ensureDir(dirPath) {
   fs.mkdirSync(dirPath, { recursive: true });
@@ -37,45 +40,40 @@ function loadPolicy() {
 }
 
 function runMadge(scanRoot) {
-  const npxBin = process.platform === 'win32' ? 'npx.cmd' : 'npx';
-  const result = spawnSync(npxBin, ['madge', '--json', scanRoot], {
-    cwd: root,
-    encoding: 'utf8',
-    windowsHide: true
+  const result = runInstalledBin({
+    root,
+    pkg: 'madge',
+    args: ['--json', '--extensions', MADGE_EXTENSIONS, scanRoot]
   });
+  const diagnostics = { stdout: result.stdout?.trim(), stderr: result.stderr?.trim(), exitCode: result.status };
 
-  if (result.error) {
-    return { error: result.error.message };
+  if (!result.ok) {
+    return { error: result.error, ...diagnostics };
   }
 
+  let graph;
   try {
-    return { graph: JSON.parse(result.stdout) };
+    graph = JSON.parse(result.stdout);
   } catch {
-    return {
-      error: `Unable to parse madge output for ${scanRoot}`,
-      stdout: result.stdout?.trim(),
-      stderr: result.stderr?.trim(),
-      exitCode: result.status
-    };
+    return { error: `Unable to parse madge output for ${scanRoot}`, ...diagnostics };
   }
+  if (Object.keys(graph).length === 0) {
+    return { error: `madge found no source files under ${scanRoot}, so the scan proved nothing`, ...diagnostics };
+  }
+  return { graph };
+}
+
+// madge prints every path relative to the scanned directory, including files it
+// reaches outside it ("../pforge-mcp/enums.mjs"), so both keys and dependencies
+// resolve against the scan root.
+function toRepoPath(scanRoot, value) {
+  return path.posix.normalize(path.posix.join(scanRoot, toPosix(value)));
 }
 
 function normalizeGraph(scanRoot, graph) {
   const normalized = new Map();
   for (const [file, deps] of Object.entries(graph)) {
-    const repoFile = toPosix(path.posix.normalize(path.posix.join(scanRoot, toPosix(file))));
-    const fromDir = path.posix.dirname(repoFile);
-    const normalizedDeps = (deps ?? []).map((dep) => {
-      const depValue = toPosix(dep);
-      if (depValue.startsWith('.')) {
-        return path.posix.normalize(path.posix.join(fromDir, depValue));
-      }
-      if (depValue.startsWith('..')) {
-        return path.posix.normalize(path.posix.join(fromDir, depValue));
-      }
-      return path.posix.normalize(path.posix.join(scanRoot, depValue));
-    });
-    normalized.set(repoFile, normalizedDeps);
+    normalized.set(toRepoPath(scanRoot, file), (deps ?? []).map((dep) => toRepoPath(scanRoot, dep)));
   }
   return normalized;
 }
@@ -274,12 +272,20 @@ try {
     highFanOutUnstable: highFanOutUnstable.sort((left, right) => right.fanOut - left.fanOut),
     errors
   });
+  if (errors.length > 0) {
+    // The report is kept as evidence, but a scan that did not run must not pass.
+    console.error(`architecture scan incomplete: ${errors.map((e) => `${e.scanRoot}: ${e.message}`).join('; ')}`);
+    process.exitCode = 1;
+  }
 } catch (error) {
+  const message = error instanceof Error ? error.message : String(error);
   writeJson({
     cycles: [],
     crossLayerImports: [],
     highFanInVolatile: [],
     highFanOutUnstable: [],
-    errors: [{ message: error instanceof Error ? error.message : String(error) }]
+    errors: [{ message }]
   });
+  console.error(`architecture scan failed: ${message}`);
+  process.exitCode = 1;
 }

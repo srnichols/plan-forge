@@ -2295,6 +2295,37 @@ function Get-AnalyzeFiles {
     }
 }
 
+# The MUST criteria that no test file matches, in plan order. A criterion is tested when
+# some test file contains at least two of its first three words longer than four
+# characters. Each test file is read once, however many criteria go unmatched: reading
+# every file again for every unmatched criterion took 72 s on a large worktree and
+# timed the MCP wrapper out (meta-bug #351).
+function Get-UntestedMustCriteria {
+    param([string[]]$Criteria, $TestFiles)
+    $pending = [System.Collections.Generic.List[object]]::new()
+    for ($i = 0; $i -lt $Criteria.Count; $i++) {
+        # Extract key terms from the criterion for fuzzy matching
+        $keywords = @($Criteria[$i] -replace '[^\w\s]', '' -split '\s+' | Where-Object { $_.Length -gt 4 } | Select-Object -First 3)
+        $pending.Add([pscustomobject]@{ Index = $i; Keywords = $keywords })
+    }
+    $tested = @{}
+    foreach ($tf in $TestFiles) {
+        if ($pending.Count -eq 0) { break }
+        # -LiteralPath: on Windows PowerShell 5.1 a "[id]" route directory made -Path a
+        # wildcard, which hid the provider's -Raw parameter and aborted analyze (meta-bug #284).
+        $testContent = Get-Content -LiteralPath $tf.FullName -Raw -ErrorAction SilentlyContinue
+        if (-not $testContent) { continue }
+        for ($p = $pending.Count - 1; $p -ge 0; $p--) {
+            $matchCount = 0
+            foreach ($keyword in $pending[$p].Keywords) { if ($testContent -match $keyword) { $matchCount++ } }
+            if ($matchCount -ge 2) { $tested[$pending[$p].Index] = $true; $pending.RemoveAt($p) }
+        }
+    }
+    for ($i = 0; $i -lt $Criteria.Count; $i++) {
+        if (-not $tested.ContainsKey($i)) { $Criteria[$i] }
+    }
+}
+
 # Parses `analyze` / `diagnose` arguments. Flags may come before or after the target;
 # the first non-flag token is the target. --models implies a quorum run.
 function Get-AnalysisArgs {
@@ -2557,22 +2588,8 @@ function Invoke-Analyze {
 
     $testedMust = 0; $untestedMust = @()
     if ($mustCriteria -and $mustCriteria.Count -gt 0) {
-        foreach ($criterion in $mustCriteria) {
-            # Extract key terms from the criterion for fuzzy matching
-            $keywords = $criterion -replace '[^\w\s]', '' -split '\s+' | Where-Object { $_.Length -gt 4 } | Select-Object -First 3
-            $found = $false
-            foreach ($tf in $testFiles) {
-                # -LiteralPath: on Windows PowerShell 5.1 a "[id]" route directory made -Path a
-                # wildcard, which hid the provider's -Raw parameter and aborted analyze (meta-bug #284).
-                $testContent = Get-Content -LiteralPath $tf.FullName -Raw -ErrorAction SilentlyContinue
-                if ($testContent) {
-                    $matchCount = ($keywords | Where-Object { $testContent -match $_ }).Count
-                    if ($matchCount -ge 2) { $found = $true; break }
-                }
-            }
-            if ($found) { $testedMust++ }
-            else { $untestedMust += $criterion }
-        }
+        $untestedMust = @(Get-UntestedMustCriteria -Criteria $mustCriteria -TestFiles $testFiles)
+        $testedMust = $mustCriteria.Count - $untestedMust.Count
         Write-Host "  ✅ $testedMust/$($mustCriteria.Count) MUST criteria have matching tests" -ForegroundColor $(if ($testedMust -eq $mustCriteria.Count) { 'Green' } else { 'Yellow' })
         foreach ($u in $untestedMust) {
             $short = if ($u.Length -gt 70) { $u.Substring(0,70) + "..." } else { $u }

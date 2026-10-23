@@ -124,23 +124,43 @@ function jsRunnerFor(cwd, testFile) {
   }
 }
 
-/** One command per workspace package: `npx [--prefix <pkg>] <runner> <files>`. */
+const SUITE_CONFIG_EXTENSIONS = Object.freeze(["mjs", "js", "ts", "mts", "cjs", "cts"]);
+
+/**
+ * `vitest.<suite>.config.*` in the package for a test under `tests/<suite>/`,
+ * else null. A package whose e2e suite has its own config excludes that suite
+ * from the default one, so the default config reports "no test files" for it.
+ */
+function suiteConfigFor(cwd, dir, packageRelativeTest) {
+  const suite = /^tests\/([^/]+)\//.exec(packageRelativeTest)?.[1];
+  if (!suite) return null;
+  return SUITE_CONFIG_EXTENSIONS.map((ext) => `vitest.${suite}.config.${ext}`).find((name) => existsSync(join(cwd, dir, name))) ?? null;
+}
+
+/**
+ * One run per workspace package (and per suite config). The package is the
+ * working directory — tests that use process.cwd() expect it, and its own
+ * vitest/jest config is the one that loads — and files are package-relative.
+ * `--prefix` only moved where the binary resolved, so vitest kept loading the
+ * root config and found nothing outside it (meta-bug #321).
+ */
 function jsCommands(cwd, tests) {
   const groups = new Map();
   const unrunnable = [];
-  for (const t of tests) {
-    const found = jsRunnerFor(cwd, t);
-    if (!found) { unrunnable.push(t); continue; }
-    const key = `${found.dir}\t${found.runner}`;
-    if (!groups.has(key)) groups.set(key, []);
-    groups.get(key).push(t);
+  for (const test of tests) {
+    const found = jsRunnerFor(cwd, test);
+    if (!found) { unrunnable.push(test); continue; }
+    const file = found.dir === "." ? test : posix.relative(found.dir, test);
+    const config = found.runner.startsWith("vitest") ? suiteConfigFor(cwd, found.dir, file) : null;
+    const key = JSON.stringify([found.dir, found.runner, config]);
+    if (!groups.has(key)) groups.set(key, { dir: found.dir, runner: found.runner, config, files: [] });
+    groups.get(key).files.push(file);
   }
-  const commands = [...groups].map(([key, files]) => {
-    const [dir, runner] = key.split("\t");
-    const prefix = dir === "." ? "" : `--prefix ${dir} `;
-    return `npx ${prefix}${runner} ${files.map(quote).join(" ")}`;
-  });
-  return { commands, unrunnable };
+  const runs = [...groups.values()].map(({ dir, runner, config, files }) => ({
+    command: `npx ${runner}${config ? ` --config ${config}` : ""} ${files.map(quote).join(" ")}`,
+    workdir: dir === "." ? null : dir,
+  }));
+  return { runs, unrunnable };
 }
 
 /** Nearest *.csproj at or above the test file's directory, inside cwd. */
@@ -188,34 +208,47 @@ function groupTests(tests) {
   return groups;
 }
 
-/** Per runner family: (cwd, files) -> { commands, unrunnable }. */
+/** Runs that belong in the project root: a command string each, no working directory of its own. */
+const inRoot = (commands) => commands.map((command) => ({ command, workdir: null }));
+
+/** Per runner family: (cwd, files) -> { runs, unrunnable }. */
 const GROUP_COMMANDS = Object.freeze({
   js: (cwd, files) => jsCommands(cwd, files),
-  py: (_cwd, files) => ({ commands: [`python -m pytest ${files.map(quote).join(" ")}`], unrunnable: [] }),
-  go: (_cwd, files) => ({ commands: [`go test ${[...new Set(files.map((t) => `./${posix.dirname(t)}`))].sort().join(" ")}`], unrunnable: [] }),
+  py: (_cwd, files) => ({ runs: inRoot([`python -m pytest ${files.map(quote).join(" ")}`]), unrunnable: [] }),
+  go: (_cwd, files) => ({ runs: inRoot([`go test ${[...new Set(files.map((t) => `./${posix.dirname(t)}`))].sort().join(" ")}`]), unrunnable: [] }),
   cs: (cwd, files) => {
     const commands = dotnetCommands(cwd, files);
-    return commands ? { commands, unrunnable: [] } : { commands: [], unrunnable: files };
+    return commands ? { runs: inRoot(commands), unrunnable: [] } : { runs: [], unrunnable: files };
   },
-  other: (_cwd, files) => ({ commands: [], unrunnable: files }),
+  other: (_cwd, files) => ({ runs: [], unrunnable: files }),
 });
 
+/** A run as a person would type it: `cd pkg && npx vitest run ...` when it belongs in a package. */
+const displayCommand = ({ command, workdir }) => (workdir ? `cd ${workdir} && ${command}` : command);
+
 /**
- * @returns {{ commands: string[], skipped?: string }}
+ * @returns {{ commands: string[], runs: Array<{ command: string, workdir: string|null }>, skipped?: string }}
+ *   `runs` is what executes (a command and the project-relative directory it
+ *   runs in); `commands` is the same list as readable strings.
  */
 export function buildImpactCommands({ cwd, tests, config }) {
-  if (config.command) return { commands: [config.command.replace("{files}", tests.map(quote).join(" "))] };
-  const commands = [];
+  if (config.command) {
+    const command = config.command.replace("{files}", tests.map(quote).join(" "));
+    return { commands: [command], runs: [{ command, workdir: null }] };
+  }
+  const runs = [];
   const unrunnable = [];
   for (const [group, files] of Object.entries(groupTests(tests))) {
     if (files.length === 0) continue;
     const out = GROUP_COMMANDS[group](cwd, files);
-    commands.push(...out.commands);
+    runs.push(...out.runs);
     unrunnable.push(...out.unrunnable);
   }
-  if (unrunnable.length === 0) return { commands };
+  const commands = runs.map(displayCommand);
+  if (unrunnable.length === 0) return { commands, runs };
   return {
     commands,
+    runs,
     skipped: `no test runner detected for ${unrunnable.join(", ")}; set impactGate.command in .forge.json (e.g. "bundle exec rspec {files}")`,
   };
 }
@@ -244,12 +277,12 @@ export function runImpactGate({ cwd, sinceSha, config, runGateFn = runGate, blas
 
   const tests = related.slice(0, config.maxTests);
   const truncated = related.length > tests.length;
-  const { commands, skipped } = buildImpactCommands({ cwd, tests, config });
-  for (const command of commands) {
-    const result = runGateFn(command, cwd);
+  const { commands, runs, skipped } = buildImpactCommands({ cwd, tests, config });
+  for (const [index, run] of runs.entries()) {
+    const result = run.workdir ? runGateFn(run.command, cwd, { workdir: run.workdir }) : runGateFn(run.command, cwd);
     if (!result.success) {
-      return { ran: true, success: false, tests, truncated, commands, skipped, failedCommand: command, output: result.output ?? result.error ?? "" };
+      return { ran: true, success: false, tests, truncated, commands, skipped, failedCommand: commands[index], output: result.output ?? result.error ?? "" };
     }
   }
-  return { ran: commands.length > 0, success: true, tests, truncated, commands, skipped };
+  return { ran: runs.length > 0, success: true, tests, truncated, commands, skipped };
 }

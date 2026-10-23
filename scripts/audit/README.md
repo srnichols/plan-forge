@@ -17,6 +17,8 @@ node scripts/audit/test-smells.mjs           # focus/skip/time-flake/console-lea
 node scripts/audit/shell-parity.mjs          # .ps1/.sh twin coverage (Round 4)
 node scripts/audit/dep-boundaries.mjs        # cross-package import rules (Round 4)
 node scripts/audit/frozen-arrays-drift.mjs   # hand-typed enum literals (Round 4)
+node scripts/audit/run-jscpd.mjs             # duplicated blocks (jscpd); exits 1 when jscpd fails or writes no report
+node scripts/audit/scan-architecture.mjs     # cycles, cross-layer and cross-package imports (madge); exits 1 when madge fails
 node scripts/audit/preset-quality.mjs --php  # preset filler, copied blocks, wrong stack, skill steps, shell/PHP samples (#301; a gate, exits 1)
 ```
 

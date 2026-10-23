@@ -1,11 +1,13 @@
 import { execFileSync, execSync } from "node:child_process";
 import { existsSync } from "node:fs";
+import { isAbsolute, relative, resolve, sep } from "node:path";
 
 import {
   getCachedBashPath, setCachedBashPath,
 } from "./state.mjs";
 import { GATE_ALLOWED_PREFIXES, UNIX_TOOLS, DEFAULT_GATE_TIMEOUT_MS, GATE_MAX_BUFFER, resolveGateCommandToken, isGatePrefixAllowed } from "./constants.mjs";
 import { loadGateRunnerMode, runDevcontainerGate } from "./devcontainer-gates.mjs";
+import { findMissingTestOperands } from "./gate-operands.mjs";
 export { GATE_ALLOWED_PREFIXES, UNIX_TOOLS, DEFAULT_GATE_TIMEOUT_MS };
 
 /**
@@ -205,6 +207,9 @@ export function suggestAllowedCommand(token) {
  * @param {object} [opts]
  * @param {boolean} [opts.failOnStderr=false] - Issue #133 opt-in: treat
  *   non-empty stderr as failure even when exit code is 0.
+ * @param {string} [opts.workdir] - Meta-bug #321: project-relative directory to
+ *   run in (a workspace package whose tests need their own cwd); it may not
+ *   leave the project. `.forge.json` and the Dev Container stay the project's.
  * @returns {{ success: boolean, output: string, error: string, stderr: string, exitCode: number }}
  */
 function _validateGateAllowlist(command) {
@@ -353,16 +358,67 @@ export function normalizeGateCwd(dir) {
   return dir.replace(/^([a-z]):/, (_m, d) => `${d.toUpperCase()}:`);
 }
 
+/** Single-quote `text` for a POSIX shell. */
+const shellQuote = (text) => `'${String(text).replace(/'/g, "'\\''")}'`;
+
+/**
+ * Meta-bug #321 — the command as the Dev Container's `sh -c` should run it when
+ * the gate belongs in a project subdirectory: `cd 'pkg' && command`. The
+ * container exec has no working-directory option of its own.
+ *
+ * @param {string} command
+ * @param {string|null|undefined} workdir - project-relative directory, if any
+ * @returns {string}
+ */
+export function gateCommandInWorkdir(command, workdir) {
+  return workdir ? `cd ${shellQuote(workdir)} && ${command}` : command;
+}
+
+/**
+ * Where a gate runs. `workdir` is a project-relative subdirectory (a workspace
+ * package whose tests must run from the package itself); it may not leave the
+ * project. `cwd` is null when it does.
+ *
+ * @returns {{ cwd: string|null, relativeDir: string|null }}
+ */
+function _gateWorkdir(projectRoot, workdir) {
+  if (typeof workdir !== "string" || workdir === "" || workdir === ".") return { cwd: projectRoot, relativeDir: null };
+  const cwd = resolve(projectRoot, workdir);
+  const within = relative(projectRoot, cwd);
+  if (within === "") return { cwd: projectRoot, relativeDir: null };
+  if (within === ".." || within.startsWith(`..${sep}`) || isAbsolute(within)) return { cwd: null, relativeDir: null };
+  return { cwd, relativeDir: within.split(sep).join("/") };
+}
+
+function _failedBeforeRunning(error) {
+  return { success: false, output: "", stderr: "", error, exitCode: -1 };
+}
+
 export function runGate(command, rawCwd, opts = {}) {
-  const cwd = normalizeGateCwd(rawCwd);
+  const projectRoot = normalizeGateCwd(rawCwd);
+  const workdir = _gateWorkdir(projectRoot, opts.workdir);
+  if (!workdir.cwd) return _failedBeforeRunning(`Validation gate blocked: workdir '${opts.workdir}' is outside the project.`);
+  const cwd = workdir.cwd;
   const failOnStderr = opts.failOnStderr === true;
   const { cmdBase, blocked } = _validateGateAllowlist(command);
   if (blocked) return blocked;
 
+  // Meta-bug #337: vitest and jest treat file arguments as filters, so a test
+  // file the slice never created is silently ignored while a sibling matches.
+  const missingTests = findMissingTestOperands(command, cwd);
+  if (missingTests.length > 0) {
+    return _failedBeforeRunning(
+      `Validation gate failed: the test file(s) it names do not exist: ${missingTests.join(", ")}. ` +
+      "vitest and jest treat file arguments as filters, so a missing file is silently ignored and the gate would pass without running it. " +
+      "Create the file(s), or correct the path.",
+    );
+  }
+
   const gateTimeout = resolveGateTimeoutMs();
 
-  if (loadGateRunnerMode(cwd) === "devcontainer") {
-    return runDevcontainerGate({ command, cwd, gateTimeout, failOnStderr });
+  // `.forge.json` and the Dev Container belong to the project root, not to a package inside it.
+  if (loadGateRunnerMode(projectRoot) === "devcontainer") {
+    return runDevcontainerGate({ command: gateCommandInWorkdir(command, workdir.relativeDir), cwd: projectRoot, gateTimeout, failOnStderr });
   }
 
   const inlineRes = _runInlineNodeGate(command, cwd, gateTimeout, failOnStderr);

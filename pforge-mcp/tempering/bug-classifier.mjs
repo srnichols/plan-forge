@@ -20,10 +20,26 @@ import { resolve } from "node:path";
 // ─── Rule Definitions ─────────────────────────────────────────────────
 
 /**
+ * Scanner name for a defect a person reported rather than a scanner found
+ * (for example the Forge-Claw `/bug` command). Nothing can re-run it, so
+ * forge_bug_validate_fix hands it back for manual verification (meta-bug #328).
+ */
+export const MANUAL_SCANNER = "manual";
+
+/**
  * Deterministic classification rules, ordered by confidence.
  * First match wins. Each rule returns a classification or null.
  */
 const RULES = [
+  // Rule 0: manual-report — a person's report outranks every signal in the
+  // evidence: a stack through test code is how they found it, not proof of noise.
+  {
+    id: "manual-report",
+    test: (opts) => {
+      if (opts.scanner !== MANUAL_SCANNER) return null;
+      return { classification: "real-bug", confidence: 1, reason: "Reported by a person, not found by a scanner" };
+    },
+  },
   // Rule 1: test-frame-top — stack top in test files
   {
     id: "test-frame-top",

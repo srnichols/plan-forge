@@ -634,7 +634,7 @@ export const TOOLS = [
       required: ["scanner", "evidence"],
       properties: {
         path: { type: "string", description: "Project directory (default: current)" },
-        scanner: { type: "string", enum: ["unit", "integration", "ui-playwright", "visual-diff", "flakiness", "mutation", "load-stress", "contract", "performance-budget"], description: "Scanner that discovered the bug" },
+        scanner: { type: "string", enum: ["unit", "integration", "ui-playwright", "visual-diff", "flakiness", "mutation", "load-stress", "contract", "performance-budget", "manual"], description: "Scanner that discovered the bug, or 'manual' for a defect a person reported (no scanner can re-run it: forge_bug_validate_fix hands it back for manual verification)" },
         severity: { type: "string", enum: ["critical", "high", "medium", "low"], description: "Bug severity (default: medium)" },
         evidence: { type: "object", description: "Bug evidence: { testName, assertionMessage, stackTrace, ... }" },
         affectedFiles: { type: "array", items: { type: "string" }, description: "Files affected by this bug" },

@@ -368,6 +368,71 @@ describe("replayRecords", () => {
     expect(r.failures[0].error).toContain("HTTP_401");
   });
 
+  // #348: maxRetries is documented as a retry count, but the loop treated it as the
+  // number of attempts, so 0 made no request at all and reported "failed" with no error.
+  describe("maxRetries counts retries after the first attempt (#348)", () => {
+    const captures = (client) => client.calls.filter((c) => c.tool === "capture_thought").length;
+    const alwaysFails = () => { throw new Error("HTTP_503"); };
+
+    it("makes the initial attempt when maxRetries is 0", async () => {
+      const client = mockClient();
+      const r = await replayRecords(client, [{ content: "a" }], { rate: 0, maxRetries: 0, retryDelayMs: 1 });
+      expect(r).toMatchObject({ attempted: 1, sent: 1, failed: 0 });
+      expect(captures(client)).toBe(1);
+    });
+
+    it("tries once, and reports the real error, when maxRetries is 0 and the capture fails", async () => {
+      const client = mockClient({ captureImpl: alwaysFails });
+      const r = await replayRecords(client, [{ content: "a" }], { rate: 0, maxRetries: 0, retryDelayMs: 1 });
+      expect(captures(client)).toBe(1);
+      expect(r.failed).toBe(1);
+      expect(r.failures[0].error).toBe("HTTP_503");
+    });
+
+    it.each([[1, 2], [2, 3], [3, 4]])("tries a failing record %i retries after the first attempt: %i attempts", async (maxRetries, attempts) => {
+      const client = mockClient({ captureImpl: alwaysFails });
+      await replayRecords(client, [{ content: "a" }], { rate: 0, maxRetries, retryDelayMs: 1 });
+      expect(captures(client)).toBe(attempts);
+    });
+
+    it("retries a transient failure once when maxRetries is 1", async () => {
+      let attempt = 0;
+      const client = mockClient({
+        captureImpl: () => {
+          attempt += 1;
+          if (attempt < 2) throw new Error("HTTP_503");
+          return { id: "ok" };
+        },
+      });
+      const r = await replayRecords(client, [{ content: "a" }], { rate: 0, maxRetries: 1, retryDelayMs: 1 });
+      expect(r).toMatchObject({ sent: 1, failed: 0 });
+      expect(attempt).toBe(2);
+    });
+
+    it("rounds a fractional count down and treats a negative count as 0", async () => {
+      const fractional = mockClient({ captureImpl: alwaysFails });
+      await replayRecords(fractional, [{ content: "a" }], { rate: 0, maxRetries: 1.9, retryDelayMs: 1 });
+      expect(captures(fractional)).toBe(2);
+
+      const negative = mockClient({ captureImpl: alwaysFails });
+      await replayRecords(negative, [{ content: "a" }], { rate: 0, maxRetries: -4, retryDelayMs: 1 });
+      expect(captures(negative)).toBe(1);
+    });
+
+    it.each([NaN, Infinity, undefined])("falls back to the default of 3 retries for %s, never to zero or forever", async (maxRetries) => {
+      const client = mockClient({ captureImpl: alwaysFails });
+      await replayRecords(client, [{ content: "a" }], { rate: 0, maxRetries, retryDelayMs: 1 });
+      expect(captures(client)).toBe(4);
+    });
+
+    it("counts a record once however many tries it took", async () => {
+      const client = mockClient({ captureImpl: alwaysFails });
+      const r = await replayRecords(client, [{ content: "a" }, { content: "b" }], { rate: 0, maxRetries: 2, retryDelayMs: 1 });
+      expect(r).toMatchObject({ attempted: 2, sent: 0, failed: 2 });
+      expect(captures(client)).toBe(6);
+    });
+  });
+
   it("emits a progress callback on each record", async () => {
     const client = mockClient();
     const records = [{ content: "a" }, { content: "b" }, { content: "c" }];

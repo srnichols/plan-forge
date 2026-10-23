@@ -830,7 +830,7 @@ export const TOOL_METADATA = {
       MISSING_EVIDENCE: { message: "Evidence must include testName or assertionMessage+stackTrace", recovery: "Provide at least testName in the evidence object" },
       DUPLICATE_BUG: { message: "Bug with same fingerprint already exists", recovery: "Use forge_bug_list to find the existing bug" },
       CLASSIFIER_FAILED: { message: "Bug classifier could not determine classification", recovery: "Manually set classification or retry with more evidence" },
-      SCANNER_NOT_RECOGNIZED: { message: "Scanner name not in known list", recovery: "Use one of the 9 supported scanner names" },
+      SCANNER_NOT_RECOGNIZED: { message: "Scanner name not in known list", recovery: "Use one of the 10 supported scanner names: nine automated scanners, or 'manual' for a defect a person reported" },
     },
     example: {
       input: { scanner: "visual-diff", evidence: { testName: "homepage", assertionMessage: "pixel diff > threshold" } },
@@ -889,6 +889,7 @@ export const TOOL_METADATA = {
     consumes: [".forge/bugs/<bugId>.json", ".forge/tempering/*.json"],
     sideEffects: [
       "re-runs scanner(s) that discovered the bug",
+      "a bug whose scanner is 'manual' re-runs nothing: verdict 'manual-verification-required', no status change, no attempt recorded",
       "appends bug.validationAttempts[]",
       "on pass: updates bug status to 'fixed'",
       "on pass: dispatches commentValidatedFix to bug-adapter",

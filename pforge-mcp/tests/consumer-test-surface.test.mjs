@@ -55,4 +55,34 @@ describe("consumer test surface (#249)", () => {
       vi.resetModules();
     }
   });
+
+  // #360: a project can own a setup.sh and a scripts/audit/ of its own, or keep the
+  // copy from an old install, so neither proves the tests run in the framework
+  // checkout. Probing them ran 12 suites that import scripts `pforge update` never
+  // delivers, and they failed in every such project.
+  it("excludes the setup and audit suites in a project that has its own setup.sh and scripts/audit (#360)", async () => {
+    const frameworkMarker = fileURLToPath(new URL("../../scripts/release/release-checks.json", import.meta.url));
+    vi.doMock("node:fs", async (importOriginal) => {
+      const original = await importOriginal();
+      return {
+        ...original,
+        existsSync: (file) => file === frameworkMarker ? false : original.existsSync(file),
+      };
+    });
+    vi.resetModules();
+    try {
+      const { SOURCE_ONLY_EXCLUDES: consumerExcludes } = await import("../vitest.config.mjs");
+      const reported = [
+        "preset-build-manifest", "audit-cli-parity", "clean-code-delta", "dependency-direction",
+        "preset-quality", "test-smells-scanner", "boyscout-delta-rules", "release-archive",
+        "setup-noninteractive", "setup-preset-defaults", "setup-node-floor-path", "testbed-happypath",
+      ].map((name) => `tests/${name}.test.mjs`);
+      expect(reported.filter((suite) => !consumerExcludes.includes(suite))).toEqual([]);
+      expect(consumerExcludes).not.toContain("tests/forge-master-observe-proxy.test.mjs");
+      expect(consumerExcludes).not.toContain("tests/memory-provenance.test.mjs");
+    } finally {
+      vi.doUnmock("node:fs");
+      vi.resetModules();
+    }
+  });
 });

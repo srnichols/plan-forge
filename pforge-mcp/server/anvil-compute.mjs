@@ -5,6 +5,10 @@ import { withAnvil } from "../anvil.mjs";
 import { handleScan as temperingHandleScan } from "../tempering.mjs";
 import { PROJECT_DIR, _SERVER_CODE_HASH } from "./state.mjs";
 
+// Scoring a large worktree takes longer than the 60 s runPforge allows other commands
+// (72 s measured on the Phase-62 worktree, meta-bug #351).
+const ANALYZE_TIMEOUT_MS = 300_000;
+
 // ─── Anvil-wrapped compute helpers (Phase ANVIL Slice 5) ─────────────────────
 export async function _sweepAnvilCompute(args = {}, deps = {}) {
   const {
@@ -47,7 +51,7 @@ export async function _analyzeAnvilCompute(args = {}, deps = {}) {
   } = deps;
 
   return _withAnvil(
-    () => _runPforge(`analyze "${args.plan}"`, _cwd),
+    () => _runPforge(`analyze "${args.plan}"`, _cwd, { timeoutMs: ANALYZE_TIMEOUT_MS }),
     { toolName: "forge_analyze", inputs: { cwd: _cwd, plan: args.plan }, codeHashSeed: _codeHash },
   );
 }

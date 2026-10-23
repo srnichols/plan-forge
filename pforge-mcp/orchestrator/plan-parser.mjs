@@ -350,6 +350,51 @@ function appendValidationGateText(current, body) {
   current.validationGate = (current.validationGate ? current.validationGate + "\n" : "") + body;
 }
 
+/**
+ * Separators in a free-text dependency list: "1, 3", "5 and 6", "5 & 6",
+ * "3 + 4", "2; 3". Meta-bug #362: only commas were recognised, so "Slices 5
+ * and 6" parsed to nothing and "Slice 5 and Slice 6" to its first id.
+ */
+const DEPENDENCY_SEPARATOR_RE = /([()])|\s*(?:,|;|&|\+|\band\b)\s*/gi;
+
+/**
+ * Split a dependency list at its separators, but not inside parentheses:
+ * "(none — parallel to Slices 4, 5)" is one commentary phrase, and splitting
+ * its comma used to leak a dependency on 5 (meta-bug #362).
+ */
+function splitDependencyList(text) {
+  const parts = [];
+  let depth = 0;
+  let start = 0;
+  for (const match of String(text).matchAll(DEPENDENCY_SEPARATOR_RE)) {
+    if (match[1] === "(") depth++;
+    else if (match[1] === ")") depth = Math.max(0, depth - 1);
+    else if (depth === 0) {
+      parts.push(text.slice(start, match.index));
+      start = match.index + match[0].length;
+    }
+  }
+  parts.push(text.slice(start));
+  return parts;
+}
+
+const DEPENDS_TAG_RE = /\[(?:depends\s+on|depends|dep|needs):\s*([^\]]+)\]/i;
+const PARALLEL_TAG_RE = /\[(?:P|parallel(?:-safe)?)\]/i;
+const COMPETITIVE_TAG_RE = /\[competitive(?::\s*(\d+))?\]/i;
+const SCOPE_TAG_RE = /\[scope:\s*([^\]]+)\]/i;
+const KNOWN_HEADING_TAG_RES = [DEPENDS_TAG_RE, PARALLEL_TAG_RE, COMPETITIVE_TAG_RE, SCOPE_TAG_RE];
+
+/**
+ * Bracket tags in a slice heading that no parser rule above reads. A tag such
+ * as `[parallel-safe, group P1]` is silently ignored, so the slice runs
+ * sequentially; gate lint reports the ones that name parallelism (meta-bug #320).
+ */
+function unrecognizedHeadingTags(heading) {
+  return [...heading.matchAll(/\[([^\]]*)\]/g)]
+    .filter(([tag]) => !KNOWN_HEADING_TAG_RES.some((re) => re.test(tag)))
+    .map(([, inner]) => inner.trim());
+}
+
 function createSliceRecord(sliceMatch, rawTags) {
   const rawNumber = sliceMatch[1];
   const rawTitle = sliceMatch[2].trim();
@@ -369,24 +414,23 @@ function createSliceRecord(sliceMatch, rawTags) {
     workerTimeoutMs: null,
     tasks: [],
     rawLines: [],
+    unrecognizedTags: unrecognizedHeadingTags(rawTags),
   };
 
-  const dependsMatch = rawTags.match(/\[(?:depends\s+on|depends|dep|needs):\s*([^\]]+)\]/i);
+  const dependsMatch = rawTags.match(DEPENDS_TAG_RE);
   if (dependsMatch) {
-    current.depends = dependsMatch[1]
-      .split(",")
-      .map((d) => normalizeSliceId(d));
+    current.depends = splitDependencyList(dependsMatch[1]).map((d) => normalizeSliceId(d));
   }
 
-  if (/\[(?:P|parallel(?:-safe)?)\]/i.test(rawTags)) current.parallel = true;
+  if (PARALLEL_TAG_RE.test(rawTags)) current.parallel = true;
 
-  const competitiveMatch = rawTags.match(/\[competitive(?::\s*(\d+))?\]/i);
+  const competitiveMatch = rawTags.match(COMPETITIVE_TAG_RE);
   if (competitiveMatch) {
     current.competitive = true;
     if (competitiveMatch[1]) current.competitiveVariants = parseInt(competitiveMatch[1], 10);
   }
 
-  const scopeMatch = rawTags.match(/\[scope:\s*([^\]]+)\]/i);
+  const scopeMatch = rawTags.match(SCOPE_TAG_RE);
   if (scopeMatch) current.scope = scopeMatch[1].split(",").map((s) => s.trim());
   if (rawTitle.includes("✅") || rawTags.includes("✅")) current.status = "completed";
 
@@ -544,29 +588,40 @@ function applyWorkerTimeout(current, line) {
 function applyBodyDependencies(current, line) {
   const dependsBodyMatch = line.match(/\*\*Depends\s+On:?\*\*:?\s*(.+)/i);
   if (!dependsBodyMatch) return;
-  // Bug #225: split on commas, then pull the LEADING slice-id token out of each
+  // Bug #225: split the list, then pull the LEADING slice-id token out of each
   // phrase. The hardener authors prose deps like
   //   "**Depends On**: S1 (consumes presets.ts), and Group B merge checkpoint."
   // Running normalizeSliceId() on the whole phrase left unmatched prose in
   // node.depends, which the scheduler could never satisfy → 0-slice phantom run.
-  const bodyDeps = dependsBodyMatch[1]
-    .split(/\s*,\s*/)
+  // Meta-bug #362: the list may be joined by "and", and a comma inside
+  // parentheses is commentary — "(parallel to Slices 4, 5)" used to leak a
+  // dependency on 5.
+  const bodyDeps = splitDependencyList(dependsBodyMatch[1])
     .map((d) => extractLeadingSliceId(d))
     .filter((d) => d && d.length > 0);
   appendUniqueValues(current.depends, bodyDeps);
 }
 
+/** "Slices 1–5": a range this parser cannot expand. */
+const PLURAL_RANGE_RE = /^slices\s+\d+(?:\.\d+)?[A-Za-z]?\s*(?:[-–—]|\bthrough\b)/i;
+
 /**
  * Extract the leading slice-id token from a free-text dependency phrase.
- * Tolerates the prose forms the hardener emits: "Slice 1", "S1", "1", "2.3A".
+ * Tolerates the prose forms the hardener emits: "Slice 1", "Slices 1" (the
+ * plural a list opens with), "S1", "1", "2.3A".
  * Returns the normalized id, or null when the phrase has no leading slice id
- * (e.g. "none (foundation)", "and Group B merge checkpoint.").
+ * (e.g. "none (foundation)", "and Group B merge checkpoint.") or is a plural
+ * range. Reading only the first id of "Slices 1–5" would turn "ordered after
+ * its predecessor" (no parsed dependency) into "ordered after slice 1", so the
+ * range stays unparsed and depends-not-parsed keeps reporting it.
  *
  * @param {string} phrase
  * @returns {string|null}
  */
 function extractLeadingSliceId(phrase) {
-  const m = String(phrase).trim().match(/^(?:slice\s+)?s?(\d+(?:\.\d+)?)([A-Za-z]?)\b/i);
+  const text = String(phrase).trim();
+  if (PLURAL_RANGE_RE.test(text)) return null;
+  const m = text.match(/^(?:slices?\s+)?s?(\d+(?:\.\d+)?)([A-Za-z]?)\b/i);
   if (!m) return null;
   const normalized = normalizeSliceId(m[1] + m[2]);
   return normalized.length > 0 ? normalized : null;
@@ -707,11 +762,11 @@ export function parseSlices(lines, opts = {}) {
 }
 
 /**
- * Normalize a slice ID: strip "Slice " prefix, trim, uppercase trailing alpha.
- * e.g. "Slice 2a" → "2A", " 3 " → "3", "2B" → "2B"
+ * Normalize a slice ID: strip "Slice " / "Slices " prefix, trim, uppercase trailing alpha.
+ * e.g. "Slice 2a" → "2A", " 3 " → "3", "2B" → "2B", "Slices 5" → "5"
  */
 export function normalizeSliceId(raw) {
-  const m = String(raw).trim().replace(/^slice\s+/i, "").match(/^([\d.]+)([A-Za-z]?)$/);
+  const m = String(raw).trim().replace(/^slices?\s+/i, "").match(/^([\d.]+)([A-Za-z]?)$/);
   return m ? m[1] + m[2].toUpperCase() : String(raw).trim();
 }
 

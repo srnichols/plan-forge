@@ -88,7 +88,7 @@ Parse ESLint JSON output. Categorise violations:
 node scripts/audit/run-jscpd.mjs
 ```
 
-Parse `docs/plans/cleanup-findings/raw/duplication-report.json`. For each `duplicates[]` entry report:
+Parse `docs/plans/cleanup-findings/raw/duplication-report.json`. If the script exits non-zero, or the report has an `error`, the scan did not run: report that as a failed scan, not as zero duplicates. For each `duplicates[]` entry report:
 - First file + line range, second file + line range, token count
 - Group by token-count descending; show top 10
 
@@ -102,7 +102,7 @@ Treat matches as duplication candidates. A shared business rule needs one source
 node scripts/audit/scan-architecture.mjs
 ```
 
-Parse `docs/plans/cleanup-findings/raw/architecture-report.json`. Report:
+Parse `docs/plans/cleanup-findings/raw/architecture-report.json`. A non-zero exit or a non-empty `errors[]` means the scan did not complete: report it as a failed scan, because an empty `cycles[]` then proves nothing. Report:
 - Dependency cycles (Tarjan SCC with ≥2 nodes)
 - Cross-layer imports (inner circle depending on outer)
 - High fan-in volatile modules

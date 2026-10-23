@@ -63,7 +63,7 @@ import {
 import { runTemperingRun, runSingleScanner } from "../../tempering/runner.mjs";
 import { promoteBaseline } from "../../tempering/baselines.mjs";
 import { registerBug, listBugs, updateBugStatus, loadBug, setLinkedFixPlan, appendValidationAttempt } from "../../tempering/bug-registry.mjs";
-import { classify as classifyBug } from "../../tempering/bug-classifier.mjs";
+import { classify as classifyBug, MANUAL_SCANNER } from "../../tempering/bug-classifier.mjs";
 import { dispatch as dispatchBugAdapter } from "../../tempering/bug-adapters/contract.mjs";
 import { runTemperingDrain } from "../../tempering/drain.mjs";
 import { routeFinding } from "../../tempering/triage.mjs";
@@ -616,6 +616,17 @@ function _039_forge_bug_validate_fix_finalizeAttempt({ cwd, bugId, bug, advisory
   };
 }
 
+// A manual bug has no scanner to re-run, so there is nothing to validate; a caller can
+// still name one with scannerOverride (meta-bug #328).
+function _039_forge_bug_validate_fix_manualResult(bugId) {
+  return {
+    bugId,
+    verdict: "manual-verification-required",
+    scanners: [MANUAL_SCANNER],
+    message: `Bug ${bugId} was reported by a person, so no scanner can re-run it. Verify the fix yourself, then call forge_bug_update_status with newStatus "fixed". To check it with a scanner anyway, pass scannerOverride (for example ["unit"]) and testNameOverride.`,
+  };
+}
+
 async function _callToolHandler_039_forge_bug_validate_fix(request, args) {
   const { name } = request.params;
   if (!(name === "forge_bug_validate_fix")) return _CALL_TOOL_NO_MATCH;
@@ -626,6 +637,11 @@ async function _callToolHandler_039_forge_bug_validate_fix(request, args) {
     const context = _039_forge_bug_validate_fix_loadContext(cwd, args);
     if (context.response) return context.response;
     const { bug, advisory, scanners, testFilter, attempt } = context;
+    if (scanners.every((scanner) => scanner === MANUAL_SCANNER)) {
+      const manual = _039_forge_bug_validate_fix_manualResult(args.bugId);
+      emitToolTelemetry({ toolName: "forge_bug_validate_fix", inputs: args, result: manual, durationMs: Date.now() - t0, status: "OK", cwd: cwd });
+      return { content: [{ type: "text", text: JSON.stringify(manual, null, 2) }], isError: false };
+    }
     const { results, scannerUnavailable } = await _runBugScanners(scanners, testFilter, cwd);
     if (scannerUnavailable) {
       return { content: [{ type: "text", text: JSON.stringify({ error: ERROR_CODES.SCANNER_UNAVAILABLE.code, scanner: scannerUnavailable.scanner, message: scannerUnavailable.message }) }], isError: true };

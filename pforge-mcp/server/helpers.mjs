@@ -111,22 +111,33 @@ export function startEventFileWatcher(hub, cwd) {
   };
 }
 
-export function runPforge(args, cwd = PROJECT_DIR) {
+export const DEFAULT_PFORGE_TIMEOUT_MS = 60_000;
+
+function formatSeconds(ms) {
+  return `${ms % 1000 === 0 ? ms / 1000 : (ms / 1000).toFixed(1)}s`;
+}
+
+export function runPforge(args, cwd = PROJECT_DIR, { timeoutMs = DEFAULT_PFORGE_TIMEOUT_MS } = {}) {
   const cmd = `${PFORGE} ${args}`;
   try {
     const output = execSync(cmd, {
       cwd,
       encoding: "utf-8",
-      timeout: 60_000,
+      timeout: timeoutMs,
       env: { ...process.env, NO_COLOR: "1" },
     });
     return { success: true, output: output.trim() };
   } catch (err) {
+    const timedOut = err.code === "ETIMEDOUT";
     return {
       success: false,
       output: (err.stdout || "").trim(),
-      error: (err.stderr || err.message || "").trim(),
+      // A bare "spawnSync cmd.exe ETIMEDOUT" read as an analysis failure (meta-bug #351).
+      error: timedOut
+        ? `pforge ${args} did not finish within ${formatSeconds(timeoutMs)}. That is this wrapper's timeout, not an analysis failure; run the same command in a terminal to see how long it takes.`
+        : (err.stderr || err.message || "").trim(),
       exitCode: err.status,
+      ...(timedOut ? { timedOut: true } : {}),
     };
   }
 }

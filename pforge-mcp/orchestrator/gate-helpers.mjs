@@ -221,6 +221,11 @@ const GATE_WARN_RULES = Object.freeze([
     message: () => "'pnpm --filter <pkg> <script>' exits 0 when the script does not exist (\"None of the selected packages has a ... script\"), so a typo or a script that only exists in a sibling package reads as a passing gate. Use 'pnpm run <script>' from inside the package directory — it exits 1 with ERR_PNPM_NO_SCRIPT.",
   },
   {
+    rule: "pnpm-forwarded-separator",
+    applies: ({ line }) => /\bpnpm\s+(?:(?:--filter|-F)\s+\S+\s+)?(?:run\s+)?test[\w:.-]*\s+--(?:\s|$)/.test(line),
+    message: () => "'pnpm run test -- <files>' forwards the literal '--' to Vitest, which treats everything after it as pass-through options instead of file filters, so the whole project is collected and the gate runs (and can time out on) far more than the named files. Use 'pnpm exec vitest run <files>' instead.",
+  },
+  {
     rule: "git-diff-misses-untracked",
     applies: ({ line }) => /\bgit\s+diff\b[^\n]*\bHEAD~\d/.test(line),
     message: () => "'git diff ... HEAD~N' never lists untracked files, so a gate counting brand-new files reads 0 until they are committed — and the slice cannot commit on an unrun gate. Use 'git status --porcelain' or 'git ls-files --others --exclude-standard' to include new files.",
@@ -325,8 +330,8 @@ function _lintCommandLine(line, slice, {
  */
 const DEPENDS_DECLARATION_RE =
   /(?:\*\*Depends\s+On:?\*\*:?|\(\s*depends\b|\bafter\s+slice\b)\s*:?\s*(.*)/i;
-/** Phrase that explicitly asserts there is no dependency — never a defect. */
-const DEPENDS_NONE_RE = /^\s*[-—–]*\s*(?:n\/a|none|nothing|no\b|null)/i;
+/** A value that explicitly says there is nothing — never a defect. A leading "(" is allowed: "(none — independent; parallel to Slices 4, 5)". */
+const NO_VALUE_RE = /^\s*\(?\s*[-—–]*\s*(?:n\/a|none|nothing|no\b|null)/i;
 /** Phrase that names at least one slice-ish token. */
 const DEPENDS_NAMES_SLICE_RE = /\bslices?\s*\d|\bs\d+\b|^\s*\d+[A-Za-z]?\b/i;
 
@@ -350,7 +355,7 @@ function _lintDependencyDeclarations(plan, warnings) {
       const m = String(line).match(DEPENDS_DECLARATION_RE);
       if (!m) continue;
       const phrase = (m[1] || "").trim();
-      if (DEPENDS_NONE_RE.test(phrase) || !DEPENDS_NAMES_SLICE_RE.test(phrase)) continue;
+      if (NO_VALUE_RE.test(phrase) || !DEPENDS_NAMES_SLICE_RE.test(phrase)) continue;
       warnings.push({
         slice: slice.number,
         command: null,
@@ -403,6 +408,53 @@ function _lintSliceExecutability(plan, errors, warnings) {
         message:
           `${loc}: no numbered tasks were parsed. The worker prompt lists only numbered items ("1. …"), so ` +
           "bullet or prose instructions (including **Goal**) never reach the worker — it receives just the title, scope and gate.",
+      });
+    }
+  }
+}
+
+/**
+ * A plain-text scope label. The parser reads only the bold `**Files**` /
+ * `**Scope**` forms and the `[scope:]` heading tag (meta-bug #320).
+ * Group 1 is the text after the colon.
+ */
+const PLAIN_SCOPE_LABEL_RE = /^\s*(?:[-*]\s+)?(?:files?|scope)(?:\s+in\s+scope)?\s*(?:\([^)]*\))?\s*:\s*(.*)$/i;
+
+/**
+ * Two declarations the parser silently ignores, each of which degrades a
+ * slice without any other sign (meta-bug #320):
+ *
+ * - A plain `Files:` / `Scope:` line when the slice parsed no scope. The slice
+ *   then runs with no SCOPE instruction and no scope-escape check.
+ * - A heading tag that names parallelism but is not `[P]`, `[parallel]` or
+ *   `[parallel-safe]` — `[parallel-safe, group P1]` reads as sequential.
+ *
+ * Plain-object plans without `unrecognizedTags` are not judged for the tag.
+ */
+function _lintIgnoredDeclarations(plan, warnings) {
+  for (const slice of plan.slices) {
+    const loc = `Slice ${slice.number} ("${slice.title}")`;
+    if (Array.isArray(slice.scope) && slice.scope.length === 0) {
+      const plain = (slice.rawLines || [])
+        .map((line) => ({ line, match: String(line).match(PLAIN_SCOPE_LABEL_RE) }))
+        .find(({ match }) => match && !NO_VALUE_RE.test(match[1]));
+      if (plain) {
+        warnings.push({
+          slice: slice.number, command: null, rule: "scope-not-parsed", severity: "warn",
+          message:
+            `${loc}: "${plain.line.trim().slice(0, LINT_EXCERPT_CHARS)}" reads like a scope declaration but produced no scope. ` +
+            "Only the bold form (**Files**: `path`) or a [scope: path] heading tag is read, so this slice runs " +
+            "with no SCOPE instruction and no scope-escape check.",
+        });
+      }
+    }
+    const parallelTag = slice.parallel ? null : (slice.unrecognizedTags || []).find((tag) => /parallel/i.test(tag));
+    if (parallelTag) {
+      warnings.push({
+        slice: slice.number, command: null, rule: "parallel-tag-not-parsed", severity: "warn",
+        message:
+          `${loc}: heading tag [${parallelTag}] names parallelism but is not a tag the parser reads, so the slice runs ` +
+          "sequentially. Use exactly [P], [parallel] or [parallel-safe] and put any grouping note in the slice body.",
       });
     }
   }
@@ -517,6 +569,7 @@ export function lintGateCommands(planFilePath, cwd = process.cwd()) {
 
   _lintDependencyDeclarations(plan, warnings);
   _lintSliceExecutability(plan, errors, warnings);
+  _lintIgnoredDeclarations(plan, warnings);
   _lintParallelCoherence(plan, warnings);
 
   for (const slice of plan.slices) {

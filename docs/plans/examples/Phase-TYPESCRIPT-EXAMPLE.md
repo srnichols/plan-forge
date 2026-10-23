@@ -34,7 +34,7 @@ Add real-time notification system using Socket.io. Users receive live updates fo
 
 ### Slice 8.1 — Database: Notifications Table
 **Build command**: `pnpm build`  
-**Test command**: `pnpm test -- --run`
+**Test command**: `pnpm exec vitest run`
 
 **Tasks**:
 1. Create Prisma migration: `npx prisma migrate dev --name add_notifications`
@@ -61,7 +61,7 @@ model Notification {
 **Validation Gate**:
 ```bash
 pnpm build                                              # zero errors
-pnpm test -- --run                                      # all pass
+pnpm exec vitest run                                    # all pass
 grep -rn "as any\|@ts-ignore" --include="*.ts" apps/    # zero hits in new files
 ```
 
@@ -69,7 +69,7 @@ grep -rn "as any\|@ts-ignore" --include="*.ts" apps/    # zero hits in new files
 
 ### Slice 8.2 — Service Layer: `NotificationService`
 **Build command**: `pnpm build`  
-**Test command**: `pnpm test -- --run --reporter=verbose`
+**Test command**: `pnpm exec vitest run --reporter=verbose`
 
 **Tasks**:
 1. Create `notification.service.ts` with typed interface

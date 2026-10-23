@@ -36,14 +36,38 @@ const masterRoot = fileURLToPath(new URL("../pforge-master/", import.meta.url)).
 // asset is genuinely absent. In this repo every asset exists, so SOURCE_ONLY_EXCLUDES is
 // empty and nothing is skipped — a typo'd path would drop real coverage here, which
 // tests/consumer-test-surface.test.mjs asserts against.
+//
+// A project can own a setup.sh or a scripts/audit/ of its own, or keep the copy from an
+// old install while `pforge update` refreshes only pforge-mcp, so neither proves the tests
+// run in the framework checkout. Probing them ran the installer, audit and release suites
+// in such projects, where they failed on scripts that were never delivered (#360). This
+// marker ships with the framework repository only; tests/helpers/source-repo.mjs keys on it too.
+const FRAMEWORK_SOURCE = "../scripts/release/release-checks.json";
+
 const SOURCE_ONLY_SUITES = {
-  "../setup.sh": [
+  [FRAMEWORK_SOURCE]: [
     "tests/setup-node-floor-path.test.mjs",
+    "tests/setup-noninteractive.test.mjs",
+    "tests/setup-preset-defaults.test.mjs",
     "tests/release-archive.test.mjs",
     "tests/setup-openbrain-prompt.test.mjs",
     "tests/brain-cli.test.mjs",
     "tests/crucible-smith-panel.test.mjs",
     "tests/best-defaults-preset.test.mjs",
+    "tests/audit-cli-parity.test.mjs",
+    "tests/audit-wrappers.test.mjs",
+    "tests/clean-code-delta.test.mjs",
+    "tests/clean-code-no-regression.test.mjs",
+    "tests/dependency-direction.test.mjs",
+    "tests/test-smells-scanner.test.mjs",
+    "tests/testbed-happypath.test.mjs",
+    "tests/preset-quality.test.mjs",
+    "tests/boyscout-delta-rules.test.mjs",
+    "tests/preset-build-manifest.test.mjs",
+    // smith-golden compares smith's output on this repository with a recorded golden.
+    "tests/release-harness.test.mjs",
+    "tests/release-ship.test.mjs",
+    "tests/smith-golden.test.mjs",
   ],
   "../.github/instructions/release-checklist.instructions.md": [
     "tests/consumer-test-surface.test.mjs",
@@ -53,23 +77,10 @@ const SOURCE_ONLY_SUITES = {
   // The stub modules, not catalog.json: setup installs the catalog in projects but not the stubs.
   "../extensions/notify-slack/index.mjs": ["tests/notifications-stubs.test.mjs"],
   "../docs/index.html": ["tests/docs-nav.smoke.test.mjs"],
-  "../scripts/audit": [
-    "tests/audit-cli-parity.test.mjs",
-    "tests/clean-code-delta.test.mjs",
-    "tests/clean-code-no-regression.test.mjs",
-    "tests/dependency-direction.test.mjs",
-    "tests/test-smells-scanner.test.mjs",
-    "tests/testbed-happypath.test.mjs",
-    "tests/preset-quality.test.mjs",
-    "tests/boyscout-delta-rules.test.mjs",
-    "tests/preset-build-manifest.test.mjs",
-  ],
   "../scripts/forge-home-cleanup.mjs": ["tests/forge-home-cleanup.test.mjs"],
   "../scripts/sync-versions.mjs": ["tests/version-sync.test.mjs"],
   "../scripts/check-model-drift.mjs": ["tests/model-drift.test.mjs"],
   "../scripts/benchmark": ["tests/sdk-parity-benchmark.test.mjs"],
-  // smith-golden compares smith's output on this repository with a recorded golden.
-  "../scripts/release": ["tests/release-harness.test.mjs", "tests/release-ship.test.mjs", "tests/smith-golden.test.mjs"],
   "../scripts/build-agent-plugin.mjs": ["tests/agent-plugin.test.mjs"],
   "../templates/.github/agents/specifier.agent.md": ["tests/planning-guidance.test.mjs"],
   "../presets/shared/skills/code-review/SKILL.md": ["tests/review-guidance.test.mjs"],

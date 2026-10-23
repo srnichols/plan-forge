@@ -1,135 +1,89 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { auditRawDir } from './raw-dir.mjs';
-import { spawnSync } from 'node:child_process';
+import { runInstalledBin } from './run-installed-bin.mjs';
 
 const root = process.cwd();
 const outDir = auditRawDir(root);
 const outFile = path.join(outDir, 'duplication-report.json');
-
-function ensureDir(dirPath) {
-  fs.mkdirSync(dirPath, { recursive: true });
-}
-
-function listJsonFiles(dirPath) {
-  if (!fs.existsSync(dirPath)) {
-    return [];
-  }
-  const entries = fs.readdirSync(dirPath, { withFileTypes: true });
-  const files = [];
-  for (const entry of entries) {
-    const fullPath = path.join(dirPath, entry.name);
-    if (entry.isDirectory()) {
-      files.push(...listJsonFiles(fullPath));
-      continue;
-    }
-    if (entry.isFile() && entry.name.endsWith('.json') && fullPath !== outFile) {
-      files.push(fullPath);
-    }
-  }
-  return files;
-}
-
-function normalizeReport(report) {
-  if (!report) {
-    return { duplicates: [], statistics: {} };
-  }
-  if (Array.isArray(report)) {
-    return { duplicates: report, statistics: {} };
-  }
-  if (Array.isArray(report.duplicates)) {
-    return {
-      duplicates: report.duplicates,
-      statistics: report.statistics ?? report.statistic ?? {}
-    };
-  }
-  if (Array.isArray(report.clones)) {
-    return {
-      duplicates: report.clones,
-      statistics: report.statistics ?? report.statistic ?? {}
-    };
-  }
-  if (report.reporters && Array.isArray(report.reporters.json)) {
-    return {
-      duplicates: report.reporters.json,
-      statistics: report.statistics ?? report.statistic ?? {}
-    };
-  }
-  return {
-    duplicates: [],
-    statistics: report.statistics ?? report.statistic ?? {},
-    meta: report
-  };
-}
+// The one file jscpd's json reporter writes into --output.
+const jscpdReportFile = path.join(outDir, 'jscpd-report.json');
+const TOKEN_THRESHOLD = 75;
 
 function writeJson(payload) {
-  ensureDir(outDir);
+  fs.mkdirSync(outDir, { recursive: true });
   fs.writeFileSync(outFile, `${JSON.stringify(payload, null, 2)}\n`, 'utf8');
 }
 
-try {
-  ensureDir(outDir);
-  const npxBin = process.platform === 'win32' ? 'npx.cmd' : 'npx';
-  const args = [
-    'jscpd',
-    '--reporters',
-    'json',
-    '--min-tokens',
-    '75',
-    '--output',
-    outDir,
-    '--ignore',
-    '**/node_modules/**,**/tests/**,**/ui/**',
-    'pforge-mcp',
-    'pforge-master',
-    'pforge.ps1',
-    'pforge.sh'
-  ];
+// Reads exactly jscpd's report. Picking "the largest JSON file in the
+// directory" once took eslint-report.json for it and wrote 1,180 lint rows as
+// clone pairs (meta-bug #349).
+function readJscpdReport() {
+  if (!fs.existsSync(jscpdReportFile)) {
+    return { error: 'jscpd did not write jscpd-report.json' };
+  }
+  let report;
+  try {
+    report = JSON.parse(fs.readFileSync(jscpdReportFile, 'utf8'));
+  } catch (error) {
+    return { error: `jscpd-report.json is not valid JSON: ${error.message}` };
+  }
+  if (!Array.isArray(report?.duplicates)) {
+    return { error: 'jscpd-report.json is not a jscpd report (no duplicates array)' };
+  }
+  const notPairs = report.duplicates.filter((row) => !(row?.firstFile && row?.secondFile));
+  if (notPairs.length > 0) {
+    return { error: `jscpd-report.json holds ${notPairs.length} rows that are not clone pairs` };
+  }
+  return { duplicates: report.duplicates, statistics: report.statistics ?? {} };
+}
 
-  const result = spawnSync(npxBin, args, {
-    cwd: root,
-    encoding: 'utf8',
-    windowsHide: true
+function scanForDuplicates() {
+  // A report left by an earlier run must not stand in for this one.
+  fs.rmSync(jscpdReportFile, { force: true });
+
+  const result = runInstalledBin({
+    root,
+    pkg: 'jscpd',
+    args: [
+      '--reporters',
+      'json',
+      '--min-tokens',
+      String(TOKEN_THRESHOLD),
+      '--output',
+      outDir,
+      '--ignore',
+      '**/node_modules/**,**/tests/**,**/ui/**',
+      'pforge-mcp',
+      'pforge-master',
+      'pforge.ps1',
+      'pforge.sh'
+    ]
   });
-
-  const candidateFiles = listJsonFiles(outDir).sort((a, b) => fs.statSync(b).size - fs.statSync(a).size);
-
-  let parsed = null;
-  for (const candidate of candidateFiles) {
-    try {
-      parsed = JSON.parse(fs.readFileSync(candidate, 'utf8'));
-      break;
-    } catch {
-      // Keep scanning.
-    }
-  }
-
-  if (!parsed && result.stdout?.trim()) {
-    try {
-      parsed = JSON.parse(result.stdout);
-    } catch {
-      // Ignore non-JSON stdout.
-    }
-  }
-
-  const normalized = normalizeReport(parsed);
-  const payload = {
-    ...normalized,
+  const base = {
     tool: 'jscpd',
-    tokenThreshold: 75,
+    tokenThreshold: TOKEN_THRESHOLD,
     exitCode: result.status,
     stderr: result.stderr?.trim() || undefined
   };
+  const outcome = result.ok ? readJscpdReport() : { error: result.error };
+  if (outcome.error) {
+    return { ok: false, payload: { duplicates: [], statistics: {}, ...base, error: outcome.error } };
+  }
+  return { ok: true, payload: { duplicates: outcome.duplicates, statistics: outcome.statistics, ...base } };
+}
 
-  if (!Array.isArray(payload.duplicates) || payload.duplicates.length === 0) {
-    writeJson({ duplicates: [], statistics: {} });
-  } else {
-    writeJson(payload);
+try {
+  const { ok, payload } = scanForDuplicates();
+  writeJson(payload);
+  if (!ok) {
+    // The report is kept as evidence, but a scan that did not run must not pass.
+    console.error(`jscpd duplication scan failed: ${payload.error}`);
+    process.exitCode = 1;
   }
 } catch (error) {
-  writeJson({
-    duplicates: [],
-    statistics: {},
-    error: error instanceof Error ? error.message : String(error)
-  });
+  const message = error instanceof Error ? error.message : String(error);
+  writeJson({ duplicates: [], statistics: {}, error: message });
+  console.error(`jscpd duplication scan failed: ${message}`);
+  process.exitCode = 1;
 }

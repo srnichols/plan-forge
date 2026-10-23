@@ -17,6 +17,10 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 - **Swapped issue references** — the threat model and the forward-provenance guard test cited #333 for forward normalization and #334 for the rate-limit key. They now cite #334 and #333.
 - **A new workspace could silently miss the clean-code audit** — a guard test now fails when a workspace in the root `package.json` is absent from the ESLint config `files`, the audit runner's `scanGlobs` or `dep-boundaries.mjs`, unless it is exempt with a reason. `pforge-sdk` is the one exemption: it is in neither lint list, and covering it first needs a refactor of `validateChunk` (complexity 31) and `validateProvenance` (30). The other audit scripts still scan only `pforge-mcp` and `pforge-master`. ([#340](https://github.com/srnichols/plan-forge/issues/340))
 
+- **A retried or resumed plan was held as `estimate-unavailable` under a USD cap** — the recovery job was built from a fixed field list that left out the plan's estimate, and the budget gate prices a plan job from it, so with `budget.dailyUSD` set every Retry and Resume went to `held-budget` and waited for an owner override. The estimate now carries over from the failed job, as its quorum and plan path do. (#384)
+- **`/lanes` showed healthy remote lanes as offline** — the placement service read a function-typed health as one lane's health, but the dispatcher wires it as the lane directory's snapshot, which returns the whole map. Every remote lane then looked offline with no queue depth, and an unhealthy local lane looked online. A function health now returns the map and is called once per decision, in `/lanes`, in placement and in the approval preview. (#385)
+- **Running the Claw tests rewrote a tracked file** — `boundaries.test.mjs` ran the dependency-boundary audit without redirecting its report, so every run modified `docs/plans/cleanup-findings/raw/dep-boundaries-report.json`. The test now writes the report to a temporary directory and checks that the tracked one is unchanged. (#386)
+
 ## [3.34.0] — 2026-10-14 — Forge-Claw testing candidate (not a production release)
 
 ### Added

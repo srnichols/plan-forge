@@ -76,13 +76,23 @@ export const WORKER_KILL_GRACE_MS = 10_000;
  */
 export const WORKER_LAUNCH_RETRY_BACKOFF_MS = 3_000;
 
-/** Allowlist of commands permitted in validation gates. Shared by runGate() and lintGateCommands(). */
+/**
+ * Commands a validation gate may start with. Shared by runGate() and lintGateCommands().
+ *
+ * This guards against prose and slips, not against a determined gate. It reads
+ * only the first word, and it already admits `rm`, `curl`, `bash`, `node` and
+ * `npx`, each of which runs anything. isGateCommandAllowed(), which the
+ * regression guard calls, adds a short blocklist of destructive patterns on
+ * top; runGate() checks only this list. A project that needs another tool
+ * lists it as `gateAllowedPrefixes` in `.forge.json` (gate-allowlist.mjs)
+ * instead of editing this list (meta-bug #367).
+ */
 export const GATE_ALLOWED_PREFIXES = [
   // Build / test runners
   "npm", "npx", "node", "pnpm", "yarn", "cargo", "go", "dotnet", "python", "python3",
   "pip", "mvn", "gradle", "make", "cmake", "bash", "sh", "pwsh",
   "powershell", "pytest", "mypy", "ruff", "eslint", "tsc", "vitest",
-  "jest", "mocha",
+  "jest", "mocha", "invoke-pester",
   // Shell builtins & coreutils used in gate commands
   "cd", "cat", "ls", "rm", "mkdir", "cp", "mv", "diff", "wc",
   "head", "tail", "sort", "curl", "git", "grep", "test", "echo",
@@ -104,12 +114,12 @@ export const GATE_ALLOWED_PREFIXES = [
 export const UNIX_TOOLS = ["grep", "sed", "awk", "wc", "head", "tail", "sort", "diff", "test", "tr", "xargs", "find"];
 
 /**
- * Resolve the effective command token from a gate line, skipping leading
+ * The lowercased words of a gate line from its command on, skipping leading
  * variable assignments so the allowlist check targets the real command.
  *
  * Handles both:
- *   - POSIX env-var assignments:  `NODE_ENV=test npm test`     → `npm`
- *   - PowerShell var assignments: `$p = Get-Content x`         → `get-content`
+ *   - POSIX env-var assignments:  `NODE_ENV=test npm test`     → `npm`, `test`
+ *   - PowerShell var assignments: `$p = Get-Content x`         → `get-content`, `x`
  *     (with or without spaces around `=`, e.g. `$p=Get-Content`)
  *
  * Shared by runGate() (runtime enforcement) and lintGateCommands() (pre-flight)
@@ -117,11 +127,11 @@ export const UNIX_TOOLS = ["grep", "sed", "awk", "wc", "head", "tail", "sort", "
  * Hardener's own Windows-portable `$var = ...` gates were rejected.
  *
  * @param {string} line - A single gate command line
- * @returns {string} the lowercased command token, or "" when none resolves
+ * @returns {string[]} the words, or [] when the line holds none
  */
-export function resolveGateCommandToken(line) {
-  if (!line || typeof line !== "string") return "";
-  const tokens = line.trim().split(/\s+/);
+export function gateCommandWords(line) {
+  if (!line || typeof line !== "string") return [];
+  const tokens = line.trim().split(/\s+/).filter(Boolean);
   let i = 0;
   while (i < tokens.length) {
     const t = tokens[i];
@@ -130,12 +140,22 @@ export function resolveGateCommandToken(line) {
     // PowerShell assignment with spaces: `$var =` (consume name + the `=` token)
     if (/^\$[A-Za-z_][A-Za-z0-9_]*$/.test(t) && tokens[i + 1] === "=") { i += 2; continue; }
     // PowerShell assignment without spaces: `$var=Get-Content` — the command
-    // is attached after `=`, so resolve to that remainder, not the next token.
+    // is attached after `=`, so it starts at that remainder, not the next token.
     const attached = t.match(/^\$[A-Za-z_][A-Za-z0-9_]*=(.+)$/);
-    if (attached) return attached[1].toLowerCase();
+    if (attached) return [attached[1], ...tokens.slice(i + 1)].map((word) => word.toLowerCase());
     break;
   }
-  return (tokens[i] || tokens[0] || "").toLowerCase();
+  return tokens.slice(i < tokens.length ? i : 0).map((word) => word.toLowerCase());
+}
+
+/**
+ * The effective command token of a gate line: its first word (see gateCommandWords).
+ *
+ * @param {string} line - A single gate command line
+ * @returns {string} the lowercased command token, or "" when none resolves
+ */
+export function resolveGateCommandToken(line) {
+  return gateCommandWords(line)[0] ?? "";
 }
 
 /**

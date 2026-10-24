@@ -92,6 +92,8 @@ Harden <YOUR-PLAN>.md by adding all 6 Mandatory Template Blocks from the runbook
 ```
 Do NOT use `- [ ]` checkbox format — the analyzer cannot score checkboxes as effectively.
 
+**IMPORTANT**: Write each Stop Condition as one bullet or table row that reads on its own, with its recovery beside it. The orchestrator sends the whole section to every slice's worker (4,000 characters at most, 600 per line): the worker follows the recovery you give and otherwise stops with a Blocker report.
+
 ### Design Context and Approved Boundary Revisions
 
 Use the specification's **Domain Language** and **Decision Ledger** in the existing plan. Reuse IDs and approved sources; do not create a second registry or rewrite completed plans.
@@ -108,6 +110,7 @@ These are agent-side checks, **not runtime enforcement**. Existing execution and
 For each Execution Slice:
 - Tag as `[parallel-safe]` or `[sequential]`. A parallel tag is exactly `[parallel-safe]` (or `[P]`) with nothing else inside the brackets: the parser ignores `[parallel-safe, group A]`, so the slice runs sequentially and gate lint warns. Name the Parallel Group in the slice body (`**Parallel Group**: A`)
 - Declare scope on a bold `**Files**:` line (backtick paths) or with a `[scope: path]` heading tag. A plain `Files:` or `Scope:` line is not read: the slice runs with no scope check and gate lint warns
+- Write `**Depends On**:` as `Slice N` entries (`Slice 3, Slice 4` or `Slices 3 and 4`) and put explanations in parentheses. An entry that does not start with a slice id (`the generated Slice 4 output`) records no dependency, so the slice can run before that slice, and gate lint warns
 - Include relevant .github/instructions/*.instructions.md files in Context Files, as backtick paths on the `**Context Files**:` line. The worker prompt lists them under "Read before editing", and appends the plan file path and the Scope Contract's Forbidden items
 - List only instruction files whose domain matches the slice (not all 17 — each consumes context budget)
 - Add a Parallel Merge Checkpoint after each parallel group
@@ -119,7 +122,7 @@ For each Execution Slice:
   - **Good**: `**Validation Gate**: \`dotnet build\``
   - **Bad**: `**Validation Gate**: Files compile, DTOs have correct properties`
   - **Bad**: a ` ```text ` (or ` ```ts `, ` ```json `) fence under the gate marker — only shell-tagged or untagged fences are executed; gate lint rejects a declared gate that parses to no command (meta-bug [#281](https://github.com/srnichols/plan-forge/issues/281))
-  - For manual checks that can't be automated, prefix with `[manual]`: `**Validation Gate**: [manual] UI layout matches mockup`
+  - For manual checks that can't be automated, prefix with `[manual]`: `**Validation Gate**: [manual] UI layout matches mockup`. An auto run stops after such a slice's worker finishes, with its changes committed, and says what to verify and to continue with `--resume-from`; assisted mode does not stop. Use it only where a person must check, since it halts an unattended run
 - **Write each slice's tasks as a numbered list** (`1. …`, `2. …`). The worker prompt receives the numbered items and the lines indented under them (sub-bullets, a code sample, a wrapped paragraph) — top-level bullet or prose instructions, including a `**Goal**` paragraph, never reach the worker, and gate lint warns about slices with none
 
 Do NOT add features or expand scope. Only structure what already exists.

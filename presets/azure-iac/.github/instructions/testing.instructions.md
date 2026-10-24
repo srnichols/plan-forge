@@ -231,3 +231,13 @@ Describe 'Production Infrastructure' {
 - [ ] `tflint` — zero errors
 - [ ] `PSScriptAnalyzer -Severity Error` — zero errors
 ```
+
+Plan Forge runs only the gate commands it allows. `Invoke-Pester` is built in. Allow the others in the project's `.forge.json`, as narrowly as you can: an entry is a command, or a command and subcommand.
+
+```json
+{
+  "gateAllowedPrefixes": ["az bicep", "terraform validate", "terraform fmt", "tflint"]
+}
+```
+
+Without these entries the gate linter reports `blocked-command` and a run refuses the gate. `az deployment group what-if` and `terraform plan` reach into Azure, so leave them out unless the identity running the gates is meant to read your subscription.

@@ -3,7 +3,8 @@
 import { readFileSync, existsSync } from "node:fs";
 import { resolve } from "node:path";
 import { createHash } from "node:crypto";
-import { resolveGateCommandToken, isGatePrefixAllowed } from "./constants.mjs";
+import { isGateLineAllowed, loadGateAllowedPrefixes } from "./gate-allowlist.mjs";
+import { parseStopConditions } from "./plan-stop-conditions.mjs";
 
 /**
  * Parse a workerTimeoutMs value from a plan body line.
@@ -185,7 +186,7 @@ export function parsePlan(planPath, cwd = process.cwd()) {
   const meta = parseMeta(lines);
   const scopeContract = parseScopeContract(lines);
   const parserCfg = loadPlanParserConfig(cwd);
-  const slices = parseSlices(lines, { implicitGates: parserCfg.implicitGates });
+  const slices = parseSlices(lines, { implicitGates: parserCfg.implicitGates, gateAllowedPrefixes: parserCfg.gateAllowedPrefixes });
   const dag = buildDAG(slices);
 
   parsePlanFrontmatter(meta, content);
@@ -193,7 +194,10 @@ export function parsePlan(planPath, cwd = process.cwd()) {
   // #308: gate lint checks parallel slices over one artifact against this section.
   const hasSharedContract = /^#{2,4}\s+Shared Contract\b/im.test(content);
 
-  return { meta, scopeContract, slices, dag, hasSharedContract };
+  // #365: the plan-level section belongs to no slice, so it travels with each one's plan context.
+  const stopConditions = parseStopConditions(lines);
+
+  return { meta, scopeContract, slices, dag, hasSharedContract, stopConditions };
 }
 
 /**
@@ -407,17 +411,39 @@ function extractDependencyRange(phrase) {
 
 /**
  * Split a dependency list into the slice ids it names (read by `toId`) and the
- * ranges it spans.
+ * ranges it spans. `unread` holds the entries that gave neither, so the caller
+ * can tell a list that was read in full from one that was only half read.
  */
 function readDependencyPhrases(text, toId) {
   const ids = [];
   const ranges = [];
+  const unread = [];
   for (const phrase of splitDependencyList(text)) {
     const range = extractDependencyRange(phrase);
-    if (range) ranges.push(range);
-    else ids.push(toId(phrase));
+    if (range) {
+      ranges.push(range);
+      continue;
+    }
+    const id = toId(phrase);
+    ids.push(id);
+    if (!id && phrase.trim()) unread.push(phrase.trim());
   }
-  return { ids, ranges };
+  return { ids, ranges, unread };
+}
+
+/**
+ * The entries of a `**Depends On**:` line that start with no slice id, so no
+ * dependency was recorded for them: "the generated Slice 4 output" in
+ * "Slice 3 and the generated Slice 4 output" (meta-bug #368). The gate linter
+ * warns when one of them names a slice. It reads the line with the regex and
+ * the entry reader the parser uses, so the two cannot disagree.
+ *
+ * @param {string} line - a slice body line
+ * @returns {string[]} empty when the line has no `**Depends On**:` list
+ */
+export function unreadDependencyEntries(line) {
+  const match = String(line).match(BODY_DEPENDS_RE);
+  return match ? readDependencyPhrases(match[1], extractLeadingSliceId).unread : [];
 }
 
 /**
@@ -608,6 +634,26 @@ function handlePlanLevelHeading(state, line) {
  */
 export const VALIDATION_GATE_MARKER_RE = /\*\*(?:Validation Gate|Exit [Gg]ate)\*?\*?\s*:?\s*(.*)$/i;
 
+/** A gate whose text opens with `[manual]`: the step-2 convention for a check no command can make. */
+const MANUAL_GATE_RE = /^\s*\[manual\]/i;
+
+/**
+ * Does a person, not a command, verify this slice? True when its gate text
+ * starts with `[manual]` and no runnable gate command was parsed. A slice with
+ * both is decided by its command (meta-bug #369).
+ *
+ * @param {{ validationGate?: string|null, validationGateDescription?: string }|null|undefined} slice
+ * @returns {boolean}
+ */
+export function isManualGateSlice(slice) {
+  return !String(slice?.validationGate ?? "").trim() && MANUAL_GATE_RE.test(String(slice?.validationGateDescription ?? ""));
+}
+
+/** A manual gate's text without its `[manual]` marker, "" when it has none. */
+export function manualGateText(slice) {
+  return String(slice?.validationGateDescription ?? "").replace(MANUAL_GATE_RE, "").trim();
+}
+
 function handleValidationGateLine(state, line) {
   const gateMatch = line.match(VALIDATION_GATE_MARKER_RE);
   if (!gateMatch) return false;
@@ -622,8 +668,9 @@ function handleValidationGateLine(state, line) {
     // A backticked span is a command only if it resolves to one. Prose on the
     // gate line — a URL path, an import specifier, a schema keyword — was being
     // harvested as a command and then failing the allowlist, producing errors
-    // that named nothing runnable (meta-bug #260).
-    const runnable = backtickCmds.filter((c) => isGatePrefixAllowed(resolveGateCommandToken(c)));
+    // that named nothing runnable (meta-bug #260). The project's own allowlist
+    // entries count, so `terraform validate` reads as a gate where it is allowed (#367).
+    const runnable = backtickCmds.filter((c) => isGateLineAllowed(c, state.gateAllowedPrefixes));
     if (runnable.length > 0) appendValidationGateText(state.current, runnable.join("\n"));
     else state.current.validationGateDescription = inlineText;
   }
@@ -641,8 +688,15 @@ function applyTestCommand(current, line) {
   if (testMatch) current.testCommand = testMatch[1];
 }
 
+/**
+ * A slice's own stop condition, on the label's line. The hardener writes the
+ * label in several spellings — plural, any case, the colon inside the bold — and
+ * only the exact `**Stop Condition**:` used to be read (meta-bug #365).
+ */
+const STOP_CONDITION_LABEL_RE = /\*\*Stop\s+Conditions?(?:\s*:\*\*|\*\*\s*:)\s*(\S.*)/i;
+
 function applyStopCondition(current, line) {
-  const stopMatch = line.match(/\*\*Stop Condition\*\*:\s*(.+)/);
+  const stopMatch = line.match(STOP_CONDITION_LABEL_RE);
   if (stopMatch) current.stopCondition = stopMatch[1].trim();
 }
 
@@ -653,8 +707,11 @@ function applyWorkerTimeout(current, line) {
   if (parsed !== null) current.workerTimeoutMs = parsed;
 }
 
+/** A `**Depends On**:` line in a slice body. Group 1 is the list. */
+const BODY_DEPENDS_RE = /\*\*Depends\s+On:?\*\*:?\s*(.+)/i;
+
 function applyBodyDependencies(current, line) {
-  const dependsBodyMatch = line.match(/\*\*Depends\s+On:?\*\*:?\s*(.+)/i);
+  const dependsBodyMatch = line.match(BODY_DEPENDS_RE);
   if (!dependsBodyMatch) return;
   // Bug #225: split the list, then pull the LEADING slice-id token out of each
   // phrase. The hardener authors prose deps like
@@ -855,15 +912,11 @@ function applyTaskLine(state, line) {
   state.taskBlankLines = 0;
 }
 
-/**
- * @param {string[]} lines
- * @param {{ implicitGates?: boolean, lockLines?: string[] }} [opts]
- *   `lockLines`, when given, receives every line that becomes a slice heading,
- *   scope entry or gate command — the input computeLockHash hashes.
- */
-export function parseSlices(lines, opts = {}) {
-  const state = {
+/** The state `parseSlices` carries from line to line; `opts` is what its caller asked for. */
+function createSliceParseState(opts) {
+  return {
     implicitGates: opts.implicitGates === true,
+    gateAllowedPrefixes: Array.isArray(opts.gateAllowedPrefixes) ? opts.gateAllowedPrefixes : [],
     lockLines: Array.isArray(opts.lockLines) ? opts.lockLines : null,
     slices: [],
     current: null,
@@ -879,6 +932,18 @@ export function parseSlices(lines, opts = {}) {
     taskBlockOpen: false,
     taskBlankLines: 0,
   };
+}
+
+/**
+ * @param {string[]} lines
+ * @param {{ implicitGates?: boolean, gateAllowedPrefixes?: string[], lockLines?: string[] }} [opts]
+ *   `gateAllowedPrefixes` is the project's extra gate commands, which let an
+ *   inline backticked gate read as a command (meta-bug #367).
+ *   `lockLines`, when given, receives every line that becomes a slice heading,
+ *   scope entry or gate command — the input computeLockHash hashes.
+ */
+export function parseSlices(lines, opts = {}) {
+  const state = createSliceParseState(opts);
 
   for (const line of lines) {
     closeTaskBlockOnOutdent(state, line);
@@ -1084,22 +1149,21 @@ function topologicalSort(nodes) {
 
 /**
  * Meta-bug #89: plan-parser configuration loader.
- * Returns { implicitGates } with defaults. Opt-in only — false by default
- * so existing plans with illustrative bash blocks in slice prose are not
- * accidentally executed as gates.
+ * Returns { implicitGates, gateAllowedPrefixes }. `implicitGates` is opt-in only —
+ * false by default so existing plans with illustrative bash blocks in slice prose
+ * are not accidentally executed as gates. `gateAllowedPrefixes` is the project's
+ * extra gate commands (meta-bug #367), empty by default.
  */
 export function loadPlanParserConfig(cwd = process.cwd()) {
-  const defaults = { implicitGates: false };
+  return { implicitGates: _readImplicitGates(cwd), gateAllowedPrefixes: loadGateAllowedPrefixes(cwd) };
+}
+
+function _readImplicitGates(cwd) {
   try {
     const configPath = resolve(cwd, ".forge.json");
-    if (!existsSync(configPath)) return defaults;
-    const raw = JSON.parse(readFileSync(configPath, "utf-8"));
-    const block = raw?.runtime?.planParser;
-    if (!block || typeof block !== "object") return defaults;
-    return {
-      implicitGates: block.implicitGates === true,
-    };
+    if (!existsSync(configPath)) return false;
+    return JSON.parse(readFileSync(configPath, "utf-8"))?.runtime?.planParser?.implicitGates === true;
   } catch {
-    return defaults;
+    return false;
   }
 }

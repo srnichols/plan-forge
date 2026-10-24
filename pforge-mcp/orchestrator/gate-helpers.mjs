@@ -3,9 +3,10 @@
 import { readFileSync, existsSync, readdirSync, statSync } from "node:fs";
 import { execSync } from "node:child_process";
 import { resolve, basename, dirname, join, relative, extname, isAbsolute } from "node:path";
-import { parsePlan, VALIDATION_GATE_MARKER_RE } from "./plan-parser.mjs";
+import { parsePlan, normalizeSliceId, unreadDependencyEntries, isManualGateSlice, VALIDATION_GATE_MARKER_RE } from "./plan-parser.mjs";
 import { lintTaskFilesOutsideScope } from "./task-scope-lint.mjs";
-import { UNIX_TOOLS, resolveGateCommandToken, isGatePrefixAllowed } from "./constants.mjs";
+import { UNIX_TOOLS, resolveGateCommandToken } from "./constants.mjs";
+import { isGateLineAllowed, loadGateAllowedPrefixes, gateAllowlistAdvice } from "./gate-allowlist.mjs";
 import { coalesceGateLines, looksLikeProse, runGate, resolveGateTimeoutMs } from "./schedulers.mjs";
 import { recall as brainRecall, loadReviewerConfig, invokeReviewer } from "../brain.mjs";
 
@@ -245,18 +246,17 @@ const GATE_WARN_RULES = Object.freeze([
   },
 ]);
 
-function _lintBasicRules({ line, slice, loc, cmdToken, lastSliceNumber, warnings, errors }) {
+function _lintBasicRules({ line, slice, loc, cmdToken, lastSliceNumber, gateAllowedPrefixes, warnings, errors }) {
   if (line.includes("/dev/stdin")) {
     errors.push({
       slice: slice.number, command: line, rule: "unix-only-path", severity: "error",
       message: `${loc}: '/dev/stdin' is Unix-only — fails on Windows. Use readFileSync(0,'utf8') for cross-platform stdin.`,
     });
   }
-  const isAllowed = isGatePrefixAllowed(cmdToken);
-  if (!isAllowed) {
+  if (!isGateLineAllowed(line, gateAllowedPrefixes)) {
     errors.push({
       slice: slice.number, command: line, rule: "blocked-command", severity: "error",
-      message: `${loc}: '${cmdToken}' is not in the gate allowlist. Add it to GATE_ALLOWED_PREFIXES or rewrite the command.`,
+      message: `${loc}: '${cmdToken}' is not in the gate allowlist. ${gateAllowlistAdvice(line)}, or rewrite the command.`,
     });
   }
   for (const { rule, applies, message } of GATE_WARN_RULES) {
@@ -303,6 +303,7 @@ function _lintCommandLine(line, slice, {
   lastSliceNumber,
   disabledRules,
   strictMode,
+  gateAllowedPrefixes,
   warnings,
   errors,
   portabilityWarnings,
@@ -316,7 +317,7 @@ function _lintCommandLine(line, slice, {
     return;
   }
   const cmdToken = _resolveCmdToken(line);
-  _lintBasicRules({ line: line, slice: slice, loc: loc, cmdToken: cmdToken, ...{ lastSliceNumber, warnings, errors } });
+  _lintBasicRules({ line: line, slice: slice, loc: loc, cmdToken: cmdToken, ...{ lastSliceNumber, gateAllowedPrefixes, warnings, errors } });
   _lintWRules({ line: line, slice: slice, loc: loc, cmdToken: cmdToken, ...{ strictMode, disabledRules, warnings, errors } });
 
   const portResult = validateGatePortability(line);
@@ -335,6 +336,10 @@ const DEPENDS_DECLARATION_RE =
 const NO_VALUE_RE = /^\s*\(?\s*[-—–]*\s*(?:n\/a|none|nothing|no\b|null)/i;
 /** Phrase that names at least one slice-ish token. */
 const DEPENDS_NAMES_SLICE_RE = /\bslices?\s*\d|\bs\d+\b|^\s*\d+[A-Za-z]?\b/i;
+/** "Slice 4", "Slices 4" or "S4" in prose. Group 1 is the id. */
+const SLICE_MENTION_RE = /\b(?:slices?\s+|s)(\d+(?:\.\d+)?[A-Za-z]?)\b/gi;
+/** "Phase-ANVIL Slice 1" names another plan's slice, which this plan cannot order. */
+const OTHER_PLAN_RE = /\bphases?\b/i;
 
 /**
  * Warn when a slice declares a dependency that the parser did not understand.
@@ -348,28 +353,92 @@ const DEPENDS_NAMES_SLICE_RE = /\bslices?\s*\d|\bs\d+\b|^\s*\d+[A-Za-z]?\b/i;
  * repo's 46 parseable plans there are 211 dependency declarations, of which 17
  * say "nothing"/"none"/"—" — warning on those would be pure noise.
  */
+function _lintUnparsedDependencies(slice, warnings) {
+  const body = [slice.title || "", ...(slice.rawLines || [])];
+  for (const line of body) {
+    const m = String(line).match(DEPENDS_DECLARATION_RE);
+    if (!m) continue;
+    const phrase = (m[1] || "").trim();
+    if (NO_VALUE_RE.test(phrase) || !DEPENDS_NAMES_SLICE_RE.test(phrase)) continue;
+    warnings.push({
+      slice: slice.number,
+      command: null,
+      rule: "depends-not-parsed",
+      severity: "warn",
+      message:
+        `Slice ${slice.number} ("${slice.title}"): dependency declaration "${phrase.slice(0, LINT_EXCERPT_CHARS)}" ` +
+        `produced no parsed dependency. Recognised forms are the heading tag [depends: Slice N] and ` +
+        `a "**Depends On**:" line beginning with a slice id. This slice will fall back to running ` +
+        `after its predecessor.`,
+    });
+    break;
+  }
+}
+
+function _withoutParentheses(text) {
+  let depth = 0;
+  let kept = "";
+  for (const char of text) {
+    if (char === "(") depth++;
+    else if (char === ")") depth = Math.max(0, depth - 1);
+    else if (depth === 0) kept += char;
+  }
+  return kept;
+}
+
+/**
+ * The slices before `slice` that a dependency entry names and the parser did
+ * not record, in the order named. Parentheses are commentary, as they are to the
+ * parser. An entry that says "Phase" is about another plan, and a slice cannot
+ * depend on itself, on a later slice, or on one the plan does not have.
+ */
+function _unrecordedEarlierSlices(entry, slice, positions) {
+  const prose = _withoutParentheses(entry);
+  if (OTHER_PLAN_RE.test(prose)) return [];
+  const here = positions.get(slice.number);
+  const named = [...prose.matchAll(SLICE_MENTION_RE)].map((match) => normalizeSliceId(match[1]));
+  return [...new Set(named)].filter((id) => positions.get(id) < here && !slice.depends.includes(id));
+}
+
+/**
+ * Warn when a `**Depends On**:` list was only half read (meta-bug #368).
+ *
+ * The parser reads a list entry by entry, and an entry yields a dependency only
+ * when it starts with a slice id. "Slice 3 and the generated Slice 4 output" is
+ * read as Slice 3, and the slice can run before Slice 4. `depends-not-parsed`
+ * fires only when nothing parsed, so a list with at least one id raised nothing.
+ *
+ * Scoped to the entries the parser could not read, not to every slice a
+ * declaration names: the second would fire on "Independent of Slice 4" and on
+ * references to another plan's slices, and across docs/plans it did, four times,
+ * all wrong.
+ */
+function _lintUnreadDependencyEntries(slice, positions, warnings) {
+  for (const line of slice.rawLines || []) {
+    const hits = unreadDependencyEntries(line)
+      .map((entry) => ({ entry, ids: _unrecordedEarlierSlices(entry, slice, positions) }))
+      .filter(({ ids }) => ids.length > 0);
+    if (hits.length === 0) continue;
+    const entries = hits.map(({ entry }) => `"${entry.slice(0, LINT_EXCERPT_CHARS)}"`).join(", ");
+    const named = [...new Set(hits.flatMap(({ ids }) => ids))].map((id) => `Slice ${id}`).join(", ");
+    warnings.push({
+      slice: slice.number,
+      command: null,
+      rule: "depends-entry-not-parsed",
+      severity: "warn",
+      message:
+        `Slice ${slice.number} ("${slice.title}"): "Depends On" entry ${entries} names ${named} but does not start with a slice id, ` +
+        `so no dependency on it was recorded and this slice can run before it. ` +
+        `Write each as "Slice N" and put any explanation in parentheses.`,
+    });
+  }
+}
+
 function _lintDependencyDeclarations(plan, warnings) {
+  const positions = new Map(plan.slices.map((slice, index) => [slice.number, index]));
   for (const slice of plan.slices) {
-    if ((slice.depends || []).length > 0) continue;
-    const body = [slice.title || "", ...(slice.rawLines || [])];
-    for (const line of body) {
-      const m = String(line).match(DEPENDS_DECLARATION_RE);
-      if (!m) continue;
-      const phrase = (m[1] || "").trim();
-      if (NO_VALUE_RE.test(phrase) || !DEPENDS_NAMES_SLICE_RE.test(phrase)) continue;
-      warnings.push({
-        slice: slice.number,
-        command: null,
-        rule: "depends-not-parsed",
-        severity: "warn",
-        message:
-          `Slice ${slice.number} ("${slice.title}"): dependency declaration "${phrase.slice(0, LINT_EXCERPT_CHARS)}" ` +
-          `produced no parsed dependency. Recognised forms are the heading tag [depends: Slice N] and ` +
-          `a "**Depends On**:" line beginning with a slice id. This slice will fall back to running ` +
-          `after its predecessor.`,
-      });
-      break;
-    }
+    if ((slice.depends || []).length > 0) _lintUnreadDependencyEntries(slice, positions, warnings);
+    else _lintUnparsedDependencies(slice, warnings);
   }
 }
 
@@ -381,7 +450,8 @@ function _lintDependencyDeclarations(plan, warnings) {
  *
  * - A slice that DECLARES a Validation Gate but parsed no runnable command is
  *   an error: it would run with no gate at all. An explicit `[manual]` gate —
- *   the step-2 convention for checks that cannot be automated — is exempt.
+ *   the step-2 convention for checks that cannot be automated — is exempt; an
+ *   auto run stops after such a slice for a person to verify it (meta-bug #369).
  * - A slice with no numbered tasks is a warning: buildSlicePrompt sends only
  *   numbered items, so the worker receives just the title, scope and gate.
  *   Plain objects without a `tasks` array (callers passing gate-only fixtures)
@@ -392,8 +462,7 @@ function _lintSliceExecutability(plan, errors, warnings) {
     const loc = `Slice ${slice.number} ("${slice.title}")`;
     const declaredGate = (slice.rawLines || []).find((line) => VALIDATION_GATE_MARKER_RE.test(line));
     const gateText = String(slice.validationGateDescription || "").trim();
-    const isManualGate = /^\[manual\]/i.test(gateText);
-    if (declaredGate && !isManualGate && !String(slice.validationGate || "").trim()) {
+    if (declaredGate && !String(slice.validationGate || "").trim() && !isManualGateSlice(slice)) {
       const described = gateText ? ` (gate text: "${gateText.slice(0, LINT_EXCERPT_CHARS)}")` : "";
       errors.push({
         slice: slice.number, command: null, rule: "gate-declared-not-runnable", severity: "error",
@@ -557,6 +626,7 @@ export function lintGateCommands(planFilePath, cwd = process.cwd()) {
   const lastSliceNumber = plan.slices.length > 0
     ? plan.slices[plan.slices.length - 1].number
     : null;
+  const gateAllowedPrefixes = loadGateAllowedPrefixes(cwd);
 
   // A lint that examined nothing is not a lint that passed. Three plans read
   // "0 error(s), 0 warning(s)" while every slice heading had failed to parse;
@@ -584,6 +654,7 @@ export function lintGateCommands(planFilePath, cwd = process.cwd()) {
         lastSliceNumber,
         disabledRules,
         strictMode,
+        gateAllowedPrefixes,
         warnings,
         errors,
         portabilityWarnings,
@@ -678,22 +749,26 @@ export function validateGatePortability(command) {
  * Check whether a line would pass the gate allowlist (prefix-based) without the prose guard.
  * Used by regressionGuard to implement the precedence rule: allowlisted commands win over prose heuristic.
  * @param {string} cmd - The command line to check
+ * @param {string[]} [extra] - the project's gateAllowedPrefixes
  * @returns {boolean} true if the command matches an allowlist prefix
  */
-function wouldPassAllowlist(cmd) {
+function wouldPassAllowlist(cmd, extra = []) {
   if (!cmd || typeof cmd !== "string") return false;
-  return isGatePrefixAllowed(resolveGateCommandToken(cmd));
+  return isGateLineAllowed(cmd, extra);
 }
 
 /**
  * Check if a command string is permitted in validation gates.
- * Uses the same GATE_ALLOWED_PREFIXES allowlist as runGate() and lintGateCommands().
+ * Uses the same GATE_ALLOWED_PREFIXES allowlist as runGate() and lintGateCommands(),
+ * plus the project's own entries (`gateAllowedPrefixes` in .forge.json).
  * Skips leading env-var assignments (e.g., "NODE_ENV=test npm test").
- * Additionally blocks known-dangerous patterns (e.g., rm -rf /) regardless of prefix.
+ * Additionally blocks known-dangerous patterns (e.g., rm -rf /) regardless of prefix
+ * or of what a project lists.
  * @param {string} cmd - The command line to check
+ * @param {string[]} [extra] - the project's gateAllowedPrefixes, from loadGateAllowedPrefixes
  * @returns {boolean} true if the command is allowed, false if blocked
  */
-export function isGateCommandAllowed(cmd) {
+export function isGateCommandAllowed(cmd, extra = []) {
   if (!cmd || typeof cmd !== "string") return false;
   const trimmed = cmd.trim();
 
@@ -707,7 +782,7 @@ export function isGateCommandAllowed(cmd) {
   ];
   if (BLOCKED_PATTERNS.some((p) => p.test(trimmed))) return false;
 
-  if (isGatePrefixAllowed(resolveGateCommandToken(trimmed))) {
+  if (isGateLineAllowed(trimmed, extra)) {
     return true;
   }
 
@@ -812,7 +887,8 @@ function _prioritizeByHotspots(gateItems, cwd) {
 }
 
 function _classifyAndSkipGate(gate, cwd, results) {
-  if (looksLikeProse(gate.cmd) && !wouldPassAllowlist(gate.cmd)) {
+  const extra = loadGateAllowedPrefixes(cwd);
+  if (looksLikeProse(gate.cmd) && !wouldPassAllowlist(gate.cmd, extra)) {
     results.push({ ...gate, status: "skipped", reason: "liveguard-prose-skipped" });
     try {
       appendForgeJsonl("liveguard-events.jsonl", {
@@ -825,7 +901,7 @@ function _classifyAndSkipGate(gate, cwd, results) {
     } catch { /* best-effort telemetry */ }
     return "skipped";
   }
-  if (!isGateCommandAllowed(gate.cmd)) {
+  if (!isGateCommandAllowed(gate.cmd, extra)) {
     results.push({ ...gate, status: "blocked", reason: `'${gate.cmd.split(/\s+/)[0]}' not in gate allowlist` });
     return "blocked";
   }

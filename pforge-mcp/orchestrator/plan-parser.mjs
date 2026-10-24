@@ -4,6 +4,7 @@ import { readFileSync, existsSync } from "node:fs";
 import { resolve } from "node:path";
 import { createHash } from "node:crypto";
 import { resolveGateCommandToken, isGatePrefixAllowed } from "./constants.mjs";
+import { parseStopConditions } from "./plan-stop-conditions.mjs";
 
 /**
  * Parse a workerTimeoutMs value from a plan body line.
@@ -193,7 +194,10 @@ export function parsePlan(planPath, cwd = process.cwd()) {
   // #308: gate lint checks parallel slices over one artifact against this section.
   const hasSharedContract = /^#{2,4}\s+Shared Contract\b/im.test(content);
 
-  return { meta, scopeContract, slices, dag, hasSharedContract };
+  // #365: the plan-level section belongs to no slice, so it travels with each one's plan context.
+  const stopConditions = parseStopConditions(lines);
+
+  return { meta, scopeContract, slices, dag, hasSharedContract, stopConditions };
 }
 
 /**
@@ -407,17 +411,39 @@ function extractDependencyRange(phrase) {
 
 /**
  * Split a dependency list into the slice ids it names (read by `toId`) and the
- * ranges it spans.
+ * ranges it spans. `unread` holds the entries that gave neither, so the caller
+ * can tell a list that was read in full from one that was only half read.
  */
 function readDependencyPhrases(text, toId) {
   const ids = [];
   const ranges = [];
+  const unread = [];
   for (const phrase of splitDependencyList(text)) {
     const range = extractDependencyRange(phrase);
-    if (range) ranges.push(range);
-    else ids.push(toId(phrase));
+    if (range) {
+      ranges.push(range);
+      continue;
+    }
+    const id = toId(phrase);
+    ids.push(id);
+    if (!id && phrase.trim()) unread.push(phrase.trim());
   }
-  return { ids, ranges };
+  return { ids, ranges, unread };
+}
+
+/**
+ * The entries of a `**Depends On**:` line that start with no slice id, so no
+ * dependency was recorded for them: "the generated Slice 4 output" in
+ * "Slice 3 and the generated Slice 4 output" (meta-bug #368). The gate linter
+ * warns when one of them names a slice. It reads the line with the regex and
+ * the entry reader the parser uses, so the two cannot disagree.
+ *
+ * @param {string} line - a slice body line
+ * @returns {string[]} empty when the line has no `**Depends On**:` list
+ */
+export function unreadDependencyEntries(line) {
+  const match = String(line).match(BODY_DEPENDS_RE);
+  return match ? readDependencyPhrases(match[1], extractLeadingSliceId).unread : [];
 }
 
 /**
@@ -641,8 +667,15 @@ function applyTestCommand(current, line) {
   if (testMatch) current.testCommand = testMatch[1];
 }
 
+/**
+ * A slice's own stop condition, on the label's line. The hardener writes the
+ * label in several spellings — plural, any case, the colon inside the bold — and
+ * only the exact `**Stop Condition**:` used to be read (meta-bug #365).
+ */
+const STOP_CONDITION_LABEL_RE = /\*\*Stop\s+Conditions?(?:\s*:\*\*|\*\*\s*:)\s*(\S.*)/i;
+
 function applyStopCondition(current, line) {
-  const stopMatch = line.match(/\*\*Stop Condition\*\*:\s*(.+)/);
+  const stopMatch = line.match(STOP_CONDITION_LABEL_RE);
   if (stopMatch) current.stopCondition = stopMatch[1].trim();
 }
 
@@ -653,8 +686,11 @@ function applyWorkerTimeout(current, line) {
   if (parsed !== null) current.workerTimeoutMs = parsed;
 }
 
+/** A `**Depends On**:` line in a slice body. Group 1 is the list. */
+const BODY_DEPENDS_RE = /\*\*Depends\s+On:?\*\*:?\s*(.+)/i;
+
 function applyBodyDependencies(current, line) {
-  const dependsBodyMatch = line.match(/\*\*Depends\s+On:?\*\*:?\s*(.+)/i);
+  const dependsBodyMatch = line.match(BODY_DEPENDS_RE);
   if (!dependsBodyMatch) return;
   // Bug #225: split the list, then pull the LEADING slice-id token out of each
   // phrase. The hardener authors prose deps like

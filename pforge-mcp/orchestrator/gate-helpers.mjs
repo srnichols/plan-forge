@@ -3,7 +3,7 @@
 import { readFileSync, existsSync, readdirSync, statSync } from "node:fs";
 import { execSync } from "node:child_process";
 import { resolve, basename, dirname, join, relative, extname, isAbsolute } from "node:path";
-import { parsePlan, normalizeSliceId, unreadDependencyEntries, VALIDATION_GATE_MARKER_RE } from "./plan-parser.mjs";
+import { parsePlan, normalizeSliceId, unreadDependencyEntries, isManualGateSlice, VALIDATION_GATE_MARKER_RE } from "./plan-parser.mjs";
 import { lintTaskFilesOutsideScope } from "./task-scope-lint.mjs";
 import { UNIX_TOOLS, resolveGateCommandToken } from "./constants.mjs";
 import { isGateLineAllowed, loadGateAllowedPrefixes, gateAllowlistAdvice } from "./gate-allowlist.mjs";
@@ -450,7 +450,8 @@ function _lintDependencyDeclarations(plan, warnings) {
  *
  * - A slice that DECLARES a Validation Gate but parsed no runnable command is
  *   an error: it would run with no gate at all. An explicit `[manual]` gate —
- *   the step-2 convention for checks that cannot be automated — is exempt.
+ *   the step-2 convention for checks that cannot be automated — is exempt; an
+ *   auto run stops after such a slice for a person to verify it (meta-bug #369).
  * - A slice with no numbered tasks is a warning: buildSlicePrompt sends only
  *   numbered items, so the worker receives just the title, scope and gate.
  *   Plain objects without a `tasks` array (callers passing gate-only fixtures)
@@ -461,8 +462,7 @@ function _lintSliceExecutability(plan, errors, warnings) {
     const loc = `Slice ${slice.number} ("${slice.title}")`;
     const declaredGate = (slice.rawLines || []).find((line) => VALIDATION_GATE_MARKER_RE.test(line));
     const gateText = String(slice.validationGateDescription || "").trim();
-    const isManualGate = /^\[manual\]/i.test(gateText);
-    if (declaredGate && !isManualGate && !String(slice.validationGate || "").trim()) {
+    if (declaredGate && !String(slice.validationGate || "").trim() && !isManualGateSlice(slice)) {
       const described = gateText ? ` (gate text: "${gateText.slice(0, LINT_EXCERPT_CHARS)}")` : "";
       errors.push({
         slice: slice.number, command: null, rule: "gate-declared-not-runnable", severity: "error",

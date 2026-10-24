@@ -53,6 +53,7 @@ import { isRetiredModel, isUnavailableToUser, retirementDate, useLiveCopilotMode
 import { availableEscalationChain, discoverCopilotModels } from "./copilot-live-models.mjs";
 import { rewritePlanStatusOnSuccess as _rewritePlanStatusOnSuccess } from "./run-plan/plan-status-update.mjs";
 import { computePlanCoverage, readPassedSlicesFromHistory } from "./run-plan/plan-coverage.mjs";
+import { holdManualGateSlice, summarizeManualHolds, manualHoldReport } from "./run-plan/manual-gate-hold.mjs";
 import { failNoOpSlice, failIgnoredScopeSlice } from "./run-plan/slice-evidence-checks.mjs";
 
 const [QUORUM_MODE_AUTO, QUORUM_PRESET_POWER, QUORUM_PRESET_SPEED, QUORUM_MODE_FALSE] = QUORUM_MODES;
@@ -457,6 +458,8 @@ function _handlePassedSliceResult(result, slice, ctx) {
   const { cwd, mode, eventBus, startSha, preSliceState, runDir } = ctx;
   result.autoCommit = autoCommitSliceIfDirty({ slice, cwd, mode, eventBus, startSha, preSliceState });
   _bubbleAutoCommitCodeChanges(result);
+  // Meta-bug #369: the work is committed; a slice that needs a person to verify it stops the run here.
+  holdManualGateSlice({ sliceResult: result, slice, mode });
   // Issue #195: re-persist slice-N.json so the on-disk record matches
   // the slice-completed event.
   try {
@@ -2936,6 +2939,12 @@ function buildSummary(plan, results, runMeta, extras = {}) {
   }
   if (extras.analyzeResult?.ran && extras.analyzeResult.score !== null) {
     parts.push(`Score: ${extras.analyzeResult.score}/100`);
+  }
+  // Meta-bug #369: what is waiting for a person, and where to continue.
+  const manualHolds = summarizeManualHolds(plan, results);
+  if (manualHolds.length > 0) {
+    summary.awaitingManualVerification = manualHolds;
+    parts.push(manualHoldReport(manualHolds));
   }
   summary.report = parts.join(". ") + ".";
 

@@ -634,6 +634,26 @@ function handlePlanLevelHeading(state, line) {
  */
 export const VALIDATION_GATE_MARKER_RE = /\*\*(?:Validation Gate|Exit [Gg]ate)\*?\*?\s*:?\s*(.*)$/i;
 
+/** A gate whose text opens with `[manual]`: the step-2 convention for a check no command can make. */
+const MANUAL_GATE_RE = /^\s*\[manual\]/i;
+
+/**
+ * Does a person, not a command, verify this slice? True when its gate text
+ * starts with `[manual]` and no runnable gate command was parsed. A slice with
+ * both is decided by its command (meta-bug #369).
+ *
+ * @param {{ validationGate?: string|null, validationGateDescription?: string }|null|undefined} slice
+ * @returns {boolean}
+ */
+export function isManualGateSlice(slice) {
+  return !String(slice?.validationGate ?? "").trim() && MANUAL_GATE_RE.test(String(slice?.validationGateDescription ?? ""));
+}
+
+/** A manual gate's text without its `[manual]` marker, "" when it has none. */
+export function manualGateText(slice) {
+  return String(slice?.validationGateDescription ?? "").replace(MANUAL_GATE_RE, "").trim();
+}
+
 function handleValidationGateLine(state, line) {
   const gateMatch = line.match(VALIDATION_GATE_MARKER_RE);
   if (!gateMatch) return false;

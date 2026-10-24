@@ -1,8 +1,9 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
-import { existsSync, mkdtempSync, readdirSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join, relative, resolve } from "node:path";
+import { join, relative } from "node:path";
 import { parsePlan, buildDAG } from "../orchestrator/plan-parser.mjs";
+import { PLAN_CORPUS, PLAN_CORPUS_ROOT, PLANS_DIR } from "./helpers/plan-corpus.mjs";
 
 /**
  * Meta-bug #375 — a dependency range was read as its first id. `**Depends On**:
@@ -103,23 +104,11 @@ describe("a dependency range names every slice it spans (#375)", () => {
   });
 });
 
-const PLANS_DIR = resolve(import.meta.dirname, "..", "..", "docs", "plans");
 const BARE_RANGE = /\*\*Depends\s+On:?\*\*:?\s*S\d+(?:\.\d+)?\s*[-–—]\s*S\d+/i;
 
-function planFiles(path) {
-  return readdirSync(path).flatMap((name) => {
-    const full = join(path, name);
-    if (statSync(full).isDirectory()) return planFiles(full);
-    return /PLAN\.md$/i.test(name) ? [full] : [];
-  });
-}
-
-// The corpus lives in the source repository, not in a project that installed pforge-mcp.
-describe.skipIf(!existsSync(PLANS_DIR))("the bare ranges in docs/plans are read (#375)", () => {
-  const root = resolve(PLANS_DIR, "..", "..");
-  const slices = existsSync(PLANS_DIR)
-    ? planFiles(PLANS_DIR).flatMap((file) => parsePlan(file, root).slices.map((parsed, index, all) => ({ plan: relative(PLANS_DIR, file).replace(/\\/g, "/"), parsed, before: all.slice(0, index) })))
-    : [];
+// The corpus is the framework's own phase plans: planning/main has them, master and an installed project do not (#398).
+describe.skipIf(PLAN_CORPUS.length === 0)("the bare ranges in docs/plans are read (#375)", () => {
+  const slices = PLAN_CORPUS.flatMap((file) => parsePlan(file, PLAN_CORPUS_ROOT).slices.map((parsed, index, all) => ({ plan: relative(PLANS_DIR, file).replace(/\\/g, "/"), parsed, before: all.slice(0, index) })));
   const withRange = slices.filter(({ parsed }) => parsed.rawLines.some((line) => BARE_RANGE.test(line)));
 
   it("finds the slices that declare one", () => {

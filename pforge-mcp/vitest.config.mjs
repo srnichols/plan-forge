@@ -71,6 +71,7 @@ const SOURCE_ONLY_SUITES = {
     "tests/smith-golden.test.mjs",
     "tests/meta-378-guidance-tool-names.test.mjs",
     "tests/meta-379-preset-pnpm-separator.test.mjs",
+    "tests/meta-394-setup-python-stub.test.mjs",
   ],
   "../.github/instructions/release-checklist.instructions.md": [
     "tests/consumer-test-surface.test.mjs",

@@ -1662,23 +1662,27 @@ MCPEOF
     else
         yellow "  SKIP  .vscode/mcp.json → 'plan-forge' already exists"
     fi
-    # Add forge-master-chat entry if pforge-master/server.mjs is present and not already registered
+    # Add forge-master-chat entry if pforge-master/server.mjs is present and not already registered.
+    # Node does the merge, not python3: on Windows, Git Bash finds the Microsoft Store python3 stub,
+    # which exits 49 and, under set -e, used to abort the whole install (#394).
     if [[ -f "$PROJECT_PATH/pforge-master/server.mjs" ]] && ! grep -q '"forge-master-chat"' "$VSCODE_MCP" 2>/dev/null; then
-        if command -v python3 &>/dev/null; then
-            python3 - "$VSCODE_MCP" <<'PYEOF'
-import json, sys
-path = sys.argv[1]
-with open(path) as f: data = json.load(f)
-if "forge-master-chat" not in data.get("servers", {}):
-    data.setdefault("servers", {})["forge-master-chat"] = {
-        "type": "stdio", "command": "node",
-        "args": ["pforge-master/server.mjs"], "cwd": "${workspaceFolder}"
-    }
-    with open(path, "w") as f: json.dump(data, f, indent=2)
-    print("  MERGE .vscode/mcp.json -> added 'forge-master-chat' server")
-PYEOF
+        if command -v node &>/dev/null; then
+            node - "$VSCODE_MCP" <<'JSEOF' || yellow "  NOTE  add 'forge-master-chat' server to .vscode/mcp.json manually (could not merge it)"
+const fs = require("node:fs");
+const file = process.argv[2];
+const data = JSON.parse(fs.readFileSync(file, "utf8").replace(/^\uFEFF/, ""));
+data.servers = data.servers || {};
+if (!data.servers["forge-master-chat"]) {
+  data.servers["forge-master-chat"] = {
+    type: "stdio", command: "node",
+    args: ["pforge-master/server.mjs"], cwd: "${workspaceFolder}"
+  };
+  fs.writeFileSync(file, JSON.stringify(data, null, 2));
+  console.log("  MERGE .vscode/mcp.json -> added 'forge-master-chat' server");
+}
+JSEOF
         else
-            yellow "  NOTE  add 'forge-master-chat' server to .vscode/mcp.json manually (python3 not found)"
+            yellow "  NOTE  add 'forge-master-chat' server to .vscode/mcp.json manually (node not found)"
         fi
     fi
 

@@ -1,8 +1,9 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
-import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join, relative, resolve } from "node:path";
+import { join, relative } from "node:path";
 import { parsePlan } from "../orchestrator/plan-parser.mjs";
+import { PLAN_CORPUS, PLAN_CORPUS_ROOT, PLANS_DIR } from "./helpers/plan-corpus.mjs";
 
 /**
  * Meta-bug #373 — `parseMeta` overwrote the plan's status on every
@@ -63,16 +64,7 @@ describe("plan status comes from the header (#373)", () => {
   });
 });
 
-const PLANS_DIR = resolve(import.meta.dirname, "..", "..", "docs", "plans");
 const STATUS = /\*\*Status\*\*:\s*(.+)/;
-
-function planFiles(path) {
-  return readdirSync(path).flatMap((name) => {
-    const full = join(path, name);
-    if (statSync(full).isDirectory()) return planFiles(full);
-    return /PLAN\.md$/i.test(name) ? [full] : [];
-  });
-}
 
 /** The first Status line before the first `##` heading, which is where this repository's plans declare it. */
 function headerStatus(file) {
@@ -85,9 +77,9 @@ function headerStatus(file) {
   return null;
 }
 
-// The corpus lives in the source repository, not in a project that installed pforge-mcp.
-describe.skipIf(!existsSync(PLANS_DIR))("the plans in docs/plans report their header status (#373)", () => {
-  const plans = existsSync(PLANS_DIR) ? planFiles(PLANS_DIR) : [];
+// The corpus is the framework's own phase plans: planning/main has them, master and an installed project do not (#398).
+describe.skipIf(PLAN_CORPUS.length === 0)("the plans in docs/plans report their header status (#373)", () => {
+  const plans = PLAN_CORPUS;
 
   it("reads a corpus large enough to mean something", () => {
     expect(plans.length).toBeGreaterThan(20);
@@ -95,7 +87,7 @@ describe.skipIf(!existsSync(PLANS_DIR))("the plans in docs/plans report their he
 
   it("reports each plan's header status, including the plans with several Status lines", () => {
     const wrong = plans
-      .map((file) => ({ plan: relative(PLANS_DIR, file).replace(/\\/g, "/"), expected: headerStatus(file), actual: parsePlan(file, resolve(PLANS_DIR, "..", "..")).meta.status }))
+      .map((file) => ({ plan: relative(PLANS_DIR, file).replace(/\\/g, "/"), expected: headerStatus(file), actual: parsePlan(file, PLAN_CORPUS_ROOT).meta.status }))
       .filter(({ expected, actual }) => expected !== null && actual !== expected)
       .map(({ plan, expected, actual }) => `${plan}: expected "${expected.slice(0, 50)}" but parsed "${actual.slice(0, 50)}"`);
     expect(wrong).toEqual([]);
@@ -105,7 +97,7 @@ describe.skipIf(!existsSync(PLANS_DIR))("the plans in docs/plans report their he
     for (const name of ["Phase-42-CLEAN-CODE-AUDIT-PLAN.md", "Phase-50-CLEAN-CODE-GUIDANCE-PLAN.md"]) {
       const file = join(PLANS_DIR, name);
       if (!existsSync(file)) continue;
-      expect(parsePlan(file, resolve(PLANS_DIR, "..", "..")).meta.status, name).toMatch(/shipped/i);
+      expect(parsePlan(file, PLAN_CORPUS_ROOT).meta.status, name).toMatch(/shipped/i);
     }
   });
 });

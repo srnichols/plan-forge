@@ -106,6 +106,16 @@ function Copy-WithCreate([string]$Source, [string]$Destination, [bool]$Overwrite
     return $true
 }
 
+# Whether setup copies a file of a runtime package (pforge-mcp, pforge-master, pforge-sdk). Installed
+# dependencies, run state and coverage output stay behind. Whole directory segments of the path below the
+# package are matched: the filter used to be a substring match on the absolute path, which also dropped
+# orchestrator/run-plan/plan-coverage.mjs, and left nothing to install when the source tree sat under a
+# .forge folder (#400, #346).
+function Test-RuntimePackageFile([System.IO.FileInfo]$File, [string]$SourceDir) {
+    $relative = $File.FullName.Substring($SourceDir.Length + 1) -replace '\\', '/'
+    return $relative -notmatch '(^|/)(node_modules|\.forge|coverage)/'
+}
+
 function Update-Placeholders([string]$FilePath, [string]$Name, [string]$Stack) {
     if (-not (Test-Path $FilePath)) { return }
     $content = Get-Content $FilePath -Raw
@@ -1704,7 +1714,7 @@ if (Test-Path $sdkSrcDir) {
     }
     $sdkFileCount = 0
     Get-ChildItem -Path $sdkSrcDir -File -Recurse |
-        Where-Object { $_.FullName -notmatch '(node_modules|\.forge|coverage)' } |
+        Where-Object { Test-RuntimePackageFile $_ $sdkSrcDir } |
         ForEach-Object {
             $relPath = $_.FullName.Substring($sdkSrcDir.Length + 1)
             $dstFile = Join-Path $sdkDstDir $relPath
@@ -1729,7 +1739,7 @@ if (Test-Path $fmSrcDir) {
     }
     $fmFileCount = 0
     Get-ChildItem -Path $fmSrcDir -File -Recurse |
-        Where-Object { $_.FullName -notmatch '(node_modules|\.forge|coverage)' } |
+        Where-Object { Test-RuntimePackageFile $_ $fmSrcDir } |
         ForEach-Object {
             $relPath = $_.FullName.Substring($fmSrcDir.Length + 1)
             $dstFile = Join-Path $fmDstDir $relPath
@@ -1764,10 +1774,10 @@ if (Test-Path $mcpSrcDir) {
         New-Item -ItemType Directory -Path $mcpDstDir -Force | Out-Null
     }
 
-    # Copy all MCP runtime files (not node_modules or .forge)
+    # Copy all MCP runtime files (not node_modules, .forge or coverage output)
     $mcpFileCount = 0
     Get-ChildItem -Path $mcpSrcDir -File -Recurse |
-        Where-Object { $_.FullName -notmatch '(node_modules|\.forge|coverage)' } |
+        Where-Object { Test-RuntimePackageFile $_ $mcpSrcDir } |
         ForEach-Object {
             $relPath = $_.FullName.Substring($mcpSrcDir.Length + 1)
             $dstFile = Join-Path $mcpDstDir $relPath

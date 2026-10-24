@@ -136,6 +136,7 @@
     { "label": "pforge.ps1 analyze reads checkbox criteria under Acceptance Criteria (#387) (3.34.0)", "path": "pforge.ps1", "contains": "meta-bug #387" },
     { "label": "A numbered task keeps the lines indented under it (3.34.0)", "path": "pforge-mcp/orchestrator/plan-parser.mjs", "contains": "taskHeadline" },
     { "label": "Quorum dry-run and reviewer prompts carry the plan context (3.34.0)", "path": "pforge-mcp/orchestrator/quorum.mjs", "contains": "appendPlanContext" },
-    { "label": "setup.sh no longer depends on python3, the Microsoft Store stub (#394) (3.34.0)", "path": "pforge-mcp/tests/meta-394-setup-python-stub.test.mjs", "contains": "Microsoft Store App" }
+    { "label": "setup.sh no longer depends on python3, the Microsoft Store stub (#394) (3.34.0)", "path": "pforge-mcp/tests/meta-394-setup-python-stub.test.mjs", "contains": "Microsoft Store App" },
+    { "label": "A fresh PowerShell install delivers files whose path contains coverage (#400) (3.34.0)", "path": "pforge-mcp/orchestrator/run-plan/plan-coverage.mjs" }
   ]
 }

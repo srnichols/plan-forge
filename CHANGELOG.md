@@ -7,6 +7,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+## [3.34.0] — 2026-10-24 — Slices no longer pass without evidence, and workers see the whole plan
+
 ### Added
 
 - The gate linter warns when a slice's tasks ask to change a file its scope does not allow (`task-file-outside-scope`). The scope guard blocks or reverts a change outside `[scope:]`, so a task that says "create `docs/x.html`" while the scope omits it sets the worker up to fail; about ten filed plan defects had this cause. The rule is narrow on purpose, because it only warns and a noisy lint gets muted. A path counts only when it is the object of an imperative write verb ("Update `a.md`", "Add a section to `b.md`"); a file that is read, cited, run, described or told not to change does not, and neither do globs, directories, config keys, addresses, runtime paths such as `.forge/` and `state/`, or a file the task says is gitignored. Scope is read suffix-aware, so scope `pforge-claw/src/**` allows the task's `src/router.mjs`. Across `docs/plans` it fires on none of the 278 slices that declare a scope, where checking every backticked path flagged 13% of them; its use is for plans written elsewhere. (#380)

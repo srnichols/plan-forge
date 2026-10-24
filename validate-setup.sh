@@ -316,7 +316,8 @@ fi
 # Extensions
 EXT_JSON="$PROJECT_PATH/.forge/extensions/extensions.json"
 if [[ -f "$EXT_JSON" ]]; then
-    EXT_COUNT=$(python3 -c "import json; print(len(json.load(open('$EXT_JSON')).get('extensions',[])))" 2>/dev/null || echo "0")
+    # Node, not python3: Windows' Git Bash finds the Microsoft Store python3 stub, which cannot run (#394).
+    EXT_COUNT=$(node -e "const e = JSON.parse(require('fs').readFileSync(process.argv[1], 'utf8').replace(/^\uFEFF/, '')).extensions; console.log(Array.isArray(e) ? e.length : 0)" "$EXT_JSON" 2>/dev/null || echo "0")
     if [[ "$EXT_COUNT" -gt 0 ]]; then
         green "  PASS  Extensions: $EXT_COUNT installed"
         PASS=$((PASS+1))

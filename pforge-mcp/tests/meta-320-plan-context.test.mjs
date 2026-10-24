@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { mkdtempSync, writeFileSync, rmSync, readFileSync } from "node:fs";
+import { existsSync, mkdtempSync, writeFileSync, rmSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 
@@ -24,6 +24,7 @@ import { buildPlanContext, buildPlanContextBlock } from "../orchestrator/prompt-
 import { parsePlan } from "../orchestrator/plan-parser.mjs";
 import { lintGateCommands } from "../orchestrator/gate-helpers.mjs";
 import { runPlan } from "../orchestrator.mjs";
+import { IS_PLAN_FORGE_SOURCE } from "./helpers/source-repo.mjs";
 
 /**
  * Meta-bug #320 — buildSlicePrompt sent the worker the slice title, numbered
@@ -226,6 +227,8 @@ describe("the hardening guidance no longer teaches what the parser ignores (#320
     "templates/.github/agents/plan-hardener.agent.md",
     "plugins/plan-forge/com.github.copilot/agents/plan-hardener.agent.md",
   ];
+  // The agent copies are framework assets (templates/, plugins/): an installed project has neither (#402).
+  const presentAgents = hardenerAgents.filter((rel) => existsSync(resolve(ROOT, rel)));
 
   it.each(hardeningDocs)("%s asks for exactly [parallel-safe] with the group in the body", (rel) => {
     const src = read(rel);
@@ -240,10 +243,15 @@ describe("the hardening guidance no longer teaches what the parser ignores (#320
     expect(src).toMatch(/plain `Files:` or `Scope:` line is not read/);
   });
 
-  it.each(hardenerAgents)("%s keeps the group out of the parallel tag", (rel) => {
+  it.each(presentAgents)("%s keeps the group out of the parallel tag", (rel) => {
     const src = read(rel);
     expect(src).not.toMatch(/`\[parallel-safe\]` with group/);
     expect(src).toMatch(/not inside the brackets/);
+  });
+
+  // Where the copies are expected, a renamed or moved file must fail here, not drop out of the check above.
+  it.skipIf(!IS_PLAN_FORGE_SOURCE)("finds both hardener agent copies in the framework's source tree", () => {
+    expect(presentAgents).toEqual(hardenerAgents);
   });
 });
 

@@ -1,8 +1,9 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
-import { existsSync, mkdtempSync, readdirSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join, relative, resolve } from "node:path";
+import { join, relative } from "node:path";
 import { parsePlan } from "../orchestrator/plan-parser.mjs";
+import { PLAN_CORPUS, PLAN_CORPUS_ROOT, PLANS_DIR } from "./helpers/plan-corpus.mjs";
 
 /**
  * Meta-bug #374 — `**Context Files**:` was read only when its files sat on the
@@ -90,16 +91,6 @@ describe("Context Files written as a bullet list (#374)", () => {
   });
 });
 
-const PLANS_DIR = resolve(import.meta.dirname, "..", "..", "docs", "plans");
-
-function planFiles(path) {
-  return readdirSync(path).flatMap((name) => {
-    const full = join(path, name);
-    if (statSync(full).isDirectory()) return planFiles(full);
-    return /PLAN\.md$/i.test(name) ? [full] : [];
-  });
-}
-
 /** A slice whose Context Files label has no files after it on its line but a file bullet on a later one. */
 function declaresBulletList(rawLines) {
   const labelAt = rawLines.findIndex((line) => /\*\*Context Files:?\*\*:?\s*$/i.test(line));
@@ -109,12 +100,9 @@ function declaresBulletList(rawLines) {
   return /^\s*[-*]\s+(?!\()\S/.test(next ?? "");
 }
 
-// The corpus lives in the source repository, not in a project that installed pforge-mcp.
-describe.skipIf(!existsSync(PLANS_DIR))("every Context Files bullet list in docs/plans is read (#374)", () => {
-  const root = resolve(PLANS_DIR, "..", "..");
-  const slices = existsSync(PLANS_DIR)
-    ? planFiles(PLANS_DIR).flatMap((file) => parsePlan(file, root).slices.map((parsed) => ({ plan: relative(PLANS_DIR, file).replace(/\\/g, "/"), parsed })))
-    : [];
+// The corpus is the framework's own phase plans: planning/main has them, master and an installed project do not (#398).
+describe.skipIf(PLAN_CORPUS.length === 0)("every Context Files bullet list in docs/plans is read (#374)", () => {
+  const slices = PLAN_CORPUS.flatMap((file) => parsePlan(file, PLAN_CORPUS_ROOT).slices.map((parsed) => ({ plan: relative(PLANS_DIR, file).replace(/\\/g, "/"), parsed })));
 
   it("reads a corpus large enough to mean something", () => {
     expect(slices.length).toBeGreaterThan(100);

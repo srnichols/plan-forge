@@ -5,7 +5,8 @@ import { execSync } from "node:child_process";
 import { resolve, basename, dirname, join, relative, extname, isAbsolute } from "node:path";
 import { parsePlan, normalizeSliceId, unreadDependencyEntries, VALIDATION_GATE_MARKER_RE } from "./plan-parser.mjs";
 import { lintTaskFilesOutsideScope } from "./task-scope-lint.mjs";
-import { UNIX_TOOLS, resolveGateCommandToken, isGatePrefixAllowed } from "./constants.mjs";
+import { UNIX_TOOLS, resolveGateCommandToken } from "./constants.mjs";
+import { isGateLineAllowed, loadGateAllowedPrefixes, gateAllowlistAdvice } from "./gate-allowlist.mjs";
 import { coalesceGateLines, looksLikeProse, runGate, resolveGateTimeoutMs } from "./schedulers.mjs";
 import { recall as brainRecall, loadReviewerConfig, invokeReviewer } from "../brain.mjs";
 
@@ -245,18 +246,17 @@ const GATE_WARN_RULES = Object.freeze([
   },
 ]);
 
-function _lintBasicRules({ line, slice, loc, cmdToken, lastSliceNumber, warnings, errors }) {
+function _lintBasicRules({ line, slice, loc, cmdToken, lastSliceNumber, gateAllowedPrefixes, warnings, errors }) {
   if (line.includes("/dev/stdin")) {
     errors.push({
       slice: slice.number, command: line, rule: "unix-only-path", severity: "error",
       message: `${loc}: '/dev/stdin' is Unix-only — fails on Windows. Use readFileSync(0,'utf8') for cross-platform stdin.`,
     });
   }
-  const isAllowed = isGatePrefixAllowed(cmdToken);
-  if (!isAllowed) {
+  if (!isGateLineAllowed(line, gateAllowedPrefixes)) {
     errors.push({
       slice: slice.number, command: line, rule: "blocked-command", severity: "error",
-      message: `${loc}: '${cmdToken}' is not in the gate allowlist. Add it to GATE_ALLOWED_PREFIXES or rewrite the command.`,
+      message: `${loc}: '${cmdToken}' is not in the gate allowlist. ${gateAllowlistAdvice(line)}, or rewrite the command.`,
     });
   }
   for (const { rule, applies, message } of GATE_WARN_RULES) {
@@ -303,6 +303,7 @@ function _lintCommandLine(line, slice, {
   lastSliceNumber,
   disabledRules,
   strictMode,
+  gateAllowedPrefixes,
   warnings,
   errors,
   portabilityWarnings,
@@ -316,7 +317,7 @@ function _lintCommandLine(line, slice, {
     return;
   }
   const cmdToken = _resolveCmdToken(line);
-  _lintBasicRules({ line: line, slice: slice, loc: loc, cmdToken: cmdToken, ...{ lastSliceNumber, warnings, errors } });
+  _lintBasicRules({ line: line, slice: slice, loc: loc, cmdToken: cmdToken, ...{ lastSliceNumber, gateAllowedPrefixes, warnings, errors } });
   _lintWRules({ line: line, slice: slice, loc: loc, cmdToken: cmdToken, ...{ strictMode, disabledRules, warnings, errors } });
 
   const portResult = validateGatePortability(line);
@@ -625,6 +626,7 @@ export function lintGateCommands(planFilePath, cwd = process.cwd()) {
   const lastSliceNumber = plan.slices.length > 0
     ? plan.slices[plan.slices.length - 1].number
     : null;
+  const gateAllowedPrefixes = loadGateAllowedPrefixes(cwd);
 
   // A lint that examined nothing is not a lint that passed. Three plans read
   // "0 error(s), 0 warning(s)" while every slice heading had failed to parse;
@@ -652,6 +654,7 @@ export function lintGateCommands(planFilePath, cwd = process.cwd()) {
         lastSliceNumber,
         disabledRules,
         strictMode,
+        gateAllowedPrefixes,
         warnings,
         errors,
         portabilityWarnings,
@@ -746,22 +749,26 @@ export function validateGatePortability(command) {
  * Check whether a line would pass the gate allowlist (prefix-based) without the prose guard.
  * Used by regressionGuard to implement the precedence rule: allowlisted commands win over prose heuristic.
  * @param {string} cmd - The command line to check
+ * @param {string[]} [extra] - the project's gateAllowedPrefixes
  * @returns {boolean} true if the command matches an allowlist prefix
  */
-function wouldPassAllowlist(cmd) {
+function wouldPassAllowlist(cmd, extra = []) {
   if (!cmd || typeof cmd !== "string") return false;
-  return isGatePrefixAllowed(resolveGateCommandToken(cmd));
+  return isGateLineAllowed(cmd, extra);
 }
 
 /**
  * Check if a command string is permitted in validation gates.
- * Uses the same GATE_ALLOWED_PREFIXES allowlist as runGate() and lintGateCommands().
+ * Uses the same GATE_ALLOWED_PREFIXES allowlist as runGate() and lintGateCommands(),
+ * plus the project's own entries (`gateAllowedPrefixes` in .forge.json).
  * Skips leading env-var assignments (e.g., "NODE_ENV=test npm test").
- * Additionally blocks known-dangerous patterns (e.g., rm -rf /) regardless of prefix.
+ * Additionally blocks known-dangerous patterns (e.g., rm -rf /) regardless of prefix
+ * or of what a project lists.
  * @param {string} cmd - The command line to check
+ * @param {string[]} [extra] - the project's gateAllowedPrefixes, from loadGateAllowedPrefixes
  * @returns {boolean} true if the command is allowed, false if blocked
  */
-export function isGateCommandAllowed(cmd) {
+export function isGateCommandAllowed(cmd, extra = []) {
   if (!cmd || typeof cmd !== "string") return false;
   const trimmed = cmd.trim();
 
@@ -775,7 +782,7 @@ export function isGateCommandAllowed(cmd) {
   ];
   if (BLOCKED_PATTERNS.some((p) => p.test(trimmed))) return false;
 
-  if (isGatePrefixAllowed(resolveGateCommandToken(trimmed))) {
+  if (isGateLineAllowed(trimmed, extra)) {
     return true;
   }
 
@@ -880,7 +887,8 @@ function _prioritizeByHotspots(gateItems, cwd) {
 }
 
 function _classifyAndSkipGate(gate, cwd, results) {
-  if (looksLikeProse(gate.cmd) && !wouldPassAllowlist(gate.cmd)) {
+  const extra = loadGateAllowedPrefixes(cwd);
+  if (looksLikeProse(gate.cmd) && !wouldPassAllowlist(gate.cmd, extra)) {
     results.push({ ...gate, status: "skipped", reason: "liveguard-prose-skipped" });
     try {
       appendForgeJsonl("liveguard-events.jsonl", {
@@ -893,7 +901,7 @@ function _classifyAndSkipGate(gate, cwd, results) {
     } catch { /* best-effort telemetry */ }
     return "skipped";
   }
-  if (!isGateCommandAllowed(gate.cmd)) {
+  if (!isGateCommandAllowed(gate.cmd, extra)) {
     results.push({ ...gate, status: "blocked", reason: `'${gate.cmd.split(/\s+/)[0]}' not in gate allowlist` });
     return "blocked";
   }

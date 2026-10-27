@@ -394,7 +394,7 @@ Cross-artifact consistency analysis — validates that requirements are traced t
 
 | Dimension | What It Checks |
 |---|---|
-| Traceability | MUST/SHOULD criteria exist, slices defined, criteria mapped to slices |
+| Traceability | MUST/SHOULD criteria exist, slices defined, criteria mapped to slices: a criterion counts when a slice mentions one of its significant words, and a plan with slices and no criteria earns 10 of the 25 points |
 | Coverage | Changed files within Scope Contract, no forbidden edits |
 | Test Coverage | MUST criteria matched against test files via keyword fuzzy matching |
 | Gates | Validation gates referenced in slices, no deferred-work markers in changed files |

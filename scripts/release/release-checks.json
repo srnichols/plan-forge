@@ -150,6 +150,14 @@
     { "label": "Copilot retirements announced for 2026-11-16 are listed (#393) (3.35.0)", "path": "pforge-mcp/model-retirements.json", "contains": "gpt-5.6-terra" },
     { "label": "The pricing snapshot includes the models Copilot lists now (#393) (3.35.0)", "path": "pforge-mcp/copilot-pricing.json", "contains": "claude-haiku-5.5" },
     { "label": "The pricing snapshot no longer prices a model Copilot retired on 2026-10-19 (#393) (3.35.0)", "path": "pforge-mcp/copilot-pricing.json", "notContains": "\"gpt-5.5\"" },
-    { "label": "The audit reports a scanner that did not run as unavailable instead of guessing (#397) (3.35.0)", "path": "pforge-mcp/tests/audit-wrappers.test.mjs", "contains": "long-param-walker.mjs (#397)" }
+    { "label": "The audit reports a scanner that did not run as unavailable instead of guessing (#397) (3.35.0)", "path": "pforge-mcp/tests/audit-wrappers.test.mjs", "contains": "long-param-walker.mjs (#397)" },
+    { "label": "pforge smith in bash reaches its offline fallback when the GitHub request fails (#409) (3.35.1)", "path": "pforge.sh", "contains": "|| gh_response=\"\"" },
+    { "label": "pforge org-rules export in bash reads the project's rules when no MCP server answers (#409) (3.35.1)", "path": "pforge.sh", "contains": "|| http_code=\"\"" },
+    { "label": "resolve-tag is tested against a stubbed GitHub API, so the suite does not need the network (#409) (3.35.1)", "path": "pforge-mcp/tests/update-from-github-shell.test.mjs", "contains": "stubbed GitHub API (#409)" },
+    { "label": "pforge analyze reads a criterion within its line, PowerShell (#407) (3.35.1)", "path": "pforge.ps1", "contains": "'(?m)^[ \\t]*[-*][ \\t]*\\*\\*MUST\\*\\*[: \\t]+(.+)'" },
+    { "label": "pforge analyze credits the slices of a plan that has no criteria to trace, PowerShell (#408) (3.35.1)", "path": "pforge.ps1", "contains": "if ($allCriteria.Count -eq 0 -and $scoreTrace -eq 0) { $scoreTrace = 10 }" },
+    { "label": "The manual's tool count is checked against the tool registry (#406) (3.35.1)", "path": "pforge-mcp/tests/meta-406-manual-counts.test.mjs", "contains": "in step with the tool registry (#406)" },
+    { "label": "ship.mjs names a missing release worktree (#410) (3.35.1)", "path": "pforge-mcp/tests/release-ship.test.mjs", "contains": "release worktree not found" },
+    { "label": "The MCP lock pins the patched qs (3.35.1)", "path": "pforge-mcp/package-lock.json", "contains": "qs-6.16.1.tgz" }
   ]
 }

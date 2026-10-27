@@ -236,6 +236,22 @@ describe("checkPreconditions: a query that fails is reported as failing (#410)",
     expect(r.problems).toEqual(["planning checkout: git status --porcelain failed: fatal: unable to read status"]);
   });
 
+  it("does not put the planning checkout on a wrong branch because its branch could not be read", () => {
+    const r = run({ "planning:branch": gitFailure("fatal: not a git repository") });
+    expect(r.problems).toEqual(["planning checkout: git rev-parse --abbrev-ref HEAD failed: fatal: not a git repository"]);
+  });
+
+  it("does not call an existing release worktree dirty because its status could not be read", () => {
+    const r = run({ "worktree:status": gitFailure("fatal: unable to read status") });
+    expect(r.problems).toEqual(["release worktree: git status --porcelain failed: fatal: unable to read status"]);
+  });
+
+  it("says why from what git printed, not from the error's own first lines", () => {
+    const failure = Object.assign(new Error("Command failed: git status --porcelain"), { stderr: "warning: noise\nfatal: the real reason\n" });
+    expect(run({ "planning:status": failure }).problems)
+      .toEqual(["planning checkout: git status --porcelain failed: fatal: the real reason"]);
+  });
+
   it("reports an ahead/behind comparison that failed, not a count of zero or NaN", () => {
     const r = run({ "planning:ahead-behind": gitFailure("fatal: bad revision 'origin/planning/main...HEAD'") });
     expect(r.problems).toHaveLength(1);

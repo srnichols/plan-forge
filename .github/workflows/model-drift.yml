@@ -4,11 +4,13 @@ name: Model Drift
 # GitHub Copilot (#303), so retirements and price changes surface without waiting
 # for a release. Runs scripts/check-model-drift.mjs:
 #   - a default retiring within 30 days (pforge-mcp/model-retirements.json),
-#   - a Copilot-served default missing from the live model list,
+#   - a Copilot-served default missing from the live model list, unless
+#     scripts/model-availability.json records why (a plan can hide a model, #393),
 #   - pforge-mcp/copilot-pricing.json out of date with live prices.
-# The live checks need a COPILOT_GITHUB_TOKEN secret (a token with Copilot access).
-# Drift, or missing credentials, opens or updates one tracking issue; a clean run
-# closes it. The release checklist's pricing step stays as the final check.
+# The live checks need a COPILOT_GITHUB_TOKEN secret (a token with Copilot access). The model
+# list is the token's own, filtered by its plan: use a token from a plan that has the premium
+# models for an authoritative check. Drift, or missing credentials, opens or updates one
+# tracking issue; a clean run closes it. The release checklist's pricing step stays as the final check.
 
 on:
   schedule:

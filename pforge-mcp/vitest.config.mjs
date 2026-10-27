@@ -77,6 +77,7 @@ const SOURCE_ONLY_SUITES = {
     "tests/meta-406-manual-counts.test.mjs",
     "tests/meta-413-tool-count-claims.test.mjs",
     "tests/meta-414-lockfile-registry.test.mjs",
+    "tests/dependency-advisory-floors.test.mjs",
   ],
   "../.github/instructions/release-checklist.instructions.md": [
     "tests/consumer-test-surface.test.mjs",

@@ -31,6 +31,9 @@
   "optionalDependencies": {
     "@azure/identity": "^4.4.0"
   },
+  "overrides": {
+    "zod": "^4.6.6"
+  },
   "license": "MIT",
   "author": "srnichols",
   "repository": {

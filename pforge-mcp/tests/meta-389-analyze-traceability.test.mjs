@@ -366,6 +366,18 @@ const E2E = [
     lines: ["1/1 acceptance criteria traced to a slice"],
     trace: 25,
   },
+  {
+    name: "a SHOULD marker line with no text is not a criterion, and the line below it is not its text (#407)",
+    plan: planWithSlices(["- **SHOULD**:", `  - ${ITEMS}`], "Items endpoint"),
+    lines: [],
+    trace: 15,
+  },
+  {
+    name: "a SHOULD marker with no text does not take the MUST line below it as its text (#407)",
+    plan: planWithSlices(["- **SHOULD**:", MUST(ITEMS)], "Items endpoint"),
+    lines: ["1/1 acceptance criteria traced to a slice"],
+    trace: 25,
+  },
   // #408: pforge.sh has always credited "slices defined" (CLI-GUIDE: "criteria exist, slices defined, criteria
   // mapped to slices") with a floor of 10 when there is nothing to trace; pforge.ps1 gave such a plan 0.
   {

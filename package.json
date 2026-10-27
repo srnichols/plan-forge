@@ -1,6 +1,6 @@
 {
   "name": "plan-forge",
-  "version": "3.36.0-dev",
+  "version": "3.35.1-dev",
   "private": true,
   "engines": {
     "node": ">=22.12.0"

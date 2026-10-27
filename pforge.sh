@@ -3240,7 +3240,8 @@ cmd_doctor() {
     if [ "$cache_valid" = false ]; then
         local api_url="https://api.github.com/repos/srnichols/plan-forge/releases/latest"
         local gh_response
-        gh_response="$(curl -sf --max-time 5 -H 'User-Agent: plan-forge-smith' "$api_url" 2>/dev/null)"
+        # set -e ends the script on a failed request (offline, rate-limited, timed out); the else branch below is the fallback for that
+        gh_response="$(curl -sf --max-time 5 -H 'User-Agent: plan-forge-smith' "$api_url" 2>/dev/null)" || gh_response=""
         if [ -n "$gh_response" ]; then
             source_version="$(printf '%s' "$gh_response" | json_pick tag_name | sed 's/^v//')"
             if [ -n "$source_version" ]; then
@@ -4419,10 +4420,11 @@ cmd_org_rules() {
         local body="{\"format\":\"${format}\"}"
         [ -n "$out_file" ] && body="{\"format\":\"${format}\",\"output\":\"${out_file}\"}"
         local http_code
+        # set -e ends the script when no server answers; the inline Node.js export below is the fallback for that
         http_code=$(curl -s -o /tmp/pforge_org_rules_out.txt -w "%{http_code}" \
             -X POST "http://localhost:3100/api/tool/org-rules" \
             -H "Content-Type: application/json" \
-            -d "$body" --max-time 5 2>/dev/null)
+            -d "$body" --max-time 5 2>/dev/null) || http_code=""
         if [ "$http_code" = "200" ]; then
             if [ -n "$out_file" ]; then
                 echo "  ✅ Org rules exported to: $out_file"

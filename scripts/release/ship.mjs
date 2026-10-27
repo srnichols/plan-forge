@@ -8,10 +8,12 @@
  * sync master → planning/main. Every step is the command the checklist names.
  *
  * Usage:
+ *   git worktree add ../Plan-Forge-release-3.31.0 master   # once per release: a clean checkout of master
  *   node scripts/release/ship.mjs --version 3.31.0 --title "Safer runs" \
- *     --worktree ../Plan-Forge-release-3.26.6            # dry run: preflight + plan
+ *     --worktree ../Plan-Forge-release-3.31.0              # dry run: preflight + plan
  *   node scripts/release/ship.mjs ... --execute           # run it
  *   node scripts/release/ship.mjs ... --execute --from-step tag   # resume after a failure
+ *   node scripts/release/ship.mjs --help                  # usage and the step ids
  *
  * --planning defaults to this checkout (planning/main); --date to today (UTC).
  * Nothing is pushed in a dry run. A failed step stops the run; fix the cause
@@ -19,7 +21,7 @@
  */
 
 import { execFileSync, spawnSync } from "node:child_process";
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
@@ -104,6 +106,31 @@ export function unexpectedReleaseChanges(files) {
 
 // ─── Preflight ────────────────────────────────────────────────────────
 
+/**
+ * A directory a command was to run in does not exist. Node reports that as ENOENT for the command,
+ * which reads as "git is not installed", so it gets its own error (#410).
+ */
+export class MissingDirectoryError extends Error {
+  constructor(directory) {
+    super(`directory not found: ${directory}`);
+    this.name = "MissingDirectoryError";
+    this.directory = directory;
+  }
+}
+
+const lastLine = (text) => String(text ?? "").split(/\r?\n/).map((line) => line.trim()).filter(Boolean).pop();
+
+/** A precondition query that failed, in one line: the command that was run and why it failed. */
+class QueryError extends Error {
+  constructor(query, cause) {
+    super(`${describeCommand(query)} failed: ${lastLine(cause?.stderr) ?? lastLine(cause?.message) ?? String(cause)}`);
+    this.name = "QueryError";
+    this.cause = cause;
+  }
+}
+
+const isFailure = (answer) => answer instanceof Error;
+
 const PRECONDITION_QUERIES = ({ version, worktree, planningRepo }) => [
   { key: "fetch", cmd: "git", args: ["fetch", "--quiet", "origin"], cwd: planningRepo },
   { key: "planning:branch", cmd: "git", args: ["rev-parse", "--abbrev-ref", "HEAD"], cwd: planningRepo },
@@ -116,27 +143,45 @@ const PRECONDITION_QUERIES = ({ version, worktree, planningRepo }) => [
   { key: "gh", cmd: "gh", args: ["auth", "status"], cwd: planningRepo },
 ];
 
+/** Each query's output, or the QueryError of a query that failed: a failure is never read as the state it was to report. */
 function queryAll(queries, exec) {
   const answers = {};
   for (const query of queries) {
     try {
       answers[query.key] = String(exec(query) ?? "").trim();
     } catch (err) {
-      answers[query.key] = err;
+      answers[query.key] = new QueryError(query, err);
     }
   }
   return answers;
 }
 
-function branchProblems(a) {
+function planningProblems(a) {
   const problems = [];
-  if (a["planning:branch"] !== "planning/main") problems.push(`planning checkout is on "${a["planning:branch"]}", not planning/main`);
-  if (a["planning:status"]) problems.push("planning checkout has uncommitted changes");
-  const [behind, ahead] = String(a["planning:ahead-behind"]).split(/\s+/).map(Number);
-  if (behind || ahead) problems.push(`planning/main is ${ahead} ahead / ${behind} behind origin — push or pull first`);
-  if (a["worktree:branch"] !== "master") problems.push(`release worktree is on "${a["worktree:branch"]}", not master`);
-  if (a["worktree:status"]) problems.push("release worktree has uncommitted changes");
+  const failed = ["planning:branch", "planning:status", "planning:ahead-behind"].filter((key) => isFailure(a[key]));
+  for (const key of failed) problems.push(`planning checkout: ${a[key].message}`);
+  if (!failed.includes("planning:branch") && a["planning:branch"] !== "planning/main") problems.push(`planning checkout is on "${a["planning:branch"]}", not planning/main`);
+  if (!failed.includes("planning:status") && a["planning:status"]) problems.push("planning checkout has uncommitted changes");
+  if (!failed.includes("planning:ahead-behind")) {
+    const [behind, ahead] = String(a["planning:ahead-behind"]).split(/\s+/).map(Number);
+    if (behind || ahead) problems.push(`planning/main is ${ahead} ahead / ${behind} behind origin — push or pull first`);
+  }
   return problems;
+}
+
+function worktreeProblems(a, worktree) {
+  const failed = ["worktree:branch", "worktree:status"].filter((key) => isFailure(a[key]));
+  if (failed.some((key) => a[key].cause instanceof MissingDirectoryError)) {
+    return [`release worktree not found: ${worktree} — create it with: git worktree add ${quote(worktree)} master`];
+  }
+  const problems = failed.map((key) => `release worktree: ${a[key].message}`);
+  if (!failed.includes("worktree:branch") && a["worktree:branch"] !== "master") problems.push(`release worktree is on "${a["worktree:branch"]}", not master`);
+  if (!failed.includes("worktree:status") && a["worktree:status"]) problems.push("release worktree has uncommitted changes");
+  return problems;
+}
+
+function branchProblems(a, worktree) {
+  return [...planningProblems(a), ...worktreeProblems(a, worktree)];
 }
 
 const releaseTags = (tagsText) => String(tagsText || "").split(/\s+/).filter((t) => SEMVER.test(t.replace(/^v/, "")));
@@ -147,11 +192,14 @@ export function previousTagFor(version, tagsText) {
 }
 
 function versionProblems(a, version) {
-  const latest = releaseTags(a.tags)[0];
   const problems = [];
+  const tags = isFailure(a.tags) ? "" : a.tags;
+  if (isFailure(a.tags)) problems.push(`release tags: ${a.tags.message}`);
+  const latest = releaseTags(tags)[0];
   if (latest && compareVersions(version, latest.slice(1)) <= 0) problems.push(`v${version} is not newer than the latest tag ${latest}`);
-  if (a["remote-tag"] && !(a["remote-tag"] instanceof Error)) problems.push(`tag v${version} already exists on origin`);
-  return { problems, previousTag: previousTagFor(version, a.tags) };
+  if (isFailure(a["remote-tag"])) problems.push(`origin: ${a["remote-tag"].message}`);
+  else if (a["remote-tag"]) problems.push(`tag v${version} already exists on origin`);
+  return { problems, previousTag: previousTagFor(version, tags) };
 }
 
 /**
@@ -160,8 +208,9 @@ function versionProblems(a, version) {
  */
 export function checkPreconditions({ version, worktree, planningRepo, changelog, exec = defaultExec }) {
   const answers = queryAll(PRECONDITION_QUERIES({ version, worktree, planningRepo }), exec);
-  const problems = branchProblems(answers);
-  if (answers.gh instanceof Error) problems.push("gh is not signed in — run gh auth login");
+  const problems = branchProblems(answers, worktree);
+  if (isFailure(answers.fetch)) problems.push(`origin: ${answers.fetch.message}`);
+  if (isFailure(answers.gh)) problems.push("gh is not signed in — run gh auth login");
   const versions = versionProblems(answers, version);
   problems.push(...versions.problems);
   try {
@@ -172,7 +221,8 @@ export function checkPreconditions({ version, worktree, planningRepo, changelog,
   return { ok: problems.length === 0, problems, previousTag: versions.previousTag };
 }
 
-function defaultExec({ cmd, args, cwd }) {
+export function defaultExec({ cmd, args, cwd }) {
+  if (cwd && !existsSync(cwd)) throw new MissingDirectoryError(cwd);
   return execFileSync(cmd, args, { cwd, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"], windowsHide: true });
 }
 
@@ -291,6 +341,30 @@ export function buildReleaseSteps({ platform = process.platform, ...opts }) {
 
 // ─── CLI ──────────────────────────────────────────────────────────────
 
+/** The usage text printed by --help, with the step ids that --from-step takes. */
+export function usage() {
+  const stepIds = buildReleaseSteps({
+    version: "1.2.3", title: "", date: "2000-01-01", previousTag: "v1.2.2", worktree: "", planningRepo: "", platform: "linux",
+  }).map((step) => step.id);
+  return [
+    'Usage: node scripts/release/ship.mjs --version X.Y.Z --title "<title>" --worktree <dir> [options]',
+    "",
+    "Runs docs/RELEASE-CHECKLIST.md §3 end to end. Without --execute it runs preflight and prints the plan.",
+    "",
+    "  --version X.Y.Z     the release to cut (choose the segment as RELEASE-CHECKLIST §2a says)",
+    '  --title "<text>"    the release title: the CHANGELOG heading and the GitHub Release title',
+    "  --worktree <dir>    a clean checkout of master. Create it once per release with:",
+    "                        git worktree add ../Plan-Forge-release-X.Y.Z master",
+    "  --planning <dir>    the planning/main checkout (default: this one)",
+    "  --date YYYY-MM-DD   the release date (default: today, UTC)",
+    "  --execute           run the steps; without it nothing is changed or pushed",
+    "  --from-step <id>    resume at a step after a failure (preflight is skipped)",
+    "  -h, --help          print this text",
+    "",
+    `Steps: ${stepIds.join(", ")}`,
+  ].join("\n");
+}
+
 function parseArgs(argv) {
   const opts = { execute: false, planningRepo: REPO_ROOT, date: new Date().toISOString().slice(0, ISO_DATE_LENGTH) };
   const valueFlags = { "--version": "version", "--title": "title", "--worktree": "worktree", "--planning": "planningRepo", "--date": "date", "--from-step": "fromStep" };
@@ -323,7 +397,12 @@ function selectSteps(steps, fromStep) {
 }
 
 async function main() {
-  const opts = parseArgs(process.argv.slice(2));
+  const argv = process.argv.slice(2);
+  if (argv.includes("--help") || argv.includes("-h")) {
+    console.log(usage());
+    return;
+  }
+  const opts = parseArgs(argv);
   const changelog = readFileSync(join(opts.planningRepo, "CHANGELOG.md"), "utf8");
   // Resuming skips preflight: the release is half done, so "clean and in sync" no longer holds.
   const preflight = opts.fromStep

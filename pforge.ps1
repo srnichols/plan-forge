@@ -2520,9 +2520,11 @@ function Invoke-Analyze {
     # ═══════════════════════════════════════════════════════════════
     Write-Host "Traceability:" -ForegroundColor Cyan
 
-    # Extract MUST and SHOULD criteria
-    $mustCriteria = [regex]::Matches($planContent, '(?m)^\s*[-*]\s*\*\*MUST\*\*[:\s]+(.+)') | ForEach-Object { $_.Groups[1].Value.Trim() }
-    $shouldCriteria = [regex]::Matches($planContent, '(?m)^\s*[-*]\s*\*\*SHOULD\*\*[:\s]+(.+)') | ForEach-Object { $_.Groups[1].Value.Trim() }
+    # Extract MUST and SHOULD criteria. Only horizontal whitespace may sit around the marker and before the
+    # text: \s also matches a newline, so a marker with nothing after its colon took the next line as its
+    # text, which pforge.sh (it reads line by line) does not (meta-bug #407).
+    $mustCriteria = [regex]::Matches($planContent, '(?m)^[ \t]*[-*][ \t]*\*\*MUST\*\*[: \t]+(.+)') | ForEach-Object { $_.Groups[1].Value.Trim() }
+    $shouldCriteria = [regex]::Matches($planContent, '(?m)^[ \t]*[-*][ \t]*\*\*SHOULD\*\*[: \t]+(.+)') | ForEach-Object { $_.Groups[1].Value.Trim() }
     $allCriteria = @()
     if ($mustCriteria) { $allCriteria += $mustCriteria }
     if ($shouldCriteria) { $allCriteria += $shouldCriteria }
@@ -2573,6 +2575,10 @@ function Invoke-Analyze {
 
     if ($sliceCount -gt 0) {
         Write-Host "  ✅ $sliceCount execution slices found" -ForegroundColor Green
+        # "Slices defined" is part of Traceability (CLI-GUIDE: criteria exist, slices defined, criteria mapped
+        # to slices). A plan with slices and nothing to trace earns the floor pforge.sh has always given it,
+        # not 0 (meta-bug #408); a plan whose criteria nothing traces still scores 0.
+        if ($allCriteria.Count -eq 0 -and $scoreTrace -eq 0) { $scoreTrace = 10 }
     }
     else {
         Write-Host "  ⚠️  No execution slices found (## / ### / #### Slice N pattern)" -ForegroundColor Yellow

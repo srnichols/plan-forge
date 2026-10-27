@@ -1,8 +1,16 @@
 import { describe, it, expect } from "vitest";
+import { execFileSync, spawnSync } from "node:child_process";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join, resolve } from "node:path";
 import {
   releaseSegment, nextDevVersion, promoteChangelog, releaseNotes, buildReleaseSteps,
   checkPreconditions, RELEASE_FILES, unexpectedReleaseChanges, previousTagFor,
+  defaultExec, MissingDirectoryError,
 } from "../../scripts/release/ship.mjs";
+
+const REPO = resolve(import.meta.dirname, "..", "..");
+const SHIP = join(REPO, "scripts", "release", "ship.mjs");
 
 const CHANGELOG = [
   "# Changelog",
@@ -173,5 +181,134 @@ describe("previousTagFor", () => {
     expect(previousTagFor("3.31.0", "v3.31.0\nv3.30.0\nv3.29.3")).toBe("v3.30.0");
     expect(previousTagFor("3.30.1", "v3.30.0\nv3.29.3\nnot-a-tag")).toBe("v3.30.0");
     expect(previousTagFor("1.0.0", "")).toBeNull();
+  });
+});
+
+// #410: preflight reported a release worktree that did not exist as "on Error: spawnSync git ENOENT, not
+// master" with "uncommitted changes", because the Error of a failed query was read as the state it was
+// meant to report.
+describe("checkPreconditions: a query that fails is reported as failing (#410)", () => {
+  const baseState = {
+    "planning:branch": "planning/main",
+    "planning:status": "",
+    "planning:ahead-behind": "0\t0",
+    "worktree:branch": "master",
+    "worktree:status": "",
+    tags: "v3.30.0\nv3.29.3",
+    "remote-tag": "",
+    gh: "ok",
+  };
+  const fakeExec = (state) => ({ key }) => {
+    if (state[key] instanceof Error) throw state[key];
+    return state[key];
+  };
+  const run = (overrides = {}) => checkPreconditions({
+    version: "3.31.0", worktree: "/w/release", planningRepo: "/w/main",
+    changelog: CHANGELOG, exec: fakeExec({ ...baseState, ...overrides }),
+  });
+  const gitFailure = (message) => Object.assign(new Error(`Command failed: git\n${message}`), { stderr: `${message}\n` });
+
+  it("names a release worktree that does not exist once, with the command that creates it", () => {
+    const missing = new MissingDirectoryError("/w/release");
+    const r = run({ "worktree:branch": missing, "worktree:status": missing });
+    expect(r.ok).toBe(false);
+    expect(r.problems).toEqual(["release worktree not found: /w/release — create it with: git worktree add /w/release master"]);
+  });
+
+  it("quotes the path in that command when it has a space", () => {
+    const missing = new MissingDirectoryError("/w/my release");
+    const r = checkPreconditions({
+      version: "3.31.0", worktree: "/w/my release", planningRepo: "/w/main", changelog: CHANGELOG,
+      exec: fakeExec({ ...baseState, "worktree:branch": missing, "worktree:status": missing }),
+    });
+    expect(r.problems).toEqual(['release worktree not found: /w/my release — create it with: git worktree add "/w/my release" master']);
+  });
+
+  it("reports a failed read as the command that failed and why, not as a wrong state", () => {
+    const r = run({ "worktree:branch": gitFailure("fatal: not a git repository (or any of the parent directories): .git") });
+    expect(r.problems).toHaveLength(1);
+    expect(r.problems[0]).toMatch(/^release worktree: git rev-parse --abbrev-ref HEAD failed: fatal: not a git repository/);
+    expect(r.problems[0]).not.toMatch(/is on|Error:|ENOENT|spawnSync/);
+  });
+
+  it("does not call a checkout dirty because its status could not be read", () => {
+    const r = run({ "planning:status": gitFailure("fatal: unable to read status") });
+    expect(r.problems).toEqual(["planning checkout: git status --porcelain failed: fatal: unable to read status"]);
+  });
+
+  it("reports an ahead/behind comparison that failed, not a count of zero or NaN", () => {
+    const r = run({ "planning:ahead-behind": gitFailure("fatal: bad revision 'origin/planning/main...HEAD'") });
+    expect(r.problems).toHaveLength(1);
+    expect(r.problems[0]).toMatch(/^planning checkout: git rev-list --left-right --count origin\/planning\/main\.\.\.HEAD failed: fatal: bad revision/);
+  });
+
+  it("reports a tag listing that failed instead of passing as if there were no tags", () => {
+    const r = run({ tags: gitFailure("fatal: unable to list tags") });
+    expect(r.problems).toEqual(["release tags: git tag --list v* --sort=-v:refname failed: fatal: unable to list tags"]);
+  });
+
+  it("reports an origin that could not be asked about the tag, and a fetch that failed", () => {
+    expect(run({ "remote-tag": gitFailure("fatal: unable to access origin") }).problems)
+      .toEqual(["origin: git ls-remote --tags origin v3.31.0 failed: fatal: unable to access origin"]);
+    expect(run({ fetch: gitFailure("fatal: unable to access origin") }).problems)
+      .toEqual(["origin: git fetch --quiet origin failed: fatal: unable to access origin"]);
+  });
+
+  it("still judges the state of a query that succeeded", () => {
+    const r = run({ "worktree:branch": "feature", "planning:status": " M x" });
+    expect(r.problems).toEqual(['planning checkout has uncommitted changes', 'release worktree is on "feature", not master']);
+  });
+});
+
+describe("defaultExec (#410)", () => {
+  it("fails on a directory that does not exist with that fact, without running the command", () => {
+    const missing = join(tmpdir(), `pf-no-such-dir-${process.pid}-${Date.now()}`);
+    let error;
+    try {
+      defaultExec({ cmd: "git", args: ["--version"], cwd: missing });
+    } catch (err) {
+      error = err;
+    }
+    expect(error).toBeInstanceOf(MissingDirectoryError);
+    expect(error.directory).toBe(missing);
+    expect(error.message).toContain(missing);
+  });
+});
+
+describe("ship.mjs command line (#410)", () => {
+  it("prints the usage, with how to create the release worktree and the step ids, and exits 0", () => {
+    for (const flag of ["--help", "-h"]) {
+      const r = spawnSync(process.execPath, [SHIP, flag], { encoding: "utf8" });
+      expect(r.status, r.stderr).toBe(0);
+      expect(r.stdout).toContain("--worktree");
+      expect(r.stdout).toContain("git worktree add");
+      expect(r.stdout).toContain("--from-step");
+      expect(r.stdout).toContain("push-master");
+    }
+  });
+
+  it("a dry run against a worktree that does not exist says so and how to create it", () => {
+    const root = mkdtempSync(join(tmpdir(), "pf-ship-cli-"));
+    try {
+      const planning = join(root, "planning");
+      mkdirSync(planning);
+      execFileSync("git", ["init", "-q"], { cwd: planning });
+      writeFileSync(join(planning, "CHANGELOG.md"), CHANGELOG);
+      const missing = join(root, "Plan-Forge-release-9.9.9");
+      const r = spawnSync(process.execPath, [SHIP, "--version", "9.9.9", "--title", "t", "--worktree", missing, "--planning", planning], { encoding: "utf8" });
+      expect(r.status).toBe(1);
+      expect(r.stderr).toContain(`release worktree not found: ${missing}`);
+      expect(r.stderr).toContain("git worktree add");
+      expect(r.stderr).not.toMatch(/spawnSync|ENOENT|release worktree is on|release worktree has uncommitted/);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+});
+
+describe("the release checklist (#410)", () => {
+  it("says how to create the release worktree that ship.mjs requires", () => {
+    const checklist = readFileSync(join(REPO, "docs", "RELEASE-CHECKLIST.md"), "utf8");
+    expect(checklist).toContain("git worktree add ../Plan-Forge-release-<ver> master");
   });
 });

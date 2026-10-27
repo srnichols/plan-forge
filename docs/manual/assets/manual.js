@@ -145,6 +145,7 @@
   // The value between the tokens is rewritten at build time by `maintain.mjs`
   // from the table below. Run `node docs/manual/maintain.mjs` after editing.
   // Tokens that reference an unknown key are flagged as a MEDIUM audit issue.
+  // `tools` is the exception: maintain.mjs sets it from the tools the MCP server registers.
   //
   // When you change a number here:
   //   1. Update the comment on the line so the source-of-truth is documented.
@@ -153,7 +154,7 @@
   //
   const MANUAL_COUNTS = {
     // Pipeline / surface ────────────────────────────────────────────────
-    tools:        106, // MCP TOOLS array length (capabilities snapshot toolCount) — tools.json is a curated subset (92) and lags; use: node -e "import('./pforge-mcp/server/tool-definitions.mjs').then(m=>console.log(m.TOOLS.length))"
+    tools:        107, // tools in the TOOLS array of pforge-mcp/server/tool-definitions.mjs; maintain.mjs keeps this in step (tools.json is a curated subset and lags)
     instructions: 18,  // presets/dotnet|typescript/.github/instructions/
     agents:       12,  // 6 stack-specific + 6 pipeline (post Pass 5 reconciliation; cross-stack reviewers folded into stack agents)
     skills:       11,  // dotnet preset (typescript = 10) — varies by preset

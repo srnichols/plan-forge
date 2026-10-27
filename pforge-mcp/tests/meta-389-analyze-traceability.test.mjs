@@ -352,6 +352,28 @@ const E2E = [
     lines: ["0/1 acceptance criteria traced to a slice", "No slice mentions: Reconciliation jobs recover abandoned reservations after the scheduler..."],
     trace: 0,
   },
+  // #407: pforge.ps1 read the pattern after the marker as [:\s]+, which crosses a newline, so a marker with
+  // nothing after its colon took the next line as its text.
+  {
+    name: "a marker line with no text is not a criterion, and the line below it is not its text (#407)",
+    plan: planWithSlices(["- **MUST**:", `  - ${ITEMS}`], "Items endpoint"),
+    lines: [],
+    trace: 15,
+  },
+  {
+    name: "a marker with no text does not take the SHOULD line below it as its text (#407)",
+    plan: planWithSlices(["- **MUST**:", SHOULD(ITEMS)], "Items endpoint"),
+    lines: ["1/1 acceptance criteria traced to a slice"],
+    trace: 25,
+  },
+  // #408: pforge.sh has always credited "slices defined" (CLI-GUIDE: "criteria exist, slices defined, criteria
+  // mapped to slices") with a floor of 10 when there is nothing to trace; pforge.ps1 gave such a plan 0.
+  {
+    name: "a plan with slices and no criteria earns the floor for slices defined (#408)",
+    plan: ["# Phase 9 — Trace Fixture", "", "## Scope", "", "Some prose.", "", "## Execution Slices", "", ...slice(1, "Items endpoint", GATE)].join("\n"),
+    lines: [],
+    trace: 10,
+  },
 ];
 
 function seedRepo(files) {

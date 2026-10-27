@@ -2,7 +2,10 @@
  * Shell integration tests for `pforge update --from-github` — Phase AUTO-UPDATE-01, Slice 1.
  *
  * These tests invoke the actual CLI entry point of update-from-github.mjs.
- * Skippable with CI_SKIP_NETWORK=1 when network is unavailable.
+ * `resolve-tag` runs against a stubbed GitHub API (a --import preload that replaces globalThis.fetch), so
+ * a rate-limited or offline runner cannot fail the suite (#409). The one test that asks the real API is
+ * opt-in: set CI_LIVE_NETWORK=1 (CI_SKIP_NETWORK=1 still skips it). Every release is checked against the
+ * live API by scripts/release/verify-public.mjs.
  *
  * Note: These test the Node.js CLI wrapper, not the full PS1/bash flow
  * (which requires tar + full project structure). The shell scripts delegate
@@ -10,9 +13,10 @@
  */
 
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
-import { execFile } from "node:child_process";
+import { execFile, spawnSync } from "node:child_process";
 import { resolve, join } from "node:path";
 import { mkdirSync, rmSync, writeFileSync, existsSync, readFileSync } from "node:fs";
+import { pathToFileURL } from "node:url";
 import { promisify } from "node:util";
 
 const execFileP = promisify(execFile);
@@ -20,6 +24,7 @@ const CLI_PATH = resolve(import.meta.dirname || ".", "..", "update-from-github.m
 const TMP_DIR = resolve(import.meta.dirname || ".", ".tmp-ufg-shell-test");
 
 const SKIP = process.env.CI_SKIP_NETWORK === "1" || process.env.CI_SKIP_NETWORK === "true";
+const LIVE = process.env.CI_LIVE_NETWORK === "1" || process.env.CI_LIVE_NETWORK === "true";
 
 // Windows + Node v24 libuv bug: `execFile("node", [cli])` of a subprocess that
 // holds a network handle at exit can trigger
@@ -104,10 +109,82 @@ describe("update-from-github CLI", () => {
     }
   }, 15_000);
 
-  (SKIP || SKIP_WIN_LIBUV ? it.skip : it)("resolve-tag without --tag hits GitHub API (network required)", async () => {
+  (LIVE && !SKIP && !SKIP_WIN_LIBUV ? it : it.skip)("resolve-tag without --tag hits GitHub API (live; opt in with CI_LIVE_NETWORK=1)", async () => {
     const { stdout } = await execFileP("node", [CLI_PATH, "resolve-tag"], { timeout: 10_000 });
     const result = JSON.parse(stdout.trim());
     expect(result.ok).toBe(true);
     expect(result.tag).toMatch(/^v?\d+\.\d+/);
+  });
+});
+
+// A preload that stands in for the network: UFG_FETCH_STUB maps a URL fragment to { status, body } or
+// { throws }, and every request is appended to UFG_FETCH_LOG so a test can see what was asked.
+const FETCH_STUB = `
+import { appendFileSync } from "node:fs";
+const stub = JSON.parse(process.env.UFG_FETCH_STUB);
+globalThis.fetch = async (url, init) => {
+  appendFileSync(process.env.UFG_FETCH_LOG, JSON.stringify({ url: String(url), headers: init?.headers ?? {} }) + "\\n");
+  const found = Object.entries(stub).find(([part]) => String(url).includes(part));
+  if (!found || found[1].throws) throw new TypeError(found ? found[1].throws : "fetch failed");
+  return new Response(JSON.stringify(found[1].body ?? null), { status: found[1].status ?? 200 });
+};
+`;
+
+function resolveTagStubbed(stub, { env = {} } = {}) {
+  const preload = join(TMP_DIR, "fetch-stub.mjs");
+  const log = join(TMP_DIR, "fetch-log.jsonl");
+  writeFileSync(preload, FETCH_STUB);
+  const run = spawnSync(process.execPath, ["--import", pathToFileURL(preload).href, CLI_PATH, "resolve-tag"], {
+    encoding: "utf8",
+    timeout: 60_000,
+    env: { ...process.env, GITHUB_TOKEN: "", UFG_FETCH_STUB: JSON.stringify(stub), UFG_FETCH_LOG: log, ...env },
+  });
+  let out = null;
+  try { out = JSON.parse(run.stdout.trim()); } catch { /* the assertions show the raw output through detail */ }
+  const requests = existsSync(log) ? readFileSync(log, "utf-8").trim().split("\n").map((line) => JSON.parse(line)) : [];
+  return { status: run.status, out, requests, detail: `exit ${run.status}; stdout: ${run.stdout}; stderr: ${run.stderr}` };
+}
+
+describe("update-from-github CLI resolve-tag against a stubbed GitHub API (#409)", () => {
+  const RELEASE = { status: 200, body: { tag_name: "v9.9.9" } };
+  const tags = (...names) => ({ status: 200, body: names.map((name) => ({ name })) });
+
+  it("prints the latest release tag, asking GitHub's releases endpoint the way the API expects", () => {
+    const r = resolveTagStubbed({ "/releases/latest": RELEASE, "/tags": tags("v9.9.9", "v9.9.8") });
+    expect(r.out, r.detail).toEqual({ ok: true, tag: "v9.9.9" });
+    expect(r.status, r.detail).toBe(0);
+    expect(r.requests).toHaveLength(2);
+    expect(r.requests[0].url).toMatch(/^https:\/\/api\.github\.com\/repos\/[^/]+\/[^/]+\/releases\/latest$/);
+    expect(r.requests[1].url).toMatch(/^https:\/\/api\.github\.com\/repos\/[^/]+\/[^/]+\/tags\b/);
+    // GitHub rejects an API request that has no user agent
+    expect(r.requests.map((q) => q.headers)).toEqual(Array(2).fill({ accept: "application/vnd.github+json", "user-agent": "plan-forge-update" }));
+  });
+
+  it("sends GITHUB_TOKEN as an authorization header", () => {
+    const r = resolveTagStubbed({ "/releases/latest": RELEASE, "/tags": tags("v9.9.9") }, { env: { GITHUB_TOKEN: "not-a-real-token" } });
+    expect(r.out, r.detail).toEqual({ ok: true, tag: "v9.9.9" });
+    expect(r.requests.map((q) => q.headers.authorization)).toEqual(["token not-a-real-token", "token not-a-real-token"]);
+  });
+
+  it("warns when a newer stable tag exists than the latest release, ignoring pre-releases", () => {
+    const r = resolveTagStubbed({ "/releases/latest": RELEASE, "/tags": tags("v10.0.0-rc.1", "v9.9.10", "v9.9.9") });
+    expect(r.out, r.detail).toMatchObject({ ok: true, tag: "v9.9.9", warning: { drift: true, newestTag: "v9.9.10", releaseTag: "v9.9.9" } });
+  });
+
+  it("still resolves when only the tag listing cannot be fetched", () => {
+    const r = resolveTagStubbed({ "/releases/latest": RELEASE, "/tags": { throws: "offline" } });
+    expect(r.out, r.detail).toEqual({ ok: true, tag: "v9.9.9" });
+    expect(r.status, r.detail).toBe(0);
+  });
+
+  it.each([
+    ["a rate-limited API", { status: 403, body: { message: "API rate limit exceeded" } }, "ERR_RATE_LIMITED"],
+    ["an HTTP error, whatever the body", { status: 500, body: { tag_name: "v9.9.9" } }, "ERR_API"],
+    ["a response without tag_name", { status: 200, body: {} }, "ERR_API"],
+    ["a request that cannot be made", { throws: "getaddrinfo ENOTFOUND api.github.com" }, "ERR_NETWORK"],
+  ])("reports %s and exits 1", (_what, release, code) => {
+    const r = resolveTagStubbed({ "/releases/latest": release });
+    expect(r.out, r.detail).toMatchObject({ ok: false, code });
+    expect(r.status, r.detail).toBe(1);
   });
 });

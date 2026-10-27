@@ -10,8 +10,9 @@
   "manualRollbacks": 0,
 
   "mcpTools": {
-    "total": 105,
-    "_breakdownNote": "Per-family breakdown is no longer maintained here — it drifted badly between v2.63 and v3.20. The authoritative source is pforge-mcp/tools.json (one entry per MCP tool), surfaced in docs/capabilities.md by scripts/generate-capabilities-doc.mjs."
+    "total": 107,
+    "_updatedFor": "v3.35.1",
+    "_breakdownNote": "Per-family breakdown is no longer maintained here — it drifted badly between v2.63 and v3.20. The authoritative source is pforge-mcp/tools.json (one entry per MCP tool), surfaced in docs/capabilities.md by scripts/generate-capabilities-doc.mjs. tests/meta-406-manual-counts.test.mjs fails when total is not the number of tools the server registers."
   },
 
   "cliCommands": "48+",
@@ -39,7 +40,7 @@
 
   "_knownStaleAliases": {
     "_comment": "Numbers that appeared in prior versions as current-state claims and should NEVER appear in current docs. The checker flags any of these found outside of CHANGELOG.md, /memories/, and docs/V3-CAPABILITY-AUDIT.md (excluded because that doc intentionally mentions old values for forensic purposes). Do NOT add version strings here that are also used as 'feature shipped at vX' annotations throughout the manual — the regex matcher can't distinguish historical badges from current-version claims.",
-    "mcpTools": [18, 34, 36, 43, 52, 65, 67, 69, 84, 88, 89, 91, 93, 102, 104, 106],
+    "mcpTools": [18, 34, 36, 43, 52, 65, 67, 69, 84, 88, 89, 91, 93, 102, 104, 105, 106],
     "dashboardTabs": [15],
     "testsPassing": [103, 2470, 2478, 2486, 2627, 3167, 3169, 3277, 3285, 3963],
     "agents": [14, 17, 18, 19],

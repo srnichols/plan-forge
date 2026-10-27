@@ -642,7 +642,9 @@ function _formatQuorumResponse({ context, oldestTimestamp, customQuestion, analy
 // ─── Express App + REST API  ─────────────────────────────
 export function createExpressApp() {
   const app = express();
-  app.use(express.json());
+  // Nothing sends this API a compressed body, and body-parser before 2.4.0 is open to denial of
+  // service through trailing bytes after one (GHSA-27r3-jxmh-p828), so none is inflated.
+  app.use(express.json({ inflate: false }));
   app.use("/dashboard", express.static(resolve(__dirname, "dashboard")));
   _registerExpressRouteGroups(app);
   return app;

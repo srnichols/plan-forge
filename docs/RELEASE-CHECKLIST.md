@@ -193,15 +193,21 @@ Skipping any step has burned us before. Each step has the exact command that wor
 **Automated:** `scripts/release/ship.mjs` runs this whole section, from the `to-master` sync through Step 9 and the `to-planning` sync, with the commands below:
 
 ```pwsh
+# Once per release: the release worktree, a clean checkout of master next to this one
+git worktree add ../Plan-Forge-release-<ver> master
 # Dry run: preflight, then the plan with every command, nothing changed
 node scripts/release/ship.mjs --version X.Y.Z --title "<title>" --worktree ../Plan-Forge-release-<ver>
 # Release
 node scripts/release/ship.mjs --version X.Y.Z --title "<title>" --worktree ../Plan-Forge-release-<ver> --execute
 # Resume after fixing a failed step (preflight is skipped)
 node scripts/release/ship.mjs ... --execute --from-step <step-id>
+# Usage, and the step ids that --from-step takes
+node scripts/release/ship.mjs --help
 ```
 
-Preflight requires a clean `planning/main` that is in sync with `origin`, a clean release worktree on `master`, a non-empty `[Unreleased]`, a version newer than every tag, a tag name that is free on `origin`, and a signed-in `gh`. The release and bump-back commits refuse files other than the version files and `CHANGELOG.md`. You still choose the version (§2a) and add the `release-checks.json` entries (Step 3a) before running it.
+Preflight requires a clean `planning/main` that is in sync with `origin`, a clean release worktree on `master`, a non-empty `[Unreleased]`, a version newer than every tag, a tag name that is free on `origin`, and a signed-in `gh`. It names the command that failed when it cannot read one of those, and the command that creates the worktree when it is missing. The release and bump-back commits refuse files other than the version files and `CHANGELOG.md`. You still choose the version (§2a) and add the `release-checks.json` entries (Step 3a) before running it. Remove the worktree after Step 9 with `git worktree remove ../Plan-Forge-release-<ver>`.
+
+**A machine too slow to finish Step 3a.** The rehearsal installs through Git Bash, and on a slow Windows machine that alone can pass the harness's 15-minute limit. Let `ship.mjs` run until the release commit exists (the run reaches `rehearse`), stop it, push `master` yourself (`git push origin master` from the release worktree), and wait for the **Release Rehearsal** and **Validate Setup** workflows on that commit to pass. Read the names of any failed tests before you re-run anything: a failure in something the release changed blocks the release, and a re-run is only for a test that failed on the network or the runner's load, which you then file as an issue. Then resume with `--from-step tag`, which skips the push you already did. Do not resume at `push-master`: that step is followed by the tag, with nothing waiting for the workflows.
 
 Before Step 1, sync consumer code from `planning/main` onto `master` using
 `scripts/sync-master.ps1 -Direction to-master` or its Bash twin. Check the

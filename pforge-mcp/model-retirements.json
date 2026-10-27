@@ -3,9 +3,11 @@
     "GitHub Copilot model retirements (#303). Plan Forge must not default to a model listed here.",
     "Value: the retirement date. Where GitHub announced one window for several models, the date is the window's end.",
     "Add a model when GitHub announces its retirement. The weekly Model Drift workflow (scripts/check-model-drift.mjs)",
-    "fails when a default retires within 30 days, and model-defaults-contract.test.mjs fails once it has."
+    "fails when a default retires within 30 days, and model-defaults-contract.test.mjs fails once it has.",
+    "Only a passed retirement date drops a model from pforge-mcp/copilot-pricing.json: the live model list is one account's view (#393).",
+    "claude-opus-4.8 stays available to individual Copilot subscribers on annual plans; the deprecation applies to everyone else."
   ],
-  "source": "GitHub Copilot supported-models page and changelog, 2026-09-30 model refresh",
+  "source": "GitHub Copilot supported-models page and changelog: the 2026-09-30 model refresh and the 2026-10-15 deprecation notice",
   "copilot": {
     "claude-sonnet-4.6": "2026-09-01",
     "claude-opus-4.7": "2026-10-02",
@@ -17,6 +19,9 @@
     "gpt-5.4": "2026-10-19",
     "gpt-5.4-mini": "2026-10-19",
     "gpt-5-mini": "2026-10-19",
-    "grok-4.5": "2026-10-19"
+    "grok-4.5": "2026-10-19",
+    "claude-opus-4.8": "2026-11-16",
+    "claude-opus-5": "2026-11-16",
+    "gpt-5.6-terra": "2026-11-16"
   }
 }

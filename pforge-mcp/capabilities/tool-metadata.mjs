@@ -1546,7 +1546,7 @@ export const TOOL_METADATA = {
     },
     example: {
       input: { preset: "config" },
-      output: { runtime: "cli-gh", presets: [{ preset: "config", declared: 2, effective: 2, synthesisViable: true, recommendation: null, models: [{ model: "claude-opus-5", status: "available", via: "cli", priced: true }, { model: "gtp-5.6-sol", status: "available", via: "cli", priced: false }], warnings: ["gtp-5.6-sol is not in the pricing registry — cost estimates fall back to a conservative rate, and the name may be a typo. Routing is unaffected."] }] },
+      output: { runtime: "cli-gh", presets: [{ preset: "config", declared: 2, effective: 2, synthesisViable: true, recommendation: null, models: [{ model: "claude-opus-5.5", status: "available", via: "cli", priced: true }, { model: "gtp-5.6-sol", status: "available", via: "cli", priced: false }], warnings: ["gtp-5.6-sol is not in the pricing registry — cost estimates fall back to a conservative rate, and the name may be a typo. Routing is unaffected."] }] },
     },
   },
   // NOTE: forge_self_update was removed in v3.15.2. It was never an MCP tool —

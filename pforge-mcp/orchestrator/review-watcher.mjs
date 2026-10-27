@@ -1711,7 +1711,7 @@ export function appendWatchHistory(report, watcherCwd = process.cwd()) {
  * @param {string} options.targetPath  - Absolute path to project being watched
  * @param {string} [options.runId]     - Specific run dir; default = latest
  * @param {"snapshot"|"analyze"} [options.mode="snapshot"]
- * @param {string} [options.model]     - Override watcher model (default: claude-opus-4.8)
+ * @param {string} [options.model]     - Override watcher model (default: DEFAULT_WATCHER_MODEL)
  * @param {number} [options.timeout=300000] - Worker timeout for analyze mode
  * @param {number} [options.tailEvents=25] - Trailing events (1-200)
  * @param {string} [options.sinceTimestamp] - (v2.35) Only flag events newer than this ISO timestamp

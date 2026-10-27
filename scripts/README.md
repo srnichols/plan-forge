@@ -159,7 +159,8 @@ Get-RunStatus -RunDir ".forge/runs/2026-05-05T09-00-00"
 | `check-manual-links.mjs` | Validate links in the manual HTML pages |
 | `check-metrics.ps1` | Validate metrics thresholds |
 | `sync-versions.mjs` | Set `VERSION` and every package version together; `--check` reports drift (#306) |
-| `check-model-drift.mjs` | Model defaults retiring within 30 days, defaults missing from Copilot, and stale AI-credit pricing; run weekly by the Model Drift workflow (#303) |
+| `check-model-drift.mjs` | Model defaults retiring within 30 days, defaults missing from Copilot with no recorded reason, and stale AI-credit pricing; run weekly by the Model Drift workflow (#303). A default the account's plan hides is a note when `model-availability.json` records why (#393) |
+| `model-availability.json` | Data for the drift check: Copilot models the live list does not show to the checking account, each with its evidence (#393) |
 | `audit/preset-build/extract.mjs` | Writes a stack's manifest-mapped preset code blocks into its scaffold (#309) |
 | `audit/preset-build/run.mjs` | Builds and runs a stack's checks in Docker from its manifest; run nightly by the Preset Build Checks workflow (#309) |
 | `release/rehearse.mjs` | Release rehearsal: fresh setup and update from the previous release, both shells, from the release archive; tag-collision preflight (#300, #128) |

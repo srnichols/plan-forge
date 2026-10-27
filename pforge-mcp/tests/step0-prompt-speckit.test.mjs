@@ -15,6 +15,7 @@ import { describe, it, expect } from "vitest";
 import { readFileSync } from "node:fs";
 import { resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
+import { optionalGuidanceUnavailable } from "./helpers/optional-guidance.mjs";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const PROMPT_PATH = resolve(
@@ -22,11 +23,13 @@ const PROMPT_PATH = resolve(
   "../../.github/prompts/step0-specify-feature.prompt.md"
 );
 
-const prompt = readFileSync(PROMPT_PATH, "utf-8");
+const skipMissingPrompt = optionalGuidanceUnavailable(PROMPT_PATH);
+const prompt = skipMissingPrompt ? undefined : readFileSync(PROMPT_PATH, "utf-8");
+const promptSuite = describe.skipIf(skipMissingPrompt);
 
 // ─── 1. CLI shortcut ──────────────────────────────────────────────────────────
 
-describe("step0 prompt — pforge crucible import CLI shortcut", () => {
+promptSuite("step0 prompt — pforge crucible import CLI shortcut", () => {
   it("references 'pforge crucible import' in the Spec Kit section", () => {
     expect(prompt).toContain("pforge crucible import");
   });
@@ -38,7 +41,7 @@ describe("step0 prompt — pforge crucible import CLI shortcut", () => {
 
 // ─── 2. Spec Kit import options ───────────────────────────────────────────────
 
-describe("step0 prompt — Spec Kit import options", () => {
+promptSuite("step0 prompt — Spec Kit import options", () => {
   it("offers an 'Import spec' option", () => {
     expect(prompt).toMatch(/Import spec/);
   });
@@ -63,7 +66,7 @@ describe("step0 prompt — Spec Kit import options", () => {
 
 // ─── 3. Crucible frontmatter requirement ──────────────────────────────────────
 
-describe("step0 prompt — Crucible frontmatter requirement (v2.37)", () => {
+promptSuite("step0 prompt — Crucible frontmatter requirement (v2.37)", () => {
   it("documents the crucibleId frontmatter field", () => {
     expect(prompt).toMatch(/crucibleId/);
   });
@@ -83,7 +86,7 @@ describe("step0 prompt — Crucible frontmatter requirement (v2.37)", () => {
 
 // ─── 4. [NEEDS CLARIFICATION] marker pattern ──────────────────────────────────
 
-describe("step0 prompt — [NEEDS CLARIFICATION] pattern", () => {
+promptSuite("step0 prompt — [NEEDS CLARIFICATION] pattern", () => {
   it("uses [NEEDS CLARIFICATION] markers throughout", () => {
     expect(prompt).toMatch(/\[NEEDS CLARIFICATION/);
   });
@@ -95,7 +98,7 @@ describe("step0 prompt — [NEEDS CLARIFICATION] pattern", () => {
 
 // ─── 5. XML specification output block ───────────────────────────────────────
 
-describe("step0 prompt — XML output block", () => {
+promptSuite("step0 prompt — XML output block", () => {
   it("includes a <specification> XML output example", () => {
     expect(prompt).toMatch(/<specification/);
   });
@@ -111,7 +114,7 @@ describe("step0 prompt — XML output block", () => {
 
 // ─── 6. Spec Kit artifact scanning ───────────────────────────────────────────
 
-describe("step0 prompt — artifact discovery", () => {
+promptSuite("step0 prompt — artifact discovery", () => {
   it("documents all three Spec Kit artifact types", () => {
     expect(prompt).toMatch(/spec\.md/);
     expect(prompt).toMatch(/plan\.md/);

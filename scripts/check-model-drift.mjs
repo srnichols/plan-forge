@@ -7,9 +7,14 @@
  * Without waiting for a release, reports:
  *   - retiring    a model Plan Forge defaults to retires within N days, or has
  *                 already retired (pforge-mcp/model-retirements.json);
- *   - unavailable a Copilot-served default is missing from the live Copilot model list;
+ *   - unavailable a Copilot-served default is missing from the live Copilot model list
+ *                 and nobody has recorded why (scripts/model-availability.json);
  *   - pricing     pforge-mcp/copilot-pricing.json differs from the live AI-credit prices
- *                 (models added, removed or repriced).
+ *                 (models added or repriced), or still prices a model whose retirement has passed.
+ * The live list is the signed-in account's own, filtered by its Copilot plan and policy, so
+ * a model it lacks may be plan-gated, not retired (#393). Such a default is a note when its
+ * gating is recorded, and a priced model the list lacks stays in the snapshot until its
+ * retirement date passes; neither is drift.
  * The live checks need Copilot access (COPILOT_GITHUB_TOKEN / GH_TOKEN, or a signed-in
  * gh). Without it they are skipped and reported as such; the retirement check still runs.
  *
@@ -21,7 +26,7 @@ import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { defaultedModels } from "../pforge-mcp/orchestrator/constants.mjs";
 import { isDirectApiOnlyModel } from "../pforge-mcp/orchestrator/worker-spawn.mjs";
-import { buildSnapshot, loadCopilotModels, readExistingSnapshot } from "./sync-copilot-pricing.mjs";
+import { buildSnapshot, loadCopilotModels, readExistingSnapshot, retiredAsOf } from "./sync-copilot-pricing.mjs";
 
 const REPO = resolve(fileURLToPath(new URL("..", import.meta.url)));
 const DAY_MS = 86_400_000;
@@ -45,13 +50,35 @@ export function unavailableDefaults({ defaults, liveIds, isDirectApiOnly = isDir
   return defaults.filter((model) => !isDirectApiOnly(model) && !live.has(model));
 }
 
-/** Models added, removed or repriced between two pricing snapshots' `models` maps. */
-export function diffPricing(saved, fresh) {
+/**
+ * Splits the defaults the live list lacks into those whose absence somebody has explained (a note,
+ * with its evidence) and those nobody has (drift). The list is one account's view, filtered by plan.
+ *
+ * @param {string[]} missing
+ * @param {Record<string, { reason: string, detail: string, checked: string }>} [notListed] - scripts/model-availability.json
+ * @returns {{ drift: string[], notes: { model: string, reason: string, detail: string, checked: string }[] }}
+ */
+export function splitUnavailable(missing, notListed = {}) {
+  const drift = [];
+  const notes = [];
+  for (const model of missing) {
+    if (Object.hasOwn(notListed, model)) notes.push({ model, ...notListed[model] });
+    else drift.push(model);
+  }
+  return { drift, notes };
+}
+
+/**
+ * Models added, removed or repriced between two pricing snapshots' `models` maps. A model the live
+ * map lacks is removed only when its retirement has passed; otherwise it is kept, because the
+ * account's list omits models its plan hides (#393).
+ */
+export function diffPricing(saved, fresh, { isRetired = () => false } = {}) {
   const keys = new Set([...Object.keys(saved), ...Object.keys(fresh)]);
-  const out = { added: [], removed: [], changed: [] };
+  const out = { added: [], removed: [], changed: [], kept: [] };
   for (const id of [...keys].sort()) {
-    if (!(id in saved)) out.added.push(id);
-    else if (!(id in fresh)) out.removed.push(id);
+    if (!Object.hasOwn(saved, id)) out.added.push(id);
+    else if (!Object.hasOwn(fresh, id)) (isRetired(id) ? out.removed : out.kept).push(id);
     else if (JSON.stringify(saved[id]) !== JSON.stringify(fresh[id])) out.changed.push(id);
   }
   return out;
@@ -68,46 +95,83 @@ function pricingLines(pricing) {
   return parts.length ? [...parts, "", "Refresh with `node scripts/sync-copilot-pricing.mjs` and commit `pforge-mcp/copilot-pricing.json`."] : [];
 }
 
-/** Markdown report; empty sections are omitted. */
-export function renderReport({ retiring, unavailable, pricing, liveError, withinDays }) {
+function noteLines(notes) {
+  return notes.map((n) => `- \`${n.model}\` is ${n.reason}: ${String(n.detail).replace(/\.$/, "")}. Checked ${n.checked}.`);
+}
+
+/** Markdown report; empty sections are omitted. Notes follow the drift and never count as drift. */
+export function renderReport({ retiring, unavailable, notes = [], pricing, liveError, withinDays }) {
   const lines = ["## Copilot model and pricing drift", ""];
   if (retiring.length) lines.push(`### Defaults retiring within ${withinDays} days`, "", ...retiringLines(retiring), "", "Move these defaults in `pforge-mcp/orchestrator/constants.mjs` (and the restatements the model-defaults contract test pins).", "");
-  if (unavailable.length) lines.push("### Defaults missing from the live Copilot model list", "", ...unavailable.map((m) => `- \`${m}\``), "");
+  if (unavailable.length) lines.push("### Defaults missing from the live Copilot model list", "", ...unavailable.map((m) => `- \`${m}\``), "", "If a plan or policy hides one from this account, record the evidence in `scripts/model-availability.json`; if Copilot retired it, add it to `pforge-mcp/model-retirements.json`.", "");
   const priced = pricing ? pricingLines(pricing) : [];
   if (priced.length) lines.push("### AI-credit pricing changed", "", ...priced, "");
   if (liveError) lines.push("### Live checks skipped", "", `The Copilot model list was unavailable (${liveError}). Set a \`COPILOT_GITHUB_TOKEN\` secret with Copilot access so the weekly check can compare availability and pricing.`, "");
-  if (lines.length === 2) lines.push("No drift: every default is available and not retiring soon, and the pricing snapshot is current.");
+  if (lines.length === 2) lines.push("No drift: every default is available and not retiring soon, and the pricing snapshot is current.", "");
+  if (notes.length) lines.push("### Defaults this account cannot see (recorded, not drift)", "", ...noteLines(notes), "", "The list is this account's own, filtered by its Copilot plan. Run the check with a token from a plan that has these models for an authoritative answer.", "");
+  if (pricing?.kept?.length) lines.push("### Priced models kept: not in this account's list, no retirement has passed", "", pricing.kept.map((id) => `\`${id}\``).join(", "), "");
   return `${lines.join("\n").trimEnd()}\n`;
 }
 
-async function liveChecks(defaults) {
-  try {
-    const models = await loadCopilotModels();
-    const fresh = buildSnapshot(models);
-    return {
-      unavailable: unavailableDefaults({ defaults, liveIds: models.map((m) => m.id) }),
-      pricing: diffPricing(readExistingSnapshot().models, fresh.models),
-      liveError: null,
-    };
-  } catch (err) {
-    return { unavailable: [], pricing: null, liveError: err.message.split("\n")[0] };
+/**
+ * Decides what drifted, from what the live list shows. Pure: the model list, the snapshot and the
+ * clock are arguments, so a check can be run against any account's list.
+ *
+ * @param {object} input
+ * @param {string[]} input.defaults - every model Plan Forge picks on the user's behalf
+ * @param {Record<string, string>} input.retirements - pforge-mcp/model-retirements.json
+ * @param {{ notListed?: object }} [input.registry] - scripts/model-availability.json
+ * @param {object[]|null} input.models - the account's listModels(), null when it could not be read
+ * @param {{ models: object }} input.existing - the pricing snapshot on disk
+ * @param {number} [input.now]
+ * @param {number} [input.withinDays]
+ * @param {string|null} [input.liveError]
+ */
+export function evaluateDrift({ defaults, retirements, registry = {}, models, existing, now = Date.now(), withinDays = DEFAULT_WITHIN_DAYS, liveError = null }) {
+  const retiring = retiringDefaults({ defaults, retirements, now, withinDays });
+  if (!models) {
+    return { retiring, unavailable: [], notes: [], pricing: null, liveError: liveError ?? "no model list", withinDays };
   }
+  const { drift, notes } = splitUnavailable(unavailableDefaults({ defaults, liveIds: models.map((m) => m.id) }), registry.notListed);
+  const pricing = diffPricing(existing.models, buildSnapshot(models).models, { isRetired: retiredAsOf(retirements, now) });
+  return { retiring, unavailable: drift, notes, pricing, liveError: null, withinDays };
+}
+
+/** 1 when anything drifted, 3 when nothing did but the live checks could not run, else 0. */
+export function exitCodeFor({ retiring, unavailable, pricing, liveError }) {
+  const pricingDrift = pricing && ["added", "removed", "changed"].some((kind) => pricing[kind].length > 0);
+  if (retiring.length || unavailable.length || pricingDrift) return EXIT_DRIFT;
+  return liveError ? EXIT_LIVE_SKIPPED : EXIT_CLEAN;
+}
+
+async function loadLiveModels() {
+  try {
+    return { models: await loadCopilotModels(), liveError: null };
+  } catch (err) {
+    return { models: null, liveError: err.message.split("\n")[0] };
+  }
+}
+
+function readJson(...segments) {
+  return JSON.parse(readFileSync(join(REPO, ...segments), "utf8"));
 }
 
 async function main() {
   const argv = process.argv.slice(2);
   const opt = (name) => (argv.includes(name) ? argv[argv.indexOf(name) + 1] : undefined);
   const withinDays = Number(opt("--within-days") ?? DEFAULT_WITHIN_DAYS);
-  const defaults = defaultedModels();
-  const retirements = JSON.parse(readFileSync(join(REPO, "pforge-mcp", "model-retirements.json"), "utf8")).copilot;
-  const retiring = retiringDefaults({ defaults, retirements, withinDays });
-  const live = await liveChecks(defaults);
-  const report = renderReport({ retiring, withinDays, ...live });
+  const result = evaluateDrift({
+    defaults: defaultedModels(),
+    retirements: readJson("pforge-mcp", "model-retirements.json").copilot,
+    registry: readJson("scripts", "model-availability.json"),
+    existing: readExistingSnapshot(),
+    withinDays,
+    ...(await loadLiveModels()),
+  });
+  const report = renderReport(result);
   if (opt("--report")) writeFileSync(opt("--report"), report);
   process.stdout.write(report);
-  const pricingDrift = live.pricing && Object.values(live.pricing).some((ids) => ids.length);
-  if (retiring.length || live.unavailable.length || pricingDrift) return EXIT_DRIFT;
-  return live.liveError ? EXIT_LIVE_SKIPPED : EXIT_CLEAN;
+  return exitCodeFor(result);
 }
 
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {

@@ -3,6 +3,7 @@ import { readFileSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { randomUUID } from "node:crypto";
+import { optionalGuidanceUnavailable } from "./helpers/optional-guidance.mjs";
 
 import { classifyDiff, CATEGORIES, SEVERITY_ORDER, maxSeverity } from "../diff-classify.mjs";
 
@@ -16,7 +17,10 @@ vi.mock("node:child_process", async (importOriginal) => {
   };
 });
 
-import { runPreCommitChain } from "../../.github/hooks/PreCommit.mjs";
+const hookUrl = new URL("../../.github/hooks/PreCommit.mjs", import.meta.url);
+const skipMissingHook = optionalGuidanceUnavailable(fileURLToPath(hookUrl));
+const hook = skipMissingHook ? undefined : await import(hookUrl.href);
+const runPreCommitChain = hook?.runPreCommitChain;
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const FIXTURES = resolve(HERE, "fixtures", "diff-classify");
@@ -132,7 +136,7 @@ describe("diff-classify heuristics", () => {
   });
 });
 
-describe("diff-classify precommit integration", () => {
+describe.skipIf(skipMissingHook)("diff-classify precommit integration (requires installed PreCommit)", () => {
   const savedEnv = {};
 
   beforeEach(() => {

@@ -141,6 +141,15 @@
     { "label": "A plan's Stop Conditions section reaches the worker (#365) (3.35.0)", "path": "pforge-mcp/orchestrator/plan-stop-conditions.mjs", "contains": "parseStopConditions" },
     { "label": "Gate linter warns on a half-read Depends On entry (#368) (3.35.0)", "path": "pforge-mcp/orchestrator/gate-helpers.mjs", "contains": "depends-entry-not-parsed" },
     { "label": "A project can extend the gate command allowlist with gateAllowedPrefixes (#367) (3.35.0)", "path": "pforge-mcp/orchestrator/gate-allowlist.mjs", "contains": "loadGateAllowedPrefixes" },
-    { "label": "A [manual] gate holds an auto run for a person to verify it (#369) (3.35.0)", "path": "pforge-mcp/orchestrator/run-plan/manual-gate-hold.mjs", "contains": "holdManualGateSlice" }
+    { "label": "A [manual] gate holds an auto run for a person to verify it (#369) (3.35.0)", "path": "pforge-mcp/orchestrator/run-plan/manual-gate-hold.mjs", "contains": "holdManualGateSlice" },
+    { "label": "setup.sh copies the runtime packages from a source tree under a .forge folder (#346) (3.35.0)", "path": "pforge-mcp/tests/meta-346-setup-sh-package-filter.test.mjs", "contains": "list_runtime_package_files" },
+    { "label": "An installed custom-preset project skips only the guidance tests whose files it lacks (#347) (3.35.0)", "path": "pforge-mcp/tests/helpers/optional-guidance.mjs", "contains": "optionalGuidanceUnavailable" },
+    { "label": "pforge analyze scores Traceability by the slices, PowerShell (#389) (3.35.0)", "path": "pforge.ps1", "contains": "Get-UntracedCriteria" },
+    { "label": "pforge analyze scores Traceability by the slices, bash (#389) (3.35.0)", "path": "pforge.sh", "contains": "analyze_untraced_criteria" },
+    { "label": "pforge analyze counts and lists the criteria the way PowerShell does, bash (#389) (3.35.0)", "path": "pforge.sh", "contains": "analyze_marked_criteria()" },
+    { "label": "Copilot retirements announced for 2026-11-16 are listed (#393) (3.35.0)", "path": "pforge-mcp/model-retirements.json", "contains": "gpt-5.6-terra" },
+    { "label": "The pricing snapshot includes the models Copilot lists now (#393) (3.35.0)", "path": "pforge-mcp/copilot-pricing.json", "contains": "claude-haiku-5.5" },
+    { "label": "The pricing snapshot no longer prices a model Copilot retired on 2026-10-19 (#393) (3.35.0)", "path": "pforge-mcp/copilot-pricing.json", "notContains": "\"gpt-5.5\"" },
+    { "label": "The audit reports a scanner that did not run as unavailable instead of guessing (#397) (3.35.0)", "path": "pforge-mcp/tests/audit-wrappers.test.mjs", "contains": "long-param-walker.mjs (#397)" }
   ]
 }

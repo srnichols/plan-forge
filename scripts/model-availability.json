@@ -1,0 +1,26 @@
+{
+  "$comment": [
+    "Copilot models the live model list does not show to the account that runs the drift check (#393).",
+    "listModels() is filtered by the signed-in account's Copilot plan and policy, so a model missing from it is not evidence that Copilot stopped serving it.",
+    "An entry turns 'a default is missing from the live list' from drift into a note. Add one only with evidence: say what you checked and when.",
+    "A model leaves the pricing snapshot only when its retirement is announced in pforge-mcp/model-retirements.json and the date has passed; do not list a retired model here.",
+    "For an authoritative weekly check, give the Model Drift workflow a COPILOT_GITHUB_TOKEN from a plan that has the premium models."
+  ],
+  "notListed": {
+    "claude-opus-5.5": {
+      "reason": "plan-gated",
+      "detail": "GitHub's changelog of 2026-09-22 offers it to Copilot Pro+, Max, Business and Enterprise only; copilot --model claude-opus-5.5 is rejected as not available on an account without them, and no retirement is announced",
+      "checked": "2026-10-24"
+    },
+    "gpt-6-astra": {
+      "reason": "plan-gated",
+      "detail": "GitHub's changelog of 2026-09-04 offers it to Copilot Pro+, Max, Business and Enterprise only; copilot --model gpt-6-astra is rejected as not available on an account without them, and no retirement is announced",
+      "checked": "2026-10-24"
+    },
+    "gemini-3.8-flash": {
+      "reason": "unlisted",
+      "detail": "copilot --model gemini-3.8-flash answers on the account whose listModels() omits it, so the list is incomplete here, not the model retired",
+      "checked": "2026-10-24"
+    }
+  }
+}

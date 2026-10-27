@@ -11,7 +11,8 @@
  *
  * Two tests:
  *  1. Fast fixture check — baseline JSON exists and has totalErrors === 5.
- *  2. Full audit run — fresh results must not exceed baseline error count.
+ *  2. Full audit run — fresh results must not exceed baseline error count. Skipped, naming
+ *     them, when a scanner could not run (no acorn or eslint in the install).
  */
 
 import { describe, it, expect } from 'vitest';
@@ -47,7 +48,7 @@ describe.skipIf(!BASELINE_AVAILABLE)('clean-code no-regression gate (Phase-55)',
   it(
     'fresh audit produces no more errors than baseline',
     { timeout: 180_000 },
-    () => {
+    (ctx) => {
       const tmpOut = join(tmpdir(), `pf55-clean-code-${Date.now()}-${process.pid}.json`);
       // Sub-scanners write their raw reports to a fixed dir under docs/plans/.
       // Redirect it, or a full test run leaves 9 tracked files dirty.
@@ -79,6 +80,14 @@ describe.skipIf(!BASELINE_AVAILABLE)('clean-code no-regression gate (Phase-55)',
 
         const baseline = JSON.parse(readFileSync(BASELINE_PATH, 'utf8'));
         const current = JSON.parse(readFileSync(tmpOut, 'utf8'));
+
+        // acorn and eslint are root dev dependencies. A CI-style install (npm install in pforge-mcp only)
+        // has neither, so those scanners do not run, and a total that lacks them says nothing about a
+        // regression. The audit reports them as unavailable; this skips, naming them (#397).
+        const notRun = Object.entries(current.categories).filter(([, category]) => category.unavailable);
+        if (notRun.length > 0) {
+          ctx.skip(`audit scanners did not run: ${notRun.map(([name, category]) => `${name} (${category.reason})`).join('; ')}`);
+        }
 
         if (current.summary.totalErrors > baseline.summary.totalErrors) {
           const delta = current.summary.totalErrors - baseline.summary.totalErrors;

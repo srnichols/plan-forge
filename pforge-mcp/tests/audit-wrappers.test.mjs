@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { spawnSync } from "node:child_process";
-import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync, rmSync } from "node:fs";
+import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync, rmSync, copyFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { auditGlobs, auditRoots } from "../../scripts/audit/scan-roots.mjs";
@@ -368,5 +368,178 @@ describe("run-eslint-clean-code.mjs (#370)", () => {
     const result = run("run-eslint-clean-code.mjs", project);
     expect(result.status).toBe(1);
     expect(result.stderr).toMatch(/eslint is not installed/);
+  });
+});
+
+// ─── long-param-walker.mjs and clean-code-review.mjs (#397) ──────────────────
+//
+// Meta-bug #397 — a CI-style install (npm install in pforge-mcp only) has neither acorn nor
+// eslint at the repository root. long-param-walker.mjs then fell back to a regex that counts
+// every comma inside a call's parentheses, nested calls and literals included, and reported 82
+// long-parameter errors that are not there, while the ESLint category dropped out of the report
+// without a word. The clean-code no-regression test failed on the false errors. A scanner that
+// cannot run is now reported as unavailable, with its reason, and no scan guesses.
+
+/** Copies audit scripts into the project's own scripts/audit, so acorn is resolved from the project and not from this repository. */
+function installAuditScripts(root, names) {
+  mkdirSync(join(root, "scripts", "audit"), { recursive: true });
+  for (const name of names) copyFileSync(join(AUDIT_DIR, name), join(root, "scripts", "audit", name));
+}
+
+function runInstalled(script, { root, rawDir }, args = []) {
+  return spawnSync(process.execPath, [join(root, "scripts", "audit", script), ...args], {
+    cwd: root,
+    encoding: "utf8",
+    timeout: 60_000,
+    env: { ...process.env, PFORGE_AUDIT_RAW_DIR: rawDir },
+  });
+}
+
+/** A fake acorn whose parse() returns one call expression per entry, with that many arguments. */
+function installAcornStub(root, argCounts) {
+  const dir = join(root, "node_modules", "acorn");
+  mkdirSync(dir, { recursive: true });
+  writeFileSync(join(dir, "package.json"), JSON.stringify({ name: "acorn", version: "0.0.0", main: "index.js" }));
+  const body = argCounts.map((count, i) => ({
+    type: "CallExpression",
+    callee: { type: "Identifier", name: `call${i}` },
+    arguments: Array.from({ length: count }, () => ({ type: "Literal" })),
+    loc: { start: { line: i + 1, column: 0 } },
+  }));
+  writeFileSync(join(dir, "index.js"), `exports.parse = () => (${JSON.stringify({ type: "Program", body })});\n`);
+}
+
+// A call whose parentheses hold more than 100 characters and several commas, as the regex looks for.
+const WIDE_CALL = `call(${["aaaaaaaaaaaaaaaaaaaa", "bbbbbbbbbbbbbbbbbbbb", "cccccccccccccccccccc", "dddddddddddddddddddd", "eeeeeeeeeeeeeeeeeeee", "ffffffffffffffffffff", "g"].join(", ")});\n`;
+
+describe("long-param-walker.mjs (#397)", () => {
+  let project;
+  beforeEach(() => {
+    project = makeProject();
+    installAuditScripts(project.root, ["long-param-walker.mjs", "raw-dir.mjs", "scan-roots.mjs"]);
+    mkdirSync(join(project.root, "pforge-mcp", "src"), { recursive: true });
+    writeFileSync(join(project.root, "pforge-mcp", "src", "wide.mjs"), WIDE_CALL);
+  });
+  const reportPath = ({ rawDir }) => join(rawDir, "long-param-report.json");
+
+  it("does not guess from a regex when acorn is not installed: it exits 1, says so and writes no report", () => {
+    mkdirSync(project.rawDir, { recursive: true });
+    writeFileSync(reportPath(project), JSON.stringify([{ file: "old.mjs", line: 1, callee: "f", argCount: 9 }]));
+    const result = runInstalled("long-param-walker.mjs", project);
+    expect(result.status).toBe(1);
+    expect(result.stderr).toMatch(/acorn is not installed/);
+    expect(result.stderr).toMatch(/did not run/);
+    expect(existsSync(reportPath(project)), "neither regex guesses nor an earlier run's report may stand in for the scan").toBe(false);
+  });
+
+  it("reads each call through acorn when it is installed, with no regex finding", () => {
+    installAcornStub(project.root, [7, 3]);
+    const result = runInstalled("long-param-walker.mjs", project);
+    expect(result.status, result.stderr).toBe(0);
+    const report = JSON.parse(readFileSync(reportPath(project), "utf8"));
+    expect(report).toEqual([{ file: "pforge-mcp/src/wide.mjs", line: 1, col: 0, callee: "call0", argCount: 7 }]);
+    expect(JSON.stringify(report)).not.toContain("regex-fallback");
+  });
+
+  it("reports a clean scan as an empty report", () => {
+    installAcornStub(project.root, [2, 5]);
+    const result = runInstalled("long-param-walker.mjs", project);
+    expect(result.status, result.stderr).toBe(0);
+    expect(JSON.parse(readFileSync(reportPath(project), "utf8"))).toEqual([]);
+  });
+
+  it("exits 1 and writes no report when the scan itself fails, instead of a report that is not a findings array", () => {
+    installAcornStub(project.root, [7]);
+    rmSync(join(project.root, "pforge-mcp"), { recursive: true });
+    writeFileSync(join(project.root, "pforge-mcp"), "a file where the scan root should be a directory");
+    mkdirSync(project.rawDir, { recursive: true });
+    writeFileSync(reportPath(project), JSON.stringify([{ file: "old.mjs", line: 1, callee: "f", argCount: 9 }]));
+    const result = runInstalled("long-param-walker.mjs", project);
+    expect(result.status).toBe(1);
+    expect(result.stderr).toMatch(/long-parameter scan failed/);
+    expect(existsSync(reportPath(project))).toBe(false);
+  });
+});
+
+describe("clean-code-review.mjs (#397)", () => {
+  let project;
+  beforeEach(() => {
+    project = makeProject();
+    installAuditScripts(project.root, ["clean-code-review.mjs", "raw-dir.mjs"]);
+  });
+
+  const stubScript = (name, source) => writeFileSync(join(project.root, "scripts", "audit", `${name}.mjs`), source);
+  const WORKING_MODULE_SCAN = `
+    import fs from 'node:fs'; import path from 'node:path';
+    const raw = process.env.PFORGE_AUDIT_RAW_DIR; fs.mkdirSync(raw, { recursive: true });
+    fs.writeFileSync(path.join(raw, 'module-metrics.json'), JSON.stringify([{ file: 'big.mjs', loc: 4000, g14Severity: 'high-severity' }]));
+  `;
+  const FAILING_LONG_PARAM_SCAN = "console.error('long-param-walker: acorn is not installed (a root npm install provides it), so the scan did not run'); process.exitCode = 1;";
+  const earlierLongParamReport = () => {
+    mkdirSync(project.rawDir, { recursive: true });
+    writeFileSync(join(project.rawDir, "long-param-report.json"), JSON.stringify(
+      Array.from({ length: 3 }, (_, i) => ({ file: "x.mjs", line: i + 1, callee: "f", argCount: 9 })),
+    ));
+  };
+  const audit = (args = []) => {
+    const out = join(project.root, "report.json");
+    const result = runInstalled("clean-code-review.mjs", project, ["--out", out, ...args]);
+    expect(result.status, `${result.stdout}\n${result.stderr}`).toBe(0);
+    return JSON.parse(readFileSync(out, "utf8"));
+  };
+
+  it("reports a scanner that did not run as unavailable, with its reason, and never reads its earlier report", () => {
+    stubScript("measure-modules", WORKING_MODULE_SCAN);
+    stubScript("long-param-walker", FAILING_LONG_PARAM_SCAN);
+    earlierLongParamReport();
+    const report = audit();
+    expect(report.categories["module-size"]).toMatchObject({ errorCount: 1, warnCount: 0 });
+    expect(report.categories["module-size"].unavailable).toBeUndefined();
+    expect(report.categories["long-params"]).toEqual({
+      unavailable: true,
+      reason: "long-param-walker: acorn is not installed (a root npm install provides it), so the scan did not run",
+      errorCount: 0,
+      warnCount: 0,
+      findings: [],
+    });
+    expect(report.summary.totalErrors, "the earlier report's three errors must not be counted").toBe(1);
+    expect(report.errors.map((e) => e.script)).toContain("long-param-walker");
+  });
+
+  it("reports every scanner it cannot find as unavailable too, ESLint's category included", () => {
+    stubScript("measure-modules", WORKING_MODULE_SCAN);
+    const { categories } = audit();
+    for (const category of ["eslint-d-series", "long-params", "dead-exports", "test-smells", "shell-parity", "dep-boundaries", "frozen-arrays-drift", "markers", "commented-code", "console-log"]) {
+      expect(categories[category], category).toMatchObject({ unavailable: true, reason: "Script not found" });
+    }
+  });
+
+  it("names the unavailable scanners in its console summary instead of printing zero errors for them", () => {
+    stubScript("measure-modules", WORKING_MODULE_SCAN);
+    stubScript("long-param-walker", FAILING_LONG_PARAM_SCAN);
+    const result = runInstalled("clean-code-review.mjs", project);
+    expect(result.status, result.stderr).toBe(0);
+    expect(result.stdout).toMatch(/long-params\s+│ unavailable: long-param-walker: acorn is not installed/);
+    expect(result.stdout).toMatch(/eslint-d-series\s+│ unavailable: Script not found/);
+    expect(result.stdout).toMatch(/module-size\s+│ errors: 1/);
+  });
+
+  it("says a baseline comparison covers only the scanners that ran", () => {
+    stubScript("measure-modules", WORKING_MODULE_SCAN);
+    const baseline = join(project.root, "baseline.json");
+    writeFileSync(baseline, JSON.stringify({ summary: { totalErrors: 5 } }));
+    const result = runInstalled("clean-code-review.mjs", project, ["--out", join(project.root, "report.json"), "--compare-baseline", baseline]);
+    expect(result.status, result.stderr).toBe(0);
+    expect(result.stdout).toMatch(/No regression: 1 errors \(baseline: 5\)/);
+    expect(result.stdout).toMatch(/NOTE: \d+ scanner\(s\) did not run \(.*long-params.*\); the comparison covers only the rest/);
+  });
+
+  it("does not mention unavailable scanners when every one ran", () => {
+    for (const name of ["measure-modules", "grep-matrix", "run-eslint-clean-code", "long-param-walker", "dead-exports", "test-smells", "shell-parity", "dep-boundaries", "frozen-arrays-drift"]) {
+      stubScript(name, name === "measure-modules" ? WORKING_MODULE_SCAN : "");
+    }
+    const report = audit();
+    expect(Object.values(report.categories).filter((c) => c.unavailable)).toEqual([]);
+    expect(report.errors).toEqual([]);
   });
 });

@@ -23,6 +23,10 @@ const outPath = outIndex !== -1 ? args[outIndex + 1] : null;
 const compareBaselineIndex = args.indexOf('--compare-baseline');
 const compareBaselinePath = compareBaselineIndex !== -1 ? args[compareBaselineIndex + 1] : null;
 
+function firstLine(text) {
+  return String(text ?? '').split(/\r?\n/).map((line) => line.trim()).find(Boolean) ?? '';
+}
+
 function runScript(scriptPath) {
   try {
     execFileSync(process.execPath, [scriptPath], {
@@ -33,7 +37,7 @@ function runScript(scriptPath) {
     });
     return { ok: true };
   } catch (err) {
-    return { ok: false, error: err.message };
+    return { ok: false, error: err.message, reason: firstLine(err.stderr) || firstLine(err.message) };
   }
 }
 
@@ -107,16 +111,17 @@ function suggestEslintFix(msg, file) {
   return `Fix ESLint violation '${msg.ruleId}' at ${file}:${msg.line}`;
 }
 
+// `categories` are the report categories a scanner feeds: when it does not run, they are reported as unavailable.
 const scripts = [
-  { name: 'measure-modules', path: path.join(root, 'scripts', 'audit', 'measure-modules.mjs') },
-  { name: 'grep-matrix', path: path.join(root, 'scripts', 'audit', 'grep-matrix.mjs') },
-  { name: 'run-eslint-clean-code', path: path.join(root, 'scripts', 'audit', 'run-eslint-clean-code.mjs') },
-  { name: 'long-param-walker', path: path.join(root, 'scripts', 'audit', 'long-param-walker.mjs') },
-  { name: 'dead-exports', path: path.join(root, 'scripts', 'audit', 'dead-exports.mjs') },
-  { name: 'test-smells', path: path.join(root, 'scripts', 'audit', 'test-smells.mjs') },
-  { name: 'shell-parity', path: path.join(root, 'scripts', 'audit', 'shell-parity.mjs') },
-  { name: 'dep-boundaries', path: path.join(root, 'scripts', 'audit', 'dep-boundaries.mjs') },
-  { name: 'frozen-arrays-drift', path: path.join(root, 'scripts', 'audit', 'frozen-arrays-drift.mjs') }
+  { name: 'measure-modules', path: path.join(root, 'scripts', 'audit', 'measure-modules.mjs'), categories: ['module-size'] },
+  { name: 'grep-matrix', path: path.join(root, 'scripts', 'audit', 'grep-matrix.mjs'), categories: ['markers', 'commented-code', 'console-log'] },
+  { name: 'run-eslint-clean-code', path: path.join(root, 'scripts', 'audit', 'run-eslint-clean-code.mjs'), categories: ['eslint-d-series'] },
+  { name: 'long-param-walker', path: path.join(root, 'scripts', 'audit', 'long-param-walker.mjs'), categories: ['long-params'] },
+  { name: 'dead-exports', path: path.join(root, 'scripts', 'audit', 'dead-exports.mjs'), categories: ['dead-exports'] },
+  { name: 'test-smells', path: path.join(root, 'scripts', 'audit', 'test-smells.mjs'), categories: ['test-smells'] },
+  { name: 'shell-parity', path: path.join(root, 'scripts', 'audit', 'shell-parity.mjs'), categories: ['shell-parity'] },
+  { name: 'dep-boundaries', path: path.join(root, 'scripts', 'audit', 'dep-boundaries.mjs'), categories: ['dep-boundaries'] },
+  { name: 'frozen-arrays-drift', path: path.join(root, 'scripts', 'audit', 'frozen-arrays-drift.mjs'), categories: ['frozen-arrays-drift'] }
 ];
 
 const report = {
@@ -126,18 +131,28 @@ const report = {
   summary: { totalErrors: 0, totalWarnings: 0 }
 };
 
+// Scanner name -> why its scan did not run.
+const unavailable = new Map();
 for (const script of scripts) {
   if (!fs.existsSync(script.path)) {
     report.errors.push({ script: script.name, message: 'Script not found' });
+    unavailable.set(script.name, 'Script not found');
     continue;
   }
   const result = runScript(script.path);
   if (!result.ok) {
     report.errors.push({ script: script.name, message: result.error });
+    unavailable.set(script.name, result.reason || result.error);
   }
 }
 
-const moduleMetrics = loadJson(path.join(rawDir, 'module-metrics.json'));
+// A scanner that did not run has no findings to read. The report an earlier run left in the raw
+// directory must not stand in for it: that is how a failed scan was counted as a regression (#397).
+function loadScanReport(scriptName, file) {
+  return unavailable.has(scriptName) ? null : loadJson(path.join(rawDir, file));
+}
+
+const moduleMetrics = loadScanReport('measure-modules', 'module-metrics.json');
 if (Array.isArray(moduleMetrics)) {
   const findings = moduleMetrics
     .filter((m) => m.g14Severity)
@@ -155,7 +170,7 @@ if (Array.isArray(moduleMetrics)) {
   report.summary.totalWarnings += warnCount;
 }
 
-const grepMatrix = loadJson(path.join(rawDir, 'grep-matrix-report.json'));
+const grepMatrix = loadScanReport('grep-matrix', 'grep-matrix-report.json');
 if (grepMatrix) {
   const markers = [
     ...(grepMatrix.todos ?? []),
@@ -192,7 +207,7 @@ if (grepMatrix) {
   report.summary.totalWarnings += markers.length + commentedCode.length;
 }
 
-const longParams = loadJson(path.join(rawDir, 'long-param-report.json'));
+const longParams = loadScanReport('long-param-walker', 'long-param-report.json');
 if (Array.isArray(longParams)) {
   const findings = longParams.map((f) => ({
     ...f,
@@ -207,7 +222,7 @@ if (Array.isArray(longParams)) {
   report.summary.totalWarnings += warnCount;
 }
 
-const deadExports = loadJson(path.join(rawDir, 'dead-exports-report.json'));
+const deadExports = loadScanReport('dead-exports', 'dead-exports-report.json');
 if (deadExports && Array.isArray(deadExports.findings)) {
   const findings = deadExports.findings.flatMap((file) =>
     (file.deadExports ?? []).map((exp) => ({
@@ -222,7 +237,7 @@ if (deadExports && Array.isArray(deadExports.findings)) {
   report.summary.totalWarnings += findings.length;
 }
 
-const testSmells = loadJson(path.join(rawDir, 'test-smells-report.json'));
+const testSmells = loadScanReport('test-smells', 'test-smells-report.json');
 if (testSmells && Array.isArray(testSmells.findings)) {
   const findings = testSmells.findings.flatMap((file) =>
     file.findings.map((s) => ({
@@ -241,7 +256,7 @@ if (testSmells && Array.isArray(testSmells.findings)) {
   report.summary.totalWarnings += warnCount;
 }
 
-const shellParity = loadJson(path.join(rawDir, 'shell-parity-report.json'));
+const shellParity = loadScanReport('shell-parity', 'shell-parity-report.json');
 if (shellParity && Array.isArray(shellParity.findings)) {
   const findings = shellParity.findings.map((f) => ({
     base: f.base,
@@ -257,7 +272,7 @@ if (shellParity && Array.isArray(shellParity.findings)) {
   report.summary.totalWarnings += warnCount;
 }
 
-const depBoundaries = loadJson(path.join(rawDir, 'dep-boundaries-report.json'));
+const depBoundaries = loadScanReport('dep-boundaries', 'dep-boundaries-report.json');
 if (depBoundaries && Array.isArray(depBoundaries.findings)) {
   const findings = depBoundaries.findings.map((f) => ({
     source: f.source,
@@ -274,7 +289,7 @@ if (depBoundaries && Array.isArray(depBoundaries.findings)) {
   report.summary.totalWarnings += warnCount;
 }
 
-const frozenArrays = loadJson(path.join(rawDir, 'frozen-arrays-drift-report.json'));
+const frozenArrays = loadScanReport('frozen-arrays-drift', 'frozen-arrays-drift-report.json');
 if (frozenArrays && Array.isArray(frozenArrays.findings)) {
   const findings = frozenArrays.findings.flatMap((file) =>
     file.findings.map((d) => ({
@@ -299,7 +314,7 @@ if (frozenArrays && Array.isArray(frozenArrays.findings)) {
 }
 
 // D-series: ESLint clean-code violations (complexity-error, max-lines-per-function-error, max-params-error)
-const eslintReport = loadJson(path.join(rawDir, 'eslint-report.json'));
+const eslintReport = loadScanReport('run-eslint-clean-code', 'eslint-report.json');
 if (Array.isArray(eslintReport)) {
   const dSeriesErrorRules = new Set([
     'clean-code/complexity-error',
@@ -343,6 +358,14 @@ if (Array.isArray(eslintReport)) {
   report.summary.totalWarnings += warnFindings.length;
 }
 
+// Say so, rather than omit the category: a report with no ESLint section read as an ESLint with nothing to say.
+for (const script of scripts) {
+  if (!unavailable.has(script.name)) continue;
+  for (const category of script.categories) {
+    report.categories[category] = { unavailable: true, reason: unavailable.get(script.name), errorCount: 0, warnCount: 0, findings: [] };
+  }
+}
+
 if (outPath) {
   fs.mkdirSync(path.dirname(path.resolve(outPath)), { recursive: true });
   fs.writeFileSync(path.resolve(outPath), `${JSON.stringify(report, null, 2)}\n`, 'utf8');
@@ -354,6 +377,10 @@ if (outPath) {
   console.log('══════════════════════════════════════════════');
 
   for (const [category, data] of Object.entries(report.categories)) {
+    if (data.unavailable) {
+      console.log(`  ${category.padEnd(20)} │ unavailable: ${data.reason}`);
+      continue;
+    }
     if (data.advisory) {
       console.log(`  ${category.padEnd(20)} │ advisory: ${data.count}`);
       continue;
@@ -396,6 +423,10 @@ if (compareBaselinePath) {
       process.exitCode = 1;
     } else {
       console.log(`\nNo regression: ${currentErrors} errors (baseline: ${baselineErrors}) ✓`);
+    }
+    if (unavailable.size > 0) {
+      const notRun = Object.entries(report.categories).filter(([, data]) => data.unavailable).map(([category]) => category);
+      console.log(`NOTE: ${unavailable.size} scanner(s) did not run (${notRun.join(', ')}); the comparison covers only the rest.`);
     }
   }
 }

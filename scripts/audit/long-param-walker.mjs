@@ -109,14 +109,9 @@ function writeJson(payload) {
 }
 
 try {
-  const files = [];
-  for (const includeRoot of auditRoots('long-param-walker')) {
-    const absoluteRoot = path.join(root, includeRoot);
-    if (fs.existsSync(absoluteRoot)) {
-      walk(absoluteRoot, files);
-    }
-  }
-
+  // acorn is a root dev dependency. Without it the scan cannot read a call's arguments, and a regex over
+  // the parentheses counts every comma inside nested calls and literals: in an install with no acorn it
+  // reported 82 long-parameter errors that are not there (#397). The scan did not run, and says so.
   let acornParse = null;
   try {
     ({ parse: acornParse } = await import('acorn'));
@@ -124,48 +119,57 @@ try {
     acornParse = null;
   }
 
-  const findings = [];
-  for (const filePath of files) {
-    const source = fs.readFileSync(filePath, 'utf8');
-    const relativeFile = toPosix(path.relative(root, filePath));
-
-    if (!acornParse) {
-      findings.push(...regexFallback(source, relativeFile));
-      continue;
+  if (!acornParse) {
+    fs.rmSync(outFile, { force: true });
+    console.error('long-param-walker: acorn is not installed (a root npm install provides it), so the long-parameter scan did not run');
+    process.exitCode = 1;
+  } else {
+    const files = [];
+    for (const includeRoot of auditRoots('long-param-walker')) {
+      const absoluteRoot = path.join(root, includeRoot);
+      if (fs.existsSync(absoluteRoot)) {
+        walk(absoluteRoot, files);
+      }
     }
 
-    try {
-      const ast = acornParse(source, {
-        ecmaVersion: 'latest',
-        sourceType: 'module',
-        locations: true,
-        allowHashBang: true
-      });
+    const findings = [];
+    for (const filePath of files) {
+      const source = fs.readFileSync(filePath, 'utf8');
+      const relativeFile = toPosix(path.relative(root, filePath));
 
-      walkAst(ast, (node) => {
-        if (node.type !== 'CallExpression') {
-          return;
-        }
-        if ((node.arguments?.length ?? 0) <= 5) {
-          return;
-        }
-        findings.push({
-          file: relativeFile,
-          line: node.loc?.start?.line ?? 1,
-          col: node.loc?.start?.column ?? 0,
-          callee: calleeToString(node.callee),
-          argCount: node.arguments.length
+      try {
+        const ast = acornParse(source, {
+          ecmaVersion: 'latest',
+          sourceType: 'module',
+          locations: true,
+          allowHashBang: true
         });
-      });
-    } catch {
-      findings.push(...regexFallback(source, relativeFile));
-    }
-  }
 
-  writeJson(findings);
+        walkAst(ast, (node) => {
+          if (node.type !== 'CallExpression') {
+            return;
+          }
+          if ((node.arguments?.length ?? 0) <= 5) {
+            return;
+          }
+          findings.push({
+            file: relativeFile,
+            line: node.loc?.start?.line ?? 1,
+            col: node.loc?.start?.column ?? 0,
+            callee: calleeToString(node.callee),
+            argCount: node.arguments.length
+          });
+        });
+      } catch {
+        findings.push(...regexFallback(source, relativeFile));
+      }
+    }
+
+    writeJson(findings);
+  }
 } catch (error) {
-  writeJson({
-    error: error instanceof Error ? error.message : String(error),
-    findings: []
-  });
+  // A report that is not a findings array used to be written here with exit 0, which read as a clean scan.
+  fs.rmSync(outFile, { force: true });
+  console.error(`long-param-walker: the long-parameter scan failed: ${error instanceof Error ? error.message : String(error)}`);
+  process.exitCode = 1;
 }

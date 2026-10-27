@@ -39,13 +39,13 @@ Add all **6 Mandatory Template Blocks** from the runbook:
 1. **Scope Contract** — In-scope items (with files affected), out-of-scope, forbidden actions
 2. **Required Decisions** — Flag anything implicit or ambiguous as TBD
 3. **Execution Slices** — 30–120 min each with:
-   - `Depends On` (which slices must complete first)
+   - `Depends On` (which slices must complete first), written as `Slice N` entries (`Slice 3, Slice 4`) with any explanation in parentheses: an entry that does not start with a slice id records no dependency
    - `Context Files` (only instruction files whose domain matches the slice — not all 17)
    - Parallelism tag: exactly `[parallel-safe]` (name the Parallel Group in the slice body, not inside the brackets) or `[sequential]`
    - Validation gates (build, test, manual checks)
 4. **Re-anchor Checkpoints** — Lightweight 4-question check by default, full re-anchor every 3rd slice
 5. **Definition of Done** — Measurable criteria including "Reviewer Gate passed (zero 🔴 Critical)"
-6. **Stop Conditions** — When to halt execution
+6. **Stop Conditions** — When to halt execution: one bullet or table row each that reads on its own, with its recovery beside it. The orchestrator sends the section to every slice's worker
 
 Order sections with **Scope Contract and Stop Conditions first** in the output document (most-referenced sections at top improves model performance on long documents).
 

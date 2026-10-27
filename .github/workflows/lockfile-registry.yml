@@ -1,0 +1,39 @@
+name: Lockfile Registry
+
+# Fails a change that makes an npm lockfile resolve a package from anywhere but the public registry.
+# npm writes the registry it asked into each `resolved` URL, so a lock made behind a package mirror
+# fails `npm ci` for everyone outside the mirror's network (#414).
+# Scanner: scripts/lock-registry.mjs; `node scripts/lock-registry.mjs --write` rewrites a mirror's URLs.
+
+on:
+  push:
+    branches: [main, master, planning/main]
+    paths:
+      - '**/package-lock.json'
+      - '**/npm-shrinkwrap.json'
+      - 'scripts/lock-registry.mjs'
+      - '.github/workflows/lockfile-registry.yml'
+  pull_request:
+    branches: [main, master, planning/main]
+    paths:
+      - '**/package-lock.json'
+      - '**/npm-shrinkwrap.json'
+      - 'scripts/lock-registry.mjs'
+      - '.github/workflows/lockfile-registry.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  lockfile-registry:
+    name: Lockfiles resolve from the public registry
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+
+      - name: Check every tracked lockfile
+        run: node scripts/lock-registry.mjs

@@ -95,6 +95,15 @@ copy_with_create() {
     return 0
 }
 
+# Lists, NUL-separated, the files of a runtime package (pforge-mcp, pforge-master, pforge-sdk) that setup
+# copies. Directories named node_modules, .forge or coverage below the package stay behind, installed
+# dependencies, run state and coverage output, and find does not walk them. The filter used to be
+# `! -path '*/.forge/*'`, which matches the whole path: a source tree under a .forge folder installed
+# nothing at all, and the install still reported success (#346, with #400 for setup.ps1).
+list_runtime_package_files() {
+    find "$1" \( -type d \( -name node_modules -o -name .forge -o -name coverage \) -prune \) -o -type f -print0 2>/dev/null
+}
+
 replace_placeholders() {
     local file="$1"
     local name="$2"
@@ -1583,7 +1592,7 @@ if [[ -d "$SDK_SRC_DIR" ]]; then
         mkdir -p "$(dirname "$dst_file")"
         cp "$f" "$dst_file"
         sdk_count=$((sdk_count + 1))
-    done < <(find "$SDK_SRC_DIR" -type f ! -path '*/node_modules/*' ! -path '*/.forge/*' ! -path '*/coverage/*' -print0 2>/dev/null)
+    done < <(list_runtime_package_files "$SDK_SRC_DIR")
     green "  COPY  pforge-sdk/ ($sdk_count files: hallmark, lattice, chunker, notifications, readers)"
 fi
 
@@ -1603,7 +1612,7 @@ if [[ -d "$FM_SRC_DIR" ]]; then
         mkdir -p "$(dirname "$dst_file")"
         cp "$f" "$dst_file"
         fm_count=$((fm_count + 1))
-    done < <(find "$FM_SRC_DIR" -type f ! -path '*/node_modules/*' ! -path '*/.forge/*' ! -path '*/coverage/*' -print0 2>/dev/null)
+    done < <(list_runtime_package_files "$FM_SRC_DIR")
     green "  COPY  pforge-master/ ($fm_count files: server, observer-loop, planner, providers, ui)"
 
     # Auto-install pforge-master dependencies (@modelcontextprotocol/sdk + ws)
@@ -1636,7 +1645,7 @@ if [[ -d "$MCP_SRC_DIR" ]]; then
         mkdir -p "$(dirname "$dst_file")"
         cp "$f" "$dst_file"
         mcp_count=$((mcp_count + 1))
-    done < <(find "$MCP_SRC_DIR" -type f ! -path '*/node_modules/*' ! -path '*/.forge/*' ! -path '*/coverage/*' -print0 2>/dev/null)
+    done < <(list_runtime_package_files "$MCP_SRC_DIR")
     green "  COPY  pforge-mcp/ ($mcp_count files: server, orchestrator, capabilities, dashboard, tests)"
 
     # Generate .vscode/mcp.json for Copilot MCP integration

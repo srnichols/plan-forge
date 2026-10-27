@@ -85,12 +85,18 @@ describe("model defaults contract — tempering, workers, Forge-Master, power-go
     "tempering visualAnalyzer.models": [...TEMPERING_DEFAULT_CONFIG.visualAnalyzer.models],
     "grok worker defaultModel": [WORKER_CAPABILITIES.workers.grok.defaultModel],
     "Forge-Master routerModel": [DEFAULT_FORGE_MASTER_ROUTER_MODEL],
-    "power-gov models": [...QUORUM_PRESETS["power-gov"].models, QUORUM_PRESETS["power-gov"].reviewerModel],
   };
 
   it.each(Object.entries(OTHER_DEFAULTS))("%s are priced and not retiring", (_label, models) => {
     expect(models.filter((m) => !MODEL_PRICING[m])).toEqual([]);
     expect(models.filter((m) => COPILOT_RETIRED.includes(m))).toEqual([]);
+  });
+
+  // power-gov runs on Azure Government's Foundry, where GitHub Copilot's retirements do not apply:
+  // GPT-5.6 Terra leaves Copilot on 2026-11-16 and stays in this preset (#393).
+  it("power-gov models are priced, and are not held to Copilot's retirements", () => {
+    const gov = QUORUM_PRESETS["power-gov"];
+    expect([...gov.models, gov.reviewerModel].filter((m) => !MODEL_PRICING[m])).toEqual([]);
   });
 
   it("the visual analyzer uses the default quorum (Copilot-served, image-capable)", () => {
@@ -166,12 +172,16 @@ const SKIP_DIRS = new Set(["node_modules", "tests", "__tests__", "fixtures", "wo
     return SCAN_EXT.test(entry.name) && !ALLOWED.has(rel) ? [rel] : [];
   });
 
+  // The power-gov preset names models served from Azure Government, where Copilot's retirements do not
+  // apply (#393). The exemption is for that file and that model only; anywhere else it is still a hit.
+  const AZURE_GOVERNMENT = new Map([["pforge-mcp/orchestrator/constants.mjs", new Set(["gpt-5.6-terra"])]]);
+
   it("finds no retiring model name outside the allow-list", () => {
     const escaped = COPILOT_RETIRED.map((m) => m.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"));
     const pattern = new RegExp(`(?<![\\w.-])(${escaped.join("|")})(?![\\w-]|\\.\\w)`, "g");
     const hits = SCAN_ROOTS.filter((root) => existsSync(join(REPO, root))).flatMap(walk).flatMap((rel) =>
       readFileSync(join(REPO, rel), "utf8").split("\n").flatMap((line, i) =>
-        [...line.matchAll(pattern)].map((m) => `${rel}:${i + 1} ${m[1]}`)));
+        [...line.matchAll(pattern)].filter((m) => !AZURE_GOVERNMENT.get(rel)?.has(m[1])).map((m) => `${rel}:${i + 1} ${m[1]}`)));
     expect(hits).toEqual([]);
   });
 });

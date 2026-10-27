@@ -6077,7 +6077,7 @@
             "recommendation": null,
             "models": [
               {
-                "model": "claude-opus-5",
+                "model": "claude-opus-5.5",
                 "status": "available",
                 "via": "cli",
                 "priced": true

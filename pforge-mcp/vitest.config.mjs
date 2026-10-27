@@ -74,6 +74,7 @@ const SOURCE_ONLY_SUITES = {
     "tests/meta-394-setup-python-stub.test.mjs",
     "tests/meta-400-setup-ps1-package-filter.test.mjs",
     "tests/meta-346-setup-sh-package-filter.test.mjs",
+    "tests/meta-406-manual-counts.test.mjs",
   ],
   "../.github/instructions/release-checklist.instructions.md": [
     "tests/consumer-test-surface.test.mjs",

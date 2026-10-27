@@ -21,13 +21,19 @@
  *       mode, warns on drift; in normal mode, rewrites unconditionally.
  *   4. Substitutes <!--c:KEY-->VALUE<!--/c--> tokens against MANUAL_COUNTS
  *      so chapter prose stays in sync with a single source of truth.
+ *   4b. MANUAL_COUNTS.tools equals the number of tools the MCP server registers
+ *      (pforge-mcp/server/tool-definitions.mjs). Audit mode reports a mismatch; a normal run
+ *      rewrites MANUAL_COUNTS.tools first, so one run brings every count in step.
  *   5. Re-generates the A–Z body of book-index.html from CHAPTERS + SEARCH_SECTIONS
+ *
+ * Exit status: 1 when any issue is reported, 0 otherwise. In --audit mode that includes count and
+ * glossary drift; the capabilities-drift workflow gates on it.
  */
 
 import fs from "node:fs";
 import path from "node:path";
 import vm from "node:vm";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const MANUAL_DIR = __dirname;
@@ -92,6 +98,39 @@ try {
   process.exit(1);
 }
 log(`   ✓ Parsed ${CHAPTERS.length} chapters, ${SEARCH_SECTIONS.length} indexed sections, ${Object.keys(MANUAL_COUNTS).length} count keys`);
+
+// ─── Step 1b: MANUAL_COUNTS.tools vs the tools the MCP server registers ───
+//
+// MANUAL_COUNTS is a hand-kept table, so nothing else notices when a tool is added. The registry is the
+// authority: audit mode reports a mismatch, a normal run rewrites the number so Steps 5d and 6 below
+// propagate it in the same run.
+log("\n1b. Comparing MANUAL_COUNTS.tools with the registered MCP tools…");
+const TOOL_DEFINITIONS = path.join(MANUAL_DIR, "..", "..", "pforge-mcp", "server", "tool-definitions.mjs");
+let registeredTools = null;
+try {
+  const { TOOLS } = await import(pathToFileURL(TOOL_DEFINITIONS).href);
+  if (!Array.isArray(TOOLS)) throw new Error("TOOLS is not an array");
+  registeredTools = TOOLS.length;
+} catch (err) {
+  issues.push({ severity: "HIGH", type: "COUNT", file: "pforge-mcp/server/tool-definitions.mjs", msg: `Cannot read the registered tool count: ${err.message}` });
+}
+if (registeredTools === null) {
+  log("   ✗ Registered tool count unavailable");
+} else if (MANUAL_COUNTS.tools === registeredTools) {
+  log(`   ✓ MANUAL_COUNTS.tools matches the ${registeredTools} registered tools`);
+} else if (auditOnly) {
+  issues.push({ severity: "HIGH", type: "COUNT", file: "assets/manual.js", msg: `MANUAL_COUNTS.tools is ${MANUAL_COUNTS.tools}, but the MCP server registers ${registeredTools} tools — run 'node docs/manual/maintain.mjs' to update it` });
+  log(`   ✗ MANUAL_COUNTS.tools is ${MANUAL_COUNTS.tools}; ${registeredTools} tools are registered`);
+} else {
+  const updatedJs = manualJsSrc.replace(/^(\s*tools:\s+)\d+(?=,)/m, `$1${registeredTools}`);
+  if (updatedJs === manualJsSrc) {
+    issues.push({ severity: "HIGH", type: "COUNT", file: "assets/manual.js", msg: "Could not find the 'tools:' entry of MANUAL_COUNTS to update" });
+  } else {
+    fs.writeFileSync(MANUAL_JS, updatedJs, "utf8");
+    log(`   ✓ MANUAL_COUNTS.tools ${MANUAL_COUNTS.tools} → ${registeredTools}`);
+    MANUAL_COUNTS.tools = registeredTools;
+  }
+}
 
 // ─── Step 2: Scan HTML files ───
 log("\n2. Scanning docs/manual/*.html…");
@@ -292,6 +331,13 @@ for (const file of allHtml) {
 }
 log(`   ${actDrifts === 0 ? "✓ All Act labels match manual.js" : `✗ ${actDrifts} Act drift(s)`}`);
 
+// ─── Count tokens ───
+// <!--c:KEY-->VALUE<!--/c--> reads MANUAL_COUNTS (Step 6). KEY may include hyphens (e.g. 'cli-commands').
+const COUNT_TOKEN_RE = /<!--c:([a-zA-Z][a-zA-Z0-9_-]*)-->([^<]*)<!--\/c-->/g;
+// A page as Step 6 leaves it, for the step below that reads glossary.html before Step 6 reaches it:
+// without this, one run left glossary-terms.js a count behind the glossary it came from.
+const withCounts = (html) => html.replace(COUNT_TOKEN_RE, (match, key) => (key in MANUAL_COUNTS ? `<!--c:${key}-->${MANUAL_COUNTS[key]}<!--/c-->` : match));
+
 // ─── Step 5d: Glossary tooltip terms sync ───
 //
 // Source of truth: docs/manual/glossary.html — the curated glossary tables.
@@ -330,7 +376,7 @@ const SKIP_TERMS = [
 const terms = {};
 let rowMatch;
 if (fs.existsSync(glossaryHtmlPath)) {
-  const glossaryHtml = fs.readFileSync(glossaryHtmlPath, "utf8");
+  const glossaryHtml = withCounts(fs.readFileSync(glossaryHtmlPath, "utf8"));
   while ((rowMatch = ROW_RE.exec(glossaryHtml)) !== null) {
     const termCell = rowMatch[1];
     const defCell = rowMatch[2];
@@ -388,8 +434,6 @@ if (existingTerms === generated) {
 // In audit mode (--audit) drift is flagged but no files are written. In normal
 // mode the VALUE between the tokens is rewritten in-place to MANUAL_COUNTS[KEY].
 log("\n6. Substituting count tokens (<!--c:KEY-->...<!--/c-->)…");
-// KEY may include hyphens (e.g. 'cli-commands') to match the MANUAL_COUNTS key form.
-const COUNT_TOKEN_RE = /<!--c:([a-zA-Z][a-zA-Z0-9_-]*)-->([^<]*)<!--\/c-->/g;
 let countTokensSeen = 0;
 let countTokensRewritten = 0;
 let countFilesTouched = 0;
@@ -761,7 +805,7 @@ console.log("    ACT   → Update the badge's 'Act <ROMAN>' to match the chapter
 console.log("    GLOSSARY → Run 'node docs/manual/maintain.mjs' (without --audit) to regenerate assets/glossary-terms.js from glossary.html.");
 console.log("    COUNT → Add the key to MANUAL_COUNTS in assets/manual.js, or run without --audit to rewrite drift");
 console.log("    CSS   → Run `npm run build:css` from the repo root to rebuild docs/assets/tailwind.built.css");
-process.exit(bySev.HIGH.length > 0 ? 1 : 0);
+process.exit(issues.length > 0 ? 1 : 0);
 
 // ─── Helpers ───
 function prettyPageRef(href, chapters) {

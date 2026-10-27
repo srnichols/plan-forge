@@ -7,6 +7,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+## [3.35.0] — 2026-10-27 — Stop conditions reach workers, projects extend the gate allowlist, and Traceability is scored by the slices
+
 ### Fixed
 
 - A plan's `## Stop Conditions` section now reaches the worker. The hardener's template puts it at plan level, after the slices, and a slice body ends at the next `##` heading, so no slice owned it: the only stop text a worker was given was a per-slice `**Stop Condition**:` line, read only in that exact spelling. 18 of the 29 plans in `docs/plans` outside the archive have the section and 15 slices have a line of their own, so most plans ran their workers without their own halt rules and nothing said so. The plan-context block that ends every slice prompt (the executor and its retries, the quorum dry-run models and the reviewer) now adds a "Stop conditions from the plan" section: the lines as the plan wrote them, with a table of condition, reason and recovery condensed to one line a row and the recovery kept. It tells the worker not to work around a condition, to follow the recovery the plan gives, and otherwise to stop with the `## ⚠ Blocker` report that already fails a slice (#338). The section is held to 600 characters a line and 4,000 in all (the longest in `docs/plans` are 513 and 3,112), and adds a median of about 2,300 characters, about 580 tokens, to every slice prompt of a plan that has one. The per-slice label also reads `**Stop Conditions**:`, in any case, and with the colon inside the bold. (#365)

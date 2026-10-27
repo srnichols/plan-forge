@@ -145,6 +145,37 @@ describe.skipIf(!sourceRepo)("maintain.mjs keeps the manual's counts in step wit
     expect(audit.output).toContain("Drift between glossary.html and assets/glossary-terms.js");
   }, 60_000);
 
+  // A Windows checkout (core.autocrlf) gives every tracked file CRLF line endings, and maintain.mjs writes LF.
+  const withWindowsLineEndings = (tree) => {
+    for (const name of ["js", "intro", "glossary", "terms"]) writeFileSync(tree.files[name], tree.read(name).replace(/\r?\n/g, "\r\n"));
+  };
+
+  it("audits clean on a tree whose files have the CRLF line endings of a Windows checkout", () => {
+    const tree = manualTree();
+    withWindowsLineEndings(tree);
+    const audit = maintain(tree, "--audit");
+    expect(audit.status, audit.output).toBe(0);
+    expect(audit.output).toContain("All checks passed");
+  }, 60_000);
+
+  it("leaves a tree with CRLF line endings as it is when nothing changed", () => {
+    const tree = manualTree();
+    withWindowsLineEndings(tree);
+    const before = snapshot(tree);
+    const run = maintain(tree);
+    expect(run.status, run.output).toBe(0);
+    expect(snapshot(tree)).toEqual(before);
+  }, 60_000);
+
+  it("still reports tooltip terms that lag the glossary on a tree with CRLF line endings", () => {
+    const tree = manualTree();
+    withWindowsLineEndings(tree);
+    writeFileSync(tree.files.glossary, glossary("Serves", 100).replace(/\n/g, "\r\n"));
+    const audit = maintain(tree, "--audit");
+    expect(audit.status, audit.output).toBe(1);
+    expect(audit.output).toContain("Drift between glossary.html and assets/glossary-terms.js");
+  }, 60_000);
+
   it("reports a glossary count token whose key is unknown and keeps its text in the tooltip terms", () => {
     const tree = manualTree();
     writeFileSync(tree.files.glossary, glossary("Exposes", 100).replace("tools.", "tools, <!--c:nope-->7<!--/c--> ways."));

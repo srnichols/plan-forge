@@ -7,6 +7,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+## [3.35.1] — 2026-10-27 — Offline fallbacks work in bash, analyze reads criteria the same in both shells, and the manual follows the tool registry
+
 ### Fixed
 
 - `pforge smith` and `pforge org-rules export` in bash no longer end early when a request fails. `pforge.sh` runs under `set -e`, and `x=$(curl -sf ...)` ends the script when the request fails (offline, rate-limited, timed out, nothing listening), so the fallback written below each call never ran. `smith` stopped at "Version Currency:" when the GitHub releases call failed, and the rest of the report, the auto-update status line included, never printed; `org-rules export` stopped after its banner with exit 7 when no MCP server was running, instead of reading the project's `.github/instructions`, `copilot-instructions.md` and `PROJECT-PRINCIPLES.md`. PowerShell catches the failure and always worked. A scan of every `curl` and `wget` call in `pforge.sh` found no other that a failure can end the script on, and a test now fails on one. The shipped tests no longer need the network for this: `smith` is tested with the API unreachable, `resolve-tag` against a stubbed API (on Windows too, where its live test was skipped), and the live test is opt-in with `CI_LIVE_NETWORK=1`; every release is still checked against the real API by `verify-public`. (#409)

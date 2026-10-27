@@ -22,6 +22,11 @@ import { dirname, join, resolve } from "node:path";
  * a regex pre-check that filled nothing decided to skip it. Both shells now read
  * those criteria, in the Traceability step as well as the Test Coverage step: bash
  * used to leave Traceability at 15 where PowerShell scored 25 for the same plan.
+ *
+ * Meta-bug #389 — Traceability scored 25/25 in both shells whatever the slices said. It now
+ * counts a criterion only when a slice refers to it (meta-389-analyze-traceability.test.mjs),
+ * so the reporter's example below, whose exporter criterion no slice mentions, scores 74/100
+ * (it scored 87) and the checkbox cases with that criterion score 12 for Traceability.
  */
 
 const REPO_ROOT = resolve(import.meta.dirname, "..", "..");
@@ -114,7 +119,7 @@ const CASES = [
     files: withItemsTest,
     lines: ["1/2 MUST criteria have matching tests", `No test found for: ${EXPORTER}`, "1 test file(s) found in project"],
     score: 12,
-    trace: 25,
+    trace: 12,
   },
   {
     name: "checkbox criteria after a line of prose count as MUST",
@@ -122,7 +127,7 @@ const CASES = [
     files: withItemsTest,
     lines: ["1/2 MUST criteria have matching tests", `No test found for: ${EXPORTER}`, "1 test file(s) found in project"],
     score: 12,
-    trace: 25,
+    trace: 12,
   },
   {
     name: "checkbox criteria after blank lines, with an upper-case [X], count as MUST (#387)",
@@ -130,7 +135,7 @@ const CASES = [
     files: withItemsTest,
     lines: ["1/2 MUST criteria have matching tests", `No test found for: ${EXPORTER}`, "1 test file(s) found in project"],
     score: 12,
-    trace: 25,
+    trace: 12,
   },
   {
     name: "checkbox criteria under a sub-heading of the section count as MUST (#387)",
@@ -138,7 +143,7 @@ const CASES = [
     files: withItemsTest,
     lines: ["1/2 MUST criteria have matching tests", `No test found for: ${EXPORTER}`, "1 test file(s) found in project"],
     score: 12,
-    trace: 25,
+    trace: 12,
   },
   {
     name: "checkboxes after the section ends are not criteria (#387)",
@@ -210,10 +215,10 @@ describe.skipIf(!BASH)("pforge.sh analyze matches each MUST criterion to a test 
     if (trace !== undefined) expect(traceabilityScore(result), result.stdout).toBe(trace);
   });
 
-  it("scores the plan from the reporter's example 87/100, as PowerShell does", () => {
+  it("scores the reporter's example 74/100: Traceability (#389) and Test Coverage each lose the exporter criterion", () => {
     const dir = seedRepo({ [PLAN_REL]: planWith([MUST(ITEMS), MUST(EXPORTER)]), ...withItemsTest });
     const result = runSh(dir);
-    expect(result.stdout).toMatch(/Consistency Score: 87\/100/);
+    expect(result.stdout).toMatch(/Consistency Score: 74\/100/);
   });
 });
 

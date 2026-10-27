@@ -2326,6 +2326,68 @@ function Get-UntestedMustCriteria {
     }
 }
 
+# The text of each execution slice, one string per slice: from its "## / ### / #### Slice N" heading to the
+# next heading of the same or a higher level. Deeper headings stay inside it, and a line inside a code fence
+# is never a heading. The Acceptance Criteria section is not a slice, which is what lets a criterion go
+# untraced (meta-bug #389).
+function Get-AnalyzeSliceTexts {
+    param([string]$PlanContent)
+    $slices = [System.Collections.Generic.List[string]]::new()
+    $current = $null
+    $currentDepth = 0
+    $inFence = $false
+    foreach ($line in ($PlanContent -split "`r?`n")) {
+        if ($line -match '^\s*(```|~~~)') {
+            $inFence = -not $inFence
+            if ($null -ne $current) { [void]$current.AppendLine($line) }
+            continue
+        }
+        if ($inFence) {
+            if ($null -ne $current) { [void]$current.AppendLine($line) }
+            continue
+        }
+        $depth = 0
+        if ($line -match '^(#+)\s') { $depth = $Matches[1].Length }
+        if ([regex]::IsMatch($line, '^#{2,4}\s+Slice\s+\d+\b')) {
+            if ($null -ne $current) { $slices.Add($current.ToString()) }
+            $current = [System.Text.StringBuilder]::new()
+            $currentDepth = $depth
+            [void]$current.AppendLine($line)
+        }
+        elseif ($null -ne $current -and $depth -gt 0 -and $depth -le $currentDepth) {
+            $slices.Add($current.ToString())
+            $current = $null
+        }
+        elseif ($null -ne $current) {
+            [void]$current.AppendLine($line)
+        }
+    }
+    if ($null -ne $current) { $slices.Add($current.ToString()) }
+    $slices.ToArray()
+}
+
+# The criteria no slice refers to, in the order given. A slice refers to a criterion when it contains one of
+# the criterion's significant words: the distinct words of more than four letters, digits or underscores,
+# split at any other character and compared without regard to case, so `getPricing(model)` yields getpricing
+# and model. A criterion with no such word has nothing to judge by and counts as traced. A criterion used to
+# be searched for in the plan it was read from, so every one was found (meta-bug #389).
+function Get-UntracedCriteria {
+    param([string[]]$Criteria, [string[]]$SliceTexts)
+    $texts = @($SliceTexts | ForEach-Object { $_.ToLowerInvariant() })
+    foreach ($criterion in $Criteria) {
+        $words = @([regex]::Split($criterion.ToLowerInvariant(), '[^a-z0-9_]+') | Where-Object { $_.Length -gt 4 } | Select-Object -Unique)
+        if ($words.Count -eq 0) { continue }
+        $traced = $false
+        foreach ($text in $texts) {
+            foreach ($word in $words) {
+                if ($text.Contains($word)) { $traced = $true; break }
+            }
+            if ($traced) { break }
+        }
+        if (-not $traced) { $criterion }
+    }
+}
+
 # Parses `analyze` / `diagnose` arguments. Flags may come before or after the target;
 # the first non-flag token is the target. --models implies a quorum run.
 function Get-AnalysisArgs {
@@ -2487,16 +2549,18 @@ function Invoke-Analyze {
     $sliceCount = ([regex]::Matches($planContent, '(?m)^#{2,4}\s+Slice\s+\d+\b')).Count
 
     if ($allCriteria.Count -gt 0) {
-        # Check if slices reference criteria via Traces to:
-        $tracedCount = 0
-        foreach ($c in $allCriteria) {
-            $shortCriterion = $c.Substring(0, [Math]::Min(40, $c.Length))
-            if ($planContent -match [regex]::Escape($shortCriterion) -or $planContent -match 'Traces to:') {
-                $tracedCount++
-            }
-        }
+        # A criterion is traced when a slice refers to it. It used to be searched for in the plan it was read
+        # from, which always matched (and any "Traces to:" in the plan matched every one), so this step scored
+        # 25/25 whatever the slices said (meta-bug #389).
+        $untracedCriteria = @(Get-UntracedCriteria -Criteria $allCriteria -SliceTexts @(Get-AnalyzeSliceTexts $planContent))
+        $tracedCount = $allCriteria.Count - $untracedCriteria.Count
         Write-Host "  ✅ $($allCriteria.Count) acceptance criteria found ($($mustCriteria.Count) MUST, $($shouldCriteria.Count) SHOULD)" -ForegroundColor Green
-        $scoreTrace = [Math]::Floor(25 * ($tracedCount / [Math]::Max($allCriteria.Count, 1)))
+        Write-Host "  ✅ $tracedCount/$($allCriteria.Count) acceptance criteria traced to a slice" -ForegroundColor $(if ($untracedCriteria.Count -eq 0) { 'Green' } else { 'Yellow' })
+        foreach ($u in $untracedCriteria) {
+            $short = if ($u.Length -gt 70) { $u.Substring(0,70) + "..." } else { $u }
+            Write-Host "  ⚠️  No slice mentions: $short" -ForegroundColor Yellow
+        }
+        $scoreTrace = [Math]::Floor((25 * $tracedCount) / $allCriteria.Count)
     }
     else {
         Write-Host "  ⚠️  No MUST/SHOULD criteria found in plan" -ForegroundColor Yellow

@@ -2172,13 +2172,36 @@ cmd_diagnose() {
 }
 
 # ─── Command: analyze ──────────────────────────────────────────────────
+# The "- [ ] text" items under "## Acceptance Criteria", one per line, up to the next "---" or "##"
+# heading (meta-bug #387). Reads the plan on stdin.
+analyze_checkbox_criteria() {
+    awk '
+        done { next }
+        tolower($0) ~ /## acceptance criteria/ { in_section = 1; next }
+        in_section && ($0 ~ /^[[:space:]]*---[[:space:]]*$/ || $0 ~ /^##[[:space:]]/) { done = 1; next }
+        in_section && match($0, /^[[:space:]]*-[[:space:]]*\[[ xX]\][[:space:]]*/) {
+            item = substr($0, RLENGTH + 1)
+            sub(/[[:space:]]+$/, "", item)
+            if (length(item) > 0) print item
+        }
+    '
+}
+
+# The text of every "- **MUST**: text" line (pass MUST) or "- **SHOULD**: text" line (pass SHOULD) of
+# the plan on stdin, one per line, read the way pforge.ps1 reads them (meta-bugs #376, #389): the marker
+# is matched in capitals only, and a line with nothing after it is not a criterion. A trailing carriage
+# return goes with the trailing space.
+analyze_marked_criteria() {
+    sed -nE "s/^[[:space:]]*[-*][[:space:]]*\*\*$1\*\*[[:space:]:]+(.+)\$/\1/p" | sed -E 's/[[:space:]]+$//'
+}
+
 # The MUST criteria of a plan, one per line, read the way pforge.ps1 reads them
 # (meta-bugs #376, #387): "- **MUST**: text" lines and, for a plan with no MUST or SHOULD
 # line at all, the "- [ ] text" items under "## Acceptance Criteria". Reads the plan on stdin.
 analyze_must_criteria() {
     local plan must should_count
     plan="$(tr -d '\r')"
-    must="$(printf '%s\n' "$plan" | sed -nE 's/^[[:space:]]*[-*][[:space:]]*\*\*MUST\*\*[[:space:]:]+(.+)$/\1/p' | sed -E 's/[[:space:]]+$//')"
+    must="$(printf '%s\n' "$plan" | analyze_marked_criteria MUST)"
     if [ -n "$must" ]; then
         printf '%s\n' "$must"
         return 0
@@ -2187,14 +2210,97 @@ analyze_must_criteria() {
     if [ "$should_count" -gt 0 ]; then
         return 0
     fi
-    printf '%s\n' "$plan" | awk '
-        done { next }
-        tolower($0) ~ /## acceptance criteria/ { in_section = 1; next }
-        in_section && ($0 ~ /^[[:space:]]*---[[:space:]]*$/ || $0 ~ /^##[[:space:]]/) { done = 1; next }
-        in_section && match($0, /^[[:space:]]*-[[:space:]]*\[[ xX]\][[:space:]]*/) {
-            item = substr($0, RLENGTH + 1)
-            sub(/[[:space:]]+$/, "", item)
-            if (length(item) > 0) print item
+    printf '%s\n' "$plan" | analyze_checkbox_criteria
+}
+
+# Sets the variable named by $2 to the number of non-empty lines in $1. It starts no process: under Git Bash
+# on Windows each one costs a good part of a second, and a count made with grep or wc was one of dozens in an
+# analyze run (meta-bug #389).
+analyze_count_lines() {
+    local line count=0
+    while IFS= read -r line; do
+        if [ -n "$line" ]; then
+            count=$((count + 1))
+        fi
+    done <<< "$1"
+    printf -v "$2" '%d' "$count"
+}
+
+# The criteria no slice refers to, in the order given (meta-bug #389): the rule of Get-UntracedCriteria
+# in pforge.ps1. A slice runs from its "## / ### / #### Slice N" heading to the next heading of the same
+# or a higher level; deeper headings stay inside it and a line inside a code fence is never a heading. It
+# refers to a criterion when it contains one of the criterion's significant words: the distinct words of
+# more than four letters, digits or underscores, split at any other character and compared without regard
+# to case. A criterion with no such word has nothing to judge by and counts as traced. $1 is a file of
+# criteria; the plan is read on stdin. LC_ALL=C keeps the word and case rules byte-for-byte ASCII, as in
+# pforge.ps1.
+analyze_untraced_criteria() {
+    tr -d '\r' | LC_ALL=C awk -v criteria_file="$1" '
+        function heading_depth(line) {
+            if (match(line, /^#+/) && substr(line, RLENGTH + 1, 1) ~ /[ \t]/) return RLENGTH
+            return 0
+        }
+        function is_slice_heading(line, depth,    rest, after) {
+            if (depth < 2 || depth > 4) return 0
+            rest = substr(line, depth + 1)
+            if (!match(rest, /^[ \t]+Slice[ \t]+[0-9]+/)) return 0
+            after = substr(rest, RSTART + RLENGTH, 1)
+            return (after == "" || after !~ /[A-Za-z0-9_]/)
+        }
+        BEGIN {
+            count = 0
+            while ((getline criterion < criteria_file) > 0) {
+                count++
+                text[count] = criterion
+                cleaned = tolower(criterion)
+                gsub(/[^a-z0-9_]+/, " ", cleaned)
+                words = split(cleaned, parts, " ")
+                keywords[count] = 0
+                for (w = 1; w <= words; w++) {
+                    if (length(parts[w]) > 4 && !((count, parts[w]) in seen)) {
+                        seen[count, parts[w]] = 1
+                        keywords[count]++
+                        key[count, keywords[count]] = parts[w]
+                    }
+                }
+            }
+            close(criteria_file)
+            slices = 0; in_slice = 0; in_fence = 0; slice_depth = 0
+        }
+        {
+            line = tolower($0)
+            if ($0 ~ /^[ \t]*(```|~~~)/) {
+                in_fence = !in_fence
+                if (in_slice) body[slices] = body[slices] "\n" line
+                next
+            }
+            if (in_fence) {
+                if (in_slice) body[slices] = body[slices] "\n" line
+                next
+            }
+            depth = heading_depth($0)
+            if (is_slice_heading($0, depth)) {
+                slices++
+                in_slice = 1
+                slice_depth = depth
+                body[slices] = line
+            } else if (in_slice && depth > 0 && depth <= slice_depth) {
+                in_slice = 0
+            } else if (in_slice) {
+                body[slices] = body[slices] "\n" line
+            }
+        }
+        END {
+            for (i = 1; i <= count; i++) {
+                if (keywords[i] == 0) continue
+                traced = 0
+                for (s = 1; s <= slices && !traced; s++) {
+                    for (k = 1; k <= keywords[i]; k++) {
+                        if (index(body[s], key[i, k]) > 0) { traced = 1; break }
+                    }
+                }
+                if (!traced) print text[i]
+            }
         }
     '
 }
@@ -2326,11 +2432,15 @@ cmd_analyze() {
     # ═══════════════════════════════════════════════════════════════
     echo "Traceability:"
 
+    # The criteria are read once, by the rules of pforge.ps1, and counted from what was read, so what is
+    # counted is what is scored. The counts start no process (see analyze_count_lines).
+    local must_text should_text must_count should_count slice_count
+    must_text="$(analyze_marked_criteria MUST <<< "$plan_content")"
+    should_text="$(analyze_marked_criteria SHOULD <<< "$plan_content")"
+    analyze_count_lines "$must_text" must_count
+    analyze_count_lines "$should_text" should_count
     # grep -c prints its own 0 on no match (exit 1); "|| echo 0" appended a
-    # second line and broke the arithmetic below for any plan without SHOULDs.
-    local must_count should_count slice_count
-    must_count=$(echo "$plan_content" | grep -ciE '^\s*[-*]\s*\*\*MUST\*\*' || true)
-    should_count=$(echo "$plan_content" | grep -ciE '^\s*[-*]\s*\*\*SHOULD\*\*' || true)
+    # second line and broke the arithmetic below.
     # Accept h2/h3/h4 headers to match the canonical parser at
     # pforge-mcp/orchestrator/plan-parser.mjs (/^#{2,4}\s+Slice\s+\d+\b/).
     slice_count=$(echo "$plan_content" | grep -cE '^#{2,4}[[:space:]]+Slice[[:space:]]+[0-9]' || true)
@@ -2338,12 +2448,34 @@ cmd_analyze() {
     # With no MUST or SHOULD line the "- [ ]" items under "## Acceptance Criteria" are the
     # criteria, all counted as MUST, as in pforge.ps1 (#387).
     if [ "$total_criteria" -eq 0 ]; then
-        must_count="$(printf '%s\n' "$plan_content" | analyze_must_criteria | grep -c . || true)"
+        must_text="$(analyze_checkbox_criteria <<< "$plan_content")"
+        analyze_count_lines "$must_text" must_count
         total_criteria=$must_count
     fi
+    local trace_judged=false
     if [ "$total_criteria" -gt 0 ]; then
         echo "  ✅ $total_criteria acceptance criteria ($must_count MUST, $should_count SHOULD)"
-        score_trace=$((25 * total_criteria / total_criteria))  # Full if found
+        # Twin of the pforge.ps1 step (meta-bug #389): a criterion counts only when a slice refers to
+        # it. This used to score 25/25 for any plan with criteria, whatever its slices said.
+        trace_judged=true
+        local criteria_listing untraced_criteria untraced_total criterion
+        criteria_listing="$(mktemp)"
+        {
+            [ -z "$must_text" ] || printf '%s\n' "$must_text"
+            [ -z "$should_text" ] || printf '%s\n' "$should_text"
+        } > "$criteria_listing"
+        untraced_criteria="$(analyze_untraced_criteria "$criteria_listing" <<< "$plan_content")"
+        rm -f "$criteria_listing"
+        analyze_count_lines "$untraced_criteria" untraced_total
+        echo "  ✅ $((total_criteria - untraced_total))/$total_criteria acceptance criteria traced to a slice"
+        while IFS= read -r criterion; do
+            [ -n "$criterion" ] || continue
+            if [ "${#criterion}" -gt 70 ]; then
+                criterion="${criterion:0:70}..."
+            fi
+            echo "  ⚠️  No slice mentions: $criterion"
+        done <<< "$untraced_criteria"
+        score_trace=$((25 * (total_criteria - untraced_total) / total_criteria))
     else
         if echo "$plan_content" | grep -qiE 'acceptance criteria|definition of done'; then
             echo "  ✅ Acceptance criteria section detected (non-standard format)"
@@ -2355,7 +2487,10 @@ cmd_analyze() {
 
     if [ "$slice_count" -gt 0 ]; then
         echo "  ✅ $slice_count execution slices found"
-        [ "$score_trace" -eq 0 ] && score_trace=10
+        # The floor for a plan with no criteria to judge; a plan whose criteria nothing traces scores 0.
+        if [ "$trace_judged" != true ] && [ "$score_trace" -eq 0 ]; then
+            score_trace=10
+        fi
     else
         echo "  ⚠️  No execution slices found"
     fi

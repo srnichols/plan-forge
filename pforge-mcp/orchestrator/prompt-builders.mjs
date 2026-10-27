@@ -1,6 +1,7 @@
 /** Plan Forge — Phase-53 S9: shared prompt builders */
 
 import { isAbsolute, relative, resolve, sep } from "node:path";
+import { isManualGateSlice, manualGateText } from "./plan-parser.mjs";
 
 const MAX_FORBIDDEN_ITEMS = 20;
 const MAX_FORBIDDEN_ITEM_CHARS = 300;
@@ -12,6 +13,8 @@ const MAX_STOP_CONDITION_CHARS = 4000;
 const PLACEHOLDER_ITEM_RE = /^(?:none|nothing|n\/a|tbd)(?:\s*[—–:-].*)?$/i;
 /** A bullet or number in front of a line: the "- " of "- None". */
 const LIST_MARKER_RE = /^(?:[-*+]|\d+[.)])\s+/;
+/** What a worker is told about a `[manual]` gate: it cannot do the check, so it must not claim it (meta-bug #369). */
+const MANUAL_VERIFICATION_LABEL = "Manual verification (a person does this after you finish; you cannot, so do not report it as done)";
 // The Blocker Report is the one stop signal the orchestrator acts on: a worker that writes it fails the slice (meta-bug #338).
 const STOP_CONDITIONS_HEADING =
   "Stop conditions from the plan. If one occurs, do not work around it: follow the recovery the plan gives. " +
@@ -41,6 +44,8 @@ export function buildSlicePrompt(slice) {
   }
   if (slice.validationGate) {
     parts.push("", "Validation gate (run these after completion):", slice.validationGate);
+  } else if (isManualGateSlice(slice)) {
+    parts.push("", `${MANUAL_VERIFICATION_LABEL}: ${manualGateText(slice) || "(no description)"}`);
   }
   if (slice.stopCondition) {
     parts.push("", `Stop condition: ${slice.stopCondition}`);

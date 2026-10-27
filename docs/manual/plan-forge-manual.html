@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Plan Forge Manual — Complete Offline Edition</title>
-  <meta name="description" content="Plan Forge Manual — complete single-page offline edition. 79 chapters and appendices. Generated 2026-10-07 04:58:34 UTC." />
+  <meta name="description" content="Plan Forge Manual — complete single-page offline edition. 79 chapters and appendices. Generated 2026-10-24 16:42:17 UTC." />
   <meta name="generator" content="Plan Forge export.mjs" />
   <link rel="icon" type="image/svg+xml" href="../assets/plan-forge-logo.svg" />
   <link rel="stylesheet" href="../assets/tailwind.built.css" />
@@ -124,8 +124,8 @@
   <h1>📚 Plan Forge Manual</h1>
   <p class="export-subtitle">Complete offline edition &mdash; 79 chapters &amp; appendices</p>
   <p class="export-meta">
-    Generated 2026-10-07 04:58:34 UTC
-    &middot; content hash <code>41ad005f1cac2cbc</code>
+    Generated 2026-10-24 16:42:17 UTC
+    &middot; content hash <code>5ae69e1a4ca6de2a</code>
     &middot; vv3.6.2
     &middot; <a href="https://planforge.software/" rel="noopener">Main site ↗</a>
     &middot; <a href="index.html">Online version ↗</a>
@@ -8529,7 +8529,7 @@ pforge triage    # list ranked open alerts (incidents + drift violations)</code>
             </tbody>
           </table>
         </div>
-        <p class="text-sm text-slate-400 mb-6"><strong>Output</strong>: <code class="text-forge-400">{ gates[], passed, failed, blocked, summary }</code>. Commands are allow-listed via <code>GATE_ALLOWED_PREFIXES</code>, dangerous patterns like <code>rm -rf /</code> are blocked.</p>
+        <p class="text-sm text-slate-400 mb-6"><strong>Output</strong>: <code class="text-forge-400">{ gates[], passed, failed, blocked, summary }</code>. Commands are allow-listed: the built-in list (<code>GATE_ALLOWED_PREFIXES</code>) plus any <code>gateAllowedPrefixes</code> a project sets in <code>.forge.json</code>. Dangerous patterns like <code>rm -rf /</code> are blocked whatever is listed.</p>
 
         <h2 id="forge-runbook">forge_runbook</h2>
         <p>Generates a human-readable operational runbook from a hardened plan file. Optionally appends recent incidents for context. Saves to <code class="text-forge-400">.forge/runbooks/</code>.</p>
@@ -11248,7 +11248,7 @@ pforge cost-report --since=30d --json | jq '.byModel'</code></pre>
           <tr><td><strong>Dashboard</strong></td><td>Web UI at <code>localhost:3100/dashboard</code>. 25 tabs for monitoring, cost, replay, skills, config, watcher, and LiveGuard.</td></tr>
           <tr><td><strong>Lifecycle Hook</strong></td><td>Automatic actions tied to Plan Forge's pipeline: <code>PreDeploy</code>, <code>PreCommit</code>, <code>PreAgentHandoff</code>, <code>PostSlice</code> (configured via <code>.github/hooks/plan-forge.json</code>). Distinct from Claude Code's own hook names.</td></tr>
           <tr><td><strong>OpenBrain</strong></td><td>The L3 memory layer. Self-hosted MCP server (PostgreSQL + pgvector) that provides cross-session, cross-tool semantic memory. Plan Forge ships with L1 (Hub) + L2 (<code>.forge/*.jsonl</code>) memory built-in; L3 requires OpenBrain. Without it, Reflexion lessons, Auto-skills, cross-project Federation, and 28 auto-capturing tools become inert. Recommended at install time; easy to add later via <code>pforge brain hint</code>. Deploy options: Docker, Supabase, Kubernetes, Azure. See <a href="https://srnichols.github.io/OpenBrain">srnichols.github.io/OpenBrain</a>.</td></tr>
-          <tr><td><strong>MCP</strong></td><td>Model Context Protocol. A standard for AI agents to call functions. Plan Forge's MCP server exposes <!--c:tools-->106<!--/c--> tools (core + LiveGuard + Watcher + Crucible + Tempering + Bug Registry + Testbed + Forge-Master).</td></tr>
+          <tr><td><strong>MCP</strong></td><td>Model Context Protocol. A standard for AI agents to call functions. Plan Forge's MCP server exposes <!--c:tools-->107<!--/c--> tools (core + LiveGuard + Watcher + Crucible + Tempering + Bug Registry + Testbed + Forge-Master).</td></tr>
           <tr><td><strong>ACI</strong></td><td>Agent-Computer Interface. The SWE-agent principle that an agent only performs as well as the surface lets it: bounded payloads, sparse fields, paginated lists, friendly empty-result messages. Enforced in Plan Forge via tool-surface temper guards in <code>architecture-principles.instructions.md</code>. <code>forge_search</code> is the reference standard.</td></tr>
           <tr><td><strong>Bridge</strong></td><td>Notification dispatcher that forwards WebSocket hub events to external platforms (Slack, Discord, Telegram, generic webhooks).</td></tr>
           <tr><td><strong>Knowledge Graph</strong></td><td>In-memory graph of Phase / Slice / Commit / File / Run / Bug nodes, queryable via <code>forge_graph_query</code>. Used by Forge-Master for cross-feature reasoning. See <a href="knowledge-graph.html">Chapter 28</a>.</td></tr>
@@ -19257,6 +19257,7 @@ pforge ext add/remove/...       Extension management</code></pre>
               <tr><td><code>draftPullRequest</code></td><td>boolean</td><td><code>true</code></td><td><code>false</code></td><td>With <code>runIntegration: "pull-request"</code>, open the pull request as a draft.</td></tr>
 <tr><td><code>gatePreflight</code></td><td><code>"warn"</code> | <code>"block"</code> | <code>"off"</code></td><td><code>"warn"</code></td><td><code>"block"</code></td><td>Before a run, check that every validation gate's tools are installed (on <code>PATH</code> or in <code>node_modules/.bin</code>). <code>"warn"</code> prints the missing ones, <code>"block"</code> refuses to start, <code>"off"</code> skips the check. A gate that fails because its command is not installed is reported as <code>gate-unrunnable</code> and is not retried.</td></tr>
 <tr><td><code>gateRunner</code></td><td><code>"host"</code> | <code>"devcontainer"</code></td><td><code>"host"</code></td><td><code>"devcontainer"</code></td><td>Where validation gates run. <code>"devcontainer"</code> runs each gate inside the project's Dev Container (<code>devcontainer exec</code>), so gates use the toolchain declared in <code>.devcontainer/devcontainer.json</code> rather than whatever the host has. The container starts once per run, and the gate tool preflight checks inside it. Workers still run on the host. Needs the Dev Containers CLI (<code>npm install -g @devcontainers/cli</code>) and Docker; <code>PFORGE_DEVCONTAINER_CLI</code> points at a specific CLI.</td></tr>
+<tr><td><code>gateAllowedPrefixes</code></td><td>string[]</td><td><code>[]</code></td><td><code>["az bicep", "terraform validate"]</code></td><td>Extra commands a validation gate may start with, beyond the built-in list (<code>npm</code>, <code>node</code>, <code>pytest</code>, <code>Invoke-Pester</code> and the like). An entry is a command (<code>helm</code>) or a command and subcommand (<code>terraform validate</code>, <code>az bicep</code>), so a project can allow the read-only part of a tool and not the rest. Matching is case-insensitive and reads the start of the gate line; up to 100 entries of one to three plain words, and an entry with shell syntax is ignored. The gate lint, <code>pforge run-plan</code> and the regression guard all read it, and their messages say what to add. It is not a sandbox: the built-in list already admits <code>bash</code>, <code>node</code>, <code>npx</code> and <code>rm</code>, each of which can run anything. The regression guard also refuses a short list of destructive patterns (<code>rm -rf /</code>, <code>mkfs</code>, <code>dd</code> to a device) whatever is listed; a run's own gates are not checked against it.</td></tr>
               <tr><td><code>impactGate</code></td><td><code>"block"</code> | <code>"warn"</code> | <code>"off"</code> | object</td><td><code>"block"</code></td><td><code>{ "mode": "warn", "command": "bundle exec rspec {files}" }</code></td><td>After a slice's own gate passes, run the tests related to the files the slice changed: tests it changed, tests named after changed files (<code>foo.test.*</code>, <code>test_foo.py</code>, <code>foo_test.go</code>, <code>FooTests.cs</code>), and the Lattice blast radius. Runners are detected for vitest, jest, pytest, <code>go test</code> and <code>dotnet test</code>; <code>command</code> (with <code>{files}</code>) covers anything else, and <code>maxTests</code> (default 40) caps the run. Use <code>"warn"</code> if your suite has known failures.</td></tr>
 <tr><td><code>resumeOnRetry</code></td><td>boolean</td><td><code>true</code></td><td><code>false</code></td><td>A slice retry resumes the worker's previous session (Copilot CLI <code>--session-id</code>, SDK <code>resumeSession</code>) instead of starting cold, so the worker keeps the files it already read and the changes it already made. A failed resume starts a fresh session. Env override: <code>PFORGE_RESUME_ON_RETRY=0|1</code>.</td></tr>
 <tr><td><code>routing.autoTier</code></td><td><code>"complexity"</code> | <code>"efficiency"</code> | <code>"balance"</code> | <code>"intelligence"</code> | <code>"off"</code></td><td><code>"complexity"</code></td><td><code>"intelligence"</code></td><td>For slices on model <code>auto</code>: run them on the Copilot SDK and let it pick the model for a tier. <code>"complexity"</code> maps the slice complexity score to efficiency (1&ndash;3), balance (4&ndash;6) or intelligence (7&ndash;10). See <a href="advanced-execution.html#cost-optimization">Advanced Execution</a>.</td></tr>
@@ -21216,7 +21217,7 @@ switch ($LASTEXITCODE) {
 
 <!-- Footer -->
 <footer style="max-width:56rem;margin:3rem auto;padding:1.5rem;font-size:0.75rem;color:#475569;border-top:1px solid #1e293b;font-family:'JetBrains Mono',monospace;">
-  <p>Plan Forge Manual &mdash; offline edition &mdash; generated 2026-10-07 04:58:34 UTC &mdash; hash <code>41ad005f1cac2cbc</code></p>
+  <p>Plan Forge Manual &mdash; offline edition &mdash; generated 2026-10-24 16:42:17 UTC &mdash; hash <code>5ae69e1a4ca6de2a</code></p>
   <p>Regenerate with: <code>node docs/manual/export.mjs</code> &mdash; <a href="https://planforge.software/" style="color:#f59e0b;" rel="noopener">Main site</a> &mdash; <a href="index.html" style="color:#f59e0b;">Online version</a> &mdash; <a href="https://github.com/srnichols/plan-forge" style="color:#f59e0b;" rel="noopener">GitHub</a></p>
 </footer>
 

@@ -142,7 +142,7 @@ pforge triage    # list ranked open alerts (incidents + drift violations)</code>
             </tbody>
           </table>
         </div>
-        <p class="text-sm text-slate-400 mb-6"><strong>Output</strong>: <code class="text-forge-400">{ gates[], passed, failed, blocked, summary }</code>. Commands are allow-listed via <code>GATE_ALLOWED_PREFIXES</code>, dangerous patterns like <code>rm -rf /</code> are blocked.</p>
+        <p class="text-sm text-slate-400 mb-6"><strong>Output</strong>: <code class="text-forge-400">{ gates[], passed, failed, blocked, summary }</code>. Commands are allow-listed: the built-in list (<code>GATE_ALLOWED_PREFIXES</code>) plus any <code>gateAllowedPrefixes</code> a project sets in <code>.forge.json</code>. Dangerous patterns like <code>rm -rf /</code> are blocked whatever is listed.</p>
 
         <h2 id="forge-runbook">forge_runbook</h2>
         <p>Generates a human-readable operational runbook from a hardened plan file. Optionally appends recent incidents for context. Saves to <code class="text-forge-400">.forge/runbooks/</code>.</p>

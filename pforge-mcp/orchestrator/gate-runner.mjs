@@ -5,7 +5,8 @@ import { isAbsolute, relative, resolve, sep } from "node:path";
 import {
   getCachedBashPath, setCachedBashPath,
 } from "./state.mjs";
-import { GATE_ALLOWED_PREFIXES, UNIX_TOOLS, DEFAULT_GATE_TIMEOUT_MS, GATE_MAX_BUFFER, resolveGateCommandToken, isGatePrefixAllowed } from "./constants.mjs";
+import { GATE_ALLOWED_PREFIXES, UNIX_TOOLS, DEFAULT_GATE_TIMEOUT_MS, GATE_MAX_BUFFER, resolveGateCommandToken } from "./constants.mjs";
+import { isGateLineAllowed, loadGateAllowedPrefixes, gateAllowlistAdvice } from "./gate-allowlist.mjs";
 import { loadGateRunnerMode, runDevcontainerGate } from "./devcontainer-gates.mjs";
 import { findMissingTestOperands } from "./gate-operands.mjs";
 export { GATE_ALLOWED_PREFIXES, UNIX_TOOLS, DEFAULT_GATE_TIMEOUT_MS };
@@ -212,9 +213,9 @@ export function suggestAllowedCommand(token) {
  *   leave the project. `.forge.json` and the Dev Container stay the project's.
  * @returns {{ success: boolean, output: string, error: string, stderr: string, exitCode: number }}
  */
-function _validateGateAllowlist(command) {
+function _validateGateAllowlist(command, extra = []) {
   const cmdBase = resolveGateCommandToken(command);
-  const isAllowed = isGatePrefixAllowed(cmdBase);
+  const isAllowed = isGateLineAllowed(command, extra);
   if (isAllowed) return { cmdBase, blocked: null };
   const hints = [];
   if (isPlaceholderToken(cmdBase)) {
@@ -223,13 +224,14 @@ function _validateGateAllowlist(command) {
   const suggestion = suggestAllowedCommand(cmdBase);
   if (suggestion) hints.push(`Did you mean '${suggestion}'?`);
   const hintSuffix = hints.length ? ` ${hints.join(" ")}` : "";
+  const projectEntries = extra.length > 0 ? `; this project also allows: ${extra.join(", ")}` : "";
   return {
     cmdBase,
     blocked: {
       success: false,
       output: "",
       stderr: "",
-      error: `Validation gate blocked: '${cmdBase}' not in allowlist.${hintSuffix} Allowed: ${GATE_ALLOWED_PREFIXES.join(", ")}`,
+      error: `Validation gate blocked: '${cmdBase}' not in allowlist.${hintSuffix} Allowed: ${GATE_ALLOWED_PREFIXES.join(", ")}${projectEntries}. ${gateAllowlistAdvice(command)}.`,
       exitCode: -1,
     },
   };
@@ -400,7 +402,7 @@ export function runGate(command, rawCwd, opts = {}) {
   if (!workdir.cwd) return _failedBeforeRunning(`Validation gate blocked: workdir '${opts.workdir}' is outside the project.`);
   const cwd = workdir.cwd;
   const failOnStderr = opts.failOnStderr === true;
-  const { cmdBase, blocked } = _validateGateAllowlist(command);
+  const { cmdBase, blocked } = _validateGateAllowlist(command, loadGateAllowedPrefixes(projectRoot));
   if (blocked) return blocked;
 
   // Meta-bug #337: vitest and jest treat file arguments as filters, so a test

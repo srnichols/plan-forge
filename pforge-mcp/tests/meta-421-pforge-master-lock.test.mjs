@@ -7,8 +7,9 @@
  * of resolving one. These checks keep the lock present, in step with the manifest, and complete enough that
  * npm accepts it with no registry to ask.
  *
- * The lock is made with `npm install --package-lock-only --legacy-peer-deps` (a plain run hits the same crash)
- * and then `node scripts/lock-registry.mjs --write`; see docs/RELEASE-CHECKLIST.md.
+ * The lock is made with a plain `npm install --package-lock-only` (with vitest 4 that crashed the same way and needed
+ * `--legacy-peer-deps`, which with vitest 5 leaves vite out of the lock) and then
+ * `node scripts/lock-registry.mjs --write`; see docs/RELEASE-CHECKLIST.md.
  */
 
 import { describe, it, expect, beforeEach, afterEach } from "vitest";

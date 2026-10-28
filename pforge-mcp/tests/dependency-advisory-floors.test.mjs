@@ -11,6 +11,14 @@
  * body-parser before 2.4.0 (or 1.20.9 on the 1.x line) is open to denial of service through trailing bytes
  * after a compressed request body (GHSA-27r3-jxmh-p828). express and the MCP SDK ask for `^2`, so a lock
  * update is enough and needs no override.
+ *
+ * undici before 7.30.1 (eight advisories; jsdom reaches it through `^7.25.0`), vite up to 8.3.2, vitest and
+ * @vitest/mocker before 4.1.12, and postcss-selector-parser before 6.1.5 are development dependencies. A lock
+ * update inside the ranges package.json allows is enough for each.
+ *
+ * A lock entry has to carry a sha512 integrity. A package mirror whose metadata lacks one makes npm write the
+ * sha1 `shasum` instead, and `scripts/lock-registry.mjs --write` rewrites URLs only, so the weaker hash would
+ * be committed without anyone noticing.
  */
 
 import { describe, it, expect } from "vitest";
@@ -20,13 +28,24 @@ import { fileURLToPath } from "node:url";
 
 const REPO = resolve(dirname(fileURLToPath(import.meta.url)), "..", "..");
 const ZOD_FLOOR = "4.6.6";
-const LOCKS = ["package-lock.json", "pforge-mcp/package-lock.json", "pforge-master/package-lock.json"];
+const ROOT_LOCK = "package-lock.json";
+const MCP_LOCK = "pforge-mcp/package-lock.json";
+const LOCKS = [ROOT_LOCK, MCP_LOCK, "pforge-master/package-lock.json"];
 const MANIFESTS = ["package.json", "pforge-mcp/package.json"];
 
-/** `patched` lists the first fixed release of each major line the advisory covers. */
+/**
+ * `patched` lists the first fixed release of each major line the advisory covers; a line the advisory's
+ * vulnerable range stops short of is listed at its first release. `locks` names the locks that carry the
+ * package, where that is fewer than all three.
+ */
 const ADVISORIES = [
   { id: "GHSA-mrhx-c7xc-m3w5", pkg: "zod", patched: [ZOD_FLOOR] },
   { id: "GHSA-27r3-jxmh-p828", pkg: "body-parser", patched: ["1.20.9", "2.4.0"] },
+  { id: "GHSA-4qv8-2p9j-2685 and seven more", pkg: "undici", patched: ["7.30.1", "8.0.0"], locks: [ROOT_LOCK, MCP_LOCK] },
+  { id: "GHSA-587h-7wmj-h5pm and five more", pkg: "vite", patched: ["8.3.3"] },
+  { id: "GHSA-qxg6-89mg-rqv8 and GHSA-xp26-3454-mjgp", pkg: "vitest", patched: ["4.1.12", "5.0.0"] },
+  { id: "GHSA-qxg6-89mg-rqv8 and GHSA-xp26-3454-mjgp", pkg: "@vitest/mocker", patched: ["4.1.12", "5.0.0"] },
+  { id: "GHSA-rj75-hqrm-r3gf", pkg: "postcss-selector-parser", patched: ["6.1.5", "7.0.0"], locks: [ROOT_LOCK] },
 ];
 
 const readJson = (relative) => JSON.parse(readFileSync(join(REPO, relative), "utf8"));
@@ -76,13 +95,22 @@ describe("isPatched", () => {
   });
 });
 
-describe.each(ADVISORIES)("$pkg stays at a release without $id", ({ pkg, patched }) => {
-  it.each(LOCKS)(`%s resolves every ${pkg} at or past the fix (${patched.join(" or ")})`, (lock) => {
+describe.each(ADVISORIES)("$pkg stays at a release without $id", ({ pkg, patched, locks = LOCKS }) => {
+  it.each(locks)(`%s resolves every ${pkg} at or past the fix (${patched.join(" or ")})`, (lock) => {
     const entries = Object.entries(readJson(lock).packages).filter(([key]) => key === `node_modules/${pkg}` || key.endsWith(`/node_modules/${pkg}`));
     expect(entries.length, `${lock} has no ${pkg}`).toBeGreaterThan(0);
     for (const [key, entry] of entries) {
       expect(isPatched(entry.version, patched), `${lock} ${key} is ${entry.version}`).toBe(true);
     }
+  });
+});
+
+describe("every locked tarball keeps a sha512 integrity", () => {
+  it.each(LOCKS)("%s has no downloaded package hashed with less", (lock) => {
+    const fetched = Object.entries(readJson(lock).packages).filter(([key, entry]) => key && !entry.link && typeof entry.resolved === "string");
+    expect(fetched.length, `${lock} has no downloaded package`).toBeGreaterThan(0);
+    const weak = fetched.filter(([, entry]) => !String(entry.integrity ?? "").startsWith("sha512-")).map(([key, entry]) => `${key}@${entry.version}: ${entry.integrity ?? "no integrity"}`);
+    expect(weak, `${lock} lists packages without a sha512 integrity; take it from the public registry's metadata, or from another lock that has the same release`).toEqual([]);
   });
 });
 

@@ -186,6 +186,8 @@ jobs:
           ./pforge.sh new-phase "Auth/Login: Part 2" || { echo "::error::pforge.sh new-phase failed for a name with a path separator"; rc=1; }
           [ -f docs/plans/Phase-2-AUTH-LOGIN--PART-2-PLAN.md ] || { echo "::error::new-phase did not make the plan file for a name with a path separator"; rc=1; }
           grep -q "### Phase 2: Auth/Login: Part 2" docs/plans/DEPLOYMENT-ROADMAP.md || { echo "::error::new-phase did not keep the phase name as typed"; rc=1; }
+          ./pforge.sh new-phase 'Back\slash' || { echo "::error::pforge.sh new-phase failed for a name with a backslash"; rc=1; }
+          [ -f docs/plans/Phase-3-BACK-SLASH-PLAN.md ] || { echo "::error::new-phase did not make the plan file for a name with a backslash"; rc=1; }
           echo "::endgroup::"
           exit $rc
 

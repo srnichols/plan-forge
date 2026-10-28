@@ -202,6 +202,47 @@ ${end}"
     fi
 }
 
+# ─── Closing Next Steps ────────────────────────────────────────────────
+# A step is printed only when the file it names is in the project. A preset that installs fewer files
+# (`custom` has no AGENTS.md, prompts, agents or skills) would otherwise send the reader to files that
+# were never created. Twin of Get-SetupNextSteps in setup.ps1. A pointer is "path|text".
+pf_existing_pointers() {
+    local project_path="$1" pointer
+    shift
+    for pointer in "$@"; do
+        if [[ -e "$project_path/${pointer%%|*}" ]]; then
+            printf '%s\n' "${pointer#*|}"
+        fi
+    done
+}
+
+pf_setup_next_steps() {
+    local step=0 text
+    while IFS= read -r text; do
+        step=$((step + 1))
+        printf '  %d. %s\n' "$step" "$text"
+    done < <(pf_existing_pointers "$1" \
+        ".github/copilot-instructions.md|Review .github/copilot-instructions.md — fill in project-specific details" \
+        "AGENTS.md|Review AGENTS.md — customize worker patterns for your app" \
+        ".vscode/settings.json|Review .vscode/settings.json — uncomment instruction file references" \
+        ".github/prompts|Review .github/prompts/ — customize scaffolding recipes for your conventions" \
+        ".github/agents|Review .github/agents/ — tailor reviewer checklists for your project" \
+        ".github/skills|Review .github/skills/ — update build/deploy commands for your CI/CD" \
+        "docs/plans/DEPLOYMENT-ROADMAP.md|Review docs/plans/DEPLOYMENT-ROADMAP.md — add your phases" \
+        "docs/COPILOT-VSCODE-GUIDE.md|Read docs/COPILOT-VSCODE-GUIDE.md for Copilot Agent Mode workflow" \
+        "docs/plans/AI-Plan-Hardening-Runbook-Instructions.md|Start planning: open docs/plans/AI-Plan-Hardening-Runbook-Instructions.md")
+}
+
+pf_setup_optional_steps() {
+    local text
+    while IFS= read -r text; do
+        printf '  - %s\n' "$text"
+    done < <(pf_existing_pointers "$1" \
+        ".github/prompts/project-profile.prompt.md|Run .github/prompts/project-profile.prompt.md to generate project-specific guardrails" \
+        ".github/prompts/project-principles.prompt.md|Run .github/prompts/project-principles.prompt.md to define project principles" \
+        ".github/prompts/step0-specify-feature.prompt.md|Use .github/prompts/step0-specify-feature.prompt.md to define your first feature")
+}
+
 # ─── Agent Adapter: Claude Code ────────────────────────────────────────
 install_claude_agent() {
     local target="$1"
@@ -1757,20 +1798,10 @@ echo ""
 cyan "Files installed to: $PROJECT_PATH"
 echo ""
 yellow "Next steps:"
-echo "  1. Review .github/copilot-instructions.md — fill in project-specific details"
-echo "  2. Review AGENTS.md — customize worker patterns for your app"
-echo "  3. Review .vscode/settings.json — uncomment instruction file references"
-echo "  4. Review .github/prompts/ — customize scaffolding recipes for your conventions"
-echo "  5. Review .github/agents/ — tailor reviewer checklists for your project"
-echo "  6. Review .github/skills/ — update build/deploy commands for your CI/CD"
-echo "  7. Review docs/plans/DEPLOYMENT-ROADMAP.md — add your phases"
-echo "  8. Read docs/COPILOT-VSCODE-GUIDE.md for Copilot Agent Mode workflow"
-echo "  9. Start planning: open docs/plans/AI-Plan-Hardening-Runbook-Instructions.md"
+pf_setup_next_steps "$PROJECT_PATH"
 echo ""
 yellow "Optional (recommended):"
-echo "  - Run .github/prompts/project-profile.prompt.md to generate project-specific guardrails"
-echo "  - Run .github/prompts/project-principles.prompt.md to define project principles"
-echo "  - Use .github/prompts/step0-specify-feature.prompt.md to define your first feature"
+pf_setup_optional_steps "$PROJECT_PATH"
 echo "  - Start your first plan the Crucible way: call forge_crucible_submit (MCP) — every plan ships with a crucibleId for full traceability"
 echo "  - On GitHub? Run 'pforge github status' for a GitHub-native readiness check, or read /manual/plan-forge-on-the-github-stack.html"
 echo ""

@@ -7,6 +7,14 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+### Security
+
+- Development dependencies with advisories are updated in the root and `pforge-mcp` locks, inside the ranges `package.json` already allowed: `undici` 7.30.1 (eight advisories, four of them high; `jsdom` pulls it in), `vite` 8.3.5 (six advisories, one high), `vitest` and `@vitest/mocker` 4.1.12 (two, moderate) and, in the root lock, `postcss-selector-parser` 6.1.5 (moderate). `npm audit` for the full tree: root lock 7 → 2, `pforge-mcp` lock 6 → 2, `pforge-master` lock 0 → 0. The two left are the `@azure/identity` to `@azure/msal-node` chain (#418): it waits for an `@azure/identity` release that takes msal-node 7.1, and 4.14.0 takes `^6.0.0`. `dependency-advisory-floors.test.mjs` holds the three locks to these releases, and to a sha512 integrity for every downloaded package: a package mirror whose metadata has no sha512 for a release makes npm write the sha1 `shasum`, and `lock-registry.mjs --write` rewrites URLs only, so the weaker hash used to go into a lock unnoticed.
+
+### Changed
+
+- `pforge-mcp` and `pforge-master` ask for the dependency versions a downstream project already runs, so `pforge update`, which replaces a project's `package.json` and lock files with ours, stops rolling its Dependabot bumps back. `pforge-mcp`: `@github/copilot-sdk` ^1.0.24, `express` ^5.3.0, `ws` ^8.22.0, `playwright` ^1.64.1, `@azure/identity` ^4.14.0, `dotenv` ^18.0.8 and `pixelmatch` ^8.0.0. `pforge-master`: `@modelcontextprotocol/sdk` ^1.32.1. The SDK is locked at 1.0.24, not at 1.0.28, which was published the day the locks were made; the releases between are refreshes of the bundled Copilot CLI snapshot with no SDK API change. `pixelmatch` 8 compares colours with OKLab and the HyAB distance instead of YIQ: `diffImages` calls it the same way and `threshold` keeps its scale and default, but the number of differing pixels for a pair of screenshots changes, so a visual-diff threshold tuned against 6 deserves a look. `dotenv/config` prints nothing to stdout in 18.0.8, which the MCP stdio transport needs, and a test keeps it that way. Held back: `jsdom` 30 asks for node ^22.22.2 or ^24.15.0 and pulls in `undici` 8 (node 22.19), which is above the 22.12 floor; `vitest` 5 is a major with more than twenty breaking changes (mocks are cleared before every test, fake timers and error formatting change), and 4.1.12 clears both advisories.
+
 ## [3.35.3] — 2026-10-28 — The installers report a failed npm install and run in Windows PowerShell 5.1, pforge-master ships a lockfile, and the custom preset and the capability descriptor say what they contain
 
 ### Fixed

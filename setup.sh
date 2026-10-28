@@ -185,8 +185,10 @@ ${end}"
         if grep -qF "$begin" "$gitignore"; then
             local tmp
             tmp="$(mktemp)"
-            awk -v begin="$begin" -v end="$end" -v body="$body" '
-              BEGIN { in_block = 0 }
+            # The block goes in through the environment: BSD awk (macOS) refuses a newline in a -v value, and the
+            # block has several lines (#427).
+            PF_GI_BEGIN="$begin" PF_GI_END="$end" PF_GI_BODY="$body" awk '
+              BEGIN { in_block = 0; begin = ENVIRON["PF_GI_BEGIN"]; end = ENVIRON["PF_GI_END"]; body = ENVIRON["PF_GI_BODY"] }
               {
                 if (index($0, begin) == 1 && !in_block) { in_block = 1; print body; next }
                 if (index($0, end) == 1 && in_block) { in_block = 0; next }

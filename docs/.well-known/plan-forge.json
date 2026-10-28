@@ -1,6 +1,6 @@
 {
   "name": "Plan Forge",
-  "version": "3.35.4",
+  "version": "3.35.5-dev",
   "tagline": "Forge the plan. Harden the scope. Ship with confidence.",
   "description": "AI coding guardrails that convert rough ideas into hardened execution contracts. 7-step pipeline, 107 MCP tools, self-recursive intelligence, OpenBrain persistent memory, reviewer agents, live dashboard.",
   "homepage": "https://planforge.software",

@@ -87,6 +87,8 @@ Scan the target project root for these marker files to determine the correct pre
 
 `setup.ps1` runs in the Windows PowerShell 5.1 that ships with Windows as well as in PowerShell 7+, and writes the same UTF-8 files in both. Do not install PowerShell 7 just to run it.
 
+`setup.sh` runs in the Bash 3.2 that ships with macOS, with its BSD `find`, `grep`, `sed` and `awk`. Do not install a newer Bash or GNU tools just to run it.
+
 ### Step 3: Customize Generated Files
 
 After setup completes, the agent MUST:

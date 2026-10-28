@@ -87,6 +87,7 @@ const SOURCE_ONLY_SUITES = {
     "tests/meta-428-validate-setup-file-dependency.test.mjs",
     "tests/scripts-windows-powershell.test.mjs",
     "tests/managed-gitignore-block.test.mjs",
+    "tests/bash-3-2-portability.test.mjs",
     "tests/dependency-advisory-floors.test.mjs",
     "tests/setup-next-steps.test.mjs",
   ],

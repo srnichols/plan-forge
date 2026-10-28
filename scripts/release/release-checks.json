@@ -168,7 +168,7 @@
     { "label": "pforge update says a failed npm install failed, PowerShell (#420) (3.35.3)", "path": "pforge.ps1", "contains": "npm install failed (exit $exitCode)" },
     { "label": "pforge update says a failed npm install failed and why, bash (#420) (3.35.3)", "path": "pforge.sh", "contains": "pf_npm_install()" },
     { "label": "setup.ps1 runs in Windows PowerShell 5.1 and writes UTF-8 (#417) (3.35.3)", "path": "pforge-mcp/tests/meta-417-setup-windows-powershell.test.mjs", "contains": "setup.ps1 can be read by Windows PowerShell 5.1" },
-    { "label": "pforge update installs npm dependencies inside the package, PowerShell (#422) (3.35.3)", "path": "pforge.ps1", "contains": "Push-Location -LiteralPath $PackageDir -ErrorAction Stop" },
+    { "label": "pforge update installs npm dependencies inside the package, PowerShell (#422) (3.35.3)", "path": "pforge.ps1", "contains": "Set-Location -LiteralPath $PackageDir -ErrorAction Stop" },
     { "label": "pforge update does not give npm install a --prefix, PowerShell (#422) (3.35.3)", "path": "pforge.ps1", "notContains": "--prefix $PackageDir" },
     { "label": "pforge-master ships a lockfile, so npm install there does not crash (#421) (3.35.3)", "path": "pforge-master/package-lock.json", "contains": "\"name\": \"@pforge/pforge-master\"" },
     { "label": "The pforge-master lock pins body-parser 2.4.0, past GHSA-27r3-jxmh-p828 (#418) (3.35.3)", "path": "pforge-master/package-lock.json", "contains": "body-parser-2.4.0.tgz" },

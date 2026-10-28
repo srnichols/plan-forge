@@ -124,12 +124,13 @@ function extractShFunction(source, name) {
 
 /**
  * Runs Install-NpmDependencies from `file` in one PowerShell and returns what it printed. With `real`, npm is the real
- * one, run from `real.cwd` on `real.packageDir`; otherwise a stub npm stands in and logs where it ran.
+ * one, run from `real.cwd` on `real.packageDir`; otherwise a stub npm stands in and logs where it ran. `packageDir`
+ * names the directory the helper is given, and `prelude` is PowerShell run first, in the caller's scope.
  */
-function runPs({ exe, file, mode, throwing = false, real = null }) {
+function runPs({ exe, file, mode, throwing = false, real = null, packageDir: given = null, prelude = [] }) {
   const stub = real ? null : stubNpmDir("ps");
   const workDir = tempDir("pf-meta-420-pkg-");
-  const packageDir = real?.packageDir ?? workDir;
+  const packageDir = given ?? real?.packageDir ?? workDir;
   const log = join(workDir, "npm.log");
   writeFileSync(log, "");
   const driver = join(workDir, "driver.ps1");
@@ -137,8 +138,10 @@ function runPs({ exe, file, mode, throwing = false, real = null }) {
     "$ErrorActionPreference = 'Stop'",
     extractPsFunction(SCRIPTS[file], "Install-NpmDependencies"),
     throwing ? "function npm { throw 'npm is not installed' }" : "",
+    ...prelude,
     `Install-NpmDependencies '${packageDir}' 'pforge-master'`,
     "Write-Output \"CWD=$((Get-Location).Path)\"",
+    "Write-Output \"STACK=$((Get-Location -Stack).Count)\"",
     "Write-Output 'AFTER'",
   ].join("\n")}\n`);
   const env = real ? { ...process.env, ...REAL_NPM_ENV } : envWithStub(stub, { STUB_NPM_MODE: mode, STUB_NPM_LOG: log });
@@ -206,6 +209,22 @@ describe.each(PS_SHELLS)("PowerShell helper in $name", ({ exe }) => {
     expect(run.out).toContain("npm is not installed");
     expect(run.out).toContain("AFTER");
   }, 120_000);
+
+  it.each(["setup.ps1", "pforge.ps1"])("%s: reads the status of this npm run, not a stale one left by an earlier command", (file) => {
+    const run = runPs({ exe, file, mode: "ok", prelude: ["$global:LASTEXITCODE = 5", "function npm { }"] });
+    expect(run.status, run.out).toBe(0);
+    expect(run.out).toContain("npm install complete");
+    expect(run.out).not.toMatch(/failed/i);
+  }, 120_000);
+
+  it.each(["setup.ps1", "pforge.ps1"])("%s: leaves the caller's location stack alone when the package directory does not exist", (file) => {
+    const missing = join(tmpdir(), `pf-meta-420-missing-${process.pid}-${Date.now()}`);
+    const run = runPs({ exe, file, mode: "ok", packageDir: missing, prelude: ["Push-Location -LiteralPath $env:TEMP"] });
+    expect(run.status, run.out).toBe(0);
+    expect(run.out).toContain("npm install failed");
+    expect(run.out).toMatch(/^STACK=1\s*$/m);
+    expect(run.out).toContain("AFTER");
+  }, 120_000);
 });
 
 describe.skipIf(!BASH)("shell helper", () => {
@@ -248,13 +267,16 @@ function realNpmFixture() {
   return dirs;
 }
 
-/** What each run must leave: the package's own manifest untouched, and no link to the directory the script ran from. */
+/** What each run must leave: the package's own manifest untouched, no link to the directory the script ran from, and the install made in the package. */
 function expectInstalledInPlace(run, dirs, manifestBefore) {
   expect(run.status, run.out).toBe(0);
   expect(run.out).toContain("npm install complete");
   expect(run.out).not.toMatch(/failed/i);
   expect(readFileSync(join(dirs.pkg, "package.json"), "utf8"), "the package's package.json").toBe(manifestBefore);
   expect(existsSync(join(dirs.pkg, "node_modules", "host-app")), "a link to the directory the script ran from").toBe(false);
+  // npm writes package-lock.json where it runs, so this says where the install was made.
+  expect(existsSync(join(dirs.pkg, "package-lock.json")), "npm ran in the package").toBe(true);
+  for (const elsewhere of [dirs.host, dirs.bare]) expect(existsSync(join(elsewhere, "package-lock.json")), `npm ran in ${elsewhere}`).toBe(false);
 }
 
 const samePath = (a, b) => a.replace(/\\/g, "/").toLowerCase() === b.replace(/\\/g, "/").toLowerCase();

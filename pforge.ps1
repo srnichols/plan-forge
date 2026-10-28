@@ -1593,23 +1593,24 @@ function Invoke-UpdateGuard([string]$Guard, [string]$Mode, [object[]]$Items, [st
 # that only warned as failed and keep all but one line of the reason, so npm runs under 'Continue' here.
 # npm runs inside the package: `npm install --prefix <dir>` installs the package in the current directory into
 # <dir>, which added a file: dependency on that directory to the package.json, or failed outright where the
-# current directory has no package.json (#422).
+# current directory has no package.json (#422). The caller's directory is restored by name: Push-Location
+# puts the current directory on the location stack before it tries to move, so a package directory that is
+# missing would leave an entry behind for the caller's own Pop-Location to find.
 function Install-NpmDependencies([string]$PackageDir, [string]$Label) {
     $ErrorActionPreference = 'Continue'
     $output = @()
     $exitCode = 0
     $global:LASTEXITCODE = 0
-    $entered = $false
+    $origin = (Get-Location).Path
     try {
-        Push-Location -LiteralPath $PackageDir -ErrorAction Stop
-        $entered = $true
+        Set-Location -LiteralPath $PackageDir -ErrorAction Stop
         $output = @(& npm install --loglevel=error 2>&1)
         $exitCode = $LASTEXITCODE
     } catch {
         $output = @($_.Exception.Message)
         $exitCode = 1
     } finally {
-        if ($entered) { Pop-Location }
+        Set-Location -LiteralPath $origin
     }
     if ($exitCode -eq 0) {
         Write-Host "  ✅ npm install complete" -ForegroundColor Green

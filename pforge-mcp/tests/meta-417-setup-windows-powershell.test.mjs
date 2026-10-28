@@ -151,6 +151,8 @@ describe("setup.ps1 reads and writes text as UTF-8 without a byte order mark", (
       "Write-Utf8File (Join-Path (Join-Path (Get-Location) 'sub [x]') 'wild.txt') $text",
       "Write-Utf8File 'appended.txt' 'first'",
       "Add-Utf8Content 'appended.txt' $text",
+      // A file that does not exist yet is where an encoding with a preamble writes its byte order mark.
+      "Add-Utf8Content 'created.txt' $text",
     ].join("\n")}\n`;
     writeFileSync(join(dir, "sample.txt"), sample, "utf8");
     const driver = join(dir, "driver.ps1");
@@ -164,6 +166,7 @@ describe("setup.ps1 reads and writes text as UTF-8 without a byte order mark", (
     expect(bytes("lines.txt")).toEqual(utf8(["one", sample, "three"].join(EOL) + EOL));
     expect(bytes("sub [x]/wild.txt")).toEqual(utf8(sample + EOL));
     expect(bytes("appended.txt")).toEqual(utf8(`first${EOL}${sample}${EOL}`));
+    expect(bytes("created.txt"), "appended to a file that did not exist, with no byte order mark").toEqual(utf8(sample + EOL));
     expect(bytes("plain.txt").slice(0, 3), "no byte order mark").not.toEqual([0xef, 0xbb, 0xbf]);
   }, 120_000);
 

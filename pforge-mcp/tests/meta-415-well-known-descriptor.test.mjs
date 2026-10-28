@@ -151,4 +151,13 @@ describe("generate-well-known.mjs", () => {
     expect(result.status).toBe(2);
     expect(result.stderr).toContain(DESCRIPTOR);
   });
+
+  it("refuses to publish JSON it has broken, such as from a VERSION that holds a quote, and leaves the file as it was", () => {
+    const before = readFileSync(path(DESCRIPTOR), "utf8");
+    writeFileSync(path("VERSION"), '3.0.0"\n');
+    const result = run();
+    expect(result.status).toBe(2);
+    expect(result.stderr).toContain("not valid JSON");
+    expect(readFileSync(path(DESCRIPTOR), "utf8")).toBe(before);
+  });
 });

@@ -55,6 +55,21 @@ jobs:
         shell: pwsh
         run: node scripts/check-installed-text.mjs "$env:RUNNER_TEMP\test-ps51"
 
+      # Parsing is what failed for setup.ps1 (#417) and four maintainer scripts: a file with no byte order mark is
+      # read in the system code page, and an em dash in a string ended it. The vitest job runs on Linux, where
+      # Windows PowerShell does not exist, so this is the one place every script is parsed by 5.1.
+      - name: Parse every PowerShell script in Windows PowerShell 5.1
+        shell: powershell
+        run: |
+          $bad = 0
+          foreach ($path in (git ls-files '*.ps1' '*.psm1')) {
+            $tokens = $null; $errors = $null
+            [void][System.Management.Automation.Language.Parser]::ParseFile((Resolve-Path $path).Path, [ref]$tokens, [ref]$errors)
+            if ($errors.Count) { $bad++; Write-Host "::error file=$path,line=$($errors[0].Extent.StartLineNumber)::$($errors[0].Message)" }
+          }
+          if ($bad) { exit 1 }
+          Write-Host "every script parses"
+
   validate-bash:
     name: Validate (Bash)
     runs-on: ubuntu-latest

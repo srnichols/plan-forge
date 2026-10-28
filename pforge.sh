@@ -455,7 +455,7 @@ ENTRY
 )
         if grep -q "## Completed Phases" "$roadmap"; then
             # awk, not sed: an s command cannot take a replacement that spans lines, and sed stopped with "unterminated s
-            # command" (#429). The entry also holds the user's phase name, and a / or an & in it would break the command.
+            # command" (#429). The entry holds the user's phase name too, and sed reads an & in a replacement as the matched text.
             ENTRY="$entry" awk '/## Completed Phases/ { print ENVIRON["ENTRY"]; print "" } { print }' "$roadmap" > "$roadmap.tmp"
             mv "$roadmap.tmp" "$roadmap"
         else

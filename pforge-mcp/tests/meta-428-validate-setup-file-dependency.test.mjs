@@ -23,8 +23,8 @@ const SHELLS = [
   {
     name: "validate-setup.sh",
     available: Boolean(BASH),
-    // NTFS junctions are not symbolic links to Bash on Windows, and Windows projects are validated by PowerShell.
-    seesLinks: !isWin,
+    // Node reads the link (an NTFS junction is a link to it, where `[[ -L ]]` in Git Bash says no).
+    seesLinks: true,
     run: (project) => spawnSync(BASH, [join(REPO_ROOT, "validate-setup.sh"), "--path", project], { encoding: "utf8", timeout: 120_000 }),
   },
   {
@@ -52,15 +52,15 @@ const tempDir = (prefix) => {
   return dir;
 };
 
-const manifest = (dependencies = {}) => `${JSON.stringify({ name: "pkg", version: "9.9.9", dependencies }, null, 2)}\n`;
+const manifest = (dependencies = {}, extra = {}) => `${JSON.stringify({ name: "pkg", version: "9.9.9", dependencies, ...extra }, null, 2)}\n`;
 
-/** A project with both framework packages installed. `mcp` is what pforge-mcp's package.json depends on. */
-function project({ mcp = {}, link = false } = {}) {
+/** A project with both framework packages installed. `mcp` is what pforge-mcp's package.json depends on, `mcpExtra` its other sections. */
+function project({ mcp = {}, mcpExtra = {}, link = false } = {}) {
   const dir = tempDir("pf-meta-428-validate-");
-  for (const [name, dependencies] of [["pforge-mcp", mcp], ["pforge-master", {}]]) {
+  for (const [name, dependencies, extra] of [["pforge-mcp", mcp, mcpExtra], ["pforge-master", {}, {}]]) {
     mkdirSync(join(dir, name, "node_modules"), { recursive: true });
     writeFileSync(join(dir, name, "server.mjs"), "");
-    writeFileSync(join(dir, name, "package.json"), manifest(dependencies));
+    writeFileSync(join(dir, name, "package.json"), manifest(dependencies, extra));
   }
   if (link) {
     const target = tempDir("pf-meta-428-checkout-");
@@ -89,6 +89,15 @@ for (const shell of SHELLS) {
 
     it("warns about a link: dependency too", () => {
       expect(output(project({ mcp: { shared: "link:../shared" } }))).toMatch(/WARN\s+pforge-mcp: .*left by an older installer/);
+    }, 180_000);
+
+    it.each(["devDependencies", "optionalDependencies"])("warns about a file: dependency in %s", (section) => {
+      expect(output(project({ mcpExtra: { [section]: { local: "file:../local" } } }))).toMatch(/WARN\s+pforge-mcp: .*left by an older installer/);
+    }, 180_000);
+
+    it("reads only those three sections: a file: value in overrides or peerDependencies is not left behind by the installer", () => {
+      const out = output(project({ mcpExtra: { overrides: { zod: "file:../zod" }, peerDependencies: { shared: "link:../shared" } } }));
+      expect(out).not.toContain("left by an older installer");
     }, 180_000);
 
     it.skipIf(!shell.seesLinks)("warns about a link at node_modules/plan-forge even when package.json is clean", () => {

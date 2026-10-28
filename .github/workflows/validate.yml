@@ -132,8 +132,8 @@ jobs:
           echo "bash: $(command -v bash): $(bash --version | head -1)"
           chmod +x setup.sh validate-setup.sh
           rc=0
-          # custom, a stack preset, and a stack preset with every agent adapter
-          for run in custom:copilot typescript:copilot typescript:all; do
+          # custom, a stack preset, a stack preset with every agent adapter, and a list of adapters
+          for run in custom:copilot typescript:copilot typescript:all custom:claude,cursor,codex; do
             preset="${run%%:*}"; agent="${run##*:}"
             echo "::group::setup.sh --preset $preset --agent $agent"
             dir="$RUNNER_TEMP/test-macos-$preset-$agent"; mkdir -p "$dir"

@@ -176,7 +176,9 @@ fi
 
 # ─── Agent-Specific Files ─────────────────────────────────────────────
 if [ -f "$CONFIG_PATH" ]; then
-    CONFIGURED_AGENTS="$(grep -o '"agents"[^,}]*' "$CONFIG_PATH" | sed 's/"agents":\s*"//' | sed 's/"//' || echo "copilot")"
+    # The whole quoted value, because a list such as "claude,cursor,codex" holds commas; and [[:space:]], because BSD sed
+    # (macOS) has no \s.
+    CONFIGURED_AGENTS="$(grep -o '"agents"[[:space:]]*:[[:space:]]*"[^"]*"' "$CONFIG_PATH" | sed 's/^"agents"[[:space:]]*:[[:space:]]*"//; s/"$//' || echo "copilot")"
     [ -z "$CONFIGURED_AGENTS" ] && CONFIGURED_AGENTS="copilot"
 
     IFS=',' read -ra AGENT_ARR <<< "$CONFIGURED_AGENTS"
@@ -193,7 +195,6 @@ if [ -f "$CONFIG_PATH" ]; then
             claude)
                 check_file "CLAUDE.md" "false" || true
                 if [ -d "$PROJECT_PATH/.claude/skills" ]; then
-                    local claude_count
                     claude_count=$(find "$PROJECT_PATH/.claude/skills" -name "SKILL.md" -type f 2>/dev/null | wc -l | tr -d ' ')
                     green "  PASS  .claude/skills/ ($claude_count Claude skills)"
                     PASS=$((PASS+1))
@@ -205,7 +206,6 @@ if [ -f "$CONFIG_PATH" ]; then
             cursor)
                 check_file ".cursor/rules" "false" || true
                 if [ -d "$PROJECT_PATH/.cursor/commands" ]; then
-                    local cursor_count
                     cursor_count=$(find "$PROJECT_PATH/.cursor/commands" -name "*.md" -type f 2>/dev/null | wc -l | tr -d ' ')
                     green "  PASS  .cursor/commands/ ($cursor_count Cursor commands)"
                     PASS=$((PASS+1))
@@ -216,7 +216,6 @@ if [ -f "$CONFIG_PATH" ]; then
                 ;;
             codex)
                 if [ -d "$PROJECT_PATH/.agents/skills" ]; then
-                    local codex_count
                     codex_count=$(find "$PROJECT_PATH/.agents/skills" -name "SKILL.md" -type f 2>/dev/null | wc -l | tr -d ' ')
                     green "  PASS  .agents/skills/ ($codex_count Codex skills)"
                     PASS=$((PASS+1))
@@ -387,15 +386,36 @@ fi
 # A file: dependency in a framework package, and the link it leaves in node_modules, come from an older installer that
 # ran `npm install --prefix` from a directory with its own package.json (#422). Nothing in Plan Forge depends on a
 # folder outside the package, and `pforge update --force` installs the shipped dependencies, which removes both (#428).
+# Node reads the same three sections validate-setup.ps1 does, and sees an NTFS junction as a link, which `[[ -L ]]` in
+# Git Bash does not; without node, any file: or link: value in the manifest counts and only a symbolic link does.
+LEFT_BEHIND_JS='
+const fs = require("fs");
+const [manifest, stale] = process.argv.slice(1);
+const found = [];
+try {
+  const parsed = JSON.parse(fs.readFileSync(manifest, "utf8").replace(/^\uFEFF/, ""));
+  const sections = ["dependencies", "devDependencies", "optionalDependencies"];
+  if (sections.some((name) => Object.values(parsed[name] ?? {}).some((spec) => /^(file|link):/.test(spec)))) found.push("package.json has a file: dependency");
+} catch {}
+try {
+  if (fs.lstatSync(stale).isSymbolicLink()) found.push("node_modules/plan-forge is a link to another folder");
+} catch {}
+process.stdout.write(found.join("; "));
+'
 for FRAMEWORK_PACKAGE in pforge-mcp pforge-master; do
     FRAMEWORK_MANIFEST="$PROJECT_PATH/$FRAMEWORK_PACKAGE/package.json"
     [[ -f "$FRAMEWORK_MANIFEST" ]] || continue
+    STALE_LINK="$PROJECT_PATH/$FRAMEWORK_PACKAGE/node_modules/plan-forge"
     LEFT_BEHIND=""
-    if grep -qE '"[^"]+"[[:space:]]*:[[:space:]]*"(file|link):' "$FRAMEWORK_MANIFEST"; then
-        LEFT_BEHIND="package.json has a file: dependency"
-    fi
-    if [[ -L "$PROJECT_PATH/$FRAMEWORK_PACKAGE/node_modules/plan-forge" ]]; then
-        LEFT_BEHIND="${LEFT_BEHIND:+$LEFT_BEHIND; }node_modules/plan-forge is a link to another folder"
+    if command -v node >/dev/null 2>&1; then
+        LEFT_BEHIND="$(node -e "$LEFT_BEHIND_JS" "$FRAMEWORK_MANIFEST" "$STALE_LINK" 2>/dev/null || true)"
+    else
+        if grep -qE '"[^"]+"[[:space:]]*:[[:space:]]*"(file|link):' "$FRAMEWORK_MANIFEST"; then
+            LEFT_BEHIND="package.json has a file: dependency"
+        fi
+        if [[ -L "$STALE_LINK" ]]; then
+            LEFT_BEHIND="${LEFT_BEHIND:+$LEFT_BEHIND; }node_modules/plan-forge is a link to another folder"
+        fi
     fi
     if [[ -n "$LEFT_BEHIND" ]]; then
         yellow "  WARN  ${FRAMEWORK_PACKAGE}: ${LEFT_BEHIND}, left by an older installer. Run 'pforge update --force' to repair it"

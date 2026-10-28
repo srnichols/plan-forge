@@ -1,7 +1,7 @@
 {
   "about": "Content hashes of every guidance file version Plan Forge has shipped. pforge update replaces a project file only when its content matches one of these; see pforge-mcp/update-guard.mjs.",
   "algorithm": "sha256 of UTF-8 text with BOM and CR removed, first 16 hex chars",
-  "releaseTags": 163,
+  "releaseTags": 164,
   "hashes": [
     "009fb88e94ab1695",
     "00c7a7f8210c01de",
@@ -216,6 +216,7 @@
     "3329df5b5664f86c",
     "3369d66c30986453",
     "337ae87f2e352c4d",
+    "33b6e1f244527314",
     "33bdc29cec3a2fc5",
     "342d304dd0940bcb",
     "345d822401279d57",

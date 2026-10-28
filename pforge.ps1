@@ -1586,6 +1586,40 @@ function Invoke-UpdateGuard([string]$Guard, [string]$Mode, [object[]]$Items, [st
     }
 }
 
+# Runs `npm install` for a package and says what happened. A native command's non-zero exit does not throw, so
+# the try/catch this replaces reported every failed install as complete (#420). The status is read from
+# $LASTEXITCODE, and the end of npm's own output says why it failed. Under 'Stop', Windows PowerShell 5.1 turns
+# the first line a native command writes to stderr into a terminating error, which would report an install
+# that only warned as failed and keep all but one line of the reason, so npm runs under 'Continue' here.
+# npm runs inside the package: `npm install --prefix <dir>` installs the package in the current directory into
+# <dir>, which added a file: dependency on that directory to the package.json, or failed outright where the
+# current directory has no package.json (#422). The caller's directory is restored by name: Push-Location
+# puts the current directory on the location stack before it tries to move, so a package directory that is
+# missing would leave an entry behind for the caller's own Pop-Location to find.
+function Install-NpmDependencies([string]$PackageDir, [string]$Label) {
+    $ErrorActionPreference = 'Continue'
+    $output = @()
+    $exitCode = 0
+    $global:LASTEXITCODE = 0
+    $origin = (Get-Location).Path
+    try {
+        Set-Location -LiteralPath $PackageDir -ErrorAction Stop
+        $output = @(& npm install --loglevel=error 2>&1)
+        $exitCode = $LASTEXITCODE
+    } catch {
+        $output = @($_.Exception.Message)
+        $exitCode = 1
+    } finally {
+        Set-Location -LiteralPath $origin
+    }
+    if ($exitCode -eq 0) {
+        Write-Host "  ✅ npm install complete" -ForegroundColor Green
+        return
+    }
+    Write-Host "  ⚠️  npm install failed (exit $exitCode) — run manually: cd $Label && npm install" -ForegroundColor Yellow
+    foreach ($line in @($output | Select-Object -Last 8)) { Write-Host "     $line" -ForegroundColor DarkGray }
+}
+
 function Invoke-Update {
     Write-ManualSteps "update" @(
         "Clone/pull the latest Plan Forge template repo"
@@ -2190,12 +2224,7 @@ writeFreshCache(process.argv[1], process.argv[2]);
         if (Test-Path (Join-Path $mcpDir "package.json")) {
             Write-Host ""
             Write-Host "Installing MCP dependencies..." -ForegroundColor DarkCyan
-            try {
-                $npmOutput = & npm install --prefix $mcpDir 2>&1
-                Write-Host "  ✅ npm install complete" -ForegroundColor Green
-            } catch {
-                Write-Host "  ⚠️  npm install failed — run manually: cd pforge-mcp && npm install" -ForegroundColor Yellow
-            }
+            Install-NpmDependencies $mcpDir 'pforge-mcp'
         }
 
         # Detect if MCP server is running and advise restart
@@ -2218,12 +2247,7 @@ writeFreshCache(process.argv[1], process.argv[2]);
         if (Test-Path (Join-Path $fmDir "package.json")) {
             Write-Host ""
             Write-Host "Installing pforge-master dependencies..." -ForegroundColor DarkCyan
-            try {
-                $null = & npm install --prefix $fmDir 2>&1
-                Write-Host "  ✅ npm install complete" -ForegroundColor Green
-            } catch {
-                Write-Host "  ⚠️  npm install failed — run manually: cd pforge-master && npm install" -ForegroundColor Yellow
-            }
+            Install-NpmDependencies $fmDir 'pforge-master'
         }
     }
 

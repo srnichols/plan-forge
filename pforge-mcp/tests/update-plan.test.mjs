@@ -93,7 +93,7 @@ function markShipped(sourceRoot, text) {
 describe("update-plan: one test per category", () => {
   it("prompts: offers missing prompts as new, changed ones as update, leaves unchanged ones out, skips project-principles.prompt.md", () => {
     const source = makeSourceRoot();
-    const project = makeProjectRoot({ preset: "custom" });
+    const project = makeProjectRoot({ preset: "typescript" });
     write(source, ".github/prompts/step0-specify-feature.prompt.md", "new content\n");
     write(source, ".github/prompts/step1-preflight-check.prompt.md", "same content\n");
     write(project, ".github/prompts/step1-preflight-check.prompt.md", "same content\n");
@@ -184,7 +184,7 @@ describe("update-plan: one test per category", () => {
 
   it("hooks: recursively mirrors templates/.github/hooks into .github/hooks", () => {
     const source = makeSourceRoot();
-    const project = makeProjectRoot({ preset: "custom" });
+    const project = makeProjectRoot({ preset: "typescript" });
     write(source, "templates/.github/hooks/live-guard/pre-deploy.mjs", "v1\n");
 
     const plan = buildPlan({ sourceRoot: source, projectRoot: project });
@@ -194,7 +194,7 @@ describe("update-plan: one test per category", () => {
 
   it("automations: mirrors templates/.github/automations into .github/automations as guidance", () => {
     const source = makeSourceRoot();
-    const project = makeProjectRoot({ preset: "custom" });
+    const project = makeProjectRoot({ preset: "typescript" });
     write(source, "templates/.github/automations/pforge-daily-drift.automation.md", "v1\n");
 
     const plan = buildPlan({ sourceRoot: source, projectRoot: project });

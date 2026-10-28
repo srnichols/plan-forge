@@ -25,6 +25,36 @@ jobs:
           $testDir = "$env:RUNNER_TEMP\test-project"
           .\validate-setup.ps1 -ProjectPath $testDir
 
+  validate-windows-powershell:
+    name: Validate (Windows PowerShell 5.1)
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+
+      # The other PowerShell jobs run pwsh (PowerShell 7). The PowerShell that ships with Windows is 5.1, and
+      # setup.ps1 has to install under it too: it once failed to parse there, and then wrote the system code
+      # page into the files it generated (#417).
+      - name: Run setup wizard in Windows PowerShell 5.1 (custom preset, every agent)
+        shell: powershell
+        run: |
+          $PSVersionTable.PSVersion.ToString()
+          $testDir = "$env:RUNNER_TEMP\test-ps51"
+          New-Item -ItemType Directory -Path $testDir -Force | Out-Null
+          .\setup.ps1 -Preset custom -Agent all -ProjectPath $testDir -ProjectName "Test" -Force
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+
+      - name: Run validation in Windows PowerShell 5.1
+        shell: powershell
+        run: .\validate-setup.ps1 -ProjectPath "$env:RUNNER_TEMP\test-ps51"
+
+      - name: Check the installed text is UTF-8, with its dashes and arrows
+        shell: pwsh
+        run: node scripts/check-installed-text.mjs "$env:RUNNER_TEMP\test-ps51"
+
   validate-bash:
     name: Validate (Bash)
     runs-on: ubuntu-latest

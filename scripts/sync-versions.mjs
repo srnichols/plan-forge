@@ -7,7 +7,9 @@
  *   node scripts/sync-versions.mjs --check     # exit 1 when anything disagrees with VERSION
  *
  * Synced: the root, pforge-mcp and pforge-master package.json files and their
- * entries in package-lock.json and pforge-mcp/package-lock.json. pforge-sdk is
+ * entries in package-lock.json, pforge-mcp/package-lock.json and
+ * pforge-master/package-lock.json, and the version of the published capability
+ * descriptor, docs/.well-known/plan-forge.json (#415). pforge-sdk is
  * versioned independently and is left alone. Only version values change; key
  * order, indentation and line endings are preserved.
  */
@@ -17,11 +19,12 @@ import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const SEMVER = /^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/;
-const PACKAGE_FILES = ["package.json", "pforge-mcp/package.json", "pforge-master/package.json"];
+const PACKAGE_FILES = ["package.json", "pforge-mcp/package.json", "pforge-master/package.json", "docs/.well-known/plan-forge.json"];
 // Lockfile → package keys whose version must follow VERSION ("" is the lockfile's own root).
 const LOCKFILES = {
   "package-lock.json": ["", "pforge-mcp", "pforge-master"],
   "pforge-mcp/package-lock.json": [""],
+  "pforge-master/package-lock.json": [""],
 };
 const TOP_LEVEL_VERSION = /^(\s*"version"\s*:\s*")[^"]*(")/m;
 

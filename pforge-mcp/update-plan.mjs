@@ -24,6 +24,12 @@
  * project's hand-edited copy is never silently replaced (#280). Everything
  * else (mcp, sdk, master, cli, validation, core) is a plain byte compare.
  *
+ * A project whose `.forge.json` records the `custom` preset alone (or that is
+ * planned with `--presets custom`) was installed with the shared files only, so
+ * the update adds none of the prompts, hooks, automations or skills of a category
+ * the project does not carry. A category it already carries keeps getting its new
+ * files, so a set is never left half updated (#416).
+ *
  * @module update-plan
  */
 
@@ -214,6 +220,25 @@ function resolvePresets({ sourceRoot, projectRoot, overridePresets, config }) {
   return { currentVersion, presets: ["custom"], presetSource: "default" };
 }
 
+/**
+ * Was the project installed with the shared files only? The installers copy no prompts, hooks, automations
+ * or skills for `-Preset custom` on its own, so the update must not add them either (#416). Only a preset
+ * the project recorded, or one named explicitly, says so; "custom" because nothing was detected does not.
+ */
+function isCustomOnly({ presets, presetSource }) {
+  return presetSource === "forge.json" && presets.length === 1 && presets[0] === "custom";
+}
+
+/**
+ * May the update add the files of a guidance category that the project lacks? A custom-only project gets
+ * none of a category it does not carry. One that already carries a file of it (from an update before this
+ * rule, or copied in by hand) keeps getting the category's new files: a hook launcher updated without the
+ * scripts it names stops working, so a half-updated set is worse than a complete one.
+ */
+function mayAddNew({ customOnly, dstPaths }) {
+  return !customOnly || dstPaths.some((path) => existsSync(path));
+}
+
 function getByPath(obj, path) {
   return path.split(".").reduce((node, key) => (node && typeof node === "object" ? node[key] : undefined), obj);
 }
@@ -225,19 +250,21 @@ function computeConfigMigrations(projectRoot, config) {
   return added.map((key) => ({ key, value: getByPath(migrated, key) }));
 }
 
-function scanPrompts({ sourceRoot, projectRoot, guardCtx }) {
+function scanPrompts({ sourceRoot, projectRoot, guardCtx, customOnly }) {
   const srcDir = join(sourceRoot, ".github/prompts");
+  const names = listFileNames(srcDir).filter((n) => n.endsWith(".prompt.md") && n !== SKIPPED_PROMPT);
+  const dstOf = (name) => join(projectRoot, ".github/prompts", name);
+  const allowNew = mayAddNew({ customOnly, dstPaths: names.map(dstOf) });
   const out = [];
-  for (const name of listFileNames(srcDir).filter((n) => n.endsWith(".prompt.md"))) {
-    if (name === SKIPPED_PROMPT) continue;
+  for (const name of names) {
     const entry = guidedEntry({
       category: "prompts",
       srcFull: join(srcDir, name),
-      dstFull: join(projectRoot, ".github/prompts", name),
+      dstFull: dstOf(name),
       srcRoot: sourceRoot,
       projectRoot,
       guardCtx,
-      allowNew: true,
+      allowNew,
     });
     if (entry) out.push(entry);
   }
@@ -327,23 +354,14 @@ function scanPresetFiles({ sourceRoot, projectRoot, guardCtx, presets }) {
   return out;
 }
 
-function scanSkills({ sourceRoot, projectRoot, guardCtx, presets }) {
-  const out = [];
+function scanSkills({ sourceRoot, projectRoot, guardCtx, presets, customOnly }) {
+  const candidates = [];
   const presetSkillNames = new Set();
   for (const p of presets.filter((x) => x !== "custom")) {
     const srcSkills = join(sourceRoot, "presets", p, ".github/skills");
     for (const skillName of listDirNames(srcSkills)) {
       presetSkillNames.add(skillName);
-      const entry = guidedEntry({
-        category: "skills",
-        srcFull: join(srcSkills, skillName, "SKILL.md"),
-        dstFull: join(projectRoot, ".github/skills", skillName, "SKILL.md"),
-        srcRoot: sourceRoot,
-        projectRoot,
-        guardCtx,
-        allowNew: true,
-      });
-      if (entry) out.push(entry);
+      candidates.push({ srcFull: join(srcSkills, skillName, "SKILL.md"), dstFull: join(projectRoot, ".github/skills", skillName, "SKILL.md") });
     }
   }
 
@@ -352,24 +370,24 @@ function scanSkills({ sourceRoot, projectRoot, guardCtx, presets }) {
   const srcSharedSkills = join(sourceRoot, "presets/shared/skills");
   for (const skillName of listDirNames(srcSharedSkills)) {
     if (presetSkillNames.has(skillName)) continue;
-    const entry = guidedEntry({
-      category: "skills",
-      srcFull: join(srcSharedSkills, skillName, "SKILL.md"),
-      dstFull: join(projectRoot, ".github/skills", skillName, "SKILL.md"),
-      srcRoot: sourceRoot,
-      projectRoot,
-      guardCtx,
-      allowNew: true,
-    });
+    candidates.push({ srcFull: join(srcSharedSkills, skillName, "SKILL.md"), dstFull: join(projectRoot, ".github/skills", skillName, "SKILL.md") });
+  }
+
+  const allowNew = mayAddNew({ customOnly, dstPaths: candidates.map((c) => c.dstFull) });
+  const out = [];
+  for (const { srcFull, dstFull } of candidates) {
+    const entry = guidedEntry({ category: "skills", srcFull, dstFull, srcRoot: sourceRoot, projectRoot, guardCtx, allowNew });
     if (entry) out.push(entry);
   }
   return out;
 }
 
-function scanHooks({ sourceRoot, projectRoot, guardCtx }) {
+function scanHooks({ sourceRoot, projectRoot, guardCtx, customOnly }) {
   const srcDir = join(sourceRoot, "templates/.github/hooks");
+  const rels = walkRecursive(srcDir);
+  const allowNew = mayAddNew({ customOnly, dstPaths: rels.map((rel) => join(projectRoot, ".github/hooks", rel)) });
   const out = [];
-  for (const rel of walkRecursive(srcDir)) {
+  for (const rel of rels) {
     const entry = guidedEntry({
       category: "hooks",
       srcFull: join(srcDir, rel),
@@ -377,7 +395,7 @@ function scanHooks({ sourceRoot, projectRoot, guardCtx }) {
       srcRoot: sourceRoot,
       projectRoot,
       guardCtx,
-      allowNew: true,
+      allowNew,
     });
     if (entry) out.push(entry);
   }
@@ -385,10 +403,12 @@ function scanHooks({ sourceRoot, projectRoot, guardCtx }) {
 }
 
 /** VS Code automation templates (.automation.md) — guarded like hooks, since users adapt the prompts. */
-function scanAutomations({ sourceRoot, projectRoot, guardCtx }) {
+function scanAutomations({ sourceRoot, projectRoot, guardCtx, customOnly }) {
   const srcDir = join(sourceRoot, "templates/.github/automations");
+  const rels = walkRecursive(srcDir);
+  const allowNew = mayAddNew({ customOnly, dstPaths: rels.map((rel) => join(projectRoot, ".github/automations", rel)) });
   const out = [];
-  for (const rel of walkRecursive(srcDir)) {
+  for (const rel of rels) {
     const entry = guidedEntry({
       category: "automations",
       srcFull: join(srcDir, rel),
@@ -396,7 +416,7 @@ function scanAutomations({ sourceRoot, projectRoot, guardCtx }) {
       srcRoot: sourceRoot,
       projectRoot,
       guardCtx,
-      allowNew: true,
+      allowNew,
     });
     if (entry) out.push(entry);
   }
@@ -494,7 +514,7 @@ export function buildPlan({ sourceRoot, projectRoot, presetsOverride = null, inc
   const { currentVersion, presets, presetSource } = resolvePresets({ sourceRoot, projectRoot, overridePresets: presetsOverride, config });
   const guardCtx = loadGuardContext(sourceRoot, projectRoot);
 
-  const args = { sourceRoot, projectRoot, guardCtx, presets, catalog };
+  const args = { sourceRoot, projectRoot, guardCtx, presets, catalog, customOnly: isCustomOnly({ presets, presetSource }) };
   const operations = dedupeByDst([
     ...scanPrompts(args),
     ...scanAgents(args),

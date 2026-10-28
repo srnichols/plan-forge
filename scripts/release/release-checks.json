@@ -164,6 +164,16 @@
     { "label": "A lockfile that resolves from a private mirror is caught (#414) (3.35.2)", "path": "pforge-mcp/tests/meta-414-lockfile-registry.test.mjs", "contains": "scripts/lock-registry.mjs on the command line" },
     { "label": "The MCP lock pins zod 4.6.7, past GHSA-mrhx-c7xc-m3w5 (3.35.2)", "path": "pforge-mcp/package-lock.json", "contains": "zod-4.6.7.tgz" },
     { "label": "The REST API does not inflate a compressed request body (GHSA-27r3-jxmh-p828) (3.35.2)", "path": "pforge-mcp/server/rest-api.mjs", "contains": "express.json({ inflate: false })" },
-    { "label": "The installers' closing steps name only files the project has (3.35.2)", "path": "pforge-mcp/tests/setup-next-steps.test.mjs", "contains": "points a custom install only at the files it has" }
+    { "label": "The installers' closing steps name only files the project has (3.35.2)", "path": "pforge-mcp/tests/setup-next-steps.test.mjs", "contains": "points a custom install only at the files it has" },
+    { "label": "pforge update says a failed npm install failed, PowerShell (#420) (3.35.3)", "path": "pforge.ps1", "contains": "npm install failed (exit $exitCode)" },
+    { "label": "pforge update says a failed npm install failed and why, bash (#420) (3.35.3)", "path": "pforge.sh", "contains": "pf_npm_install()" },
+    { "label": "setup.ps1 runs in Windows PowerShell 5.1 and writes UTF-8 (#417) (3.35.3)", "path": "pforge-mcp/tests/meta-417-setup-windows-powershell.test.mjs", "contains": "setup.ps1 can be read by Windows PowerShell 5.1" },
+    { "label": "pforge update installs npm dependencies inside the package, PowerShell (#422) (3.35.3)", "path": "pforge.ps1", "contains": "Set-Location -LiteralPath $PackageDir -ErrorAction Stop" },
+    { "label": "pforge update does not give npm install a --prefix, PowerShell (#422) (3.35.3)", "path": "pforge.ps1", "notContains": "--prefix $PackageDir" },
+    { "label": "pforge-master ships a lockfile, so npm install there does not crash (#421) (3.35.3)", "path": "pforge-master/package-lock.json", "contains": "\"name\": \"@pforge/pforge-master\"" },
+    { "label": "The pforge-master lock pins body-parser 2.4.0, past GHSA-27r3-jxmh-p828 (#418) (3.35.3)", "path": "pforge-master/package-lock.json", "contains": "body-parser-2.4.0.tgz" },
+    { "label": "The MCP lock pins body-parser 2.4.0, past GHSA-27r3-jxmh-p828 (#418) (3.35.3)", "path": "pforge-mcp/package-lock.json", "contains": "body-parser-2.4.0.tgz" },
+    { "label": "pforge update keeps a custom project to its shared files (#416) (3.35.3)", "path": "pforge-mcp/update-plan.mjs", "contains": "function mayAddNew(" },
+    { "label": "The capability descriptor is checked against the tool registry (#415) (3.35.3)", "path": "pforge-mcp/tests/meta-415-well-known-descriptor.test.mjs", "contains": "lists exactly the tools the server registers, and counts them" }
   ]
 }

@@ -202,6 +202,22 @@ ${end}"
     fi
 }
 
+# Runs `npm install` in a package directory and says what happened. On failure it shows the end of npm's own
+# output, which the installers used to send to /dev/null, so "failed" never said why (#420). Twin of
+# Install-NpmDependencies in setup.ps1.
+pf_npm_install() {
+    local dir="$1" label="$2" log rc=0
+    log="$(mktemp)"
+    (cd "$dir" && npm install --loglevel=error) >"$log" 2>&1 || rc=$?
+    if [[ $rc -eq 0 ]]; then
+        green "  ✅ npm install complete"
+    else
+        yellow "  ⚠️  npm install failed (exit $rc) — run manually: cd $label && npm install"
+        tail -n 8 "$log" | sed 's/^/     /'
+    fi
+    rm -f "$log"
+}
+
 # ─── Closing Next Steps ────────────────────────────────────────────────
 # A step is printed only when the file it names is in the project. A preset that installs fewer files
 # (`custom` has no AGENTS.md, prompts, agents or skills) would otherwise send the reader to files that
@@ -1086,7 +1102,7 @@ if [[ -z "$PRESET" ]]; then
                 echo "  5) go          — Go / Chi / Gin / Standard Library"
                 echo "  6) swift       — Swift / SwiftUI / iOS / Vapor"
                 echo "  7) azure-iac   — Azure Bicep / Terraform / PowerShell / azd"
-                echo "  8) custom      — Shared files only (add your own instructions)"
+                echo "  8) custom      — Shared files only: no agents, prompts, skills or hooks (add your own)"
                 echo "  9) rust        — Rust / Axum / Tokio / SQLx"
                 echo " 10) php         — PHP / Laravel"
                 echo ""
@@ -1116,7 +1132,7 @@ if [[ -z "$PRESET" ]]; then
         echo "  5) go          — Go / Chi / Gin / Standard Library"
         echo "  6) swift       — Swift / SwiftUI / iOS / Vapor"
         echo "  7) azure-iac   — Azure Bicep / Terraform / PowerShell / azd"
-        echo "  8) custom      — Shared files only (add your own instructions)"
+        echo "  8) custom      — Shared files only: no agents, prompts, skills or hooks (add your own)"
         echo "  9) rust        — Rust / Axum / Tokio / SQLx"
         echo " 10) php         — PHP / Laravel"
         echo ""
@@ -1659,11 +1675,7 @@ if [[ -d "$FM_SRC_DIR" ]]; then
     # Auto-install pforge-master dependencies (@modelcontextprotocol/sdk + ws)
     if [[ -f "$FM_DST_DIR/package.json" ]]; then
         echo "  Installing pforge-master dependencies..."
-        if (cd "$FM_DST_DIR" && npm install --silent 2>/dev/null); then
-            green "  ✅ npm install complete"
-        else
-            yellow "  ⚠️  npm install failed — run manually: cd pforge-master && npm install"
-        fi
+        pf_npm_install "$FM_DST_DIR" "pforge-master"
     fi
 fi
 
@@ -1761,11 +1773,7 @@ MCPEOF
     # Auto-install MCP dependencies
     if [[ -f "$MCP_DST_DIR/package.json" ]]; then
         echo "  Installing MCP dependencies..."
-        if (cd "$MCP_DST_DIR" && npm install --silent 2>/dev/null); then
-            green "  ✅ npm install complete"
-        else
-            yellow "  ⚠️  npm install failed — run manually: cd pforge-mcp && npm install"
-        fi
+        pf_npm_install "$MCP_DST_DIR" "pforge-mcp"
     fi
 fi
 

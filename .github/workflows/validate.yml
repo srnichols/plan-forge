@@ -91,51 +91,69 @@ jobs:
         with:
           node-version: '24'
 
-      - name: The shells on this runner
+      - name: The shells and tools on this runner
         run: |
           sw_vers
           echo "/bin/bash: $(/bin/bash --version | head -1)"
           echo "bash on PATH: $(command -v bash): $(bash --version | head -1)"
           command -v pwsh && pwsh --version || echo "no pwsh on PATH"
           ls -d /opt/homebrew/bin/bash /usr/local/bin/bash 2>/dev/null || echo "no Homebrew bash installed"
+          echo "sort -V puts 1.9 first: $(printf '1.10\n1.9\n' | sort -V | head -1)"
+          if echo x | grep -P x >/dev/null 2>&1; then echo "grep -P: yes"; else echo "grep -P: no"; fi
+          echo "stat -c: $(stat -c %Y . 2>&1 | head -1)"
+          echo "sed replacement with \\n: $(echo a | sed 's/a/b\nc/')"
+          awk --version 2>&1 | head -1 || true
 
-      - name: Setup and validate with the macOS system Bash (stock PATH)
-        if: matrix.shell == 'system-bash'
+      - name: Setup, validate and update with Bash
+        if: matrix.shell != 'pwsh'
         run: |
-          export PATH="$(dirname "$(command -v node)"):/usr/bin:/bin:/usr/sbin:/sbin"
+          if [ "${{ matrix.shell }}" = homebrew-bash ]; then
+            brew list bash >/dev/null 2>&1 || brew install bash
+            export PATH="$(brew --prefix)/bin:$PATH"
+          else
+            # The stock PATH, as a Mac user has it: /bin/bash is 3.2 and the tools are BSD.
+            export PATH="$(dirname "$(command -v node)"):/usr/bin:/bin:/usr/sbin:/sbin"
+          fi
           echo "bash: $(command -v bash): $(bash --version | head -1)"
           chmod +x setup.sh validate-setup.sh
           rc=0
-          for preset in custom typescript; do
-            echo "::group::setup.sh --preset $preset"
-            dir="$RUNNER_TEMP/test-macos-$preset"; mkdir -p "$dir"
-            if ./setup.sh --preset "$preset" --path "$dir" --name Test --force; then
-              ./validate-setup.sh --path "$dir" || { echo "::error::validate-setup.sh failed for $preset"; rc=1; }
+          # custom, a stack preset, and a stack preset with every agent adapter
+          for run in custom:copilot typescript:copilot typescript:all; do
+            preset="${run%%:*}"; agent="${run##*:}"
+            echo "::group::setup.sh --preset $preset --agent $agent"
+            dir="$RUNNER_TEMP/test-macos-$preset-$agent"; mkdir -p "$dir"
+            if ./setup.sh --preset "$preset" --agent "$agent" --path "$dir" --name Test --force; then
+              ./validate-setup.sh --path "$dir" || { echo "::error::validate-setup.sh failed for $preset $agent"; rc=1; }
             else
-              echo "::error::setup.sh --preset $preset failed"; rc=1
+              echo "::error::setup.sh --preset $preset --agent $agent failed"; rc=1
             fi
             echo "::endgroup::"
           done
-          exit $rc
 
-      - name: Setup and validate with Homebrew Bash
-        if: matrix.shell == 'homebrew-bash'
-        run: |
-          brew list bash >/dev/null 2>&1 || brew install bash
-          export PATH="$(brew --prefix)/bin:$PATH"
-          echo "bash: $(command -v bash): $(bash --version | head -1)"
-          chmod +x setup.sh validate-setup.sh
-          rc=0
-          for preset in custom typescript; do
-            echo "::group::setup.sh --preset $preset"
-            dir="$RUNNER_TEMP/test-macos-$preset"; mkdir -p "$dir"
-            if ./setup.sh --preset "$preset" --path "$dir" --name Test --force; then
-              ./validate-setup.sh --path "$dir" || { echo "::error::validate-setup.sh failed for $preset"; rc=1; }
-            else
-              echo "::error::setup.sh --preset $preset failed"; rc=1
-            fi
-            echo "::endgroup::"
-          done
+          # setup.sh read each description with grep -P, which BSD grep lacks, and the failure was hidden: the generated
+          # files carried their fallback text. They must carry the real one.
+          all="$RUNNER_TEMP/test-macos-typescript-all"
+          grep -q "^description: Pipeline Step 1" "$all/.claude/skills/planforge-step1-preflight-check/SKILL.md" || { echo "::error::a generated Claude skill has not got its description"; rc=1; }
+          grep -q '^description = "Pipeline Step 1' "$all/.gemini/commands/planforge/step1-preflight-check.toml" || { echo "::error::a generated Gemini command has not got its description"; rc=1; }
+
+          # What a Mac user does next: look at the project, then update it. A guidance file is deleted and another
+          # edited first, so the update has a new file to add and an edited one to keep.
+          echo "::group::pforge.sh in the installed project"
+          cd "$RUNNER_TEMP/test-macos-typescript-copilot"
+          chmod +x pforge.sh
+          git init -q . && git add -A && git -c user.name=ci -c user.email=ci@example.com commit -qm install
+          ./pforge.sh --help >/dev/null || { echo "::error::pforge.sh --help failed"; rc=1; }
+          ./pforge.sh check || { echo "::error::pforge.sh check failed"; rc=1; }
+          rm .github/instructions/security.instructions.md
+          echo "<!-- edited here -->" >> .github/instructions/testing.instructions.md
+          ./pforge.sh update "$GITHUB_WORKSPACE" --force --yes --allow-dev || { echo "::error::pforge.sh update failed"; rc=1; }
+          [ -f .github/instructions/security.instructions.md ] || { echo "::error::update did not restore the deleted file"; rc=1; }
+          grep -q "edited here" .github/instructions/testing.instructions.md || { echo "::error::update overwrote an edited file"; rc=1; }
+          [ -f .forge/update-pending/.github/instructions/testing.instructions.md ] || { echo "::error::update did not keep the new version of the edited file"; rc=1; }
+          grep -q "plan-forge managed" .gitignore || { echo "::error::update left no managed block in .gitignore"; rc=1; }
+          ./pforge.sh new-phase "Mac Phase" || { echo "::error::pforge.sh new-phase failed"; rc=1; }
+          grep -q "### Phase 1: Mac Phase" docs/plans/DEPLOYMENT-ROADMAP.md || { echo "::error::new-phase did not add the phase to the roadmap"; rc=1; }
+          echo "::endgroup::"
           exit $rc
 
       - name: Setup and validate with PowerShell 7

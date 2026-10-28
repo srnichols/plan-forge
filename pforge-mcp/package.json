@@ -15,7 +15,7 @@
   "devDependencies": {
     "jsdom": "^29.0.2",
     "madge": "^8.0.0",
-    "vitest": "^4.1.10"
+    "vitest": "^5.0.5"
   },
   "dependencies": {
     "@github/copilot-sdk": "^1.0.24",

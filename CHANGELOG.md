@@ -7,6 +7,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+## [3.35.3] — 2026-10-28 — The installers report a failed npm install and run in Windows PowerShell 5.1, pforge-master ships a lockfile, and the custom preset and the capability descriptor say what they contain
+
 ### Fixed
 
 - The PowerShell installers no longer say "npm install complete" when npm failed, and the Bash installers say why. `setup.ps1` and `pforge.ps1` ran `& npm install` inside a try/catch and printed "complete" after it; a native command's non-zero exit does not throw in PowerShell, so the catch never ran and the exit status was never read. `setup.sh` and `pforge.sh` checked the status but sent npm's output to `/dev/null`, so "failed" never said why. Each script has one helper now (`Install-NpmDependencies`, `pf_npm_install`), used at all eight call sites: on success it prints the line it printed before, and on failure it prints `npm install failed (exit N) — run manually: cd <package> && npm install` with the last eight lines of npm's own output, then carries on so the rest of the install completes. This is how #421 became visible: all eleven Bash jobs of Validate Setup had been printing "failed" with no reason, and the eleven PowerShell jobs printed "complete". (#420)

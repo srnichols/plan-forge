@@ -74,6 +74,89 @@ jobs:
           chmod +x validate-setup.sh
           ./validate-setup.sh --path "$TEST_DIR"
 
+  # macOS ships Bash 3.2 and BSD userland. Nothing ran the installers there, so what a Mac user gets was a guess.
+  # Each leg runs the scripts the way a user would: the system Bash with the stock PATH, Homebrew's Bash first
+  # on PATH, and PowerShell 7. Every preset step runs even when an earlier one failed, so one run says everything.
+  validate-macos:
+    name: Validate (macOS, ${{ matrix.shell }})
+    runs-on: macos-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        shell: [system-bash, homebrew-bash, pwsh]
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+
+      - name: The shells on this runner
+        run: |
+          sw_vers
+          echo "/bin/bash: $(/bin/bash --version | head -1)"
+          echo "bash on PATH: $(command -v bash): $(bash --version | head -1)"
+          command -v pwsh && pwsh --version || echo "no pwsh on PATH"
+          ls -d /opt/homebrew/bin/bash /usr/local/bin/bash 2>/dev/null || echo "no Homebrew bash installed"
+
+      - name: Setup and validate with the macOS system Bash (stock PATH)
+        if: matrix.shell == 'system-bash'
+        run: |
+          export PATH="$(dirname "$(command -v node)"):/usr/bin:/bin:/usr/sbin:/sbin"
+          echo "bash: $(command -v bash): $(bash --version | head -1)"
+          chmod +x setup.sh validate-setup.sh
+          rc=0
+          for preset in custom typescript; do
+            echo "::group::setup.sh --preset $preset"
+            dir="$RUNNER_TEMP/test-macos-$preset"; mkdir -p "$dir"
+            if ./setup.sh --preset "$preset" --path "$dir" --name Test --force; then
+              ./validate-setup.sh --path "$dir" || { echo "::error::validate-setup.sh failed for $preset"; rc=1; }
+            else
+              echo "::error::setup.sh --preset $preset failed"; rc=1
+            fi
+            echo "::endgroup::"
+          done
+          exit $rc
+
+      - name: Setup and validate with Homebrew Bash
+        if: matrix.shell == 'homebrew-bash'
+        run: |
+          brew list bash >/dev/null 2>&1 || brew install bash
+          export PATH="$(brew --prefix)/bin:$PATH"
+          echo "bash: $(command -v bash): $(bash --version | head -1)"
+          chmod +x setup.sh validate-setup.sh
+          rc=0
+          for preset in custom typescript; do
+            echo "::group::setup.sh --preset $preset"
+            dir="$RUNNER_TEMP/test-macos-$preset"; mkdir -p "$dir"
+            if ./setup.sh --preset "$preset" --path "$dir" --name Test --force; then
+              ./validate-setup.sh --path "$dir" || { echo "::error::validate-setup.sh failed for $preset"; rc=1; }
+            else
+              echo "::error::setup.sh --preset $preset failed"; rc=1
+            fi
+            echo "::endgroup::"
+          done
+          exit $rc
+
+      - name: Setup and validate with PowerShell 7
+        if: matrix.shell == 'pwsh'
+        shell: pwsh
+        run: |
+          $rc = 0
+          foreach ($preset in 'custom', 'typescript') {
+            Write-Host "::group::setup.ps1 -Preset $preset"
+            $dir = Join-Path $env:RUNNER_TEMP "test-macos-$preset"
+            New-Item -ItemType Directory -Path $dir -Force | Out-Null
+            ./setup.ps1 -Preset $preset -ProjectPath $dir -ProjectName Test -Force
+            if ($LASTEXITCODE) { Write-Host "::error::setup.ps1 -Preset $preset failed"; $rc = 1 }
+            else {
+              ./validate-setup.ps1 -ProjectPath $dir
+              if ($LASTEXITCODE) { Write-Host "::error::validate-setup.ps1 failed for $preset"; $rc = 1 }
+            }
+            Write-Host "::endgroup::"
+          }
+          exit $rc
+
   validate-all-presets:
     name: Validate All Presets (Bash)
     runs-on: ubuntu-latest

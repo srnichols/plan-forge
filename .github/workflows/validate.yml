@@ -185,6 +185,10 @@ jobs:
             else {
               ./validate-setup.ps1 -ProjectPath $dir
               if ($LASTEXITCODE) { Write-Host "::error::validate-setup.ps1 failed for $preset"; $rc = 1 }
+              # PowerShell here hides a name that starts with a dot, and the runtime packages ship some (#427). Every tracked
+              # file of them has to be in the project; an update would list the others as new.
+              $missing = @(git ls-files pforge-mcp pforge-master pforge-sdk | Where-Object { "/$_/" -notmatch '/(node_modules|\.forge|coverage)/' } | Where-Object { -not (Test-Path -LiteralPath (Join-Path $dir $_)) })
+              if ($missing.Count -gt 0) { Write-Host "::error::setup.ps1 -Preset $preset did not copy $($missing.Count) files of the runtime packages, $($missing[0]) for one"; $rc = 1 }
             }
             Write-Host "::endgroup::"
           }

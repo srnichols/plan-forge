@@ -3,11 +3,14 @@
  *
  * PowerShell on Unix treats a name that starts with a dot as hidden, and Get-ChildItem -Recurse does not enter a
  * hidden folder unless it is given -Force. Every file of a stack preset sits under presets/<stack>/.github/, so
- * Step 3 copied only AGENTS.md, and Step 4 never visited .github to replace the placeholders. Nothing showed on
- * Windows, where a folder is hidden only when it carries the Hidden attribute, which .github does not.
+ * Step 3 copied only AGENTS.md, and Step 4 never visited .github to replace the placeholders. The copy of the
+ * runtime packages (pforge-mcp, pforge-master, pforge-sdk) skipped their dot-prefixed files the same way: a results
+ * file and the test fixtures that are a project's .github folder. Nothing showed on Windows, where a name is hidden
+ * only when it carries the Hidden attribute, which .github does not.
  *
- * This test builds a small source tree and hides its dot folders the way Unix does: nothing to do on macOS and
- * Linux, the Hidden attribute on Windows. The project's own .github is hidden before setup runs, for Step 4.
+ * This test builds a small source tree and hides its names that start with a dot the way Unix does: nothing to do
+ * on macOS and Linux, the Hidden attribute on Windows. The project's own .github is hidden before setup runs, for
+ * Step 4.
  */
 
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
@@ -26,11 +29,22 @@ const SOURCE_TREE = [
   "VERSION",
   "pforge-mcp/package.json",
   "pforge-mcp/preset-catalog.json",
+  "pforge-master/package.json",
+  "pforge-sdk/package.json",
   `presets/${PRESET}`,
   "presets/shared",
   "templates",
   ".github/prompts",
   ".github/instructions",
+];
+
+// The runtime packages ship names that start with a dot too (a results file, and test fixtures that are a project's
+// .github folder), and setup copies the packages whole.
+const RUNTIME_DOT_FILES = [
+  "pforge-mcp/.vitest-results.json",
+  "pforge-mcp/tests/fixtures/update-plan/case/project/.github/instructions/sample.instructions.md",
+  "pforge-master/.sample-config",
+  "pforge-sdk/.hidden-folder/sample.txt",
 ];
 
 const SHELLS = [
@@ -62,20 +76,19 @@ function listFiles(root) {
   return found.sort();
 }
 
-/** Hides each folder whose name starts with a dot, which is how PowerShell on macOS and Linux sees it. */
-function hideDotFolders(root) {
+/** Hides each file and folder whose name starts with a dot, which is how PowerShell on macOS and Linux sees it. */
+function hideDotNames(root) {
   if (!isWin) return;
-  const dirs = [];
+  const paths = [];
   const walk = (dir) => {
     for (const entry of readdirSync(dir, { withFileTypes: true })) {
-      if (!entry.isDirectory()) continue;
       const full = join(dir, entry.name);
-      if (entry.name.startsWith(".")) dirs.push(full);
-      walk(full);
+      if (entry.name.startsWith(".")) paths.push(full);
+      if (entry.isDirectory()) walk(full);
     }
   };
   walk(root);
-  for (const dir of dirs) spawnSync("attrib", ["+h", dir]);
+  for (const path of paths) spawnSync("attrib", ["+h", path]);
 }
 
 function buildSourceTree() {
@@ -85,7 +98,11 @@ function buildSourceTree() {
     mkdirSync(dirname(target), { recursive: true });
     cpSync(join(REPO_ROOT, rel), target, { recursive: true });
   }
-  hideDotFolders(source);
+  for (const rel of RUNTIME_DOT_FILES) {
+    mkdirSync(dirname(join(source, rel)), { recursive: true });
+    writeFileSync(join(source, rel), "sample\n");
+  }
+  hideDotNames(source);
   return source;
 }
 
@@ -113,7 +130,7 @@ for (const shell of SHELLS) {
       presetFiles = listFiles(join(source, "presets", PRESET));
       project = tempDir("pf-meta-427-proj-");
       mkdirSync(join(project, ".github"));
-      hideDotFolders(project);
+      hideDotNames(project);
       const env = { ...process.env, PATH: `${stubNpmDir()}${delimiter}${process.env.PATH}` };
       delete env.CI;
       run = spawnSync(shell.exe, shellArgs(shell.exe, "-File", join(source, "setup.ps1"), "-Preset", PRESET, "-ProjectPath", project, "-ProjectName", "Acme", "-NonInteractive", "-Force"), {
@@ -140,6 +157,11 @@ for (const shell of SHELLS) {
 
     it("copies every file of the preset, including the ones under .github", () => {
       const missing = presetFiles.filter((rel) => !existsSync(join(project, rel)));
+      expect(missing).toEqual([]);
+    });
+
+    it("copies the runtime packages whole, including the names that start with a dot", () => {
+      const missing = RUNTIME_DOT_FILES.filter((rel) => !existsSync(join(project, rel)));
       expect(missing).toEqual([]);
     });
 

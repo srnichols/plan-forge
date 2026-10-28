@@ -187,7 +187,7 @@
     { "label": "validate-setup reaches its summary for a list of agent adapters (3.35.4)", "path": "pforge-mcp/tests/validate-setup-agents.test.mjs", "contains": "counts the files of each adapter, and gets to the summary" },
     { "label": "The MCP lock pins undici 7.30.1, past its eight advisories (3.35.4)", "path": "pforge-mcp/package-lock.json", "contains": "undici-7.30.1.tgz" },
     { "label": "The MCP lock pins vite 8.3.5, past its six advisories (3.35.4)", "path": "pforge-mcp/package-lock.json", "contains": "vite-8.3.5.tgz" },
-    { "label": "The MCP lock pins vitest 4.1.12, past GHSA-qxg6-89mg-rqv8 and GHSA-xp26-3454-mjgp (3.35.4)", "path": "pforge-mcp/package-lock.json", "contains": "vitest-4.1.12.tgz" },
+    { "label": "The MCP lock pins vitest 5.0.5, past GHSA-qxg6-89mg-rqv8 and GHSA-xp26-3454-mjgp (3.35.4)", "path": "pforge-mcp/package-lock.json", "contains": "vitest-5.0.5.tgz" },
     { "label": "The MCP package loads dotenv 18, whose dotenv/config prints nothing to stdout (3.35.4)", "path": "pforge-mcp/package.json", "contains": "\"dotenv\": \"^18.0.8\"" },
     { "label": "A lock entry hashed with less than sha512 is caught (3.35.4)", "path": "pforge-mcp/tests/dependency-advisory-floors.test.mjs", "contains": "keeps a sha512 integrity" }
   ]

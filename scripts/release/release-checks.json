@@ -189,6 +189,15 @@
     { "label": "The MCP lock pins vite 8.3.5, past its six advisories (3.35.4)", "path": "pforge-mcp/package-lock.json", "contains": "vite-8.3.5.tgz" },
     { "label": "The MCP lock pins vitest 5.0.5, past GHSA-qxg6-89mg-rqv8 and GHSA-xp26-3454-mjgp (3.35.4)", "path": "pforge-mcp/package-lock.json", "contains": "vitest-5.0.5.tgz" },
     { "label": "The MCP package loads dotenv 18, whose dotenv/config prints nothing to stdout (3.35.4)", "path": "pforge-mcp/package.json", "contains": "\"dotenv\": \"^18.0.8\"" },
-    { "label": "A lock entry hashed with less than sha512 is caught (3.35.4)", "path": "pforge-mcp/tests/dependency-advisory-floors.test.mjs", "contains": "keeps a sha512 integrity" }
+    { "label": "A lock entry hashed with less than sha512 is caught (3.35.4)", "path": "pforge-mcp/tests/dependency-advisory-floors.test.mjs", "contains": "keeps a sha512 integrity" },
+    { "label": "pforge new-phase makes the plan file's name from a phase name with a path separator, bash (#431) (3.35.4)", "path": "pforge.sh", "contains": "printf '%s' \"$phase_name\" | tr" },
+    { "label": "pforge new-phase makes the plan file's name from a phase name with a path separator, PowerShell (#431) (3.35.4)", "path": "pforge.ps1", "contains": "$upperName = ($phaseName.ToUpper()" },
+    { "label": "pforge new-phase is tested with a phase name that holds a path separator or a replacement pattern, in both shells (#431) (3.35.4)", "path": "pforge-mcp/tests/meta-429-new-phase-roadmap.test.mjs", "contains": "keeps the name as typed" },
+    { "label": "pforge.ps1 writes UTF-8 without a byte order mark in Windows PowerShell 5.1 (#432) (3.35.4)", "path": "pforge.ps1", "contains": "function Write-Utf8File" },
+    { "label": "pforge.ps1's commands are tested for the bytes they write, in PowerShell 7 and 5.1 (#432) (3.35.4)", "path": "pforge-mcp/tests/meta-432-pforge-ps1-utf8.test.mjs", "contains": "new-phase writes the plan file and the roadmap with their dashes, arrows and emoji" },
+    { "label": "pforge update keeps the dependency ranges a project raised in the framework packages (#435) (3.35.4)", "path": "pforge-mcp/manifest-merge.mjs", "contains": "export function mergePackageManifest" },
+    { "label": "pforge update offers the framework packages' package.json through the merge (#435) (3.35.4)", "path": "pforge-mcp/update-plan.mjs", "contains": "function manifestEntry" },
+    { "label": "pforge update is tested end to end for the ranges it keeps, in all three shells (#435) (3.35.4)", "path": "pforge-mcp/tests/update-package-manifests.test.mjs", "contains": "keeps the ranges the project raised" },
+    { "label": "The release harness's tag tests run with a git identity, as a CI runner has none (#436) (3.35.4)", "path": "pforge-mcp/tests/release-harness.test.mjs", "contains": "GIT_COMMITTER_NAME" }
   ]
 }

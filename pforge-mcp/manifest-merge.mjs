@@ -8,8 +8,11 @@
  *
  *   - for each dependency the release declares, in dependencies, devDependencies and optionalDependencies, the
  *     higher range wins: the project's when its lowest version is higher than the release's, the release's when
- *     it is equal, lower or not one of the plain forms below (a pin, a tag, a URL, a union of ranges)
- *   - everything else is the release's: its version, scripts, engines, and the dependencies it adds or lowers
+ *     it is equal, lower or not one of the plain forms below (a tag, a URL, a union or a pair of bounds). A range
+ *     the release lowers, to go back from a bad bump, does not reach a project that already has a higher one;
+ *     --overwrite-customized does
+ *   - everything else is the release's, overrides included: its version, scripts and engines, and the
+ *     dependencies it adds
  *   - a dependency only the project has is dropped, as before: the release defines which packages there are, and
  *     a package the release removed would otherwise stay in every project for good
  *

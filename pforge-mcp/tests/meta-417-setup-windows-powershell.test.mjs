@@ -14,9 +14,10 @@
 
 import { afterEach, describe, expect, it } from "vitest";
 import { spawnSync } from "node:child_process";
-import { chmodSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { EOL, tmpdir } from "node:os";
-import { delimiter, join, relative, resolve } from "node:path";
+import { delimiter, dirname, join, resolve } from "node:path";
+import { checkInstalledText, listProjectFiles } from "../../scripts/check-installed-text.mjs";
 
 const REPO_ROOT = resolve(import.meta.dirname, "..", "..");
 const isWin = process.platform === "win32";
@@ -185,18 +186,59 @@ describe("setup.ps1 reads and writes text as UTF-8 without a byte order mark", (
   }, 60_000);
 });
 
-// ─── a whole install under Windows PowerShell 5.1 ────────────────────────────
+// ─── the text check, and a whole install under Windows PowerShell 5.1 ────────
 
-function listFiles(root, dir = root, out = []) {
-  for (const name of readdirSync(dir)) {
-    const full = join(dir, name);
-    const rel = relative(root, full).replace(/\\/g, "/");
-    if (/(^|\/)(node_modules|\.git)(\/|$)/.test(rel)) continue;
-    if (statSync(full).isDirectory()) listFiles(root, full, out);
-    else out.push(rel);
+describe("scripts/check-installed-text.mjs", () => {
+  /** A project holding what the check looks for, each file as setup writes it under PowerShell 7. */
+  function healthyProject() {
+    const project = tempDir("pf-meta-417-check-");
+    const put = (file, content) => {
+      mkdirSync(dirname(join(project, file)), { recursive: true });
+      writeFileSync(join(project, file), content);
+    };
+    put(".gitignore", "# produced by pforge \u2014 never commit\n");
+    put("docs/plans/auto/README.md", "Auto plans \u2014 generated\n");
+    put("CLAUDE.md", "Step \u2192 next\n");
+    put("GEMINI.md", "Step \u2192 next\n");
+    put(".github/copilot-instructions.md", "Rules \u2014 follow them\n");
+    for (const json of [".forge.json", ".vscode/mcp.json", ".forge/capabilities.json", ".claude/mcp.json", ".gemini/settings.json"]) put(json, '{"ok":true}\n');
+    return { project, put };
   }
-  return out;
-}
+
+  it("passes a project written as UTF-8 without a byte order mark", () => {
+    expect(checkInstalledText(healthyProject().project)).toEqual([]);
+  });
+
+  it("finds a file written in the system code page", () => {
+    const { project, put } = healthyProject();
+    put("docs/notes.md", Buffer.concat([Buffer.from("a "), Buffer.from([0x97]), Buffer.from(" b")]));
+    expect(checkInstalledText(project)).toEqual(["docs/notes.md: not valid UTF-8 (written in the system code page)"]);
+  });
+
+  it("finds an arrow that became a question mark, and a dash decoded in the wrong code page", () => {
+    const { project, put } = healthyProject();
+    put("CLAUDE.md", "Step ? next\n");
+    put(".github/copilot-instructions.md", "Rules \u00e2\u20ac\u201d follow them \u2014\n");
+    expect(checkInstalledText(project)).toEqual([
+      'CLAUDE.md: no longer contains "\u2192"',
+      ".github/copilot-instructions.md: has an em dash decoded in the wrong code page",
+    ]);
+  });
+
+  it("finds JSON that starts with a byte order mark, or is missing", () => {
+    const { project, put } = healthyProject();
+    put(".forge.json", Buffer.concat([Buffer.from([0xef, 0xbb, 0xbf]), Buffer.from('{"ok":true}')]));
+    rmSync(join(project, ".claude", "mcp.json"));
+    expect(checkInstalledText(project)).toEqual([".forge.json: starts with a byte order mark", ".claude/mcp.json: missing"]);
+  });
+
+  it("skips binary files and node_modules", () => {
+    const { project, put } = healthyProject();
+    put("logo.png", Buffer.from([0x89, 0x50, 0x00, 0x97]));
+    put("pforge-mcp/node_modules/dep/index.js", Buffer.from([0x97]));
+    expect(checkInstalledText(project)).toEqual([]);
+  });
+});
 
 describe.skipIf(!isWin)("setup.ps1 run by Windows PowerShell 5.1", () => {
   it("installs a project whose text is valid UTF-8 with its dashes and arrows, and whose JSON has no byte order mark", () => {
@@ -208,32 +250,8 @@ describe.skipIf(!isWin)("setup.ps1 run by Windows PowerShell 5.1", () => {
     const run = spawnSync("powershell.exe", shellArgs("powershell.exe", SETUP, "-Preset", "custom", "-Agent", "all", "-ProjectPath", project, "-ProjectName", "Acme", "-NonInteractive", "-Force"), { encoding: "utf8", timeout: 280_000, env });
     expect(run.status, (run.stdout + run.stderr).slice(-1500)).toBe(0);
 
-    const files = listFiles(project);
-    expect(files.length).toBeGreaterThan(500);
-    const decoder = new TextDecoder("utf-8", { fatal: true });
-    const invalid = [];
-    for (const file of files) {
-      const bytes = readFileSync(join(project, file));
-      if (bytes.includes(0)) continue;
-      try {
-        decoder.decode(bytes);
-      } catch {
-        invalid.push(file);
-      }
-    }
-    expect(invalid, "files that are not valid UTF-8 (written in the system code page)").toEqual([]);
-
-    const text = (file) => readFileSync(join(project, file), "utf8");
-    expect(text(".gitignore")).toContain("produced by pforge \u2014 never commit");
-    expect(text("docs/plans/auto/README.md")).toContain("\u2014");
-    expect(text("CLAUDE.md")).toContain("\u2192");
-    expect(text("GEMINI.md")).toContain("\u2192");
-    // A file read and written back by Update-Placeholders keeps its dashes: read as the system code page and written as UTF-8 they become "â€”".
-    expect(text(".github/copilot-instructions.md")).toContain("\u2014");
-    expect(text(".github/copilot-instructions.md")).not.toContain("\u00e2\u20ac");
-    for (const json of [".forge.json", ".vscode/mcp.json", ".forge/capabilities.json", ".claude/mcp.json", ".gemini/settings.json"]) {
-      expect(readFileSync(join(project, json)).subarray(0, 3), `${json} has no BOM`).not.toEqual(Buffer.from([0xef, 0xbb, 0xbf]));
-      expect(() => JSON.parse(text(json)), json).not.toThrow();
-    }
+    expect(listProjectFiles(project).length).toBeGreaterThan(500);
+    // This is also what the Windows PowerShell 5.1 job of Validate Setup runs.
+    expect(checkInstalledText(project), "the installed text").toEqual([]);
   }, 300_000);
 });

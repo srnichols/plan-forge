@@ -85,6 +85,8 @@ Scan the target project root for these marker files to determine the correct pre
 
 **`-Force` is required for unattended agent execution** — it skips confirmation prompts and overwrites template files.
 
+`setup.ps1` runs in the Windows PowerShell 5.1 that ships with Windows as well as in PowerShell 7+, and writes the same UTF-8 files in both. Do not install PowerShell 7 just to run it.
+
 ### Step 3: Customize Generated Files
 
 After setup completes, the agent MUST:

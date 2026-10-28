@@ -115,7 +115,7 @@ Plan Forge is not "AI plus a code-completion plugin." It is a full enterprise en
 
 - **VS Code** with **GitHub Copilot** (free, Pro, or Enterprise)
 - **Git** installed
-- **A shell for the setup script**: on Windows, the PowerShell that ships with Windows (5.1) or PowerShell 7+, with no extra install; on macOS and Linux, Bash
+- **A shell for the setup script**: on Windows, the PowerShell that ships with Windows (5.1) or PowerShell 7+, with no extra install; on macOS and Linux, Bash (the Bash 3.2 that ships with macOS is enough) or PowerShell 7+
 
 ### 1. Clone and Run Setup
 

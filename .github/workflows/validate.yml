@@ -55,6 +55,21 @@ jobs:
         shell: pwsh
         run: node scripts/check-installed-text.mjs "$env:RUNNER_TEMP\test-ps51"
 
+      # Parsing is what failed for setup.ps1 (#417) and four maintainer scripts: a file with no byte order mark is
+      # read in the system code page, and an em dash in a string ended it. The vitest job runs on Linux, where
+      # Windows PowerShell does not exist, so this is the one place every script is parsed by 5.1.
+      - name: Parse every PowerShell script in Windows PowerShell 5.1
+        shell: powershell
+        run: |
+          $bad = 0
+          foreach ($path in (git ls-files '*.ps1' '*.psm1')) {
+            $tokens = $null; $errors = $null
+            [void][System.Management.Automation.Language.Parser]::ParseFile((Resolve-Path $path).Path, [ref]$tokens, [ref]$errors)
+            if ($errors.Count) { $bad++; Write-Host "::error file=$path,line=$($errors[0].Extent.StartLineNumber)::$($errors[0].Message)" }
+          }
+          if ($bad) { exit 1 }
+          Write-Host "every script parses"
+
   validate-bash:
     name: Validate (Bash)
     runs-on: ubuntu-latest
@@ -73,6 +88,125 @@ jobs:
           TEST_DIR="$RUNNER_TEMP/test-project"
           chmod +x validate-setup.sh
           ./validate-setup.sh --path "$TEST_DIR"
+
+  # macOS ships Bash 3.2 and BSD userland. Nothing ran the installers there, so what a Mac user gets was a guess.
+  # Each leg runs the scripts the way a user would: the system Bash with the stock PATH, Homebrew's Bash first
+  # on PATH, and PowerShell 7. Every preset step runs even when an earlier one failed, so one run says everything.
+  validate-macos:
+    name: Validate (macOS, ${{ matrix.shell }})
+    runs-on: macos-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        shell: [system-bash, homebrew-bash, pwsh]
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+
+      - name: The shells and tools on this runner
+        run: |
+          sw_vers
+          echo "/bin/bash: $(/bin/bash --version | head -1)"
+          echo "bash on PATH: $(command -v bash): $(bash --version | head -1)"
+          command -v pwsh && pwsh --version || echo "no pwsh on PATH"
+          ls -d /opt/homebrew/bin/bash /usr/local/bin/bash 2>/dev/null || echo "no Homebrew bash installed"
+          echo "sort -V puts 1.9 first: $(printf '1.10\n1.9\n' | sort -V | head -1)"
+          if echo x | grep -P x >/dev/null 2>&1; then echo "grep -P: yes"; else echo "grep -P: no"; fi
+          echo "stat -c: $(stat -c %Y . 2>&1 | head -1)"
+          echo "sed replacement with \\n: $(echo a | sed 's/a/b\nc/')"
+          echo "sed \\s in a basic regex (prints X if it is whitespace): $(printf 'a b\n' | sed 's/a\s*b/X/')"
+          echo "sed -E \\s (prints X if it is whitespace): $(printf 'a b\n' | sed -E 's/a\s+b/X/')"
+          awk --version 2>&1 | head -1 || true
+
+      - name: Setup, validate and update with Bash
+        if: matrix.shell != 'pwsh'
+        run: |
+          if [ "${{ matrix.shell }}" = homebrew-bash ]; then
+            brew list bash >/dev/null 2>&1 || brew install bash
+            export PATH="$(brew --prefix)/bin:$PATH"
+          else
+            # The stock PATH, as a Mac user has it: /bin/bash is 3.2 and the tools are BSD.
+            export PATH="$(dirname "$(command -v node)"):/usr/bin:/bin:/usr/sbin:/sbin"
+          fi
+          echo "bash: $(command -v bash): $(bash --version | head -1)"
+          chmod +x setup.sh validate-setup.sh
+          rc=0
+          # custom, a stack preset, a stack preset with every agent adapter, and a list of adapters
+          for run in custom:copilot typescript:copilot typescript:all custom:claude,cursor,codex; do
+            preset="${run%%:*}"; agent="${run##*:}"
+            echo "::group::setup.sh --preset $preset --agent $agent"
+            dir="$RUNNER_TEMP/test-macos-$preset-$agent"; mkdir -p "$dir"
+            if ./setup.sh --preset "$preset" --agent "$agent" --path "$dir" --name Test --force; then
+              ./validate-setup.sh --path "$dir" || { echo "::error::validate-setup.sh failed for $preset $agent"; rc=1; }
+            else
+              echo "::error::setup.sh --preset $preset --agent $agent failed"; rc=1
+            fi
+            echo "::endgroup::"
+          done
+
+          # setup.sh read each description with grep -P, which BSD grep lacks, and the failure was hidden: the generated
+          # files carried their fallback text. They must carry the real one.
+          all="$RUNNER_TEMP/test-macos-typescript-all"
+          grep -q "^description: Pipeline Step 1" "$all/.claude/skills/planforge-step1-preflight-check/SKILL.md" || { echo "::error::a generated Claude skill has not got its description"; rc=1; }
+          grep -q '^description = "Pipeline Step 1' "$all/.gemini/commands/planforge/step1-preflight-check.toml" || { echo "::error::a generated Gemini command has not got its description"; rc=1; }
+
+          # What a Mac user does next: look at the project, then update it. A guidance file is deleted and another
+          # edited first, so the update has a new file to add and an edited one to keep.
+          echo "::group::pforge.sh in the installed project"
+          cd "$RUNNER_TEMP/test-macos-typescript-copilot"
+          chmod +x pforge.sh
+          git init -q . && git add -A && git -c user.name=ci -c user.email=ci@example.com commit -qm install
+          # setup.sh read the names for .forge/capabilities.json with find -printf, which BSD find lacks (#427). The file has
+          # to list what the project has.
+          prompts_on_disk=$(ls .github/prompts/*.prompt.md | wc -l | tr -d ' ')
+          prompts_listed=$(grep -o '"[^"]*\.prompt\.md"' .forge/capabilities.json | wc -l | tr -d ' ')
+          [ "$prompts_on_disk" -gt 0 ] && [ "$prompts_on_disk" = "$prompts_listed" ] || { echo "::error::.forge/capabilities.json lists $prompts_listed prompts, and the project has $prompts_on_disk"; rc=1; }
+          instructions_on_disk=$(ls .github/instructions/*.instructions.md | wc -l | tr -d ' ')
+          instructions_listed=$(grep -o '"[^"]*\.instructions\.md"' .forge/capabilities.json | wc -l | tr -d ' ')
+          [ "$instructions_on_disk" -gt 0 ] && [ "$instructions_on_disk" = "$instructions_listed" ] || { echo "::error::.forge/capabilities.json lists $instructions_listed instructions, and the project has $instructions_on_disk"; rc=1; }
+          ./pforge.sh --help >/dev/null || { echo "::error::pforge.sh --help failed"; rc=1; }
+          ./pforge.sh check || { echo "::error::pforge.sh check failed"; rc=1; }
+          rm .github/instructions/security.instructions.md
+          echo "<!-- edited here -->" >> .github/instructions/testing.instructions.md
+          # A line out of the managed block in .gitignore makes the update rewrite the block with awk, which is what BSD
+          # awk refused (#427). The block has to come back as it was.
+          grep -v 'pforge-sdk/node_modules/' .gitignore > .gitignore.new && mv .gitignore.new .gitignore
+          ./pforge.sh update "$GITHUB_WORKSPACE" --force --yes --allow-dev || { echo "::error::pforge.sh update failed"; rc=1; }
+          [ -f .github/instructions/security.instructions.md ] || { echo "::error::update did not restore the deleted file"; rc=1; }
+          grep -q "edited here" .github/instructions/testing.instructions.md || { echo "::error::update overwrote an edited file"; rc=1; }
+          [ -f .forge/update-pending/.github/instructions/testing.instructions.md ] || { echo "::error::update did not keep the new version of the edited file"; rc=1; }
+          git diff --exit-code --quiet -- .gitignore || { echo "::error::update did not put the managed block in .gitignore back as it was"; rc=1; }
+          [ "$(grep -cF '# >>> plan-forge managed' .gitignore)" = 1 ] && [ "$(grep -cF '# <<< plan-forge managed <<<' .gitignore)" = 1 ] || { echo "::error::.gitignore does not hold the managed block exactly once"; rc=1; }
+          ./pforge.sh new-phase "Mac Phase" || { echo "::error::pforge.sh new-phase failed"; rc=1; }
+          grep -q "### Phase 1: Mac Phase" docs/plans/DEPLOYMENT-ROADMAP.md || { echo "::error::new-phase did not add the phase to the roadmap"; rc=1; }
+          echo "::endgroup::"
+          exit $rc
+
+      - name: Setup and validate with PowerShell 7
+        if: matrix.shell == 'pwsh'
+        shell: pwsh
+        run: |
+          $rc = 0
+          foreach ($preset in 'custom', 'typescript') {
+            Write-Host "::group::setup.ps1 -Preset $preset"
+            $dir = Join-Path $env:RUNNER_TEMP "test-macos-$preset"
+            New-Item -ItemType Directory -Path $dir -Force | Out-Null
+            ./setup.ps1 -Preset $preset -ProjectPath $dir -ProjectName Test -Force
+            if ($LASTEXITCODE) { Write-Host "::error::setup.ps1 -Preset $preset failed"; $rc = 1 }
+            else {
+              ./validate-setup.ps1 -ProjectPath $dir
+              if ($LASTEXITCODE) { Write-Host "::error::validate-setup.ps1 failed for $preset"; $rc = 1 }
+              # PowerShell here hides a name that starts with a dot, and the runtime packages ship some (#427). Every tracked
+              # file of them has to be in the project; an update would list the others as new.
+              $missing = @(git ls-files pforge-mcp pforge-master pforge-sdk | Where-Object { "/$_/" -notmatch '/(node_modules|\.forge|coverage)/' } | Where-Object { -not (Test-Path -LiteralPath (Join-Path $dir $_)) })
+              if ($missing.Count -gt 0) { Write-Host "::error::setup.ps1 -Preset $preset did not copy $($missing.Count) files of the runtime packages, $($missing[0]) for one"; $rc = 1 }
+            }
+            Write-Host "::endgroup::"
+          }
+          exit $rc
 
   validate-all-presets:
     name: Validate All Presets (Bash)

@@ -276,7 +276,7 @@ function Show-Help {
     Write-Host "  ext list          List installed extensions"
     Write-Host "  ext remove <name> Remove an installed extension"
     Write-Host "  update [source]   Update framework files from Plan Forge source (keeps guidance files you edited)"
-    Write-Host "                      Flags: --dry-run, --yes/-y (no prompt), --force (no prompt; re-apply the same version), --overwrite-customized (replace edited guidance; backups kept)"
+    Write-Host "                      Flags: --dry-run, --yes/-y (no prompt), --force (no prompt; re-apply the same version and reinstall dependencies), --overwrite-customized (replace edited guidance; backups kept)"
     Write-Host "  self-update       Check for and install the latest Plan Forge release from GitHub"
     Write-Host "                      Flags: --force (heal), --downgrade (with --force), --yes/-y, --dry-run, --verify (run check + smith after),"
     Write-Host "                             --overwrite-customized"
@@ -1620,6 +1620,31 @@ function Install-NpmDependencies([string]$PackageDir, [string]$Label) {
     foreach ($line in @($output | Select-Object -Last 8)) { Write-Host "     $line" -ForegroundColor DarkGray }
 }
 
+# Installs the dependencies of one framework package (pforge-mcp or pforge-master) in a project, when it has a
+# package.json. Update runs it for a package whose files it changed, and with --force for both even when it
+# changed none. It used to return before the install whenever every file was current, so a project whose
+# dependencies were wrong for another reason, such as a file: link an older installer left or an install that
+# failed, was never repaired. Self-update's second pass runs with --force, so it could not repair it either (#428).
+function Install-FrameworkDependencies([string]$ProjectRoot, [string]$Package) {
+    $packageDir = Join-Path $ProjectRoot $Package
+    if (-not (Test-Path (Join-Path $packageDir "package.json"))) { return }
+    $heading = if ($Package -eq 'pforge-mcp') { 'MCP' } else { $Package }
+    Write-Host ""
+    Write-Host "Installing $heading dependencies..." -ForegroundColor DarkCyan
+    Install-NpmDependencies $packageDir $Package
+}
+
+# A framework package that has a package.json and no node_modules is what a failed install leaves behind. Update
+# does not install when nothing changed, so it says how to.
+function Write-MissingDependencyHint([string]$ProjectRoot) {
+    foreach ($package in @('pforge-mcp', 'pforge-master')) {
+        $packageDir = Join-Path $ProjectRoot $package
+        if ((Test-Path (Join-Path $packageDir "package.json")) -and -not (Test-Path (Join-Path $packageDir "node_modules"))) {
+            Write-Host "  ⚠️  $package has no node_modules. Run 'pforge update --force' to install it, or: cd $package; npm install" -ForegroundColor Yellow
+        }
+    }
+}
+
 function Invoke-Update {
     Write-ManualSteps "update" @(
         "Clone/pull the latest Plan Forge template repo"
@@ -1928,6 +1953,7 @@ function Invoke-Update {
 
     if ($currentVersion -eq $sourceVersion -and -not $forceUpdate) {
         Write-Host "Already up to date (v$currentVersion). Use --force to re-apply." -ForegroundColor Green
+        Write-MissingDependencyHint $RepoRoot
         if (-not $dryRun) { Invoke-ForgeConfigMigration -ProjectRoot $RepoRoot -SourceRoot $sourcePath }
         Clear-GitHubUpdateCache -KeepCache:$keepCache
         return
@@ -2067,6 +2093,12 @@ function Invoke-Update {
         # Nothing to copy means the release is installed; self-update reads this.
         if (-not $dryRun) { $script:UpdateApplied = $true }
         if (-not $dryRun) { Invoke-ForgeConfigMigration -ProjectRoot $RepoRoot -SourceRoot $sourcePath }
+        # The dependencies are installed with --force even though no file changed (#428). Without it, update returned
+        # above, where the missing-dependency hint is printed.
+        if ($forceUpdate -and -not $dryRun) {
+            Install-FrameworkDependencies -ProjectRoot $RepoRoot -Package 'pforge-mcp'
+            Install-FrameworkDependencies -ProjectRoot $RepoRoot -Package 'pforge-master'
+        }
         Clear-GitHubUpdateCache -KeepCache:$keepCache
         return
     }
@@ -2219,14 +2251,11 @@ writeFreshCache(process.argv[1], process.argv[2]);
     # "hash table can only be added to another hash table" or, worse, a
     # hashtable-merge with a 'Name' key collision).
     $mcpUpdated = @(@($updates) + @($newFiles) | Where-Object { $_.Name -like "pforge-mcp/*" })
+    # With --force the dependencies are installed even when no file of the package changed (#428).
+    if ($mcpUpdated -or $forceUpdate) {
+        Install-FrameworkDependencies -ProjectRoot $RepoRoot -Package 'pforge-mcp'
+    }
     if ($mcpUpdated) {
-        $mcpDir = Join-Path $RepoRoot "pforge-mcp"
-        if (Test-Path (Join-Path $mcpDir "package.json")) {
-            Write-Host ""
-            Write-Host "Installing MCP dependencies..." -ForegroundColor DarkCyan
-            Install-NpmDependencies $mcpDir 'pforge-mcp'
-        }
-
         # Detect if MCP server is running and advise restart
         try {
             $null = Invoke-RestMethod -Uri "http://localhost:3100/api/status" -Method GET -TimeoutSec 2 -ErrorAction Stop
@@ -2242,13 +2271,8 @@ writeFreshCache(process.argv[1], process.argv[2]);
     # pforge-master declares @modelcontextprotocol/sdk + ws as runtime deps,
     # so missing node_modules breaks the forge-master-chat MCP stdio server.
     $fmUpdated = @(@($updates) + @($newFiles) | Where-Object { $_.Name -like "pforge-master/*" })
-    if ($fmUpdated) {
-        $fmDir = Join-Path $RepoRoot "pforge-master"
-        if (Test-Path (Join-Path $fmDir "package.json")) {
-            Write-Host ""
-            Write-Host "Installing pforge-master dependencies..." -ForegroundColor DarkCyan
-            Install-NpmDependencies $fmDir 'pforge-master'
-        }
+    if ($fmUpdated -or $forceUpdate) {
+        Install-FrameworkDependencies -ProjectRoot $RepoRoot -Package 'pforge-master'
     }
 
     # Check if CLI itself was updated — inform user

@@ -166,3 +166,11 @@ Get-RunStatus -RunDir ".forge/runs/2026-05-05T09-00-00"
 | `release/rehearse.mjs` | Release rehearsal: fresh setup and update from the previous release, both shells, from the release archive; tag-collision preflight (#300, #128) |
 | `release/verify-public.mjs` | After publishing: `pforge self-update` over the real GitHub download, both shells (#300) |
 | `release/release-checks.json` | Per-release expectations both release scripts assert in every consumer project |
+
+---
+
+## Which shell
+
+The PowerShell scripts here run in PowerShell 7 and in the Windows PowerShell 5.1 that ships with Windows, the way `setup.ps1` does. `pforge-mcp/tests/scripts-windows-powershell.test.mjs` keeps it that way: a script with non-ASCII text starts with a UTF-8 byte order mark, none uses syntax or parameters that only PowerShell 6 and 7 have (ternaries, `??`, pipeline chains, a third `Join-Path` argument, `Invoke-WebRequest` without `-UseBasicParsing`), and on Windows the whole set parses in 5.1. One exception: `cut-backfill-releases.ps1` starts `pwsh` to run `extract-changelog-section.ps1`, so it needs PowerShell 7 installed.
+
+The Bash twins are maintainer tools for Linux and assume Bash 4 and GNU tools (`declare -A`, `find -printf` and `grep -P` appear in several). They are not the installers, which also run on macOS. On a Mac, run the PowerShell version in PowerShell 7.

@@ -174,6 +174,16 @@
     { "label": "The pforge-master lock pins body-parser 2.4.0, past GHSA-27r3-jxmh-p828 (#418) (3.35.3)", "path": "pforge-master/package-lock.json", "contains": "body-parser-2.4.0.tgz" },
     { "label": "The MCP lock pins body-parser 2.4.0, past GHSA-27r3-jxmh-p828 (#418) (3.35.3)", "path": "pforge-mcp/package-lock.json", "contains": "body-parser-2.4.0.tgz" },
     { "label": "pforge update keeps a custom project to its shared files (#416) (3.35.3)", "path": "pforge-mcp/update-plan.mjs", "contains": "function mayAddNew(" },
-    { "label": "The capability descriptor is checked against the tool registry (#415) (3.35.3)", "path": "pforge-mcp/tests/meta-415-well-known-descriptor.test.mjs", "contains": "lists exactly the tools the server registers, and counts them" }
+    { "label": "The capability descriptor is checked against the tool registry (#415) (3.35.3)", "path": "pforge-mcp/tests/meta-415-well-known-descriptor.test.mjs", "contains": "lists exactly the tools the server registers, and counts them" },
+    { "label": "pforge update installs the dependencies with --force when no file changed, PowerShell (#428) (3.35.4)", "path": "pforge.ps1", "contains": "function Install-FrameworkDependencies" },
+    { "label": "pforge update installs the dependencies with --force when no file changed, bash (#428) (3.35.4)", "path": "pforge.sh", "contains": "pf_install_framework_deps()" },
+    { "label": "pforge update runs in the Bash 3.2 that macOS ships: no associative array (#427) (3.35.4)", "path": "pforge.sh", "contains": "_pf_set_has()" },
+    { "label": "pforge update refreshes the managed .gitignore block with BSD awk (#427) (3.35.4)", "path": "pforge.sh", "contains": "PF_GI_BODY" },
+    { "label": "pforge new-phase adds the phase to the roadmap, bash (#429) (3.35.4)", "path": "pforge.sh", "contains": "ENTRY=\"$entry\" awk" },
+    { "label": "The shell scripts are guarded against Bash 4 and GNU-only constructs (#427) (3.35.4)", "path": "pforge-mcp/tests/bash-3-2-portability.test.mjs", "contains": "const NOT_PORTABLE" },
+    { "label": "update and validate-setup are tested for the dependencies they leave (#428) (3.35.4)", "path": "pforge-mcp/tests/meta-428-update-installs-dependencies.test.mjs", "contains": "installs both with --force when every file is current" },
+    { "label": "pforge update is tested end to end for the guidance files it replaces, adds and keeps, in all three shells (3.35.4)", "path": "pforge-mcp/tests/update-guided-files.test.mjs", "contains": "keeps an edited copy with the new version beside it" },
+    { "label": "setup.ps1 copies the names that start with a dot in the runtime packages (#427) (3.35.4)", "path": "pforge-mcp/tests/meta-427-setup-ps1-dot-directories.test.mjs", "contains": "copies the runtime packages whole" },
+    { "label": "validate-setup reaches its summary for a list of agent adapters (3.35.4)", "path": "pforge-mcp/tests/validate-setup-agents.test.mjs", "contains": "counts the files of each adapter, and gets to the summary" }
   ]
 }

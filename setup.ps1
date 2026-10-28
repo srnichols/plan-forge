@@ -116,7 +116,8 @@ function Copy-WithCreate([string]$Source, [string]$Destination, [bool]$Overwrite
 # dependencies, run state and coverage output stay behind. Whole directory segments of the path below the
 # package are matched: the filter used to be a substring match on the absolute path, which also dropped
 # orchestrator/run-plan/plan-coverage.mjs, and left nothing to install when the source tree sat under a
-# .forge folder (#400, #346).
+# .forge folder (#400, #346). Each package is listed with -Force: PowerShell on macOS and Linux treats a name that
+# starts with a dot as hidden, and a test fixture that is a project's .github folder is one (#427).
 function Test-RuntimePackageFile([System.IO.FileInfo]$File, [string]$SourceDir) {
     $relative = $File.FullName.Substring($SourceDir.Length + 1) -replace '\\', '/'
     return $relative -notmatch '(^|/)(node_modules|\.forge|coverage)/'
@@ -1429,8 +1430,10 @@ if (-not $isCustomOnly) {
             exit 1
         }
 
-        # Copy all files from preset, preserving relative paths
-        Get-ChildItem -Path $presetDir -Recurse -File | ForEach-Object {
+        # Copy all files from preset, preserving relative paths. -Force: PowerShell on macOS and Linux treats a name
+        # that starts with a dot as hidden and does not enter such a folder without it, and every file of a stack
+        # preset is under .github (#427).
+        Get-ChildItem -Path $presetDir -Recurse -File -Force | ForEach-Object {
             $relativePath = $_.FullName.Substring($presetDir.Length + 1)
             $dst = Join-Path $ProjectPath $relativePath
             Copy-WithCreate $_.FullName $dst $Force.IsPresent
@@ -1622,7 +1625,8 @@ if ($InstallExtensions) {
 Write-Host ""
 Write-Host "Step 4: Replacing placeholders" -ForegroundColor Cyan
 
-Get-ChildItem -Path $ProjectPath -Recurse -Include "*.md" -File | ForEach-Object {
+# -Force so that .github is visited on macOS and Linux, the way `find` does in setup.sh (#427).
+Get-ChildItem -Path $ProjectPath -Recurse -Force -Include "*.md" -File | ForEach-Object {
     Update-Placeholders $_.FullName $ProjectName $stackLabel
 }
 
@@ -1802,7 +1806,7 @@ if (Test-Path $sdkSrcDir) {
         New-Item -ItemType Directory -Path $sdkDstDir -Force | Out-Null
     }
     $sdkFileCount = 0
-    Get-ChildItem -Path $sdkSrcDir -File -Recurse |
+    Get-ChildItem -Path $sdkSrcDir -File -Recurse -Force |
         Where-Object { Test-RuntimePackageFile $_ $sdkSrcDir } |
         ForEach-Object {
             $relPath = $_.FullName.Substring($sdkSrcDir.Length + 1)
@@ -1827,7 +1831,7 @@ if (Test-Path $fmSrcDir) {
         New-Item -ItemType Directory -Path $fmDstDir -Force | Out-Null
     }
     $fmFileCount = 0
-    Get-ChildItem -Path $fmSrcDir -File -Recurse |
+    Get-ChildItem -Path $fmSrcDir -File -Recurse -Force |
         Where-Object { Test-RuntimePackageFile $_ $fmSrcDir } |
         ForEach-Object {
             $relPath = $_.FullName.Substring($fmSrcDir.Length + 1)
@@ -1860,7 +1864,7 @@ if (Test-Path $mcpSrcDir) {
 
     # Copy all MCP runtime files (not node_modules, .forge or coverage output)
     $mcpFileCount = 0
-    Get-ChildItem -Path $mcpSrcDir -File -Recurse |
+    Get-ChildItem -Path $mcpSrcDir -File -Recurse -Force |
         Where-Object { Test-RuntimePackageFile $_ $mcpSrcDir } |
         ForEach-Object {
             $relPath = $_.FullName.Substring($mcpSrcDir.Length + 1)

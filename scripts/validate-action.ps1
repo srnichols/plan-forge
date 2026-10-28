@@ -1,4 +1,4 @@
-#!/usr/bin/env pwsh
+﻿#!/usr/bin/env pwsh
 # Plan Forge Validate — GitHub Action Script (PowerShell twin of validate-action.sh)
 # Validates Plan Forge setup, guardrail files, plan artifacts, and code cleanliness.
 param(
@@ -14,7 +14,9 @@ param(
 $ProjectDir     = $Path
 $FailOnWarnings = $FailOnWarnings.ToLower()
 $RunSweep       = $Sweep.ToLower() -eq "true"
-$SweepFail      = $SweepFail.ToLower() -eq "true"
+# Not $SweepFail: that parameter is a [string], so a boolean assigned back to it became "False", which is truthy,
+# and a sweep that found markers always failed instead of warning.
+$FailOnSweep    = $SweepFail.ToLower() -eq "true"
 $RunAnalyze     = $Analyze.ToLower() -eq "true"
 
 $PASS = 0; $FAIL = 0; $WARN = 0
@@ -178,8 +180,8 @@ if (Test-Path $PlansDir) {
         $PlansOk = 0; $PlansMissing = 0
         foreach ($plan in $PlanFiles) {
             $planContent = Get-Content $plan.FullName -Raw
-            $hasScope  = ($planContent | Select-String '### In Scope|### Scope Contract|## Scope') ? $true : $false
-            $hasSlices = ($planContent | Select-String '### Slice|## Execution Slices|## Slices') ? $true : $false
+            $hasScope  = [bool]($planContent | Select-String '### In Scope|### Scope Contract|## Scope')
+            $hasSlices = [bool]($planContent | Select-String '### Slice|## Execution Slices|## Slices')
             if ($hasScope -and $hasSlices) {
                 $PlansOk++
             } else {
@@ -228,7 +230,7 @@ if ($RunSweep) {
 
     if ($sweepTotal -eq 0) {
         pass "Sweep clean — zero deferred-work markers"
-    } elseif ($SweepFail) {
+    } elseif ($FailOnSweep) {
         fail "Found $sweepTotal deferred-work marker(s)"
     } else {
         warn "Found $sweepTotal deferred-work marker(s)"
@@ -250,7 +252,9 @@ if ($RunAnalyze) {
     } else {
         $PforgeScript = Join-Path $ProjectDir "pforge.ps1"
         if (Test-Path $PforgeScript) {
-            $analyzeOutput = & pwsh -NoProfile -File $PforgeScript analyze $AnalyzePlan 2>&1
+            # The PowerShell that is running this script, so Windows PowerShell 5.1 does not need pwsh installed.
+            # Out-String: -match on an array of lines does not fill $Matches, and the score was always read as 0.
+            $analyzeOutput = & (Get-Process -Id $PID).Path -NoProfile -File $PforgeScript analyze $AnalyzePlan 2>&1 | Out-String
             Write-Host $analyzeOutput
 
             $score = 0
@@ -263,9 +267,9 @@ if ($RunAnalyze) {
         } else {
             $PlanFile    = Join-Path $ProjectDir $AnalyzePlan
             $planContent = Get-Content $PlanFile -Raw
-            $hasScope  = ($planContent | Select-String '### In Scope|### Scope Contract') ? $true : $false
-            $hasSlices = ($planContent | Select-String '### Slice') ? $true : $false
-            $hasGates  = ($planContent | Select-String -CaseSensitive 'validation gate|build.*pass|test.*pass') ? $true : $false
+            $hasScope  = [bool]($planContent | Select-String '### In Scope|### Scope Contract')
+            $hasSlices = [bool]($planContent | Select-String '### Slice')
+            $hasGates  = [bool]($planContent | Select-String -CaseSensitive 'validation gate|build.*pass|test.*pass')
             if ($hasScope)  { pass "Plan has scope contract" }  else { warn "No scope contract found" }
             if ($hasSlices) { pass "Plan has slices" }           else { warn "No execution slices found" }
             if ($hasGates)  { pass "Plan has validation gates" } else { warn "No validation gates found" }

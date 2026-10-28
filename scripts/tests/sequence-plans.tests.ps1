@@ -3,7 +3,7 @@
 # Pester v5 tests for scripts/sequence-plans.psm1
 
 BeforeAll {
-  $ModulePath = Join-Path $PSScriptRoot ".." "sequence-plans.psm1"
+  $ModulePath = Join-Path (Join-Path $PSScriptRoot "..") "sequence-plans.psm1"
   Import-Module $ModulePath -Force
 }
 

@@ -4,7 +4,7 @@
 > If you're trying to *install* Plan Forge into a target project, read [`AGENT-SETUP.md`](AGENT-SETUP.md) instead — that's a different workflow.
 >
 > **Project**: Plan Forge
-> **Stack**: Node.js ESM (`.mjs`), no TypeScript build step. PowerShell 7+ AND Bash 4+ for every entry point.
+> **Stack**: Node.js ESM (`.mjs`), no TypeScript build step. PowerShell 7+ AND Bash 3.2+ for every entry point (`setup.sh`, `validate-setup.sh` and `pforge.sh` run in the Bash and BSD tools macOS ships: no `declare -A`, `mapfile`, `grep -P` or `find -printf`; `bash-3-2-portability.test.mjs` guards it and the macOS job in `validate.yml` runs them).
 > **Node**: **22.12+** for shipped packages and for contributing (`engines.node` in every package; Node 20 reached end of life on 2026-04-30). Node 24 LTS is recommended. CI runs Node 24, plus the vitest suite on 22.12 to hold the floor.
 > **Lives on**: This file is dev-internal — ships from `planning/main`, NOT from `master`.
 

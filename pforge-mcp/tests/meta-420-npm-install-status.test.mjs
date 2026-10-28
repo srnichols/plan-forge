@@ -321,19 +321,39 @@ describe("the install steps of the four scripts", () => {
     expect(code).not.toMatch(/npm\s+install[^\n]*--prefix/);
   });
 
-  it.each(["setup.ps1", "pforge.ps1"])("%s runs npm install only inside the helper, and calls the helper for pforge-mcp and pforge-master", (file) => {
-    const source = SCRIPTS[file];
+  it("setup.ps1 runs npm install only inside the helper, and calls the helper for pforge-mcp and pforge-master", () => {
+    const source = SCRIPTS["setup.ps1"];
     expect(count(source, /(?<![&\w])&\s*npm\s+install\b(?!\s+--save-optional)/g), "`& npm install` appears once, in the helper").toBe(1);
     expect(count(source, /Install-NpmDependencies\s+\$\w+\s+'pforge-mcp'/g), "pforge-mcp call").toBe(1);
     expect(count(source, /Install-NpmDependencies\s+\$\w+\s+'pforge-master'/g), "pforge-master call").toBe(1);
     expect(source).not.toMatch(/\$(null|npmOutput)\s*=\s*&\s*npm\s+install/);
   });
 
-  it.each(["setup.sh", "pforge.sh"])("%s runs npm install only inside the helper, and calls the helper for pforge-mcp and pforge-master", (file) => {
-    const source = SCRIPTS[file];
+  // update reaches the helper through one function, Install-FrameworkDependencies, from two places for each package:
+  // after it applied changes, and with --force when nothing changed (#428).
+  it("pforge.ps1 runs npm install only inside the helper, which one function calls, for pforge-mcp and pforge-master", () => {
+    const source = SCRIPTS["pforge.ps1"];
+    expect(count(source, /(?<![&\w])&\s*npm\s+install\b(?!\s+--save-optional)/g), "`& npm install` appears once, in the helper").toBe(1);
+    expect(count(source, /Install-NpmDependencies\s+\$\w+\s+\$Package\b/g), "the helper has one caller").toBe(1);
+    expect(count(source, /Install-FrameworkDependencies\s+-ProjectRoot\s+\$RepoRoot\s+-Package\s+'pforge-mcp'/g), "pforge-mcp calls").toBe(2);
+    expect(count(source, /Install-FrameworkDependencies\s+-ProjectRoot\s+\$RepoRoot\s+-Package\s+'pforge-master'/g), "pforge-master calls").toBe(2);
+    expect(source).not.toMatch(/\$(null|npmOutput)\s*=\s*&\s*npm\s+install/);
+  });
+
+  it("setup.sh runs npm install only inside the helper, and calls the helper for pforge-mcp and pforge-master", () => {
+    const source = SCRIPTS["setup.sh"];
     expect(source, "no npm output is sent to /dev/null").not.toMatch(/npm install[^\n]*2>\/dev\/null/);
     expect(source, "no --silent, which hides the reason too").not.toMatch(/npm install\s+--silent/);
     expect(count(source, /^\s*pf_npm_install\s+"[^"]+"\s+"pforge-mcp"/gm), "pforge-mcp call").toBe(1);
     expect(count(source, /^\s*pf_npm_install\s+"[^"]+"\s+"pforge-master"/gm), "pforge-master call").toBe(1);
+  });
+
+  it("pforge.sh runs npm install only inside the helper, which one function calls, for pforge-mcp and pforge-master", () => {
+    const source = SCRIPTS["pforge.sh"];
+    expect(source, "no npm output is sent to /dev/null").not.toMatch(/npm install[^\n]*2>\/dev\/null/);
+    expect(source, "no --silent, which hides the reason too").not.toMatch(/npm install\s+--silent/);
+    expect(count(source, /^\s*pf_npm_install\s+"[^"]+"\s+"\$pkg"/gm), "the helper has one caller").toBe(1);
+    expect(count(source, /^\s*pf_install_framework_deps\s+"\$REPO_ROOT"\s+pforge-mcp\b/gm), "pforge-mcp calls").toBe(2);
+    expect(count(source, /^\s*pf_install_framework_deps\s+"\$REPO_ROOT"\s+pforge-master\b/gm), "pforge-master calls").toBe(2);
   });
 });

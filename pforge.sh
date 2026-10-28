@@ -96,8 +96,10 @@ ${end}"
         if grep -qF "$begin" "$gitignore"; then
             local tmp
             tmp="$(mktemp)"
-            awk -v begin="$begin" -v end="$end" -v body="$body" '
-              BEGIN { in_block = 0 }
+            # The block goes in through the environment: BSD awk (macOS) refuses a newline in a -v value, and the
+            # block has several lines (#427).
+            PF_GI_BEGIN="$begin" PF_GI_END="$end" PF_GI_BODY="$body" awk '
+              BEGIN { in_block = 0; begin = ENVIRON["PF_GI_BEGIN"]; end = ENVIRON["PF_GI_END"]; body = ENVIRON["PF_GI_BODY"] }
               {
                 if (index($0, begin) == 1 && !in_block) { in_block = 1; print body; next }
                 if (index($0, end) == 1 && in_block) { in_block = 0; next }
@@ -154,6 +156,31 @@ pf_npm_install() {
     rm -f "$log"
 }
 
+# Installs the dependencies of one framework package (pforge-mcp or pforge-master) in a project, when it has a
+# package.json. Update runs it for a package whose files it changed, and with --force for both even when it
+# changed none. It used to return before the install whenever every file was current, so a project whose
+# dependencies were wrong for another reason, such as a file: link an older installer left or an install that
+# failed, was never repaired. Self-update's second pass runs with --force, so it could not repair it either (#428).
+pf_install_framework_deps() {
+    local root="$1" pkg="$2" heading="$2"
+    [[ -f "$root/$pkg/package.json" ]] || return 0
+    if [[ "$pkg" == pforge-mcp ]]; then heading="MCP"; fi
+    echo ""
+    echo "Installing $heading dependencies..."
+    pf_npm_install "$root/$pkg" "$pkg"
+}
+
+# A framework package that has a package.json and no node_modules is what a failed install leaves behind. Update
+# does not install when nothing changed, so it says how to.
+pf_hint_missing_framework_deps() {
+    local root="$1" pkg
+    for pkg in pforge-mcp pforge-master; do
+        if [[ -f "$root/$pkg/package.json" && ! -d "$root/$pkg/node_modules" ]]; then
+            echo "  ⚠️  $pkg has no node_modules. Run 'pforge update --force' to install it, or: cd $pkg && npm install"
+        fi
+    done
+}
+
 show_help() {
     cat <<'EOF'
 
@@ -174,7 +201,7 @@ COMMANDS:
   ext remove <name> Remove an installed extension
   ext publish <p>   Validate and generate catalog entry for publishing
   update [source]   Update framework files from Plan Forge source (keeps guidance files you edited)
-                      Flags: --dry-run, --yes/-y (no prompt), --force (no prompt; re-apply the same version), --overwrite-customized (replace edited guidance; backups kept)
+                      Flags: --dry-run, --yes/-y (no prompt), --force (no prompt; re-apply the same version and reinstall dependencies), --overwrite-customized (replace edited guidance; backups kept)
   self-update       Check for and install the latest Plan Forge release from GitHub
                       Flags: --force (heal), --downgrade (with --force), --yes/-y, --dry-run, --verify (run check + smith after),
                              --overwrite-customized
@@ -427,8 +454,10 @@ TEMPLATE
 ENTRY
 )
         if grep -q "## Completed Phases" "$roadmap"; then
-            sed -i.bak "s/## Completed Phases/${entry}\n\n## Completed Phases/" "$roadmap"
-            rm -f "$roadmap.bak"
+            # awk, not sed: an s command cannot take a replacement that spans lines, and sed stopped with "unterminated s
+            # command" (#429). The entry holds the user's phase name too, and sed reads an & in a replacement as the matched text.
+            ENTRY="$entry" awk '/## Completed Phases/ { print ENVIRON["ENTRY"]; print "" } { print }' "$roadmap" > "$roadmap.tmp"
+            mv "$roadmap.tmp" "$roadmap"
         else
             echo "$entry" >> "$roadmap"
         fi
@@ -1310,6 +1339,27 @@ EOF
 }
 
 # ─── Command: update ───────────────────────────────────────────────────
+# Sets and maps are held in strings, one member or "key<TAB>value" per line, the string starting with a newline
+# (`local set=$'\n'`; add with `set+="$member"$'\n'`). `declare -A` is Bash 4.0+, and macOS ships Bash 3.2 (#427).
+_pf_set_has() {
+    local nl=$'\n'
+    case "$1" in *"$nl$2$nl"*) return 0 ;; esac
+    return 1
+}
+
+# Puts the value of key $2 in map $1 into the variable named by $3, empty when the key is not there. The newline
+# and tab sit in variables because $'...' inside a quoted ${...#...} is read differently by Bash 3.2 and 4.
+_pf_map_get() {
+    local nl=$'\n' tab=$'\t' rest
+    rest=${1#*"$nl$2$tab"}
+    if [ "$rest" = "$1" ]; then
+        rest=""
+    else
+        rest=${rest%%"$nl"*}
+    fi
+    printf -v "$3" '%s' "$rest"
+}
+
 _pf_sha256() {
     if command -v sha256sum >/dev/null 2>&1; then
         sha256sum "$1" | cut -d' ' -f1
@@ -1624,7 +1674,7 @@ cmd_update() {
                 for arg in "$@"; do
                     [ "$arg" = "--from-github" ] || filtered_args+=("$arg")
                 done
-                cmd_update "${filtered_args[@]}" "--from-github"
+                cmd_update ${filtered_args[@]+"${filtered_args[@]}"} "--from-github"
                 return $?
             fi
         fi
@@ -1713,6 +1763,7 @@ cmd_update() {
 
     if [ "$current_version" = "$source_version" ] && ! $force; then
         echo "Already up to date (v$current_version). Use --force to re-apply."
+        pf_hint_missing_framework_deps "$REPO_ROOT"
         $dry_run || _pf_migrate_forge_config "$REPO_ROOT" "$source_path"
         _pf_gh_cleanup
         return 0
@@ -1768,16 +1819,16 @@ cmd_update() {
     # Map operations back into _updates / _new_files, matching the shape the
     # confirm/apply/guard/pending machinery below already expects. Node parses
     # the JSON (#297 — never Python or PCRE grep); paths are already posix/rel.
-    declare -A _offered=() _is_guided=()
+    local _offered=$'\n' _is_guided=$'\n'
     local _op_action _op_src _op_dst _op_guided
     while IFS=$'\t' read -r _op_action _op_src _op_dst _op_guided; do
         [ -z "$_op_action" ] && continue
         if [ "$_op_action" = "remove" ]; then _removals+=("$_op_dst"); continue; fi
         local _full_src="$source_path/$_op_src" _full_dst="$REPO_ROOT/$_op_dst"
-        _offered["$_op_dst"]=1
+        _offered+="$_op_dst"$'\n'
         # Guided only when a guard can apply it; without one, guidance files
         # are replaced when they differ, as releases before the guard did.
-        if [ "$_op_guided" = "1" ] && [ -n "$update_guard" ]; then _is_guided["$_full_dst"]=1; fi
+        if [ "$_op_guided" = "1" ] && [ -n "$update_guard" ]; then _is_guided+="$_full_dst"$'\n'; fi
         if [ "$_op_action" = "new" ]; then
             _new_files+=("$_full_src|$_full_dst|$_op_dst")
         else
@@ -1804,7 +1855,7 @@ for (const op of plan.operations) {
             [ -d "$_dst_dir" ] || continue
             while IFS= read -r -d '' _f; do
                 _dst_rel="${_f#"$REPO_ROOT"/}"
-                [ -n "${_offered[$_dst_rel]+x}" ] && continue
+                _pf_set_has "$_offered" "$_dst_rel" && continue
                 _nu_skip=false
                 for nu in "${_never_update[@]}"; do
                     [ "$nu" = "$_dst_rel" ] && _nu_skip=true && break
@@ -1836,7 +1887,7 @@ for (const op of plan.operations) {
     local _kept=() _guided=()
     for entry in ${_updates[@]+"${_updates[@]}"} ${_new_files[@]+"${_new_files[@]}"}; do
         _e_dst="${entry#*|}"; _e_dst="${_e_dst%%|*}"
-        [ -n "${_is_guided[$_e_dst]+x}" ] && _guided+=("$entry")
+        _pf_set_has "$_is_guided" "$_e_dst" && _guided+=("$entry")
     done
     local _guard_candidates=(${_guided[@]+"${_guided[@]}"} ${_kept_candidates[@]+"${_kept_candidates[@]}"})
     if [ "${#_guard_candidates[@]}" -gt 0 ] && [ -z "$update_guard" ]; then
@@ -1849,9 +1900,9 @@ for (const op of plan.operations) {
             _pf_gh_cleanup
             return 1
         fi
-        declare -A _guard_action=()
+        local _guard_action=$'\n' _verdict
         while IFS=$'\t' read -r _act _e_rel; do
-            [ -n "$_e_rel" ] && _guard_action["$_e_rel"]="$_act"
+            [ -n "$_e_rel" ] && _guard_action+="$_e_rel"$'\t'"$_act"$'\n'
         done <<< "$_plan_out"
         # Mirrors PS1's Invoke-Update exactly: a guided _updates/_new_files
         # entry survives only if the guard still calls it update/new; any
@@ -1862,20 +1913,23 @@ for (const op of plan.operations) {
         local _upd2=() _new2=()
         for entry in ${_updates[@]+"${_updates[@]}"}; do
             _e_dst="${entry#*|}"; _e_dst="${_e_dst%%|*}"
-            if [ -z "${_is_guided[$_e_dst]+x}" ]; then _upd2+=("$entry"); continue; fi
-            [ "${_guard_action[${_e_dst#"$REPO_ROOT"/}]:-}" = "update" ] && _upd2+=("$entry")
+            if ! _pf_set_has "$_is_guided" "$_e_dst"; then _upd2+=("$entry"); continue; fi
+            _pf_map_get "$_guard_action" "${_e_dst#"$REPO_ROOT"/}" _verdict
+            [ "$_verdict" = "update" ] && _upd2+=("$entry")
         done
         for entry in ${_new_files[@]+"${_new_files[@]}"}; do
             _e_dst="${entry#*|}"; _e_dst="${_e_dst%%|*}"
-            if [ -z "${_is_guided[$_e_dst]+x}" ]; then _new2+=("$entry"); continue; fi
-            [ "${_guard_action[${_e_dst#"$REPO_ROOT"/}]:-}" = "new" ] && _new2+=("$entry")
+            if ! _pf_set_has "$_is_guided" "$_e_dst"; then _new2+=("$entry"); continue; fi
+            _pf_map_get "$_guard_action" "${_e_dst#"$REPO_ROOT"/}" _verdict
+            [ "$_verdict" = "new" ] && _new2+=("$entry")
         done
         _updates=(${_upd2[@]+"${_upd2[@]}"})
         _new_files=(${_new2[@]+"${_new2[@]}"})
         for entry in ${_guard_candidates[@]+"${_guard_candidates[@]}"}; do
             _e_dst="${entry#*|}"; _e_dst="${_e_dst%%|*}"
-            _is_guided["$_e_dst"]=1
-            [ "${_guard_action[${_e_dst#"$REPO_ROOT"/}]:-}" = "customized" ] && _kept+=("$entry")
+            _is_guided+="$_e_dst"$'\n'
+            _pf_map_get "$_guard_action" "${_e_dst#"$REPO_ROOT"/}" _verdict
+            [ "$_verdict" = "customized" ] && _kept+=("$entry")
         done
         if $overwrite_customized && [ "${#_kept[@]}" -gt 0 ]; then
             for entry in "${_kept[@]}"; do
@@ -1891,6 +1945,12 @@ for (const op of plan.operations) {
         # Nothing to copy means the release is installed; self-update reads this.
         $dry_run || _PF_UPDATE_APPLIED=1
         $dry_run || _pf_migrate_forge_config "$REPO_ROOT" "$source_path"
+        # The dependencies are installed with --force even though no file changed (#428). Without it, update returned
+        # above, where the missing-dependency hint is printed.
+        if $force && ! $dry_run; then
+            pf_install_framework_deps "$REPO_ROOT" pforge-mcp
+            pf_install_framework_deps "$REPO_ROOT" pforge-master
+        fi
         _pf_gh_cleanup
         return 0
     fi
@@ -1943,7 +2003,7 @@ for (const op of plan.operations) {
     for entry in ${_updates[@]+"${_updates[@]}"}; do
         local src="${entry%%|*}" rest="${entry#*|}"
         local dst="${rest%%|*}" name="${rest##*|}"
-        [ -n "${_is_guided[$dst]+x}" ] && continue
+        _pf_set_has "$_is_guided" "$dst" && continue
         cp "$src" "$dst"
         echo "  ✅ Updated $name"
     done
@@ -1952,7 +2012,7 @@ for (const op of plan.operations) {
     for entry in ${_new_files[@]+"${_new_files[@]}"}; do
         local src="${entry%%|*}" rest="${entry#*|}"
         local dst="${rest%%|*}" name="${rest##*|}"
-        [ -n "${_is_guided[$dst]+x}" ] && continue
+        _pf_set_has "$_is_guided" "$dst" && continue
         mkdir -p "$(dirname "$dst")"
         cp "$src" "$dst"
         echo "  ✅ Added $name"
@@ -1965,7 +2025,7 @@ for (const op of plan.operations) {
     local _guided_apply=() _guard_flags=() _apply_out _res _detail
     for entry in ${_updates[@]+"${_updates[@]}"} ${_new_files[@]+"${_new_files[@]}"} ${_kept[@]+"${_kept[@]}"}; do
         _e_dst="${entry#*|}"; _e_dst="${_e_dst%%|*}"
-        [ -n "${_is_guided[$_e_dst]+x}" ] && _guided_apply+=("$entry")
+        _pf_set_has "$_is_guided" "$_e_dst" && _guided_apply+=("$entry")
     done
     if [ "${#_guided_apply[@]}" -gt 0 ]; then
         $overwrite_customized && _guard_flags+=("--overwrite-customized")
@@ -2023,22 +2083,18 @@ writeFreshCache(process.argv[1], process.argv[2]);
 
     # Check if MCP files were updated — remind to reinstall deps
     local mcp_updated=false
-    for entry in "${_updates[@]}" "${_new_files[@]}"; do
+    for entry in ${_updates[@]+"${_updates[@]}"} ${_new_files[@]+"${_new_files[@]}"}; do
         local entry_name="${entry##*|}"
         if [[ "$entry_name" == pforge-mcp/* ]]; then
             mcp_updated=true
             break
         fi
     done
+    # With --force the dependencies are installed even when no file of the package changed (#428).
+    if [ "$mcp_updated" = true ] || $force; then
+        pf_install_framework_deps "$REPO_ROOT" pforge-mcp
+    fi
     if [ "$mcp_updated" = true ]; then
-        # Auto-install MCP dependencies
-        local mcp_dir="$REPO_ROOT/pforge-mcp"
-        if [ -f "$mcp_dir/package.json" ]; then
-            echo ""
-            echo "Installing MCP dependencies..."
-            pf_npm_install "$mcp_dir" "pforge-mcp"
-        fi
-
         # Detect if MCP server is running and advise restart
         if curl -s --max-time 2 "http://localhost:3100/api/status" >/dev/null 2>&1; then
             echo ""
@@ -2051,25 +2107,20 @@ writeFreshCache(process.argv[1], process.argv[2]);
     # pforge-master declares @modelcontextprotocol/sdk + ws as runtime deps,
     # so missing node_modules breaks the forge-master-chat MCP stdio server.
     local fm_updated=false
-    for entry in "${_updates[@]}" "${_new_files[@]}"; do
+    for entry in ${_updates[@]+"${_updates[@]}"} ${_new_files[@]+"${_new_files[@]}"}; do
         local entry_name="${entry##*|}"
         if [[ "$entry_name" == pforge-master/* ]]; then
             fm_updated=true
             break
         fi
     done
-    if [ "$fm_updated" = true ]; then
-        local fm_dir="$REPO_ROOT/pforge-master"
-        if [ -f "$fm_dir/package.json" ]; then
-            echo ""
-            echo "Installing pforge-master dependencies..."
-            pf_npm_install "$fm_dir" "pforge-master"
-        fi
+    if [ "$fm_updated" = true ] || $force; then
+        pf_install_framework_deps "$REPO_ROOT" pforge-master
     fi
 
     # Check if CLI itself was updated
     local cli_updated=false
-    for entry in "${_updates[@]}" "${_new_files[@]}"; do
+    for entry in ${_updates[@]+"${_updates[@]}"} ${_new_files[@]+"${_new_files[@]}"}; do
         local entry_name="${entry##*|}"
         if [ "$entry_name" = "pforge.ps1" ] || [ "$entry_name" = "pforge.sh" ]; then
             cli_updated=true
@@ -2089,7 +2140,7 @@ writeFreshCache(process.argv[1], process.argv[2]);
     # run *did* copy them, but in pathological cases (interrupted run, partial
     # copy) a second invocation is the safest heal. Scoped to subpackage adds.
     local new_subpkg_count=0
-    for entry in "${_new_files[@]}"; do
+    for entry in ${_new_files[@]+"${_new_files[@]}"}; do
         local entry_name="${entry##*|}"
         if [[ "$entry_name" == pforge-sdk/* || "$entry_name" == pforge-master/* ]]; then
             new_subpkg_count=$((new_subpkg_count + 1))
@@ -4300,8 +4351,10 @@ cmd_run_plan() {
         local quorum_val="${quorum_arg#--quorum=}"
         local enums_cli_qm="$REPO_ROOT/pforge-mcp/bin/enums-cli.mjs"
         if command -v node >/dev/null 2>&1 && [ -f "$enums_cli_qm" ]; then
-            local valid_qmodes=()
-            mapfile -t valid_qmodes < <(node "$enums_cli_qm" --enum QUORUM_MODES 2>/dev/null)
+            local valid_qmodes=() qm_line
+            while IFS= read -r qm_line; do
+                if [ -n "$qm_line" ]; then valid_qmodes+=("$qm_line"); fi
+            done < <(node "$enums_cli_qm" --enum QUORUM_MODES 2>/dev/null)
             if [ ${#valid_qmodes[@]} -gt 0 ]; then
                 local qm_valid=false
                 for qm in "${valid_qmodes[@]}"; do

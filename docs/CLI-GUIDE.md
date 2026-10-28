@@ -15,6 +15,8 @@ The CLI is two scripts — no dependencies beyond Git and your shell:
 | **Windows / PowerShell** | `pforge.ps1` | `.\pforge.ps1 <command>` |
 | **macOS / Linux / Bash** | `pforge.sh` | `./pforge.sh <command>` |
 
+`setup.sh`, `validate-setup.sh`, `pforge.sh check` and `pforge.sh update` run in the Bash 3.2 and with the BSD tools that macOS ships, and CI runs them there. The other commands have not been run on macOS. On Windows, `setup.ps1` and `pforge.ps1 update` run in Windows PowerShell 5.1 as well as in PowerShell 7.
+
 Both scripts are copied to your project root during setup. If you ran `setup.ps1` / `setup.sh`, they're already there.
 
 **Not there?** Copy them manually from the Plan Forge template repo:
@@ -645,7 +647,8 @@ Update framework files from a Plan Forge source without re-running the full setu
 .\pforge.ps1 update --dry-run
 .\pforge.ps1 update --from-github --dry-run
 
-# Skip confirmation prompt
+# Skip the confirmation prompt, re-apply the same version, and reinstall the
+# dependencies of pforge-mcp and pforge-master even when no file changed
 .\pforge.ps1 update --force
 
 # Replace guidance files you edited too (each one is backed up first)
@@ -667,6 +670,8 @@ Update framework files from a Plan Forge source without re-running the full setu
 ./pforge.sh update --overwrite-customized
 ./pforge.sh update --from-github --keep-cache
 ```
+
+**`--force` and the dependencies**: `pforge update` installs the npm dependencies of `pforge-mcp` and `pforge-master` when it changed one of their files. With `--force` it installs them for both packages even when it changed none, which repairs a project whose `node_modules` is wrong for another reason, such as a `file:` link an older installer left or an install that failed. Without `--force`, a run with nothing to do says so when a package has no `node_modules`. `pforge update --force --yes` is what `pforge self-update` runs as its second pass. `validate-setup` warns about a `file:` dependency or a link at `node_modules/plan-forge` in either package.
 
 **`--from-github` flag** (new in v2.51.0): Downloads the release tarball directly from GitHub — no local Plan Forge clone required. Resolves the latest release tag automatically, or use `--tag <tag>` to pin a specific version. The tarball is verified (gzip magic bytes + SHA-256 audit log) and size-capped at 50 MB (configurable via `.forge.json` `update.fromGitHub.maxTarballBytes`). Honors `GITHUB_TOKEN` env var for higher API rate limits.
 

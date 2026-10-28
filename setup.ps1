@@ -1429,8 +1429,10 @@ if (-not $isCustomOnly) {
             exit 1
         }
 
-        # Copy all files from preset, preserving relative paths
-        Get-ChildItem -Path $presetDir -Recurse -File | ForEach-Object {
+        # Copy all files from preset, preserving relative paths. -Force: PowerShell on macOS and Linux treats a name
+        # that starts with a dot as hidden and does not enter such a folder without it, and every file of a stack
+        # preset is under .github (#427).
+        Get-ChildItem -Path $presetDir -Recurse -File -Force | ForEach-Object {
             $relativePath = $_.FullName.Substring($presetDir.Length + 1)
             $dst = Join-Path $ProjectPath $relativePath
             Copy-WithCreate $_.FullName $dst $Force.IsPresent
@@ -1622,7 +1624,8 @@ if ($InstallExtensions) {
 Write-Host ""
 Write-Host "Step 4: Replacing placeholders" -ForegroundColor Cyan
 
-Get-ChildItem -Path $ProjectPath -Recurse -Include "*.md" -File | ForEach-Object {
+# -Force so that .github is visited on macOS and Linux, the way `find` does in setup.sh (#427).
+Get-ChildItem -Path $ProjectPath -Recurse -Force -Include "*.md" -File | ForEach-Object {
     Update-Placeholders $_.FullName $ProjectName $stackLabel
 }
 

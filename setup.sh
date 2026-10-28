@@ -104,6 +104,32 @@ list_runtime_package_files() {
     find "$1" \( -type d \( -name node_modules -o -name .forge -o -name coverage \) -prune \) -o -type f -print0 2>/dev/null
 }
 
+# The value of the first "description:" in a prompt or agent file: the text after it, minus one opening quote and
+# up to the next quote. This was `grep -oP`, which BSD grep (macOS) does not have; the failure was hidden by
+# `|| true`, so generated skill files silently got the fallback description (#427).
+frontmatter_description() {
+    awk '
+        match($0, /description:[ \t]*"?[^"]+/) {
+            value = substr($0, RSTART, RLENGTH)
+            sub(/^description:[ \t]*"?/, "", value)
+            print value
+            exit
+        }' "$1" 2>/dev/null
+}
+
+# A JSON array of the names, without their folders, of the paths it is given that exist. It is called with a glob,
+# such as "$dir"/*.prompt.md, which stays as written when nothing matches. This replaces `find -printf`, which
+# only GNU find has (#427).
+json_names() {
+    local json="" path
+    for path in "$@"; do
+        [[ -e "$path" ]] || continue
+        path="${path%/}"
+        json="${json:+$json,}\"${path##*/}\""
+    done
+    printf '[%s]' "$json"
+}
+
 replace_placeholders() {
     local file="$1"
     local name="$2"
@@ -337,7 +363,7 @@ install_claude_agent() {
 
             local desc="Plan Forge prompt"
             local got_desc
-            got_desc="$(grep -oP 'description:\s*"?\K[^"]+' "$prompt_file" 2>/dev/null | head -1)" || true
+            got_desc="$(frontmatter_description "$prompt_file")" || true
             [ -n "$got_desc" ] && desc="$got_desc"
 
             {
@@ -370,7 +396,7 @@ install_claude_agent() {
 
             local desc="Plan Forge reviewer agent"
             local got_desc
-            got_desc="$(grep -oP 'description:\s*"?\K[^"]+' "$agent_file" 2>/dev/null | head -1)" || true
+            got_desc="$(frontmatter_description "$agent_file")" || true
             [ -n "$got_desc" ] && desc="$got_desc"
 
             {
@@ -451,7 +477,7 @@ install_cursor_agent() {
             if [ ! -f "$cmd_file" ]; then
                 local desc="Plan Forge prompt"
                 local got_desc
-                got_desc="$(grep -oP 'description:\s*"?\K[^"]+' "$prompt_file" 2>/dev/null | head -1)" || true
+                got_desc="$(frontmatter_description "$prompt_file")" || true
                 [ -n "$got_desc" ] && desc="$got_desc"
                 {
                     echo "---"
@@ -477,7 +503,7 @@ install_cursor_agent() {
             if [ ! -f "$cmd_file" ]; then
                 local desc="Plan Forge reviewer"
                 local got_desc
-                got_desc="$(grep -oP 'description:\s*"?\K[^"]+' "$agent_file" 2>/dev/null | head -1)" || true
+                got_desc="$(frontmatter_description "$agent_file")" || true
                 [ -n "$got_desc" ] && desc="$got_desc"
                 {
                     echo "---"
@@ -553,7 +579,7 @@ install_windsurf_agent() {
             if [ ! -f "$wf_file" ]; then
                 local desc="Plan Forge prompt"
                 local got_desc
-                got_desc="$(grep -oP 'description:\s*"?\K[^"]+' "$prompt_file" 2>/dev/null | head -1)" || true
+                got_desc="$(frontmatter_description "$prompt_file")" || true
                 [ -n "$got_desc" ] && desc="$got_desc"
                 {
                     echo "---"
@@ -579,7 +605,7 @@ install_windsurf_agent() {
             if [ ! -f "$wf_file" ]; then
                 local desc="Plan Forge reviewer"
                 local got_desc
-                got_desc="$(grep -oP 'description:\s*"?\K[^"]+' "$agent_file" 2>/dev/null | head -1)" || true
+                got_desc="$(frontmatter_description "$agent_file")" || true
                 [ -n "$got_desc" ] && desc="$got_desc"
                 {
                     echo "---"
@@ -613,7 +639,7 @@ install_codex_agent() {
 
             local desc="Plan Forge prompt"
             local got_desc
-            got_desc="$(grep -oP 'description:\s*"?\K[^"]+' "$prompt_file" 2>/dev/null | head -1)" || true
+            got_desc="$(frontmatter_description "$prompt_file")" || true
             [ -n "$got_desc" ] && desc="$got_desc"
 
             {
@@ -644,7 +670,7 @@ install_codex_agent() {
 
             local desc="Plan Forge reviewer"
             local got_desc
-            got_desc="$(grep -oP 'description:\s*"?\K[^"]+' "$agent_file" 2>/dev/null | head -1)" || true
+            got_desc="$(frontmatter_description "$agent_file")" || true
             [ -n "$got_desc" ] && desc="$got_desc"
 
             {
@@ -742,7 +768,7 @@ install_gemini_agent() {
             if [ ! -f "$toml_file" ]; then
                 local desc="Plan Forge prompt"
                 local got_desc
-                got_desc="$(grep -oP 'description:\s*"?\K[^"]+' "$prompt_file" 2>/dev/null | head -1)" || true
+                got_desc="$(frontmatter_description "$prompt_file")" || true
                 [ -n "$got_desc" ] && desc="$got_desc"
 
                 # Strip YAML frontmatter
@@ -778,7 +804,7 @@ install_gemini_agent() {
             if [ ! -f "$toml_file" ]; then
                 local desc="Plan Forge reviewer"
                 local got_desc
-                got_desc="$(grep -oP 'description:\s*"?\K[^"]+' "$agent_file" 2>/dev/null | head -1)" || true
+                got_desc="$(frontmatter_description "$agent_file")" || true
                 [ -n "$got_desc" ] && desc="$got_desc"
 
                 local prompt_body
@@ -1245,16 +1271,19 @@ fi
 echo ""
 cyan "Step 1: Core planning files"
 
-declare -A CORE_FILES=(
-    ["docs/plans/AI-Plan-Hardening-Runbook.md"]="docs/plans/AI-Plan-Hardening-Runbook.md"
-    ["docs/plans/AI-Plan-Hardening-Runbook-Instructions.md"]="docs/plans/AI-Plan-Hardening-Runbook-Instructions.md"
-    ["docs/plans/README.md"]="docs/plans/README.md"
-    ["docs/plans/DEPLOYMENT-ROADMAP-TEMPLATE.md"]="docs/plans/DEPLOYMENT-ROADMAP.md"
-    ["docs/plans/PROJECT-PRINCIPLES-TEMPLATE.md"]="docs/plans/PROJECT-PRINCIPLES-TEMPLATE.md"
+# "source:destination" pairs, both relative. A list, not an associative array: Bash 3.2, which is what macOS
+# ships, has no `declare -A` (#427).
+CORE_FILES=(
+    "docs/plans/AI-Plan-Hardening-Runbook.md:docs/plans/AI-Plan-Hardening-Runbook.md"
+    "docs/plans/AI-Plan-Hardening-Runbook-Instructions.md:docs/plans/AI-Plan-Hardening-Runbook-Instructions.md"
+    "docs/plans/README.md:docs/plans/README.md"
+    "docs/plans/DEPLOYMENT-ROADMAP-TEMPLATE.md:docs/plans/DEPLOYMENT-ROADMAP.md"
+    "docs/plans/PROJECT-PRINCIPLES-TEMPLATE.md:docs/plans/PROJECT-PRINCIPLES-TEMPLATE.md"
 )
 
-for src_rel in "${!CORE_FILES[@]}"; do
-    dst_rel="${CORE_FILES[$src_rel]}"
+for core_pair in "${CORE_FILES[@]}"; do
+    src_rel="${core_pair%%:*}"
+    dst_rel="${core_pair#*:}"
     src="$TEMPLATE_ROOT/$src_rel"
     dst="$PROJECT_PATH/$dst_rel"
     if [[ -f "$src" ]]; then
@@ -1276,15 +1305,18 @@ cyan "Step 2: Shared instruction files"
 # The file names themselves live in pforge-mcp/preset-catalog.json (internalInstructions /
 # sharedInstructions) so this list can't drift from update-plan.mjs's instruction categories (#299).
 PRESET_CATALOG_PATH="$TEMPLATE_ROOT/pforge-mcp/preset-catalog.json"
-mapfile -t _INTERNAL_INSTRUCTIONS < <(node -p "JSON.parse(require('node:fs').readFileSync(0,'utf8')).internalInstructions.join('\n')" < "$PRESET_CATALOG_PATH")
-mapfile -t _SHARED_INSTRUCTIONS < <(node -p "JSON.parse(require('node:fs').readFileSync(0,'utf8')).sharedInstructions.join('\n')" < "$PRESET_CATALOG_PATH")
+# `while read` rather than `mapfile`, which is Bash 4.0+ and not on macOS (#427).
 SHARED_FILES=()
-for _name in "${_INTERNAL_INSTRUCTIONS[@]}"; do
-    SHARED_FILES+=(".github/instructions/$_name")
-done
-for _name in "${_SHARED_INSTRUCTIONS[@]}"; do
-    SHARED_FILES+=("presets/shared/.github/instructions/$_name:.github/instructions/$_name")
-done
+while IFS= read -r _name; do
+    if [[ -n "$_name" ]]; then SHARED_FILES+=(".github/instructions/$_name"); fi
+done < <(node -p "JSON.parse(require('node:fs').readFileSync(0,'utf8')).internalInstructions.join('\n')" < "$PRESET_CATALOG_PATH")
+while IFS= read -r _name; do
+    if [[ -n "$_name" ]]; then SHARED_FILES+=("presets/shared/.github/instructions/$_name:.github/instructions/$_name"); fi
+done < <(node -p "JSON.parse(require('node:fs').readFileSync(0,'utf8')).sharedInstructions.join('\n')" < "$PRESET_CATALOG_PATH")
+if [[ "${#SHARED_FILES[@]}" -eq 0 ]]; then
+    red "  ERROR  Could not read the instruction file lists from $PRESET_CATALOG_PATH"
+    exit 1
+fi
 # project-principles.instructions.md is a pure template, not a shipped instruction file,
 # so it isn't part of preset-catalog.json's internal/shared lists.
 SHARED_FILES+=("templates/.github/instructions/project-principles.instructions.md:.github/instructions/project-principles.instructions.md")
@@ -1546,29 +1578,11 @@ green "  CREATED  docs/plans/auto/"
 CAPABILITIES_PATH="$PROJECT_PATH/.forge/capabilities.json"
 mkdir -p "$(dirname "$CAPABILITIES_PATH")"
 
-PROMPT_LIST="[]"
-if [[ -d "$PROJECT_PATH/.github/prompts" ]]; then
-    PROMPT_LIST=$(find "$PROJECT_PATH/.github/prompts" -maxdepth 1 -name "*.prompt.md" -printf '"%f",' 2>/dev/null | sed 's/,$//' | awk '{print "["$0"]"}')
-    [[ "$PROMPT_LIST" == "[]" ]] || true
-fi
-
-AGENT_LIST="[]"
-if [[ -d "$PROJECT_PATH/.github/agents" ]]; then
-    AGENT_LIST=$(find "$PROJECT_PATH/.github/agents" -maxdepth 1 -name "*.agent.md" -printf '"%f",' 2>/dev/null | sed 's/,$//' | awk '{print "["$0"]"}')
-    [[ "$AGENT_LIST" == "[]" ]] || true
-fi
-
-SKILL_LIST="[]"
-if [[ -d "$PROJECT_PATH/.github/skills" ]]; then
-    SKILL_LIST=$(find "$PROJECT_PATH/.github/skills" -mindepth 1 -maxdepth 1 -type d -printf '"%f",' 2>/dev/null | sed 's/,$//' | awk '{print "["$0"]"}')
-    [[ "$SKILL_LIST" == "[]" ]] || true
-fi
-
-INSTR_LIST="[]"
-if [[ -d "$PROJECT_PATH/.github/instructions" ]]; then
-    INSTR_LIST=$(find "$PROJECT_PATH/.github/instructions" -maxdepth 1 -name "*.instructions.md" -printf '"%f",' 2>/dev/null | sed 's/,$//' | awk '{print "["$0"]"}')
-    [[ "$INSTR_LIST" == "[]" ]] || true
-fi
+# Names only. This was `find -printf`, which BSD find (macOS) does not have; with set -e and pipefail the failure
+# ended setup without a word (#427). AGENT_LIST was built here too, but nothing read it.
+PROMPT_LIST="$(json_names "$PROJECT_PATH"/.github/prompts/*.prompt.md)"
+SKILL_LIST="$(json_names "$PROJECT_PATH"/.github/skills/*/)"
+INSTR_LIST="$(json_names "$PROJECT_PATH"/.github/instructions/*.instructions.md)"
 
 cat > "$CAPABILITIES_PATH" <<EOF
 {

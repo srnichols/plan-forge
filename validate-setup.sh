@@ -384,6 +384,25 @@ else
     WARN=$((WARN+1))
 fi
 
+# A file: dependency in a framework package, and the link it leaves in node_modules, come from an older installer that
+# ran `npm install --prefix` from a directory with its own package.json (#422). Nothing in Plan Forge depends on a
+# folder outside the package, and `pforge update --force` installs the shipped dependencies, which removes both (#428).
+for FRAMEWORK_PACKAGE in pforge-mcp pforge-master; do
+    FRAMEWORK_MANIFEST="$PROJECT_PATH/$FRAMEWORK_PACKAGE/package.json"
+    [[ -f "$FRAMEWORK_MANIFEST" ]] || continue
+    LEFT_BEHIND=""
+    if grep -qE '"[^"]+"[[:space:]]*:[[:space:]]*"(file|link):' "$FRAMEWORK_MANIFEST"; then
+        LEFT_BEHIND="package.json has a file: dependency"
+    fi
+    if [[ -L "$PROJECT_PATH/$FRAMEWORK_PACKAGE/node_modules/plan-forge" ]]; then
+        LEFT_BEHIND="${LEFT_BEHIND:+$LEFT_BEHIND; }node_modules/plan-forge is a link to another folder"
+    fi
+    if [[ -n "$LEFT_BEHIND" ]]; then
+        yellow "  WARN  ${FRAMEWORK_PACKAGE}: ${LEFT_BEHIND}, left by an older installer. Run 'pforge update --force' to repair it"
+        WARN=$((WARN+1))
+    fi
+done
+
 # pforge-sdk (shared helper library — NO runtime deps, imported via
 # relative paths from pforge-mcp; missing files crash opt-in features)
 if [[ -f "$PROJECT_PATH/pforge-sdk/src/client.mjs" ]]; then

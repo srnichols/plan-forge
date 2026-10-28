@@ -408,6 +408,31 @@ else {
     $warn++
 }
 
+# A file: dependency in a framework package, and the link it leaves in node_modules, come from an older installer that
+# ran `npm install --prefix` from a directory with its own package.json (#422). Nothing in Plan Forge depends on a
+# folder outside the package, and `pforge update --force` installs the shipped dependencies, which removes both (#428).
+foreach ($frameworkPackage in @('pforge-mcp', 'pforge-master')) {
+    $frameworkDir = Join-Path $ProjectPath $frameworkPackage
+    $frameworkManifest = Join-Path $frameworkDir "package.json"
+    if (-not (Test-Path $frameworkManifest)) { continue }
+    $leftBehind = @()
+    try { $manifest = Get-Content $frameworkManifest -Raw | ConvertFrom-Json } catch { $manifest = $null }
+    foreach ($section in @('dependencies', 'devDependencies', 'optionalDependencies')) {
+        if ($manifest -and $manifest.$section) {
+            foreach ($dependency in $manifest.$section.PSObject.Properties) {
+                if ("$($dependency.Value)" -match '^(file|link):') { $leftBehind += "depends on $($dependency.Name) at $($dependency.Value)" }
+            }
+        }
+    }
+    $stalePath = Join-Path $frameworkDir "node_modules/plan-forge"
+    $staleItem = Get-Item -LiteralPath $stalePath -Force -ErrorAction SilentlyContinue
+    if ($staleItem -and $staleItem.LinkType) { $leftBehind += "node_modules/plan-forge is a link to another folder" }
+    if ($leftBehind.Count -gt 0) {
+        Write-Host "  WARN  ${frameworkPackage}: $($leftBehind -join '; '), left by an older installer. Run 'pforge update --force' to repair it" -ForegroundColor Yellow
+        $warn++
+    }
+}
+
 # pforge-sdk (shared helper library — NO runtime deps, imported via
 # relative paths from pforge-mcp; missing files crash opt-in features)
 $sdkClientPath = Join-Path $ProjectPath "pforge-sdk/src/client.mjs"

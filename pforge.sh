@@ -156,6 +156,31 @@ pf_npm_install() {
     rm -f "$log"
 }
 
+# Installs the dependencies of one framework package (pforge-mcp or pforge-master) in a project, when it has a
+# package.json. Update runs it for a package whose files it changed, and with --force for both even when it
+# changed none. It used to return before the install whenever every file was current, so a project whose
+# dependencies were wrong for another reason, such as a file: link an older installer left or an install that
+# failed, was never repaired. Self-update's second pass runs with --force, so it could not repair it either (#428).
+pf_install_framework_deps() {
+    local root="$1" pkg="$2" heading="$2"
+    [[ -f "$root/$pkg/package.json" ]] || return 0
+    if [[ "$pkg" == pforge-mcp ]]; then heading="MCP"; fi
+    echo ""
+    echo "Installing $heading dependencies..."
+    pf_npm_install "$root/$pkg" "$pkg"
+}
+
+# A framework package that has a package.json and no node_modules is what a failed install leaves behind. Update
+# does not install when nothing changed, so it says how to.
+pf_hint_missing_framework_deps() {
+    local root="$1" pkg
+    for pkg in pforge-mcp pforge-master; do
+        if [[ -f "$root/$pkg/package.json" && ! -d "$root/$pkg/node_modules" ]]; then
+            echo "  ⚠️  $pkg has no node_modules. Run 'pforge update --force' to install it, or: cd $pkg && npm install"
+        fi
+    done
+}
+
 show_help() {
     cat <<'EOF'
 
@@ -176,7 +201,7 @@ COMMANDS:
   ext remove <name> Remove an installed extension
   ext publish <p>   Validate and generate catalog entry for publishing
   update [source]   Update framework files from Plan Forge source (keeps guidance files you edited)
-                      Flags: --dry-run, --yes/-y (no prompt), --force (no prompt; re-apply the same version), --overwrite-customized (replace edited guidance; backups kept)
+                      Flags: --dry-run, --yes/-y (no prompt), --force (no prompt; re-apply the same version and reinstall dependencies), --overwrite-customized (replace edited guidance; backups kept)
   self-update       Check for and install the latest Plan Forge release from GitHub
                       Flags: --force (heal), --downgrade (with --force), --yes/-y, --dry-run, --verify (run check + smith after),
                              --overwrite-customized
@@ -1647,7 +1672,7 @@ cmd_update() {
                 for arg in "$@"; do
                     [ "$arg" = "--from-github" ] || filtered_args+=("$arg")
                 done
-                cmd_update "${filtered_args[@]}" "--from-github"
+                cmd_update ${filtered_args[@]+"${filtered_args[@]}"} "--from-github"
                 return $?
             fi
         fi
@@ -1736,6 +1761,7 @@ cmd_update() {
 
     if [ "$current_version" = "$source_version" ] && ! $force; then
         echo "Already up to date (v$current_version). Use --force to re-apply."
+        pf_hint_missing_framework_deps "$REPO_ROOT"
         $dry_run || _pf_migrate_forge_config "$REPO_ROOT" "$source_path"
         _pf_gh_cleanup
         return 0
@@ -1917,6 +1943,12 @@ for (const op of plan.operations) {
         # Nothing to copy means the release is installed; self-update reads this.
         $dry_run || _PF_UPDATE_APPLIED=1
         $dry_run || _pf_migrate_forge_config "$REPO_ROOT" "$source_path"
+        # The dependencies are installed with --force even though no file changed (#428). Without it, update returned
+        # above, where the missing-dependency hint is printed.
+        if $force && ! $dry_run; then
+            pf_install_framework_deps "$REPO_ROOT" pforge-mcp
+            pf_install_framework_deps "$REPO_ROOT" pforge-master
+        fi
         _pf_gh_cleanup
         return 0
     fi
@@ -2049,22 +2081,18 @@ writeFreshCache(process.argv[1], process.argv[2]);
 
     # Check if MCP files were updated — remind to reinstall deps
     local mcp_updated=false
-    for entry in "${_updates[@]}" "${_new_files[@]}"; do
+    for entry in ${_updates[@]+"${_updates[@]}"} ${_new_files[@]+"${_new_files[@]}"}; do
         local entry_name="${entry##*|}"
         if [[ "$entry_name" == pforge-mcp/* ]]; then
             mcp_updated=true
             break
         fi
     done
+    # With --force the dependencies are installed even when no file of the package changed (#428).
+    if [ "$mcp_updated" = true ] || $force; then
+        pf_install_framework_deps "$REPO_ROOT" pforge-mcp
+    fi
     if [ "$mcp_updated" = true ]; then
-        # Auto-install MCP dependencies
-        local mcp_dir="$REPO_ROOT/pforge-mcp"
-        if [ -f "$mcp_dir/package.json" ]; then
-            echo ""
-            echo "Installing MCP dependencies..."
-            pf_npm_install "$mcp_dir" "pforge-mcp"
-        fi
-
         # Detect if MCP server is running and advise restart
         if curl -s --max-time 2 "http://localhost:3100/api/status" >/dev/null 2>&1; then
             echo ""
@@ -2077,25 +2105,20 @@ writeFreshCache(process.argv[1], process.argv[2]);
     # pforge-master declares @modelcontextprotocol/sdk + ws as runtime deps,
     # so missing node_modules breaks the forge-master-chat MCP stdio server.
     local fm_updated=false
-    for entry in "${_updates[@]}" "${_new_files[@]}"; do
+    for entry in ${_updates[@]+"${_updates[@]}"} ${_new_files[@]+"${_new_files[@]}"}; do
         local entry_name="${entry##*|}"
         if [[ "$entry_name" == pforge-master/* ]]; then
             fm_updated=true
             break
         fi
     done
-    if [ "$fm_updated" = true ]; then
-        local fm_dir="$REPO_ROOT/pforge-master"
-        if [ -f "$fm_dir/package.json" ]; then
-            echo ""
-            echo "Installing pforge-master dependencies..."
-            pf_npm_install "$fm_dir" "pforge-master"
-        fi
+    if [ "$fm_updated" = true ] || $force; then
+        pf_install_framework_deps "$REPO_ROOT" pforge-master
     fi
 
     # Check if CLI itself was updated
     local cli_updated=false
-    for entry in "${_updates[@]}" "${_new_files[@]}"; do
+    for entry in ${_updates[@]+"${_updates[@]}"} ${_new_files[@]+"${_new_files[@]}"}; do
         local entry_name="${entry##*|}"
         if [ "$entry_name" = "pforge.ps1" ] || [ "$entry_name" = "pforge.sh" ]; then
             cli_updated=true
@@ -2115,7 +2138,7 @@ writeFreshCache(process.argv[1], process.argv[2]);
     # run *did* copy them, but in pathological cases (interrupted run, partial
     # copy) a second invocation is the safest heal. Scoped to subpackage adds.
     local new_subpkg_count=0
-    for entry in "${_new_files[@]}"; do
+    for entry in ${_new_files[@]+"${_new_files[@]}"}; do
         local entry_name="${entry##*|}"
         if [[ "$entry_name" == pforge-sdk/* || "$entry_name" == pforge-master/* ]]; then
             new_subpkg_count=$((new_subpkg_count + 1))

@@ -238,6 +238,12 @@ describe("scripts/check-installed-text.mjs", () => {
     put("pforge-mcp/node_modules/dep/index.js", Buffer.from([0x97]));
     expect(checkInstalledText(project)).toEqual([]);
   });
+
+  it("does not pass a directory that holds no files, such as a wrong path", () => {
+    const problems = checkInstalledText(tempDir("pf-meta-417-empty-"));
+    expect(problems).toHaveLength(1);
+    expect(problems[0]).toContain("no files");
+  });
 });
 
 describe.skipIf(!isWin)("setup.ps1 run by Windows PowerShell 5.1", () => {

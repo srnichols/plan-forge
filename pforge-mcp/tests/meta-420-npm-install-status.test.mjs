@@ -138,6 +138,7 @@ function runPs({ exe, file, mode, throwing = false, real = null }) {
     extractPsFunction(SCRIPTS[file], "Install-NpmDependencies"),
     throwing ? "function npm { throw 'npm is not installed' }" : "",
     `Install-NpmDependencies '${packageDir}' 'pforge-master'`,
+    "Write-Output \"CWD=$((Get-Location).Path)\"",
     "Write-Output 'AFTER'",
   ].join("\n")}\n`);
   const env = real ? { ...process.env, ...REAL_NPM_ENV } : envWithStub(stub, { STUB_NPM_MODE: mode, STUB_NPM_LOG: log });
@@ -256,6 +257,8 @@ function expectInstalledInPlace(run, dirs, manifestBefore) {
   expect(existsSync(join(dirs.pkg, "node_modules", "host-app")), "a link to the directory the script ran from").toBe(false);
 }
 
+const samePath = (a, b) => a.replace(/\\/g, "/").toLowerCase() === b.replace(/\\/g, "/").toLowerCase();
+
 describe.each(PS_SHELLS)("PowerShell helper in $name, with real npm", ({ exe }) => {
   it.each([
     ["setup.ps1", "host", "a project that has a package.json of its own"],
@@ -267,6 +270,8 @@ describe.each(PS_SHELLS)("PowerShell helper in $name, with real npm", ({ exe }) 
     const before = readFileSync(join(dirs.pkg, "package.json"), "utf8");
     const run = runPs({ exe, file, real: { packageDir: dirs.pkg, cwd: dirs[from] } });
     expectInstalledInPlace(run, dirs, before);
+    const after = /^CWD=(.*)$/m.exec(run.out)?.[1]?.trim();
+    expect(samePath(after ?? "", dirs[from]), `the caller is left in ${after}, not where it started`).toBe(true);
   }, 180_000);
 });
 

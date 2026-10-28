@@ -408,8 +408,9 @@ const generated =
   "window.GLOSSARY_TERMS = " + JSON.stringify(terms, null, 2) + ";\n" +
   "window.GLOSSARY_TERM_OPTS = { skip: " + JSON.stringify(SKIP_TERMS) + " };\n";
 
+// A Windows checkout (core.autocrlf) gives tracked files CRLF line endings; the generated text has LF.
 const existingTerms = fs.existsSync(glossaryTermsPath)
-  ? fs.readFileSync(glossaryTermsPath, "utf8")
+  ? fs.readFileSync(glossaryTermsPath, "utf8").replace(/\r\n/g, "\n")
   : null;
 
 if (existingTerms === generated) {

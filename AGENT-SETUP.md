@@ -4,7 +4,7 @@
 >
 > **This file is your entry point.** Read it top-to-bottom, then execute the appropriate path.
 >
-> **What you get** *(v3.5.1)*: **88 MCP tools** (Core + LiveGuard + Watcher + Crucible + Tempering + Bug Registry + Testbed + Forge-Master + Lattice + Sync + Memory + Notify + Doctor), **57 CLI commands**, ~17 instruction files, ~12 reviewer agents (pipeline + stack-specific), 16+ skills, **103+ REST endpoints**, live dashboard (37 tabs across 4 groups), audit drain loop, Hallmark-stamped memory across L1/L2/L3, Anvil dedup cache, Lattice code-graph, Copilot Memory bridge (`forge_sync_memories`), self-recursive intelligence (the system gets smarter every run), OpenBrain persistent memory integration. Call `forge_capabilities` for full discovery.
+> **What you get**: the MCP tools (Core + LiveGuard + Watcher + Crucible + Tempering + Bug Registry + Testbed + Forge-Master + Lattice + Sync + Memory + Notify + Doctor), CLI commands, instruction files, reviewer agents (pipeline + stack-specific), skills, REST endpoints, a live dashboard, audit drain loop, Hallmark-stamped memory across L1/L2/L3, Anvil dedup cache, Lattice code-graph, Copilot Memory bridge (`forge_sync_memories`), self-recursive intelligence (the system gets smarter every run), OpenBrain persistent memory integration. Call `forge_capabilities` for the current counts and full discovery.
 
 ---
 
@@ -121,7 +121,7 @@ See [docs/plans/examples/plan-forge-validate.yml](docs/plans/examples/plan-forge
 ```bash
 cd pforge-mcp && npm install
 ```
-This enables 36 forge tools (`forge_smith`, `forge_sweep`, `forge_diff`, `forge_analyze`, `forge_diagnose`, `forge_run_plan`, `forge_cost_report`, `forge_capabilities`, `forge_watch`, `forge_watch_live`, etc.) as native MCP functions. The setup script already generated `.vscode/mcp.json` and `.claude/mcp.json` configs — `npm install` is the only manual step.
+This enables the `forge_*` tools (`forge_smith`, `forge_sweep`, `forge_diff`, `forge_analyze`, `forge_diagnose`, `forge_run_plan`, `forge_cost_report`, `forge_capabilities`, `forge_watch`, `forge_watch_live`, etc.) as native MCP functions. The setup script already generated `.vscode/mcp.json` and `.claude/mcp.json` configs — `npm install` is the only manual step.
 
 **Copilot cloud agent setup** — If the target project will be worked on by the Copilot cloud agent (GitHub Issues → automated PR), add the environment setup file:
 ```bash

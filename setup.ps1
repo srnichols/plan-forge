@@ -199,6 +199,37 @@ function Update-PlanForgeGitignore([string]$RepoRoot) {
     }
 }
 
+# ─── Closing Next Steps ────────────────────────────────────────────────
+# A step is printed only when the file it names is in the project. A preset that installs fewer files
+# (`custom` has no AGENTS.md, prompts, agents or skills) would otherwise send the reader to files that
+# were never created. Twin of pf_setup_next_steps in setup.sh.
+function Select-ExistingPointers([string]$ProjectPath, [object[]]$Pointers) {
+    @($Pointers | Where-Object { Test-Path -LiteralPath (Join-Path $ProjectPath $_.Path) } | ForEach-Object { $_.Text })
+}
+
+function Get-SetupNextSteps([string]$ProjectPath) {
+    $steps = @(Select-ExistingPointers $ProjectPath @(
+        @{ Path = '.github/copilot-instructions.md'; Text = 'Review .github/copilot-instructions.md — fill in project-specific details' },
+        @{ Path = 'AGENTS.md'; Text = 'Review AGENTS.md — customize worker patterns for your app' },
+        @{ Path = '.vscode/settings.json'; Text = 'Review .vscode/settings.json — uncomment instruction file references' },
+        @{ Path = '.github/prompts'; Text = 'Review .github/prompts/ — customize scaffolding recipes for your conventions' },
+        @{ Path = '.github/agents'; Text = 'Review .github/agents/ — tailor reviewer checklists for your project' },
+        @{ Path = '.github/skills'; Text = 'Review .github/skills/ — update build/deploy commands for your CI/CD' },
+        @{ Path = 'docs/plans/DEPLOYMENT-ROADMAP.md'; Text = 'Review docs/plans/DEPLOYMENT-ROADMAP.md — add your phases' },
+        @{ Path = 'docs/COPILOT-VSCODE-GUIDE.md'; Text = 'Read docs/COPILOT-VSCODE-GUIDE.md for Copilot Agent Mode workflow' },
+        @{ Path = 'docs/plans/AI-Plan-Hardening-Runbook-Instructions.md'; Text = 'Start planning: open docs/plans/AI-Plan-Hardening-Runbook-Instructions.md' }
+    ))
+    for ($i = 0; $i -lt $steps.Count; $i++) { "  $($i + 1). $($steps[$i])" }
+}
+
+function Get-SetupOptionalSteps([string]$ProjectPath) {
+    Select-ExistingPointers $ProjectPath @(
+        @{ Path = '.github/prompts/project-profile.prompt.md'; Text = 'Run .github/prompts/project-profile.prompt.md to generate project-specific guardrails' },
+        @{ Path = '.github/prompts/project-principles.prompt.md'; Text = 'Run .github/prompts/project-principles.prompt.md to define project principles' },
+        @{ Path = '.github/prompts/step0-specify-feature.prompt.md'; Text = 'Use .github/prompts/step0-specify-feature.prompt.md to define your first feature' }
+    ) | ForEach-Object { "  - $_" }
+}
+
 # ─── Agent Adapter: Claude Code ────────────────────────────────────────
 function Install-ClaudeAgent([string]$TargetPath) {
     Write-Host "  Installing Claude Code files..." -ForegroundColor DarkCyan
@@ -1905,20 +1936,10 @@ Write-Host ""
 Write-Host "Files installed to: $ProjectPath" -ForegroundColor Cyan
 Write-Host ""
 Write-Host "Next steps:" -ForegroundColor Yellow
-Write-Host "  1. Review .github/copilot-instructions.md — fill in project-specific details"
-Write-Host "  2. Review AGENTS.md — customize worker patterns for your app"
-Write-Host "  3. Review .vscode/settings.json — uncomment instruction file references"
-Write-Host "  4. Review .github/prompts/ — customize scaffolding recipes for your conventions"
-Write-Host "  5. Review .github/agents/ — tailor reviewer checklists for your project"
-Write-Host "  6. Review .github/skills/ — update build/deploy commands for your CI/CD"
-Write-Host "  7. Review docs/plans/DEPLOYMENT-ROADMAP.md — add your phases"
-Write-Host "  8. Read docs/COPILOT-VSCODE-GUIDE.md for Copilot Agent Mode workflow"
-Write-Host "  9. Start planning: open docs/plans/AI-Plan-Hardening-Runbook-Instructions.md"
+Get-SetupNextSteps $ProjectPath | ForEach-Object { Write-Host $_ }
 Write-Host ""
 Write-Host "Optional (recommended):" -ForegroundColor Yellow
-Write-Host "  - Run .github/prompts/project-profile.prompt.md to generate project-specific guardrails"
-Write-Host "  - Run .github/prompts/project-principles.prompt.md to define project principles"
-Write-Host "  - Use .github/prompts/step0-specify-feature.prompt.md to define your first feature"
+Get-SetupOptionalSteps $ProjectPath | ForEach-Object { Write-Host $_ }
 Write-Host "  - Start your first plan the Crucible way: call forge_crucible_submit (MCP) — every plan ships with a crucibleId for full traceability" -ForegroundColor DarkCyan
 Write-Host "  - On GitHub? Run 'pforge github status' for a GitHub-native readiness check, or read /manual/plan-forge-on-the-github-stack.html" -ForegroundColor DarkCyan
 Write-Host ""

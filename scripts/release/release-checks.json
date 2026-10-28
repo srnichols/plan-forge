@@ -158,6 +158,12 @@
     { "label": "pforge analyze credits the slices of a plan that has no criteria to trace, PowerShell (#408) (3.35.1)", "path": "pforge.ps1", "contains": "if ($allCriteria.Count -eq 0 -and $scoreTrace -eq 0) { $scoreTrace = 10 }" },
     { "label": "The manual's tool count is checked against the tool registry (#406) (3.35.1)", "path": "pforge-mcp/tests/meta-406-manual-counts.test.mjs", "contains": "in step with the tool registry (#406)" },
     { "label": "ship.mjs names a missing release worktree (#410) (3.35.1)", "path": "pforge-mcp/tests/release-ship.test.mjs", "contains": "release worktree not found" },
-    { "label": "The MCP lock pins the patched qs (3.35.1)", "path": "pforge-mcp/package-lock.json", "contains": "qs-6.16.1.tgz" }
+    { "label": "The MCP lock pins the patched qs (3.35.1)", "path": "pforge-mcp/package-lock.json", "contains": "qs-6.16.1.tgz" },
+    { "label": "Shipped instructions and pages are checked for a stale tool count (#413) (3.35.2)", "path": "pforge-mcp/tests/meta-413-tool-count-claims.test.mjs", "contains": "the tool count scan finds what it is meant to" },
+    { "label": "The manual audit reads a tree with Windows line endings (3.35.2)", "path": "pforge-mcp/tests/meta-406-manual-counts.test.mjs", "contains": "audits clean on a tree whose files have the CRLF line endings of a Windows checkout" },
+    { "label": "A lockfile that resolves from a private mirror is caught (#414) (3.35.2)", "path": "pforge-mcp/tests/meta-414-lockfile-registry.test.mjs", "contains": "scripts/lock-registry.mjs on the command line" },
+    { "label": "The MCP lock pins zod 4.6.7, past GHSA-mrhx-c7xc-m3w5 (3.35.2)", "path": "pforge-mcp/package-lock.json", "contains": "zod-4.6.7.tgz" },
+    { "label": "The REST API does not inflate a compressed request body (GHSA-27r3-jxmh-p828) (3.35.2)", "path": "pforge-mcp/server/rest-api.mjs", "contains": "express.json({ inflate: false })" },
+    { "label": "The installers' closing steps name only files the project has (3.35.2)", "path": "pforge-mcp/tests/setup-next-steps.test.mjs", "contains": "points a custom install only at the files it has" }
   ]
 }

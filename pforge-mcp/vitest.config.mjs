@@ -75,6 +75,10 @@ const SOURCE_ONLY_SUITES = {
     "tests/meta-400-setup-ps1-package-filter.test.mjs",
     "tests/meta-346-setup-sh-package-filter.test.mjs",
     "tests/meta-406-manual-counts.test.mjs",
+    "tests/meta-413-tool-count-claims.test.mjs",
+    "tests/meta-414-lockfile-registry.test.mjs",
+    "tests/dependency-advisory-floors.test.mjs",
+    "tests/setup-next-steps.test.mjs",
   ],
   "../.github/instructions/release-checklist.instructions.md": [
     "tests/consumer-test-surface.test.mjs",

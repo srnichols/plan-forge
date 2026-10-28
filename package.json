@@ -26,5 +26,8 @@
     "jscpd": "^4",
     "madge": "^7",
     "tailwindcss": "^3.4.0"
+  },
+  "overrides": {
+    "zod": "^4.6.6"
   }
 }

@@ -14,6 +14,7 @@
 - [ ] Regenerate the shipped-guidance index after the last change to any instruction, prompt, agent, skill, hook, preset, template or runbook file: `node scripts\build-shipped-guidance-hashes.mjs`, then `node scripts\build-shipped-guidance-hashes.mjs --check`. Commit `pforge-mcp/shipped-guidance-hashes.json`. `pforge update` treats a project file whose content is not in this index as customized and keeps it, so a stale index makes the next update report unmodified files as `KEEP`.
 - [ ] Working tree clean OR all staged changes belong to this release.
 - [ ] Audit both the root workspace lock and the standalone `pforge-mcp` lock. Run a fresh standalone install when either changes; root-workspace success alone does not validate the dependency set consumers install. Review findings rather than treating `npm install` exit 0 as a clean security audit.
+- [ ] After any change to a lockfile, run `node scripts/lock-registry.mjs`; it must say every lockfile resolves only from the public registry. npm writes the registry it asked into each `resolved` URL, so a lock made behind a package mirror makes `npm ci` fail for everyone outside the mirror's network (#414). `--write` rewrites a mirror's URL for a tarball to the public one and changes nothing else; `integrity` stays as npm recorded it, and nothing here compares it with the public registry, so read the lock diff (`npm install` has also dropped `"peer": true` from entries nobody touched). Prefer `npm update <package>` to `npm audit fix`, which moves packages you did not mean to touch. The **Lockfile Registry** workflow runs the same check on a change to a lockfile.
 
 ---
 
@@ -438,6 +439,7 @@ If a user genuinely wants the older release (e.g. their local v2.96.0 is corrupt
 [ ] §0  Tests pass on touched suites; baseline failures noted
 [ ] §0  No formatter regressions in diff
 [ ] §0  Both workspace and standalone MCP dependency audits reviewed; changed locks installed and tested
+[ ] §0  `node scripts/lock-registry.mjs` says every lockfile resolves only from the public registry
 [ ] §0  If docs CSS was changed: `npm run build:css` run and `docs/assets/tailwind.built.css.sha256` committed
 [ ] §1a Hooks mirrored (.github/hooks/ ⊆ templates/.github/hooks/)
 [ ] §1b Every instruction file enumerated in setup.{ps1,sh} + pforge.{ps1,sh}

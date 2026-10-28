@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
     Plan Forge — Project Setup Wizard
 
@@ -61,6 +61,12 @@ param(
 $ErrorActionPreference = 'Stop'
 $templateRoot = $PSScriptRoot
 
+# Every file this script reads is UTF-8. Windows PowerShell 5.1 reads a file with no byte order mark in the
+# system code page unless told otherwise, and PowerShell 7 already reads UTF-8, so this changes nothing there
+# (#417). It is a copy, so the caller's own defaults are left alone.
+$PSDefaultParameterValues = @{} + $PSDefaultParameterValues
+$PSDefaultParameterValues['Get-Content:Encoding'] = 'UTF8'
+
 # ─── Helpers ───────────────────────────────────────────────────────────
 function Write-Banner {
     Write-Host ""
@@ -116,6 +122,47 @@ function Test-RuntimePackageFile([System.IO.FileInfo]$File, [string]$SourceDir) 
     return $relative -notmatch '(^|/)(node_modules|\.forge|coverage)/'
 }
 
+# Text goes to disk as UTF-8 without a byte order mark in every PowerShell. Set-Content and Add-Content with no
+# -Encoding write the system code page in Windows PowerShell 5.1, which wrote an em dash as byte 0x97 and an
+# arrow as "?", and its -Encoding UTF8 adds a BOM, which Node's JSON.parse rejects (#417). These write what
+# PowerShell 7's Set-Content and Add-Content do: UTF-8, and a newline after the value unless -NoNewline.
+function Write-Utf8File([string]$Path, $Value, [switch]$NoNewline) {
+    $text = if ($null -eq $Value) { '' } elseif ($Value -is [array]) { $Value -join [Environment]::NewLine } else { [string]$Value }
+    if (-not $NoNewline -and $null -ne $Value) { $text += [Environment]::NewLine }
+    $full = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($Path)
+    [System.IO.File]::WriteAllText($full, $text, (New-Object System.Text.UTF8Encoding $false))
+}
+
+function Add-Utf8Content([string]$Path, [string]$Value) {
+    $full = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($Path)
+    [System.IO.File]::AppendAllText($full, $Value + [Environment]::NewLine, (New-Object System.Text.UTF8Encoding $false))
+}
+
+# Runs `npm install` for a package and says what happened. A native command's non-zero exit does not throw, so
+# the try/catch this replaces reported every failed install as complete (#420). The status is read from
+# $LASTEXITCODE, and the end of npm's own output says why it failed. Under 'Stop', Windows PowerShell 5.1 turns
+# the first line a native command writes to stderr into a terminating error, which would report an install
+# that only warned as failed and keep all but one line of the reason, so npm runs under 'Continue' here.
+function Install-NpmDependencies([string]$PackageDir, [string]$Label) {
+    $ErrorActionPreference = 'Continue'
+    $output = @()
+    $exitCode = 0
+    $global:LASTEXITCODE = 0
+    try {
+        $output = @(& npm install --loglevel=error --prefix $PackageDir 2>&1)
+        $exitCode = $LASTEXITCODE
+    } catch {
+        $output = @($_.Exception.Message)
+        $exitCode = 1
+    }
+    if ($exitCode -eq 0) {
+        Write-Host "  ✅ npm install complete" -ForegroundColor Green
+        return
+    }
+    Write-Host "  ⚠️  npm install failed (exit $exitCode) — run manually: cd $Label && npm install" -ForegroundColor Yellow
+    foreach ($line in @($output | Select-Object -Last 8)) { Write-Host "     $line" -ForegroundColor DarkGray }
+}
+
 function Update-Placeholders([string]$FilePath, [string]$Name, [string]$Stack) {
     if (-not (Test-Path $FilePath)) { return }
     $content = Get-Content $FilePath -Raw
@@ -126,7 +173,7 @@ function Update-Placeholders([string]$FilePath, [string]$Name, [string]$Stack) {
     $content = $content -replace '<YOUR LINT COMMAND>', $LintCmd
     $content = $content -replace '<YOUR DEV COMMAND>', ''
     $content = $content -replace '<DATE>', (Get-Date -Format 'yyyy-MM-dd')
-    Set-Content -Path $FilePath -Value $content -NoNewline
+    Write-Utf8File $FilePath $content -NoNewline
 }
 
 # ─── .gitignore Manager (Issue #211) ───────────────────────────────────
@@ -161,18 +208,18 @@ function Update-PlanForgeGitignore([string]$RepoRoot) {
             # Script-block replacement avoids needing to escape $ / \ in $managedBody.
             $updated = [regex]::Replace($content, $pattern, { param($m) $managedBody })
             if ($updated -ne $content) {
-                Set-Content -Path $gitignorePath -Value $updated -NoNewline
+                Write-Utf8File $gitignorePath $updated -NoNewline
                 Write-Host "  ✅ Refreshed plan-forge managed block in .gitignore" -ForegroundColor Green
             } else {
                 Write-Host "  ✓ .gitignore plan-forge block already current" -ForegroundColor DarkGray
             }
         } else {
             $separator = if ($content.Length -eq 0 -or $content.EndsWith("`n")) { "" } else { $nl }
-            Add-Content -Path $gitignorePath -Value ($separator + $nl + $managedBody)
+            Add-Utf8Content $gitignorePath ($separator + $nl + $managedBody)
             Write-Host "  ✅ Appended plan-forge managed block to .gitignore" -ForegroundColor Green
         }
     } else {
-        Set-Content -Path $gitignorePath -Value $managedBody
+        Write-Utf8File $gitignorePath $managedBody
         Write-Host "  ✅ Created .gitignore with plan-forge managed block" -ForegroundColor Green
     }
 
@@ -295,7 +342,7 @@ function Install-ClaudeAgent([string]$TargetPath) {
             }
         }
 
-        Set-Content -Path $claudeCtx -Value $sb.ToString()
+        Write-Utf8File $claudeCtx ($sb.ToString())
         Write-Host "  CREATE CLAUDE.md (project context + guardrails)" -ForegroundColor Green
     }
 
@@ -331,7 +378,7 @@ argument-hint: "Provide context or parameters for this prompt"
 
 $srcContent
 "@
-            Set-Content -Path $skillFile -Value $skillContent
+            Write-Utf8File $skillFile $skillContent
             Write-Host "  CREATE .claude/skills/planforge-$name/SKILL.md" -ForegroundColor Green
         }
     }
@@ -367,7 +414,7 @@ argument-hint: "Specify files or areas to review"
 
 $srcContent
 "@
-            Set-Content -Path $skillFile -Value $skillContent
+            Write-Utf8File $skillFile $skillContent
             Write-Host "  CREATE .claude/skills/planforge-$name/SKILL.md" -ForegroundColor Green
         }
     }
@@ -423,7 +470,7 @@ function Install-CursorAgent([string]$TargetPath) {
             }
         }
 
-        Set-Content -Path $cursorRules -Value $sb.ToString()
+        Write-Utf8File $cursorRules ($sb.ToString())
         Write-Host "  CREATE .cursor/rules (project context + guardrails)" -ForegroundColor Green
     }
 
@@ -452,7 +499,7 @@ description: $desc
 
 $srcContent
 "@
-                Set-Content -Path $cmdFile -Value $cmdContent
+                Write-Utf8File $cmdFile $cmdContent
                 Write-Host "  CREATE .cursor/commands/planforge.$name.md" -ForegroundColor Green
             }
         }
@@ -482,7 +529,7 @@ description: $desc
 
 $srcContent
 "@
-                Set-Content -Path $cmdFile -Value $cmdContent
+                Write-Utf8File $cmdFile $cmdContent
                 Write-Host "  CREATE .cursor/commands/planforge.$name.md" -ForegroundColor Green
             }
         }
@@ -540,7 +587,7 @@ function Install-WindsurfAgent([string]$TargetPath) {
             }
         }
 
-        Set-Content -Path $rulesFile -Value $sb.ToString()
+        Write-Utf8File $rulesFile ($sb.ToString())
         Write-Host "  CREATE .windsurf/rules/planforge.md (project context + guardrails)" -ForegroundColor Green
     }
 
@@ -569,7 +616,7 @@ description: $desc
 
 $srcContent
 "@
-                Set-Content -Path $wfFile -Value $wfContent
+                Write-Utf8File $wfFile $wfContent
                 Write-Host "  CREATE .windsurf/workflows/planforge.$name.md" -ForegroundColor Green
             }
         }
@@ -599,7 +646,7 @@ description: $desc
 
 $srcContent
 "@
-                Set-Content -Path $wfFile -Value $wfContent
+                Write-Utf8File $wfFile $wfContent
                 Write-Host "  CREATE .windsurf/workflows/planforge.$name.md" -ForegroundColor Green
             }
         }
@@ -640,7 +687,7 @@ metadata:
 
 $srcContent
 "@
-            Set-Content -Path $skillFile -Value $skillContent
+            Write-Utf8File $skillFile $skillContent
             Write-Host "  CREATE .agents/skills/planforge-$name/SKILL.md" -ForegroundColor Green
         }
     }
@@ -674,7 +721,7 @@ metadata:
 
 $srcContent
 "@
-            Set-Content -Path $skillFile -Value $skillContent
+            Write-Utf8File $skillFile $skillContent
             Write-Host "  CREATE .agents/skills/planforge-$name/SKILL.md" -ForegroundColor Green
         }
     }
@@ -741,7 +788,7 @@ function Install-GeminiAgent([string]$TargetPath) {
             }
         }
 
-        Set-Content -Path $geminiCtx -Value $sb.ToString()
+        Write-Utf8File $geminiCtx ($sb.ToString())
         Write-Host "  CREATE GEMINI.md (project context + guardrail imports)" -ForegroundColor Green
     }
 
@@ -779,7 +826,7 @@ function Install-GeminiAgent([string]$TargetPath) {
                 )
                 $tomlLines += $promptBody -split "`n"
                 $tomlLines += '"""'
-                Set-Content -Path $tomlFile -Value ($tomlLines -join "`n")
+                Write-Utf8File $tomlFile ($tomlLines -join "`n")
                 Write-Host "  CREATE .gemini/commands/planforge/$name.toml" -ForegroundColor Green
             }
         }
@@ -816,7 +863,7 @@ function Install-GeminiAgent([string]$TargetPath) {
                 )
                 $tomlLines += $promptBody -split "`n"
                 $tomlLines += '"""'
-                Set-Content -Path $tomlFile -Value ($tomlLines -join "`n")
+                Write-Utf8File $tomlFile ($tomlLines -join "`n")
                 Write-Host "  CREATE .gemini/commands/planforge/$name.toml" -ForegroundColor Green
             }
         }
@@ -838,7 +885,7 @@ function Install-GeminiAgent([string]$TargetPath) {
                 }
             }
         } | ConvertTo-Json -Depth 4
-        Set-Content -Path $settingsFile -Value $settings
+        Write-Utf8File $settingsFile $settings
         Write-Host "  CREATE .gemini/settings.json (MCP server config)" -ForegroundColor Green
     }
 }
@@ -912,7 +959,7 @@ function Install-GenericAgent([string]$TargetPath, [string]$GenericDir = '.ai') 
             }
         }
 
-        Set-Content -Path $aiCtx -Value $sb.ToString()
+        Write-Utf8File $aiCtx ($sb.ToString())
         Write-Host "  CREATE $GenericDir/AI_INSTRUCTIONS.md (project context + guardrails)" -ForegroundColor Green
     }
 
@@ -1062,7 +1109,8 @@ if (Test-Path $mcpPkgPath) {
 if (-not $ProjectPath) {
     $ProjectPath = Get-PromptValue "Target project directory" (Get-Location).Path
 }
-$ProjectPath = (Resolve-Path $ProjectPath -ErrorAction SilentlyContinue)?.Path ?? $ProjectPath
+$resolvedProjectPath = Resolve-Path $ProjectPath -ErrorAction SilentlyContinue
+if ($resolvedProjectPath) { $ProjectPath = $resolvedProjectPath.Path }
 
 if (-not (Test-Path $ProjectPath)) {
     Write-Host "Creating directory: $ProjectPath" -ForegroundColor Yellow
@@ -1221,7 +1269,8 @@ $stackLabel = if ($Preset.Count -gt 1) {
 }
 
 # Primary preset drives build/test/lint defaults (first non-custom wins)
-$primaryPreset = ($Preset | Where-Object { $_ -ne 'custom' } | Select-Object -First 1) ?? 'custom'
+$primaryPreset = $Preset | Where-Object { $_ -ne 'custom' } | Select-Object -First 1
+if ($null -eq $primaryPreset) { $primaryPreset = 'custom' }
 
 # ─── Build/Test/Lint Commands ──────────────────────────────────────────
 $defaultBuild = switch ($primaryPreset) {
@@ -1544,7 +1593,7 @@ if ($InstallExtensions) {
                                 Write-Host "  SKIP   .vscode/mcp.json → '$serverName' server already exists" -ForegroundColor Yellow
                             }
                         }
-                        $mcpDstJson | ConvertTo-Json -Depth 10 | Set-Content $mcpDst
+                        Write-Utf8File $mcpDst ($mcpDstJson | ConvertTo-Json -Depth 10)
                     }
                     else {
                         $vscodeDir = Join-Path $ProjectPath ".vscode"
@@ -1616,7 +1665,7 @@ function Write-BestDefaultsPreset {
             federation = @{ enabled = $false; repos = @() }  # off by default; opt-in per repo
         }
     } | ConvertTo-Json -Depth 5
-    Set-Content -Path $Path -Value $cfg
+    Write-Utf8File $Path $cfg
 }
 
 if (Test-Path $configPath) {
@@ -1635,7 +1684,7 @@ if (-not (Test-Path $autoPlansDir)) {
 }
 $autoReadme = Join-Path $autoPlansDir "README.md"
 if (-not (Test-Path $autoReadme)) {
-    Set-Content -Path $autoReadme -Value @"
+    Write-Utf8File $autoReadme @"
 # Auto-Generated Plans
 
 This directory contains plans auto-generated by LiveGuard tools (e.g. ``forge_fix_proposal``).
@@ -1684,7 +1733,7 @@ if (Test-Path $instrDir) {
 
 $capDir = Split-Path $capabilitiesPath -Parent
 if (!(Test-Path $capDir)) { New-Item -ItemType Directory -Path $capDir -Force | Out-Null }
-$capabilities | ConvertTo-Json -Depth 3 | Set-Content -Path $capabilitiesPath
+Write-Utf8File $capabilitiesPath ($capabilities | ConvertTo-Json -Depth 3)
 Write-Host "  CREATED  .forge/capabilities.json" -ForegroundColor Green
 
 # ─── Step 6: Copy VS Code Settings Template ────────────────────────────
@@ -1785,12 +1834,7 @@ if (Test-Path $fmSrcDir) {
     $fmPkgJson = Join-Path $fmDstDir "package.json"
     if (Test-Path $fmPkgJson) {
         Write-Host "  Installing pforge-master dependencies..." -ForegroundColor DarkCyan
-        try {
-            $null = & npm install --prefix $fmDstDir 2>&1
-            Write-Host "  ✅ npm install complete" -ForegroundColor Green
-        } catch {
-            Write-Host "  ⚠️  npm install failed — run manually: cd pforge-master && npm install" -ForegroundColor Yellow
-        }
+        Install-NpmDependencies $fmDstDir 'pforge-master'
     }
 }
 
@@ -1836,7 +1880,7 @@ if (Test-Path $mcpSrcDir) {
         $existing = Get-Content $vscodeMcp -Raw | ConvertFrom-Json
         if (-not $existing.servers.PSObject.Properties["plan-forge"]) {
             $existing.servers | Add-Member -NotePropertyName "plan-forge" -NotePropertyValue $mcpEntry.servers."plan-forge" -Force
-            $existing | ConvertTo-Json -Depth 10 | Set-Content $vscodeMcp
+            Write-Utf8File $vscodeMcp ($existing | ConvertTo-Json -Depth 10)
             Write-Host "  MERGE .vscode/mcp.json → added 'plan-forge' server" -ForegroundColor Green
         }
         else {
@@ -1853,7 +1897,7 @@ if (Test-Path $mcpSrcDir) {
             }
             $existing2 = Get-Content $vscodeMcp -Raw | ConvertFrom-Json
             $existing2.servers | Add-Member -NotePropertyName "forge-master-chat" -NotePropertyValue $fmEntry -Force
-            $existing2 | ConvertTo-Json -Depth 10 | Set-Content $vscodeMcp
+            Write-Utf8File $vscodeMcp ($existing2 | ConvertTo-Json -Depth 10)
             Write-Host "  MERGE .vscode/mcp.json → added 'forge-master-chat' server" -ForegroundColor Green
         }
     }
@@ -1873,7 +1917,7 @@ if (Test-Path $mcpSrcDir) {
                 cwd     = '${workspaceFolder}'
             }
         }
-        $mcpEntry | ConvertTo-Json -Depth 10 | Set-Content $vscodeMcp
+        Write-Utf8File $vscodeMcp ($mcpEntry | ConvertTo-Json -Depth 10)
         Write-Host "  CREATE .vscode/mcp.json (plan-forge MCP server)" -ForegroundColor Green
     }
 
@@ -1883,7 +1927,7 @@ if (Test-Path $mcpSrcDir) {
         $claudeMcp = Join-Path $claudeMcpDir "mcp.json"
         if (-not (Test-Path $claudeMcpDir)) { New-Item -ItemType Directory -Path $claudeMcpDir -Force | Out-Null }
         if (-not (Test-Path $claudeMcp)) {
-            $mcpEntry | ConvertTo-Json -Depth 10 | Set-Content $claudeMcp
+            Write-Utf8File $claudeMcp ($mcpEntry | ConvertTo-Json -Depth 10)
             Write-Host "  CREATE .claude/mcp.json (plan-forge MCP server)" -ForegroundColor Green
         }
     }
@@ -1892,12 +1936,7 @@ if (Test-Path $mcpSrcDir) {
     $mcpPkgJson = Join-Path $mcpDstDir "package.json"
     if (Test-Path $mcpPkgJson) {
         Write-Host "  Installing MCP dependencies..." -ForegroundColor DarkCyan
-        try {
-            $npmOutput = & npm install --prefix $mcpDstDir 2>&1
-            Write-Host "  ✅ npm install complete" -ForegroundColor Green
-        } catch {
-            Write-Host "  ⚠️  npm install failed — run manually: cd pforge-mcp && npm install" -ForegroundColor Yellow
-        }
+        Install-NpmDependencies $mcpDstDir 'pforge-mcp'
     }
 }
 

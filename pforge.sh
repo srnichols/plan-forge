@@ -138,6 +138,22 @@ ${end}"
     fi
 }
 
+# Runs `npm install` in a package directory and says what happened. On failure it shows the end of npm's own
+# output, which this script used to send to /dev/null, so "failed" never said why (#420). Twin of
+# Install-NpmDependencies in pforge.ps1.
+pf_npm_install() {
+    local dir="$1" label="$2" log rc=0
+    log="$(mktemp)"
+    (cd "$dir" && npm install --loglevel=error) >"$log" 2>&1 || rc=$?
+    if [[ $rc -eq 0 ]]; then
+        echo "  ✅ npm install complete"
+    else
+        echo "  ⚠️  npm install failed (exit $rc) — run manually: cd $label && npm install"
+        tail -n 8 "$log" | sed 's/^/     /'
+    fi
+    rm -f "$log"
+}
+
 show_help() {
     cat <<'EOF'
 
@@ -2020,11 +2036,7 @@ writeFreshCache(process.argv[1], process.argv[2]);
         if [ -f "$mcp_dir/package.json" ]; then
             echo ""
             echo "Installing MCP dependencies..."
-            if (cd "$mcp_dir" && npm install --silent 2>/dev/null); then
-                echo "  ✅ npm install complete"
-            else
-                echo "  ⚠️  npm install failed — run manually: cd pforge-mcp && npm install"
-            fi
+            pf_npm_install "$mcp_dir" "pforge-mcp"
         fi
 
         # Detect if MCP server is running and advise restart
@@ -2051,11 +2063,7 @@ writeFreshCache(process.argv[1], process.argv[2]);
         if [ -f "$fm_dir/package.json" ]; then
             echo ""
             echo "Installing pforge-master dependencies..."
-            if (cd "$fm_dir" && npm install --silent 2>/dev/null); then
-                echo "  ✅ npm install complete"
-            else
-                echo "  ⚠️  npm install failed — run manually: cd pforge-master && npm install"
-            fi
+            pf_npm_install "$fm_dir" "pforge-master"
         fi
     fi
 

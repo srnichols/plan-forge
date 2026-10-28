@@ -20,7 +20,7 @@ import { fileURLToPath } from "node:url";
 
 const REPO = resolve(dirname(fileURLToPath(import.meta.url)), "..", "..");
 const ZOD_FLOOR = "4.6.6";
-const LOCKS = ["package-lock.json", "pforge-mcp/package-lock.json"];
+const LOCKS = ["package-lock.json", "pforge-mcp/package-lock.json", "pforge-master/package-lock.json"];
 const MANIFESTS = ["package.json", "pforge-mcp/package.json"];
 
 /** `patched` lists the first fixed release of each major line the advisory covers. */

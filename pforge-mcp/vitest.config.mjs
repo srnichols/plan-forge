@@ -79,6 +79,7 @@ const SOURCE_ONLY_SUITES = {
     "tests/meta-414-lockfile-registry.test.mjs",
     "tests/meta-417-setup-windows-powershell.test.mjs",
     "tests/meta-420-npm-install-status.test.mjs",
+    "tests/meta-421-pforge-master-lock.test.mjs",
     "tests/dependency-advisory-floors.test.mjs",
     "tests/setup-next-steps.test.mjs",
   ],

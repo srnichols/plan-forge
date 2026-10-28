@@ -13,8 +13,9 @@
 - [ ] Refresh Copilot AI-credit pricing when model defaults or cost estimates changed: `node scripts\sync-copilot-pricing.mjs` and `node scripts\sync-copilot-pricing.mjs --check`. Commit `pforge-mcp/copilot-pricing.json` when it drifts. Then run `node scripts\check-model-drift.mjs`; it must report no drift: no default retiring within 30 days (`pforge-mcp/model-retirements.json`), no default missing from Copilot without a recorded reason, and pricing current. The weekly **Model Drift** workflow runs the same check between releases and tracks findings in one issue. The list the check reads is the signed-in account's own, filtered by its Copilot plan, so a model it lacks is not evidence of a retirement (#393): the sync keeps a priced model until its announced retirement date has passed, and a default the account cannot see is a note when `scripts/model-availability.json` records the evidence (what you checked, and when). Add an entry there only with evidence, and add a model to `model-retirements.json` when GitHub announces its retirement. For an authoritative result run the check, or give the workflow's `COPILOT_GITHUB_TOKEN`, from a plan that has the premium models.
 - [ ] Regenerate the shipped-guidance index after the last change to any instruction, prompt, agent, skill, hook, preset, template or runbook file: `node scripts\build-shipped-guidance-hashes.mjs`, then `node scripts\build-shipped-guidance-hashes.mjs --check`. Commit `pforge-mcp/shipped-guidance-hashes.json`. `pforge update` treats a project file whose content is not in this index as customized and keeps it, so a stale index makes the next update report unmodified files as `KEEP`.
 - [ ] Working tree clean OR all staged changes belong to this release.
-- [ ] Audit both the root workspace lock and the standalone `pforge-mcp` lock. Run a fresh standalone install when either changes; root-workspace success alone does not validate the dependency set consumers install. Review findings rather than treating `npm install` exit 0 as a clean security audit.
+- [ ] Audit the root workspace lock and the standalone `pforge-mcp` and `pforge-master` locks. Run a fresh standalone install when either standalone lock changes; root-workspace success alone does not validate the dependency set consumers install. Review findings rather than treating `npm install` exit 0 as a clean security audit.
 - [ ] After any change to a lockfile, run `node scripts/lock-registry.mjs`; it must say every lockfile resolves only from the public registry. npm writes the registry it asked into each `resolved` URL, so a lock made behind a package mirror makes `npm ci` fail for everyone outside the mirror's network (#414). `--write` rewrites a mirror's URL for a tarball to the public one and changes nothing else; `integrity` stays as npm recorded it, and nothing here compares it with the public registry, so read the lock diff (`npm install` has also dropped `"peer": true` from entries nobody touched). Prefer `npm update <package>` to `npm audit fix`, which moves packages you did not mean to touch. The **Lockfile Registry** workflow runs the same check on a change to a lockfile.
+- [ ] Make `pforge-master/package-lock.json` only with `npm install --package-lock-only --legacy-peer-deps`, run in a copy of `pforge-master/package.json`, then `node scripts/lock-registry.mjs --write pforge-master/package-lock.json`. A plain `npm install` there crashes ("Cannot read properties of null (reading 'edgesOut')") while npm resolves vitest's peer set, which is why installs in a project's `pforge-master/` failed before the lock was shipped (#421). `meta-421-pforge-master-lock.test.mjs` asks npm to accept the lock offline; also `npm ci` it in an empty directory.
 
 ---
 
@@ -146,7 +147,7 @@ These MUST agree at the tagged commit. Mismatch broke `pforge self-update` for w
 | `VERSION` | `2.82.1` (no leading `v`, no trailing newline, no `-dev`) | Tag verification, `release-guard.yml` workflow |
 | `pforge-mcp/package.json` | `"version": "2.82.1"` | npm/MCP server |
 | `pforge-master/package.json`, root `package.json` | `"version": "2.82.1"` | Forge-Master package (ships to consumers), workspace root |
-| `package-lock.json`, `pforge-mcp/package-lock.json` | workspace entries `"version": "2.82.1"` | npm lockfiles |
+| `package-lock.json`, `pforge-mcp/package-lock.json`, `pforge-master/package-lock.json` | workspace entries (root lock) or root entry (the other two) `"version": "2.82.1"` | npm lockfiles; `pforge-master/package-lock.json` ships to consumers so `npm install` there does not crash on vitest's peer set (#421) |
 | `CHANGELOG.md` | `## [2.82.1] — YYYY-MM-DD — title` | User-visible release notes |
 
 ### 2a. Choose the right version segment (SemVer — DO NOT DEFAULT TO MINOR)
@@ -235,7 +236,7 @@ node scripts/sync-versions.mjs 3.6.2
 ### Step 3 — Release commit
 
 ```pwsh
-git add VERSION package.json package-lock.json pforge-mcp/package.json pforge-mcp/package-lock.json pforge-master/package.json CHANGELOG.md
+git add VERSION package.json package-lock.json pforge-mcp/package.json pforge-mcp/package-lock.json pforge-master/package.json pforge-master/package-lock.json CHANGELOG.md
 git commit -m "chore(release): vX.Y.Z" -m "<short summary, bullets per fix>"
 ```
 
@@ -327,7 +328,7 @@ The bump-back is always to the **next likely** release of the same kind. If the 
 # Example: just shipped 3.6.2 (PATCH). Bump to 3.6.3-dev.
 node scripts/sync-versions.mjs 3.6.3-dev
 
-git add VERSION package.json package-lock.json pforge-mcp/package.json pforge-mcp/package-lock.json pforge-master/package.json
+git add VERSION package.json package-lock.json pforge-mcp/package.json pforge-mcp/package-lock.json pforge-master/package.json pforge-master/package-lock.json
 git commit -m "chore: bump VERSION to 3.6.3-dev"
 git push origin master
 ```
@@ -415,7 +416,7 @@ Fix it BEFORE starting §3 (do not just override in §3 step 2 — also correct 
 # Example: VERSION says 3.7.0-dev, but next release is a hotfix from 3.6.1 → reset to 3.6.2-dev.
 node scripts/sync-versions.mjs 3.6.2-dev
 
-git add VERSION package.json package-lock.json pforge-mcp/package.json pforge-mcp/package-lock.json pforge-master/package.json
+git add VERSION package.json package-lock.json pforge-mcp/package.json pforge-mcp/package-lock.json pforge-master/package.json pforge-master/package-lock.json
 git commit -m "chore: reset VERSION to 3.6.2-dev (next release is a hotfix, not a minor)"
 git push origin master
 ```

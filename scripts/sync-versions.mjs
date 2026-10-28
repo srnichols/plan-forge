@@ -7,7 +7,8 @@
  *   node scripts/sync-versions.mjs --check     # exit 1 when anything disagrees with VERSION
  *
  * Synced: the root, pforge-mcp and pforge-master package.json files and their
- * entries in package-lock.json and pforge-mcp/package-lock.json. pforge-sdk is
+ * entries in package-lock.json, pforge-mcp/package-lock.json and
+ * pforge-master/package-lock.json. pforge-sdk is
  * versioned independently and is left alone. Only version values change; key
  * order, indentation and line endings are preserved.
  */
@@ -22,6 +23,7 @@ const PACKAGE_FILES = ["package.json", "pforge-mcp/package.json", "pforge-master
 const LOCKFILES = {
   "package-lock.json": ["", "pforge-mcp", "pforge-master"],
   "pforge-mcp/package-lock.json": [""],
+  "pforge-master/package-lock.json": [""],
 };
 const TOP_LEVEL_VERSION = /^(\s*"version"\s*:\s*")[^"]*(")/m;
 

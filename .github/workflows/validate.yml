@@ -117,6 +117,8 @@ jobs:
           if echo x | grep -P x >/dev/null 2>&1; then echo "grep -P: yes"; else echo "grep -P: no"; fi
           echo "stat -c: $(stat -c %Y . 2>&1 | head -1)"
           echo "sed replacement with \\n: $(echo a | sed 's/a/b\nc/')"
+          echo "sed \\s in a basic regex (prints X if it is whitespace): $(printf 'a b\n' | sed 's/a\s*b/X/')"
+          echo "sed -E \\s (prints X if it is whitespace): $(printf 'a b\n' | sed -E 's/a\s+b/X/')"
           awk --version 2>&1 | head -1 || true
 
       - name: Setup, validate and update with Bash

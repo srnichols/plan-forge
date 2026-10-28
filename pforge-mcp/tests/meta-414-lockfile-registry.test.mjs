@@ -1,8 +1,8 @@
 import { describe, it, expect, afterEach } from "vitest";
 import { execFileSync, spawnSync } from "node:child_process";
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join, resolve } from "node:path";
+import { dirname, join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 
 /**
@@ -70,6 +70,14 @@ describe("which entries resolve from somewhere else", () => {
     }));
     expect(nonPublicResolved(lock).map((entry) => entry.key)).toEqual(["node_modules/a", "node_modules/b"]);
   });
+
+  it("does not take a URL that only mentions the public registry for the public registry", async () => {
+    const { nonPublicResolved } = await lib();
+    const lock = JSON.parse(lockText({
+      "node_modules/a": { version: "1.0.0", resolved: "https://proxy.example/fetch?url=https://registry.npmjs.org/a/-/a-1.0.0.tgz" },
+    }));
+    expect(nonPublicResolved(lock).map((entry) => entry.key)).toEqual(["node_modules/a"]);
+  });
 });
 
 describe("rewriting a mirror's URLs", () => {
@@ -113,6 +121,24 @@ describe("rewriting a mirror's URLs", () => {
     expect(result.changed).toEqual([]);
     expect(result.text).toBe(text);
     expect(result.unfixable.map((entry) => entry.key).sort()).toEqual(Object.keys(entries).sort());
+  });
+
+  it("rewrites an aliased package by the name of the package it installs", async () => {
+    const { normalizeLockText } = await lib();
+    const aliased = { name: "real-pkg", version: "1.2.3", resolved: `${MIRROR}/real-pkg/-/real-pkg-1.2.3.tgz`, integrity: "sha512-ddd" };
+    const result = normalizeLockText(lockText({ "node_modules/my-alias": aliased }));
+    expect(result.unfixable).toEqual([]);
+    expect(result.changed.map((c) => `${c.name}@${c.version}`)).toEqual(["real-pkg@1.2.3"]);
+    expect(result.text).toContain("https://registry.npmjs.org/real-pkg/-/real-pkg-1.2.3.tgz");
+  });
+
+  it("reports every entry of a URL it cannot find in the text, such as one written with escaped slashes", async () => {
+    const { normalizeLockText } = await lib();
+    const text = lockText({ "node_modules/fast-uri": FAST_URI, "node_modules/x/node_modules/fast-uri": FAST_URI }).replace(/\//g, "\\/");
+    const result = normalizeLockText(text);
+    expect(result.changed).toEqual([]);
+    expect(result.text).toBe(text);
+    expect(result.unfixable.map((entry) => entry.key).sort()).toEqual(["node_modules/fast-uri", "node_modules/x/node_modules/fast-uri"]);
   });
 
   it("does nothing the second time", async () => {
@@ -168,6 +194,24 @@ describe("scripts/lock-registry.mjs on the command line", () => {
     expect(run.stdout + run.stderr).toContain("cannot read it as a lockfile");
   });
 
+  it("fails on a lockfile with no packages map, which a check that read nothing would pass", () => {
+    for (const text of [JSON.stringify({ lockfileVersion: 1, dependencies: { "fast-uri": { version: "3.1.9", resolved: FAST_URI.resolved } } }), JSON.stringify({ packages: null }), "null", "[]"]) {
+      const run = cli(tempLock(text));
+      expect(run.status, text).toBe(1);
+      expect(run.stdout + run.stderr, text).toContain("cannot read it as a lockfile");
+      expect(run.stdout + run.stderr, text).toContain("packages");
+    }
+  });
+
+  it("fails when any one of several lockfiles resolves from elsewhere, and names each file", () => {
+    const good = tempLock(lockText({ "node_modules/ajv": PUBLIC }));
+    const bad = tempLock(lockText({ "node_modules/fast-uri": FAST_URI }));
+    const run = cli(good, bad);
+    expect(run.status, run.stdout + run.stderr).toBe(1);
+    expect(run.stdout).toContain(`${good}: resolves only from the public registry`);
+    expect(run.stdout).toContain(`${bad}: 1 package(s) resolve from elsewhere`);
+  });
+
   it("refuses an option it does not know instead of ignoring it", () => {
     const run = cli("--wirte", tempLock(lockText({ "node_modules/fast-uri": FAST_URI })));
     expect(run.status).toBe(1);
@@ -175,18 +219,34 @@ describe("scripts/lock-registry.mjs on the command line", () => {
   });
 });
 
+describe("finding the tracked lockfiles", () => {
+  it("lists every package-lock.json and npm-shrinkwrap.json a repository tracks, nested ones too", async () => {
+    const { trackedLockfiles } = await lib();
+    const repo = mkdtempSync(join(tmpdir(), "pf-meta-414-git-"));
+    dirs.push(repo);
+    execFileSync("git", ["init", "-q"], { cwd: repo });
+    for (const file of ["package-lock.json", "packages/a/package-lock.json", "npm-shrinkwrap.json", "docs/npm-shrinkwrap.json", "package.json", "notes/lock.txt"]) {
+      mkdirSync(dirname(join(repo, file)), { recursive: true });
+      writeFileSync(join(repo, file), "{}");
+    }
+    execFileSync("git", ["add", "-A"], { cwd: repo, stdio: "ignore" });
+    expect(trackedLockfiles(repo).sort()).toEqual(["docs/npm-shrinkwrap.json", "npm-shrinkwrap.json", "package-lock.json", "packages/a/package-lock.json"]);
+  });
+});
+
 describe.skipIf(!sourceRepo)("the tracked lockfiles resolve only from the public registry (#414)", () => {
   it("every package-lock.json and npm-shrinkwrap.json in the repository", async () => {
-    const { nonPublicResolved } = await lib();
-    const tracked = execFileSync("git", ["ls-files", "*package-lock.json", "*npm-shrinkwrap.json"], { cwd: REPO, encoding: "utf8" }).split("\n").filter(Boolean);
+    const { nonPublicResolved, trackedLockfiles } = await lib();
+    const tracked = trackedLockfiles();
     expect(tracked.length, "the repository tracks at least the workspace lock and the standalone pforge-mcp lock").toBeGreaterThanOrEqual(2);
     const wrong = tracked.flatMap((file) => nonPublicResolved(JSON.parse(readFileSync(join(REPO, file), "utf8"))).map((entry) => `${file}: ${entry.key} resolves from ${entry.resolved}`));
     expect(wrong, "run `node scripts/lock-registry.mjs --write` to rewrite a mirror's URLs").toEqual([]);
   });
 
-  it("is what `node scripts/lock-registry.mjs` with no arguments checks", () => {
+  it("is what `node scripts/lock-registry.mjs` with no arguments checks", async () => {
+    const { trackedLockfiles } = await lib();
     const run = cli();
     expect(run.status, run.stdout + run.stderr).toBe(0);
-    expect(run.stdout).toContain("package-lock.json");
+    for (const file of trackedLockfiles()) expect(run.stdout, file).toContain(`${file}: resolves only from the public registry`);
   });
 });

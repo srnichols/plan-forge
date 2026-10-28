@@ -12,7 +12,8 @@
  * A rewrite is made only where the URL ends the way the public one does, `/<name>/-/<file>.tgz`, which
  * names the same tarball, so `integrity` stays as npm wrote it. Anything else (a git or file dependency,
  * a URL that names another package) is reported and left for a person. Only the URLs change; the rest of
- * the file, line endings included, is kept as it is.
+ * the file, line endings included, is kept as it is. A lockfile with no `packages` map (npm 6's
+ * lockfileVersion 1) is refused, because a check that read nothing in it would pass it.
  */
 
 import { execFileSync } from "node:child_process";
@@ -37,9 +38,9 @@ function packageName(key, entry) {
   return at < 0 ? key : key.slice(at + NODE_MODULES.length);
 }
 
-/** The entries npm fetched from a registry: not the root, not a workspace link, with a resolved URL. */
+/** The entries npm fetched from a registry: not a workspace link, and with a resolved URL (the root has none). */
 function fetchedEntries(lock) {
-  return Object.entries(lock.packages ?? {}).filter(([key, entry]) => key !== "" && !entry.link && typeof entry.resolved === "string");
+  return Object.entries(lock.packages).filter(([, entry]) => !entry.link && typeof entry.resolved === "string");
 }
 
 /**
@@ -96,8 +97,9 @@ export function normalizeLockText(text) {
   return { text: out, changed: changed.map(({ name, version, from, to }) => ({ name, version, from, to })), unfixable };
 }
 
-function trackedLockfiles() {
-  return execFileSync("git", ["ls-files", "*package-lock.json", "*npm-shrinkwrap.json"], { cwd: REPO, encoding: "utf8" })
+/** The lockfiles a git repository tracks, nested ones included. */
+export function trackedLockfiles(root = REPO) {
+  return execFileSync("git", ["ls-files", "*package-lock.json", "*npm-shrinkwrap.json"], { cwd: root, encoding: "utf8" })
     .split("\n").filter(Boolean);
 }
 
@@ -110,6 +112,9 @@ function processFile({ path, label }, write) {
   try {
     text = readFileSync(path, "utf8");
     lock = JSON.parse(text);
+    if (typeof lock?.packages !== "object" || lock.packages === null) {
+      throw new Error('it has no "packages" map (npm 7 and later write one: lockfileVersion 2 or 3)');
+    }
   } catch (err) {
     return { ok: false, lines: [`${label}: cannot read it as a lockfile: ${err.message}`] };
   }
@@ -121,7 +126,7 @@ function processFile({ path, label }, write) {
   const { text: fixed, changed, unfixable } = normalizeLockText(text);
   if (changed.length > 0) writeFileSync(path, fixed);
   const lines = [`${label}: rewrote ${changed.length} URL(s): ${changed.map(({ name, version }) => `${name}@${version}`).join(", ") || "none"}`];
-  if (unfixable.length > 0) lines.push("  these name no tarball of their own package and are left for a person:", ...listEntries(unfixable));
+  if (unfixable.length > 0) lines.push("  these cannot be rewritten (the URL is not that package's own tarball, or is written out differently in the file) and are left for a person:", ...listEntries(unfixable));
   return { ok: unfixable.length === 0, lines };
 }
 

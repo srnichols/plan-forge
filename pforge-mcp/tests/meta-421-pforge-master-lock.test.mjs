@@ -23,8 +23,8 @@ const PACKAGE_DIR = join(REPO, "pforge-master");
 const MANIFEST = JSON.parse(readFileSync(join(PACKAGE_DIR, "package.json"), "utf8"));
 const LOCK_PATH = join(PACKAGE_DIR, "package-lock.json");
 const PUBLIC_REGISTRY = "https://registry.npmjs.org/";
-const NPM_TIMEOUT_MS = 120_000;
-const TEST_TIMEOUT_MS = 180_000;
+const NPM_TIMEOUT_MS = 270_000;
+const TEST_TIMEOUT_MS = 300_000;
 
 function readLock() {
   expect(existsSync(LOCK_PATH), "pforge-master/package-lock.json is missing; npm install there crashes without it (#421)").toBe(true);

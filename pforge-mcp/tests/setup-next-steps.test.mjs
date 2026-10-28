@@ -181,6 +181,7 @@ describe.each(IMPLEMENTATIONS)("$name closing steps", (implementation) => {
     const { full } = resultsOf(implementation);
     expect(full.next).toHaveLength(9);
     expect(full.optional).toHaveLength(3);
+    expect(full.optional.every((line) => line.trim().startsWith("- ")), full.optional.join("\n")).toBe(true);
   }, SLOW);
 
   it("lists nothing for a project with none of the files", () => {
@@ -232,15 +233,15 @@ describe("the closing block of each installer", () => {
 
   it("setup.ps1 prints what the helpers return, not a fixed list", () => {
     const block = closing(ps1Source);
-    expect(block).toContain("Get-SetupNextSteps $ProjectPath");
-    expect(block).toContain("Get-SetupOptionalSteps $ProjectPath");
+    expect(block).toMatch(/^Get-SetupNextSteps \$ProjectPath \| ForEach-Object \{ Write-Host \$_ \}$/m);
+    expect(block).toMatch(/^Get-SetupOptionalSteps \$ProjectPath \| ForEach-Object \{ Write-Host \$_ \}$/m);
     expect(block).not.toMatch(/Review AGENTS\.md|Review \.github\/(prompts|agents|skills)/);
   });
 
   it("setup.sh prints what the helpers return, not a fixed list", () => {
     const block = closing(shSource);
-    expect(block).toContain('pf_setup_next_steps "$PROJECT_PATH"');
-    expect(block).toContain('pf_setup_optional_steps "$PROJECT_PATH"');
+    expect(block).toMatch(/^pf_setup_next_steps "\$PROJECT_PATH"$/m);
+    expect(block).toMatch(/^pf_setup_optional_steps "\$PROJECT_PATH"$/m);
     expect(block).not.toMatch(/Review AGENTS\.md|Review \.github\/(prompts|agents|skills)/);
   });
 

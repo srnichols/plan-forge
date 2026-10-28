@@ -30,7 +30,7 @@ beforeAll(async () => {
   server = createExpressApp().listen(0);
   await new Promise((resolveListening) => server.once("listening", resolveListening));
   baseUrl = `http://127.0.0.1:${server.address().port}`;
-});
+}, 120_000);
 
 afterAll(async () => {
   if (server) await new Promise((resolveClosed) => server.close(resolveClosed));

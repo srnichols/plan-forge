@@ -50,6 +50,9 @@ const TOTALS = [
   ["templates/.github/copilot-instructions.md", ["forge", "all", "mcp"]],
   ["templates/copilot-instructions.md.template", ["forge", "all", "mcp"]],
   ["docs/manual/mcp-server-reference.html", ["all"]],
+  ["README.md", ["all", "mcp"]],
+  ["docs/index.html", ["all", "mcp"]],
+  ["docs/faq.html", ["all", "mcp"]],
 ];
 
 const mismatches = (claims, registered) => claims.filter((claim) => claim.count !== registered);
@@ -59,6 +62,7 @@ describe("the tool count scan finds what it is meant to", () => {
     expect(toolCountClaims("exposes 17 forge tools as native MCP operations")).toEqual([{ line: 1, count: 17, text: "17 forge tools" }]);
     expect(toolCountClaims("Runs 105+ forge tools")).toEqual([{ line: 1, count: 105, text: "105+ forge tools" }]);
     expect(toolCountClaims("1 forge tool")).toHaveLength(1);
+    expect(toolCountClaims("Ships 17 Forge Tools natively")).toEqual([{ line: 1, count: 17, text: "17 Forge Tools" }]);
     expect(toolCountClaims("all 77 tools across 8 categories", ["all"])).toEqual([{ line: 1, count: 77, text: "all 77 tools" }]);
     expect(toolCountClaims("All 107 MCP tools, and all 5 forge tools", ["all"]).map((claim) => claim.count)).toEqual([107, 5]);
     expect(toolCountClaims("**88 MCP tools** (Core + LiveGuard)", ["mcp"])).toEqual([{ line: 1, count: 88, text: "88 MCP tools" }]);
@@ -78,6 +82,20 @@ describe("the tool count scan finds what it is meant to", () => {
     expect(toolCountClaims("14 LiveGuard tools, 22 core tools", ["forge", "all", "mcp"])).toEqual([]);
   });
 
+  it("flags a count that is wrong in either direction", () => {
+    const claims = [106, 107, 108].map((count) => ({ line: 1, count, text: `${count} forge tools` }));
+    expect(mismatches(claims, 107).map((claim) => claim.count)).toEqual([106, 108]);
+  });
+
+  it("scans the text files that state a count and not data files", () => {
+    for (const scanned of ["README.md", "docs/faq.html", "llms.txt", "templates/copilot-instructions.md.template", "pforge.ps1", "setup.sh", ".github/workflows/validate.yml"]) {
+      expect(SCANNED.test(scanned), scanned).toBe(true);
+    }
+    for (const skipped of ["pforge-mcp/tools.json", "package-lock.json", "docs/assets/logo.png"]) {
+      expect(SCANNED.test(skipped), skipped).toBe(false);
+    }
+  });
+
   it("leaves current files out of the history that keeps old numbers", () => {
     for (const current of ["README.md", "AGENT-SETUP.md", "docs/faq.html", "docs/docs.html", ".github/copilot-instructions.md", "templates/.github/copilot-instructions.md", "docs/manual/mcp-server-reference.html"]) {
       expect(HISTORY.test(current), current).toBe(false);
@@ -89,11 +107,24 @@ describe("the tool count scan finds what it is meant to", () => {
 });
 
 describe.skipIf(!sourceRepo)("instructions and documents state the registered tool count (#413)", () => {
+  /** The tracked text files whose "N forge tools" has to be the registered count. */
+  const filesToScan = () => {
+    const tracked = execFileSync("git", ["ls-files"], { cwd: REPO, encoding: "utf8", maxBuffer: 1 << 28 }).split("\n").filter(Boolean);
+    return tracked.filter((name) => SCANNED.test(name) && !HISTORY.test(name));
+  };
+
+  it("reaches the instruction files, the templates and the pages that stated a stale count", () => {
+    const files = filesToScan();
+    for (const stated of [".github/copilot-instructions.md", "templates/.github/copilot-instructions.md", "templates/copilot-instructions.md.template", "AGENT-SETUP.md", "docs/docs.html", "docs/faq.html", "docs/speckit-interop.html", "docs/manual/mcp-server-reference.html"]) {
+      expect(files, stated).toContain(stated);
+    }
+    expect(files).not.toContain("CHANGELOG.md");
+  });
+
   it('no tracked file says "N forge tools" with a count that is not the registered one', async () => {
     const { TOOLS } = await import("../server/tool-definitions.mjs");
-    const tracked = execFileSync("git", ["ls-files"], { cwd: REPO, encoding: "utf8", maxBuffer: 1 << 28 }).split("\n").filter(Boolean);
     const wrong = [];
-    for (const file of tracked.filter((name) => SCANNED.test(name) && !HISTORY.test(name))) {
+    for (const file of filesToScan()) {
       let text;
       try {
         text = readFileSync(join(REPO, file), "utf8");

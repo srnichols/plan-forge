@@ -157,15 +157,27 @@ jobs:
           cd "$RUNNER_TEMP/test-macos-typescript-copilot"
           chmod +x pforge.sh
           git init -q . && git add -A && git -c user.name=ci -c user.email=ci@example.com commit -qm install
+          # setup.sh read the names for .forge/capabilities.json with find -printf, which BSD find lacks (#427). The file has
+          # to list what the project has.
+          prompts_on_disk=$(ls .github/prompts/*.prompt.md | wc -l | tr -d ' ')
+          prompts_listed=$(grep -o '"[^"]*\.prompt\.md"' .forge/capabilities.json | wc -l | tr -d ' ')
+          [ "$prompts_on_disk" -gt 0 ] && [ "$prompts_on_disk" = "$prompts_listed" ] || { echo "::error::.forge/capabilities.json lists $prompts_listed prompts, and the project has $prompts_on_disk"; rc=1; }
+          instructions_on_disk=$(ls .github/instructions/*.instructions.md | wc -l | tr -d ' ')
+          instructions_listed=$(grep -o '"[^"]*\.instructions\.md"' .forge/capabilities.json | wc -l | tr -d ' ')
+          [ "$instructions_on_disk" -gt 0 ] && [ "$instructions_on_disk" = "$instructions_listed" ] || { echo "::error::.forge/capabilities.json lists $instructions_listed instructions, and the project has $instructions_on_disk"; rc=1; }
           ./pforge.sh --help >/dev/null || { echo "::error::pforge.sh --help failed"; rc=1; }
           ./pforge.sh check || { echo "::error::pforge.sh check failed"; rc=1; }
           rm .github/instructions/security.instructions.md
           echo "<!-- edited here -->" >> .github/instructions/testing.instructions.md
+          # A line out of the managed block in .gitignore makes the update rewrite the block with awk, which is what BSD
+          # awk refused (#427). The block has to come back as it was.
+          grep -v 'pforge-sdk/node_modules/' .gitignore > .gitignore.new && mv .gitignore.new .gitignore
           ./pforge.sh update "$GITHUB_WORKSPACE" --force --yes --allow-dev || { echo "::error::pforge.sh update failed"; rc=1; }
           [ -f .github/instructions/security.instructions.md ] || { echo "::error::update did not restore the deleted file"; rc=1; }
           grep -q "edited here" .github/instructions/testing.instructions.md || { echo "::error::update overwrote an edited file"; rc=1; }
           [ -f .forge/update-pending/.github/instructions/testing.instructions.md ] || { echo "::error::update did not keep the new version of the edited file"; rc=1; }
-          grep -q "plan-forge managed" .gitignore || { echo "::error::update left no managed block in .gitignore"; rc=1; }
+          git diff --exit-code --quiet -- .gitignore || { echo "::error::update did not put the managed block in .gitignore back as it was"; rc=1; }
+          [ "$(grep -cF '# >>> plan-forge managed' .gitignore)" = 1 ] && [ "$(grep -cF '# <<< plan-forge managed <<<' .gitignore)" = 1 ] || { echo "::error::.gitignore does not hold the managed block exactly once"; rc=1; }
           ./pforge.sh new-phase "Mac Phase" || { echo "::error::pforge.sh new-phase failed"; rc=1; }
           grep -q "### Phase 1: Mac Phase" docs/plans/DEPLOYMENT-ROADMAP.md || { echo "::error::new-phase did not add the phase to the roadmap"; rc=1; }
           echo "::endgroup::"

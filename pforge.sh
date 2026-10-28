@@ -454,8 +454,10 @@ TEMPLATE
 ENTRY
 )
         if grep -q "## Completed Phases" "$roadmap"; then
-            sed -i.bak "s/## Completed Phases/${entry}\n\n## Completed Phases/" "$roadmap"
-            rm -f "$roadmap.bak"
+            # awk, not sed: an s command cannot take a replacement that spans lines, and sed stopped with "unterminated s
+            # command" (#429). The entry also holds the user's phase name, and a / or an & in it would break the command.
+            ENTRY="$entry" awk '/## Completed Phases/ { print ENVIRON["ENTRY"]; print "" } { print }' "$roadmap" > "$roadmap.tmp"
+            mv "$roadmap.tmp" "$roadmap"
         else
             echo "$entry" >> "$roadmap"
         fi

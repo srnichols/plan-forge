@@ -27,7 +27,7 @@ const NOT_PORTABLE = [
   [/\$\{[A-Za-z_][A-Za-z_0-9]*(,,|\^\^)[^}]*\}/, "case-modifying expansion, Bash 4.0+"],
   [/;;&|\|&|&>>/, "a Bash 4 operator (;;& or |& or &>>)"],
   [/\[\[\s+-v\s/, "[[ -v var ]], Bash 4.2+"],
-  [/\bsed\s+(-[a-zA-Z]*\s+)*-[a-zA-Z]*r\b/, "sed -r, which BSD sed spells -E"],
+  [/\bsed\s+(-[a-zA-Z]*\s+)*-[a-zA-Z]*r\b/, "sed -r; the portable spelling is sed -E"],
 ];
 
 const code = (text) =>

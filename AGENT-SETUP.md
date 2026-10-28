@@ -247,6 +247,8 @@ The update command uses SHA256 hashing to update only files that actually change
 
 Existing preset instruction/agent/prompt/skill files are NOT updated (they may have been customized). New files added in this version of Plan Forge ARE added if they don't yet exist in the project.
 
+A project installed with `-Preset custom` alone (recorded as `"preset": "custom"` in `.forge.json`) keeps to the shared files, as the installer left it. `pforge update` updates the files it has and adds new shared instructions and framework tooling, but adds none of the prompts, hooks, automations or skills of a category the project does not already carry. A category it does carry, from an earlier update or copied in by hand, keeps getting its new files, so a set is never half updated. To get the rest, copy what you want from the Plan Forge checkout (see Section 3) or set the project up with a stack preset.
+
 For `azure-iac` preset: 5 stack-specific + 8 cross-stack + 5 pipeline = 18 agents.
 
 ### Step 3: Validate
@@ -286,6 +288,8 @@ The validation script checks for these files. All must be present and non-empty:
 | `.github/instructions/security.instructions.md` | Security rules |
 
 ### Required (Non-Custom Presets — Agentic Files)
+
+A project set up with `-Preset custom` alone has none of these files, and `pforge update` does not add them. Copy what you want from the Plan Forge checkout: `.github/prompts/`, `templates/.github/agents/`, `templates/.github/hooks/`, `templates/.github/automations/` and `presets/shared/skills/`.
 
 | Directory / Files | Purpose |
 |-------------------|---------|

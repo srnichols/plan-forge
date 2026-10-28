@@ -38,7 +38,7 @@ const ISO_DATE_LENGTH = "YYYY-MM-DD".length;
 export const RELEASE_FILES = Object.freeze([
   "VERSION", "package.json", "package-lock.json", "pforge-mcp/package.json",
   "pforge-mcp/package-lock.json", "pforge-master/package.json", "pforge-master/package-lock.json",
-  "CHANGELOG.md",
+  "docs/.well-known/plan-forge.json", "CHANGELOG.md",
 ]);
 
 function parseVersion(version) {

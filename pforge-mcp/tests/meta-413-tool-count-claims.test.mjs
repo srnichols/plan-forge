@@ -53,6 +53,7 @@ const TOTALS = [
   ["README.md", ["all", "mcp"]],
   ["docs/index.html", ["all", "mcp"]],
   ["docs/faq.html", ["all", "mcp"]],
+  ["docs/.well-known/plan-forge.json", ["forge", "all", "mcp"]],
 ];
 
 const mismatches = (claims, registered) => claims.filter((claim) => claim.count !== registered);

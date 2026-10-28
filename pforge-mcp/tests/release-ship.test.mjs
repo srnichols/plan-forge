@@ -94,6 +94,10 @@ describe("unexpectedReleaseChanges", () => {
   it("allows every lockfile the version sync rewrites (#421)", () => {
     expect(unexpectedReleaseChanges(["package-lock.json", "pforge-mcp/package-lock.json", "pforge-master/package-lock.json"])).toEqual([]);
   });
+
+  it("allows the published capability descriptor, whose version the sync keeps current (#415)", () => {
+    expect(unexpectedReleaseChanges(["docs/.well-known/plan-forge.json"])).toEqual([]);
+  });
 });
 
 describe("buildReleaseSteps", () => {

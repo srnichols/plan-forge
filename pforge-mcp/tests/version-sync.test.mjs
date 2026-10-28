@@ -52,6 +52,7 @@ describe("sync-versions.mjs", () => {
     }, null, 2)}\n`);
     write("pforge-mcp/package-lock.json", `${JSON.stringify({ name: "plan-forge-mcp", version: "0.7.0", packages: { "": { version: "0.7.0" } } }, null, 2)}\n`);
     write("pforge-master/package-lock.json", `${JSON.stringify({ name: "@pforge/pforge-master", version: "0.8.1", packages: { "": { version: "0.8.1" } } }, null, 2)}\n`);
+    write("docs/.well-known/plan-forge.json", '{\n  "name": "Plan Forge",\n  "version": "0.6.0",\n  "capabilities": { "mcp_tools": 43 }\n}\n');
   });
 
   afterEach(() => rmSync(root, { recursive: true, force: true }));
@@ -63,6 +64,7 @@ describe("sync-versions.mjs", () => {
     expect(r.stderr).toContain("pforge-master/package.json version is 0.8.1");
     expect(r.stderr).toContain('package-lock.json packages["pforge-mcp"].version is 0.7.0');
     expect(r.stderr).toContain('pforge-master/package-lock.json packages[""].version is 0.8.1');
+    expect(r.stderr).toContain("docs/.well-known/plan-forge.json version is 0.6.0");
     expect(r.stderr).not.toContain("pforge-sdk");
   });
 
@@ -80,6 +82,7 @@ describe("sync-versions.mjs", () => {
     expect(JSON.parse(read("pforge-mcp/package-lock.json")).packages[""].version).toBe("2.0.0");
     const masterLock = JSON.parse(read("pforge-master/package-lock.json"));
     expect([masterLock.version, masterLock.packages[""].version]).toEqual(["2.0.0", "2.0.0"]);
+    expect(read("docs/.well-known/plan-forge.json")).toBe('{\n  "name": "Plan Forge",\n  "version": "2.0.0",\n  "capabilities": { "mcp_tools": 43 }\n}\n');
     expect(run(["--check", "--root", root]).status).toBe(0);
   });
 

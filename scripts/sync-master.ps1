@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
     Maintainer-only. Syncs consumer-visible code between planning/main and master.
 

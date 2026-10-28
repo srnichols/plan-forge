@@ -83,6 +83,7 @@ const SOURCE_ONLY_SUITES = {
     "tests/meta-420-npm-install-status.test.mjs",
     "tests/meta-421-pforge-master-lock.test.mjs",
     "tests/meta-427-setup-ps1-dot-directories.test.mjs",
+    "tests/scripts-windows-powershell.test.mjs",
     "tests/dependency-advisory-floors.test.mjs",
     "tests/setup-next-steps.test.mjs",
   ],

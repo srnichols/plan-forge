@@ -1,4 +1,4 @@
-#!/usr/bin/env pwsh
+﻿#!/usr/bin/env pwsh
 # Watches an in-flight pforge orchestrator (read PID from .forge/last-orch.pid),
 # waits for it to finish, then kicks off the next plan in the queue.
 #

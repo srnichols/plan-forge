@@ -1,4 +1,4 @@
-#!/usr/bin/env pwsh
+﻿#!/usr/bin/env pwsh
 # Sync planning/main → master, filtering forbidden paths.
 # Run from repo root. Assumes planning/main is at the desired release HEAD.
 [CmdletBinding()]

@@ -1,4 +1,4 @@
-#!/usr/bin/env pwsh
+﻿#!/usr/bin/env pwsh
 # Memory-QA smoke test — verifies v2.95.0 memory-upgrade tools are present and wired.
 # Exit code = number of failing checks.
 # Output format: [OK|FAIL|SKIP] <check-name> [- <reason>]
@@ -41,7 +41,7 @@ Write-Host ""
 $McpPort      = if ($env:PFORGE_MCP_PORT) { $env:PFORGE_MCP_PORT } else { "3100" }
 $McpAvailable = $false
 try {
-    $null = Invoke-WebRequest -Uri "http://localhost:$McpPort/api/health" -TimeoutSec 2 -ErrorAction Stop
+    $null = Invoke-WebRequest -UseBasicParsing -Uri "http://localhost:$McpPort/api/health" -TimeoutSec 2 -ErrorAction Stop
     $McpAvailable = $true
 } catch {
     $McpAvailable = $false
@@ -133,7 +133,7 @@ if (Test-Path $GitignoreTmpl) {
 $OpenBrainUrl = $env:OPENBRAIN_URL
 if ($OpenBrainUrl) {
     try {
-        $HealthResp = Invoke-WebRequest -Uri "$OpenBrainUrl/health" -TimeoutSec 5 -ErrorAction Stop
+        $HealthResp = Invoke-WebRequest -UseBasicParsing -Uri "$OpenBrainUrl/health" -TimeoutSec 5 -ErrorAction Stop
         Write-Ok "openbrain-health"
         if ($HealthResp.Content -match '"provenance"') {
             Write-Ok "openbrain-provenance-capability"

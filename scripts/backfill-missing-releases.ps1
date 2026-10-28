@@ -1,4 +1,4 @@
-# Backfill missing GitHub tags + Releases for versions shipped to master
+﻿# Backfill missing GitHub tags + Releases for versions shipped to master
 # without following the release checklist (issue: pforge self-update stranding).
 #
 # Idempotent: skips any version where the tag OR release already exists.

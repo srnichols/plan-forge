@@ -110,7 +110,11 @@ describe.skipIf(!IS_PLAN_FORGE_SOURCE)("#400 setup.ps1 filters its package copie
   });
 
   it("uses the shared filter, with its own source directory, for pforge-sdk, pforge-master and pforge-mcp", () => {
-    const loops = source.match(/Get-ChildItem -Path \$(sdk|fm|mcp)SrcDir -File -Recurse \|\s+Where-Object \{ Test-RuntimePackageFile \$_ \$\1SrcDir \}/g);
+    const loops = source.match(/Get-ChildItem -Path \$(sdk|fm|mcp)SrcDir -File -Recurse( -Force)? \|\s+Where-Object \{ Test-RuntimePackageFile \$_ \$\1SrcDir \}/g);
     expect(loops).toHaveLength(3);
+  });
+
+  it("lists each package with -Force, because PowerShell on macOS and Linux hides a name that starts with a dot (#427)", () => {
+    expect(source.match(/Get-ChildItem -Path \$(sdk|fm|mcp)SrcDir -File -Recurse -Force \|/g)).toHaveLength(3);
   });
 });

@@ -25,6 +25,12 @@ param(
 
 $ErrorActionPreference = 'Stop'
 
+# Every file this script reads is UTF-8. Windows PowerShell 5.1 reads a file with no byte order mark in the
+# system code page unless told otherwise, and PowerShell 7 already reads UTF-8, so this changes nothing there
+# (#432, as #417 did for setup.ps1). It is a copy, so the caller's own defaults are left alone.
+$PSDefaultParameterValues = @{} + $PSDefaultParameterValues
+$PSDefaultParameterValues['Get-Content:Encoding'] = 'UTF8'
+
 # ─── Issue #296: Windows PowerShell 5.1 started by a Node process (VS Code,
 # ─── Copilot CLI) can inherit PowerShell 7's PSModulePath. 5.1 then imports
 # ─── PowerShell 7's Core-only Microsoft.PowerShell.Utility, which lacks 5.1's
@@ -73,6 +79,23 @@ function Write-ManualSteps([string]$Title, [string[]]$Steps) {
         $i++
     }
     Write-Host ""
+}
+
+# Text goes to disk as UTF-8 without a byte order mark in every PowerShell. Set-Content and Add-Content with no
+# -Encoding write the system code page in Windows PowerShell 5.1, which wrote an em dash as byte 0x97 and an
+# arrow as "?", and its -Encoding UTF8 adds a BOM, which Node's JSON.parse rejects (#432, #417). These write what
+# PowerShell 7's Set-Content and Add-Content do: UTF-8, and a newline after the value unless -NoNewline. They are
+# the same two functions setup.ps1 has; a test holds the pair together.
+function Write-Utf8File([string]$Path, $Value, [switch]$NoNewline) {
+    $text = if ($null -eq $Value) { '' } elseif ($Value -is [array]) { $Value -join [Environment]::NewLine } else { [string]$Value }
+    if (-not $NoNewline -and $null -ne $Value) { $text += [Environment]::NewLine }
+    $full = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($Path)
+    [System.IO.File]::WriteAllText($full, $text, (New-Object System.Text.UTF8Encoding $false))
+}
+
+function Add-Utf8Content([string]$Path, [string]$Value) {
+    $full = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($Path)
+    [System.IO.File]::AppendAllText($full, $Value + [Environment]::NewLine, (New-Object System.Text.UTF8Encoding $false))
 }
 
 # ─── JSONC (Issue #252) ────────────────────────────────────────────────
@@ -223,18 +246,18 @@ function Update-PlanForgeGitignore([string]$RepoRoot) {
             $pattern = [regex]::Escape($beginMarker) + "[\s\S]*?" + [regex]::Escape($endMarker)
             $updated = [regex]::Replace($content, $pattern, { param($m) $managedBody })
             if ($updated -ne $content) {
-                Set-Content -Path $gitignorePath -Value $updated -NoNewline
+                Write-Utf8File $gitignorePath $updated -NoNewline
                 Write-Host "  ✅ Refreshed plan-forge managed block in .gitignore" -ForegroundColor Green
             } else {
                 Write-Host "  ✓ .gitignore plan-forge block already current" -ForegroundColor DarkGray
             }
         } else {
             $separator = if ($content.Length -eq 0 -or $content.EndsWith("`n")) { "" } else { $nl }
-            Add-Content -Path $gitignorePath -Value ($separator + $nl + $managedBody)
+            Add-Utf8Content $gitignorePath ($separator + $nl + $managedBody)
             Write-Host "  ✅ Appended plan-forge managed block to .gitignore" -ForegroundColor Green
         }
     } else {
-        Set-Content -Path $gitignorePath -Value $managedBody
+        Write-Utf8File $gitignorePath $managedBody
         Write-Host "  ✅ Created .gitignore with plan-forge managed block" -ForegroundColor Green
     }
 
@@ -474,7 +497,10 @@ function Invoke-NewPhase {
 
     $phaseName = $Arguments[0]
     $dryRun = $Arguments -contains '--dry-run'
-    $upperName = $phaseName.ToUpper() -replace '\s+', '-'
+    # The plan file is named from the phase name, so each character a file name cannot hold becomes a "-": a "/" or "\"
+    # made a path into a folder that is not there, and a ":" an alternate data stream on Windows (#431). The name stays
+    # as typed inside the plan and the roadmap.
+    $upperName = ($phaseName.ToUpper() -replace '\s+', '-') -replace '[\\/:*?"<>|]', '-'
 
     # Find next phase number
     $plansDir = Join-Path $RepoRoot "docs/plans"
@@ -532,7 +558,7 @@ function Invoke-NewPhase {
 (To be added during Plan Hardening — Step 2)
 "@
 
-    Set-Content -Path $filePath -Value $template
+    Write-Utf8File $filePath $template
     Write-Host "CREATED  $filePath" -ForegroundColor Green
 
     # Add entry to roadmap
@@ -548,14 +574,15 @@ function Invoke-NewPhase {
 **Plan**: [$fileName](./$fileName)
 **Status**: 📋 Planned
 "@
-        # Insert before "## Completed Phases" if it exists, otherwise append
+        # Insert before "## Completed Phases" if it exists, otherwise append. The entry goes in through an evaluator: a
+        # replacement string has its $& and $$ expanded, which rewrote a phase name that holds them.
         if ($roadmapContent -match '## Completed Phases') {
-            $roadmapContent = $roadmapContent -replace '## Completed Phases', "$entry`n`n## Completed Phases"
+            $roadmapContent = [regex]::Replace($roadmapContent, '## Completed Phases', { param($m) "$entry`n`n## Completed Phases" }, [System.Text.RegularExpressions.RegexOptions]::IgnoreCase)
         }
         else {
             $roadmapContent += $entry
         }
-        Set-Content -Path $roadmap -Value $roadmapContent -NoNewline
+        Write-Utf8File $roadmap $roadmapContent -NoNewline
         Write-Host "UPDATED  DEPLOYMENT-ROADMAP.md (added Phase $nextNum)" -ForegroundColor Green
     }
 }
@@ -712,7 +739,7 @@ function Invoke-PhaseStatus {
     $pattern = "(\*\*Plan\*\*:\s*\[$planBaseName\][^\n]*\n\*\*Status\*\*:\s*).+"
     if ($content -match $pattern) {
         $content = $content -replace $pattern, "`${1}$statusText"
-        Set-Content -Path $roadmap -Value $content -NoNewline
+        Write-Utf8File $roadmap $content -NoNewline
         Write-Host "UPDATED  $planBaseName → $statusText" -ForegroundColor Green
     }
     else {
@@ -1033,7 +1060,7 @@ function Invoke-ExtInstall([string[]]$args_) {
                         Write-Host "  SKIP   .vscode/mcp.json → '$serverName' server already exists" -ForegroundColor Yellow
                     }
                 }
-                $mcpDstJson | ConvertTo-Json -Depth 10 | Set-Content $mcpDst
+                Write-Utf8File $mcpDst ($mcpDstJson | ConvertTo-Json -Depth 10)
             }
             else {
                 # No existing mcp.json — just copy it
@@ -1068,7 +1095,7 @@ function Invoke-ExtInstall([string[]]$args_) {
             installedDate = (Get-Date -Format 'yyyy-MM-dd')
         }
         $extJson.extensions = @($extJson.extensions) + $entry
-        $extJson | ConvertTo-Json -Depth 5 | Set-Content $extJsonPath
+        Write-Utf8File $extJsonPath ($extJson | ConvertTo-Json -Depth 5)
     }
 
     Write-Host ""
@@ -1164,7 +1191,7 @@ function Invoke-ExtRemove([string[]]$args_) {
     if (Test-Path $extJsonPath) {
         $extJson = Get-Content $extJsonPath -Raw | ConvertFrom-Json
         $extJson.extensions = @($extJson.extensions | Where-Object { $_.name -ne $extName })
-        $extJson | ConvertTo-Json -Depth 5 | Set-Content $extJsonPath
+        Write-Utf8File $extJsonPath ($extJson | ConvertTo-Json -Depth 5)
     }
 
     Write-Host ""
@@ -2171,7 +2198,11 @@ function Invoke-Update {
             $r = $applied[$rel]
             switch ($r.Action) {
                 'added'     { Write-Host "  ✅ Added $rel" -ForegroundColor Green }
-                'updated'   { Write-Host "  ✅ Updated $rel" -ForegroundColor Green }
+                'updated'   {
+                    # A package.json that kept ranges the project raised says which (#435).
+                    $note = if ($r.Detail) { " ($($r.Detail))" } else { '' }
+                    Write-Host "  ✅ Updated $rel$note" -ForegroundColor Green
+                }
                 'overwrote' { Write-Host "  ✅ Updated $rel (your version backed up to $($r.Detail))" -ForegroundColor Green }
                 'kept'      { Write-Host "  📝 Kept $rel (customized); new version saved to $($r.Detail)" -ForegroundColor Yellow }
             }
@@ -2183,7 +2214,7 @@ function Invoke-Update {
         $config = Get-Content $configPath -Raw | ConvertFrom-Json
         $config.templateVersion = $sourceVersion
 
-        $config | ConvertTo-Json -Depth 10 | Set-Content -Path $configPath
+        Write-Utf8File $configPath ($config | ConvertTo-Json -Depth 10)
         Write-Host "  ✅ Updated .forge.json templateVersion to $sourceVersion" -ForegroundColor Green
 
         # Add missing modelRouting / hooks defaults. Shared with pforge.sh (#299).
@@ -2195,7 +2226,7 @@ function Invoke-Update {
     if (-not (Test-Path $autoPlansDir)) {
         New-Item -ItemType Directory -Path $autoPlansDir -Force | Out-Null
         $autoReadme = Join-Path $autoPlansDir "README.md"
-        Set-Content -Path $autoReadme -Value @"
+        Write-Utf8File $autoReadme @"
 # Auto-Generated Plans
 
 This directory contains plans auto-generated by LiveGuard tools (e.g. ``forge_fix_proposal``).
@@ -3412,8 +3443,7 @@ function Invoke-Smith {
             # Persist cache
             $forgeDir = Join-Path $RepoRoot ".forge"
             if (-not (Test-Path $forgeDir)) { New-Item -ItemType Directory -Path $forgeDir | Out-Null }
-            @{ checkedAt = (Get-Date -Format 'o'); latestVersion = $sourceVersion } |
-                ConvertTo-Json | Set-Content $versionCheckCacheFile -Encoding UTF8
+            Write-Utf8File $versionCheckCacheFile (@{ checkedAt = (Get-Date -Format 'o'); latestVersion = $sourceVersion } | ConvertTo-Json)
         }
         catch {
             # Fall back to local source repo if offline
@@ -4811,7 +4841,7 @@ function Invoke-VersionBump {
         if (Test-Path $filePath) {
             switch ($t.Strategy) {
                 'Overwrite' {
-                    Set-Content $filePath $newVersion -NoNewline -Encoding UTF8
+                    Write-Utf8File $filePath $newVersion -NoNewline
                     Write-Host "  ✅ $($t.Desc)" -ForegroundColor Green
                     $updated++
                 }
@@ -4819,7 +4849,7 @@ function Invoke-VersionBump {
                     $content = Get-Content $filePath -Raw
                     if ($content -match $t.Pattern) {
                         $content = $content -replace $t.Pattern, $t.Replace
-                        Set-Content $filePath $content -NoNewline -Encoding UTF8
+                        Write-Utf8File $filePath $content -NoNewline
                         Write-Host "  ✅ $($t.Desc)" -ForegroundColor Green
                         $updated++
                     } else {
@@ -5976,7 +6006,7 @@ function Invoke-MigrateMemory {
 
         # Write merged canonical
         try {
-            Set-Content -LiteralPath $canonicalPath -Value ($combined -join "`n") -Encoding UTF8 -NoNewline:$false
+            Write-Utf8File $canonicalPath ($combined -join "`n")
             # Rename legacy to .bak-<date>
             $bakPath = "$legacyPath.bak-$stamp"
             if (Test-Path $bakPath) { $bakPath = "$legacyPath.bak-$stamp-$([guid]::NewGuid().ToString('N').Substring(0,6))" }
@@ -6785,7 +6815,7 @@ function Invoke-Config {
             # Write atomically: temp file → rename
             $tmpPath = "$configPath.tmp"
             try {
-                ([pscustomobject]$current) | ConvertTo-Json -Depth 10 | Set-Content -Path $tmpPath -Encoding UTF8 -NoNewline
+                Write-Utf8File $tmpPath (([pscustomobject]$current) | ConvertTo-Json -Depth 10) -NoNewline
                 Move-Item -Path $tmpPath -Destination $configPath -Force
             } catch {
                 if (Test-Path $tmpPath) { Remove-Item $tmpPath -Force -ErrorAction SilentlyContinue }

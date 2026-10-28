@@ -86,6 +86,7 @@ const SOURCE_ONLY_SUITES = {
     "tests/meta-428-update-installs-dependencies.test.mjs",
     "tests/meta-428-validate-setup-file-dependency.test.mjs",
     "tests/meta-429-new-phase-roadmap.test.mjs",
+    "tests/meta-432-pforge-ps1-utf8.test.mjs",
     "tests/validate-setup-agents.test.mjs",
     "tests/update-guided-files.test.mjs",
     "tests/scripts-windows-powershell.test.mjs",

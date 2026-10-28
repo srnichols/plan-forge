@@ -13,7 +13,7 @@
 
 import { afterEach, describe, expect, it } from "vitest";
 import { execFileSync, spawnSync } from "node:child_process";
-import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 
@@ -82,6 +82,37 @@ for (const shell of SHELLS) {
       expect(text.split("\n").filter((line) => line === "## Completed Phases")).toHaveLength(1);
     }, 180_000);
 
+    // #431: the plan file is named from the phase name, so a / or \ in the name made a path into a folder that does not
+    // exist, and cat (or Set-Content) failed after the shell had printed the plan it was going to write. A character a file
+    // name cannot hold becomes a "-"; the name stays as typed inside the plan and the roadmap.
+    it.each([
+      ["Auth/Login", "Phase-2-AUTH-LOGIN-PLAN.md"],
+      ["Auth\\Login", "Phase-2-AUTH-LOGIN-PLAN.md"],
+      ["Part 1: Intro", "Phase-2-PART-1--INTRO-PLAN.md"],
+      ["a/b/c d", "Phase-2-A-B-C-D-PLAN.md"],
+    ])("a phase name that a file name cannot hold, %j, makes %s and keeps the name as typed", (name, planFile) => {
+      const dir = project(ROADMAP);
+      const run = shell.run(dir, name);
+      const out = `${run.stdout}${run.stderr}`;
+      expect(run.status, out).toBe(0);
+      const planPath = join(dir, "docs", "plans", planFile);
+      expect(existsSync(planPath), `docs/plans/${planFile} exists`).toBe(true);
+      expect(readFileSync(planPath, "utf8")).toContain(`# Phase 2: ${name}`);
+      const text = roadmapOf(dir);
+      expect(text).toContain(`### Phase 2: ${name}\n`);
+      expect(text).toContain(`**Plan**: [${planFile}](./${planFile})`);
+      expect(readdirSync(join(dir, "docs", "plans")).sort()).toEqual(["DEPLOYMENT-ROADMAP.md", "Phase-1-ONE-PLAN.md", planFile].sort());
+    }, 180_000);
+
+    it("takes a phase name that a regex replacement would expand: $&, $$ and a numbered group", () => {
+      const dir = project(ROADMAP);
+      const run = shell.run(dir, "Pay $& $$ ${1} $1");
+      expect(run.status, `${run.stdout}${run.stderr}`).toBe(0);
+      const text = roadmapOf(dir);
+      expect(text).toContain("### Phase 2: Pay $& $$ ${1} $1\n");
+      expect(text.split("\n").filter((line) => line === "## Completed Phases")).toHaveLength(1);
+    }, 180_000);
+
     it("appends the phase to a roadmap that has no Completed Phases heading", () => {
       const dir = project(ROADMAP_WITHOUT_COMPLETED);
       const run = shell.run(dir, "Demo Thing");
@@ -96,7 +127,7 @@ for (const shell of SHELLS) {
 // A roadmap with no Completed Phases heading is not compared: Bash appends the entry with echo, which ends the file with a
 // newline, and PowerShell appends it without one. That difference is older than this bug and the structure is the same.
 describe.skipIf(!BASH || !PWSH_OK)("new-phase: the two shells write the same roadmap", () => {
-  it.each([["Demo Thing"], ["Fish & Chips"]])("for %j", (name) => {
+  it.each([["Demo Thing"], ["Fish & Chips"], ["Auth/Login"], ["Part 1: Intro"], ["Pay $& $$ ${1} $1"]])("for %j", (name) => {
     const [sh, ps] = SHELLS.map((shell) => {
       const dir = project(ROADMAP);
       const run = shell.run(dir, name);

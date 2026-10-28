@@ -18,6 +18,7 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "nod
 import { EOL, tmpdir } from "node:os";
 import { delimiter, dirname, join, resolve } from "node:path";
 import { checkInstalledText, listProjectFiles } from "../../scripts/check-installed-text.mjs";
+import { codeOnly, extractPsFunction as extractFunction } from "./helpers/powershell-source.mjs";
 
 const REPO_ROOT = resolve(import.meta.dirname, "..", "..");
 const isWin = process.platform === "win32";
@@ -43,23 +44,12 @@ const tempDir = (prefix) => {
 const shellArgs = (exe, file, ...rest) => ["-NoProfile", "-NonInteractive", ...(exe === "powershell.exe" ? ["-ExecutionPolicy", "Bypass"] : []), "-File", file, ...rest];
 
 function extractPsFunction(name) {
-  const start = setupSource.indexOf(`function ${name}(`);
-  expect(start, `setup.ps1 defines ${name}`).toBeGreaterThan(-1);
-  return setupSource.slice(start, setupSource.indexOf("\n}\n", start) + 3);
+  const text = extractFunction(setupSource, name);
+  expect(text, `setup.ps1 defines ${name}`).not.toBe("");
+  return text;
 }
 
 // ─── it can be read and parsed by Windows PowerShell 5.1 ─────────────────────
-
-/** Source text with here-strings, comments and quoted strings blanked, so a scan sees only code. */
-function codeOnly(source) {
-  return source
-    .replace(/@"[\s\S]*?"@/g, '""')
-    .replace(/@'[\s\S]*?'@/g, "''")
-    .replace(/<#[\s\S]*?#>/g, "")
-    .replace(/"(?:`.|[^"`\r\n])*"/g, '""')
-    .replace(/'(?:''|[^'\r\n])*'/g, "''")
-    .replace(/#[^\r\n]*/g, "");
-}
 
 describe("setup.ps1 can be read by Windows PowerShell 5.1", () => {
   it("starts with a UTF-8 byte order mark, which is how 5.1 knows the file is not in the system code page", () => {
@@ -111,10 +101,7 @@ describe("setup.ps1 can be read by Windows PowerShell 5.1", () => {
 
 describe("setup.ps1 reads and writes text as UTF-8 without a byte order mark", () => {
   const codeLines = codeOnly(setupSource).split("\n");
-  const helperBodies = ["Write-Utf8File", "Add-Utf8Content"].map((name) => {
-    const at = setupSource.indexOf(`function ${name}(`);
-    return at < 0 ? "" : setupSource.slice(at, setupSource.indexOf("\n}\n", at) + 3);
-  }).join("\n");
+  const helperBodies = ["Write-Utf8File", "Add-Utf8Content"].map((name) => extractFunction(setupSource, name)).join("\n");
   const outsideHelpers = codeOnly(setupSource.replace(helperBodies, "")).split("\n");
 
   it("writes through Write-Utf8File and Add-Utf8Content, never Set-Content, Add-Content, Out-File or a redirect", () => {

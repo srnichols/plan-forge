@@ -10,11 +10,17 @@
  * Each script now has one helper that runs npm, reads the status, and on failure shows the end of npm's own
  * output. The helpers are read out of the scripts and run against a stub npm, because a real install takes
  * minutes and needs the network.
+ *
+ * Meta-bug #422 — the PowerShell scripts ran `npm install --prefix <package>`. With no package argument npm 10
+ * installs the package in the *current directory* into <package>: from a checkout or any project with a
+ * package.json it added a `file:` dependency on that directory to the package's package.json, and from a
+ * directory without one it failed. The helpers now run npm inside the package. Those cases run the same
+ * extracted helpers against real npm and a package with no dependencies, which needs no network.
  */
 
 import { afterEach, describe, expect, it } from "vitest";
 import { spawnSync } from "node:child_process";
-import { chmodSync, existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { delimiter, join, resolve } from "node:path";
 
@@ -36,6 +42,9 @@ const SCRIPTS = {
 };
 
 const NPM_ERROR_LINES = ["npm error Cannot read properties of null (reading 'edgesOut')", "npm error A complete log of this run can be found in: /tmp/npm-debug.log"];
+
+/** Real npm with no network: a package with no dependencies has nothing to fetch. */
+const REAL_NPM_ENV = { npm_config_offline: "true", npm_config_audit: "false", npm_config_fund: "false", npm_config_update_notifier: "false" };
 
 const tmpDirs = [];
 afterEach(() => {
@@ -113,10 +122,14 @@ function extractShFunction(source, name) {
   return match[0];
 }
 
-/** Runs Install-NpmDependencies from `file` in one PowerShell and returns what it printed. */
-function runPs({ exe, file, mode, throwing = false }) {
-  const stub = stubNpmDir("ps");
+/**
+ * Runs Install-NpmDependencies from `file` in one PowerShell and returns what it printed. With `real`, npm is the real
+ * one, run from `real.cwd` on `real.packageDir`; otherwise a stub npm stands in and logs where it ran.
+ */
+function runPs({ exe, file, mode, throwing = false, real = null }) {
+  const stub = real ? null : stubNpmDir("ps");
   const workDir = tempDir("pf-meta-420-pkg-");
+  const packageDir = real?.packageDir ?? workDir;
   const log = join(workDir, "npm.log");
   writeFileSync(log, "");
   const driver = join(workDir, "driver.ps1");
@@ -124,19 +137,20 @@ function runPs({ exe, file, mode, throwing = false }) {
     "$ErrorActionPreference = 'Stop'",
     extractPsFunction(SCRIPTS[file], "Install-NpmDependencies"),
     throwing ? "function npm { throw 'npm is not installed' }" : "",
-    `Install-NpmDependencies '${workDir}' 'pforge-master'`,
+    `Install-NpmDependencies '${packageDir}' 'pforge-master'`,
     "Write-Output 'AFTER'",
   ].join("\n")}\n`);
-  const env = envWithStub(stub, { STUB_NPM_MODE: mode, STUB_NPM_LOG: log });
+  const env = real ? { ...process.env, ...REAL_NPM_ENV } : envWithStub(stub, { STUB_NPM_MODE: mode, STUB_NPM_LOG: log });
   const args = ["-NoProfile", "-NonInteractive", ...(exe === "powershell.exe" ? ["-ExecutionPolicy", "Bypass"] : []), "-File", driver];
-  const result = spawnSync(exe, args, { encoding: "utf8", timeout: 120_000, env });
+  const result = spawnSync(exe, args, { encoding: "utf8", timeout: 120_000, env, cwd: real?.cwd });
   return { status: result.status, out: `${result.stdout}${result.stderr}`, log: readFileSync(log, "utf8"), workDir };
 }
 
-/** Runs the shell helper from `file` under `set -euo pipefail`, as the scripts run, and returns what it printed. */
-function runSh({ file, mode }) {
-  const stub = stubNpmDir("sh");
+/** Runs the shell helper from `file` under `set -euo pipefail`, as the scripts run, and returns what it printed. `real` is as for runPs. */
+function runSh({ file, mode, real = null }) {
+  const stub = real ? null : stubNpmDir("sh");
   const workDir = tempDir("pf-meta-420-pkg-");
+  const packageDir = real?.packageDir ?? workDir;
   const log = join(workDir, "npm.log");
   writeFileSync(log, "");
   const driver = join(workDir, "driver.sh");
@@ -145,12 +159,12 @@ function runSh({ file, mode }) {
     'green() { printf "%s\\n" "$*"; }',
     'yellow() { printf "%s\\n" "$*"; }',
     extractShFunction(SCRIPTS[file], "pf_npm_install"),
-    `pf_npm_install "${posix(workDir)}" "pforge-master"`,
+    `pf_npm_install "${posix(packageDir)}" "pforge-master"`,
     "echo AFTER",
     "",
   ].join("\n"));
-  const env = envWithStub(stub, { STUB_NPM_MODE: mode, STUB_NPM_LOG: log });
-  const result = spawnSync(BASH, [posix(driver)], { encoding: "utf8", timeout: 60_000, env });
+  const env = real ? { ...process.env, ...REAL_NPM_ENV } : envWithStub(stub, { STUB_NPM_MODE: mode, STUB_NPM_LOG: log });
+  const result = spawnSync(BASH, [posix(driver)], { encoding: "utf8", timeout: 60_000, env, cwd: real?.cwd });
   return { status: result.status, out: `${result.stdout}${result.stderr}`, log: readFileSync(log, "utf8"), workDir };
 }
 
@@ -221,10 +235,64 @@ describe.skipIf(!BASH)("shell helper", () => {
   });
 });
 
+// ─── real npm: the install happens in the package, wherever the script is run from (#422) ───
+
+/** A package with no dependencies, a directory with a package.json of its own, and one with none. */
+function realNpmFixture() {
+  const root = tempDir("pf-meta-422-");
+  const dirs = { pkg: join(root, "pkg"), host: join(root, "host"), bare: join(root, "bare") };
+  for (const dir of Object.values(dirs)) mkdirSync(dir);
+  writeFileSync(join(dirs.pkg, "package.json"), '{\n  "name": "pkg",\n  "version": "1.0.0"\n}\n');
+  writeFileSync(join(dirs.host, "package.json"), '{\n  "name": "host-app",\n  "version": "2.0.0"\n}\n');
+  return dirs;
+}
+
+/** What each run must leave: the package's own manifest untouched, and no link to the directory the script ran from. */
+function expectInstalledInPlace(run, dirs, manifestBefore) {
+  expect(run.status, run.out).toBe(0);
+  expect(run.out).toContain("npm install complete");
+  expect(run.out).not.toMatch(/failed/i);
+  expect(readFileSync(join(dirs.pkg, "package.json"), "utf8"), "the package's package.json").toBe(manifestBefore);
+  expect(existsSync(join(dirs.pkg, "node_modules", "host-app")), "a link to the directory the script ran from").toBe(false);
+}
+
+describe.each(PS_SHELLS)("PowerShell helper in $name, with real npm", ({ exe }) => {
+  it.each([
+    ["setup.ps1", "host", "a project that has a package.json of its own"],
+    ["pforge.ps1", "host", "a project that has a package.json of its own"],
+    ["setup.ps1", "bare", "a directory with no package.json"],
+    ["pforge.ps1", "bare", "a directory with no package.json"],
+  ])("%s installs in the package, not the current directory, when run from %s (%s)", (file, from) => {
+    const dirs = realNpmFixture();
+    const before = readFileSync(join(dirs.pkg, "package.json"), "utf8");
+    const run = runPs({ exe, file, real: { packageDir: dirs.pkg, cwd: dirs[from] } });
+    expectInstalledInPlace(run, dirs, before);
+  }, 180_000);
+});
+
+describe.skipIf(!BASH)("shell helper, with real npm", () => {
+  it.each([
+    ["setup.sh", "host"],
+    ["pforge.sh", "host"],
+    ["setup.sh", "bare"],
+    ["pforge.sh", "bare"],
+  ])("%s installs in the package, not the current directory, when run from %s", (file, from) => {
+    const dirs = realNpmFixture();
+    const before = readFileSync(join(dirs.pkg, "package.json"), "utf8");
+    const run = runSh({ file, real: { packageDir: dirs.pkg, cwd: dirs[from] } });
+    expectInstalledInPlace(run, dirs, before);
+  }, 180_000);
+});
+
 // ─── every call site uses the helper ─────────────────────────────────────────
 
 describe("the install steps of the four scripts", () => {
   const count = (source, pattern) => (source.match(pattern) ?? []).length;
+
+  it.each(Object.keys(SCRIPTS))("%s never gives npm install a --prefix (#422)", (file) => {
+    const code = SCRIPTS[file].split("\n").filter((line) => !/^\s*#/.test(line)).join("\n");
+    expect(code).not.toMatch(/npm\s+install[^\n]*--prefix/);
+  });
 
   it.each(["setup.ps1", "pforge.ps1"])("%s runs npm install only inside the helper, and calls the helper for pforge-mcp and pforge-master", (file) => {
     const source = SCRIPTS[file];

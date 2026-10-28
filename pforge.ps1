@@ -1591,17 +1591,25 @@ function Invoke-UpdateGuard([string]$Guard, [string]$Mode, [object[]]$Items, [st
 # $LASTEXITCODE, and the end of npm's own output says why it failed. Under 'Stop', Windows PowerShell 5.1 turns
 # the first line a native command writes to stderr into a terminating error, which would report an install
 # that only warned as failed and keep all but one line of the reason, so npm runs under 'Continue' here.
+# npm runs inside the package: `npm install --prefix <dir>` installs the package in the current directory into
+# <dir>, which added a file: dependency on that directory to the package.json, or failed outright where the
+# current directory has no package.json (#422).
 function Install-NpmDependencies([string]$PackageDir, [string]$Label) {
     $ErrorActionPreference = 'Continue'
     $output = @()
     $exitCode = 0
     $global:LASTEXITCODE = 0
+    $entered = $false
     try {
-        $output = @(& npm install --loglevel=error --prefix $PackageDir 2>&1)
+        Push-Location -LiteralPath $PackageDir -ErrorAction Stop
+        $entered = $true
+        $output = @(& npm install --loglevel=error 2>&1)
         $exitCode = $LASTEXITCODE
     } catch {
         $output = @($_.Exception.Message)
         $exitCode = 1
+    } finally {
+        if ($entered) { Pop-Location }
     }
     if ($exitCode -eq 0) {
         Write-Host "  ✅ npm install complete" -ForegroundColor Green

@@ -779,7 +779,7 @@ Use the `/forge-troubleshoot` skill to diagnose the failure:
 | Gate error: build failed | Stub or TODO in production code | Fill in the stub, then resume |
 | Gate error: test failed | Missing implementation or broken import | Fix the failing test, then resume |
 | CLI worker not found | `gh copilot` / `claude` / `codex` CLI not installed | Install CLI or switch to `mode: 'assisted'` |
-| MCP tools missing | `pforge-mcp/` dependencies not installed | Run `npm install --prefix pforge-mcp` |
+| MCP tools missing | `pforge-mcp/` dependencies not installed | Run `cd pforge-mcp && npm install` |
 | MCP tools missing, but deps are installed and `.vscode/mcp.json` is correct | An enterprise MCP allowlist is blocking the server | See [No `forge_*` tools in an enterprise tenant](#no-forge_-tools-in-an-enterprise-tenant) |
 | Cost overrun warning | Model too expensive for slice count | Switch to a cheaper model in `.forge.json` |
 | Slice stalled, no output | Run hung | Use `forge_abort`, then `resumeFrom` the stalled slice |

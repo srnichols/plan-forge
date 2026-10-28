@@ -83,7 +83,7 @@ Based on the failure type from Step 4:
 2. Suggest: switch to a cheaper model, reduce slice scope, or split into smaller slices
 
 #### MCP Tools Missing
-1. Verify `pforge-mcp/` has dependencies installed (`npm install --prefix pforge-mcp`)
+1. Verify `pforge-mcp/` has dependencies installed (`cd pforge-mcp && npm install`)
 2. Verify `.vscode/mcp.json` is present and correctly configured
 3. Suggest: re-run setup or manually start the MCP server
 

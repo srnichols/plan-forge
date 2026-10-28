@@ -25,6 +25,7 @@ import {
 } from "../update-plan.mjs";
 import { contentHash } from "../update-guard.mjs";
 import { IS_PLAN_FORGE_SOURCE } from "./helpers/source-repo.mjs";
+import { UPDATE_RUNTIME_FILES } from "./helpers/update-runtime.mjs";
 
 const REPO_ROOT = resolve(import.meta.dirname, "..", "..");
 const FIXTURES_ROOT = resolve(import.meta.dirname, "fixtures", "update-plan");
@@ -454,16 +455,12 @@ const KNOWN_D1_ADDITIONS = [".github/instructions/status-reporting.instructions.
  * The real modules `update-plan.mjs` itself ships alongside (plain `mcp`
  * byte-compare, not guidance) — every shell baseline reports all of these as
  * `NEW` against an empty `pforge-mcp/` project dir, so the fixture source
- * needs real copies of all of them, not just `update-guard.mjs`.
+ * needs real copies of all of them, not just `update-guard.mjs`. The list is
+ * the one the baseline test and every fake update source use, so a module the
+ * update runtime gains is added once (manifest-merge.mjs was missed here, and
+ * the committed baselines, which list it, no longer matched).
  */
-const SHIPPED_MCP_MODULES = [
-  "update-guard.mjs",
-  "detect-preset.mjs",
-  "migrate-forge-config.mjs",
-  "update-plan.mjs",
-  "preset-catalog.json",
-  "orchestrator/constants.mjs",
-];
+const SHIPPED_MCP_MODULES = UPDATE_RUNTIME_FILES.map((rel) => rel.replace(/^pforge-mcp\//, ""));
 
 /** Copy a fixture case into scratch dirs and wire in the real shipped `pforge-mcp` modules `update-plan.mjs` depends on (or reports as `NEW` itself). */
 function materializeFixture(caseName) {

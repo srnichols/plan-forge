@@ -715,6 +715,10 @@ Since v3.28.0, instruction, prompt, agent, skill, hook and runbook files are rep
 
 If you edited a file, update keeps your copy, reports it as `KEEP`, and writes the new version to `.forge/update-pending/<path>` so you can merge the changes you want. To take the new versions anyway, run with `--overwrite-customized`; each replaced file is first copied to `.forge/update-backups/<timestamp>/<path>`.
 
+#### Dependency ranges you raised
+
+`pforge-mcp/`, `pforge-master/` and `pforge-sdk/` each have a `package.json` in your repository, so Dependabot, or you, may raise a dependency range there. Update merges that file instead of replacing it (since v3.35.4): for each dependency the release declares, in `dependencies`, `devDependencies` and `optionalDependencies`, the higher range wins, and the line that reports the file says which of yours it kept, for example `Updated pforge-mcp/package.json (kept your newer ranges: express ^5.4.0)`. Everything else in the file is the release's: its `version`, `scripts`, `engines` and `overrides`, and the dependencies it adds. A range the release lowers, to go back from a bad bump, does not reach a project that already has a higher one, and a dependency that only your copy has is dropped, as before. A range that is not a plain version range (`latest`, a URL, `^1 || ^2`) is never kept. The lock file is the release's, and the `npm install` that follows an update resolves your ranges against it. To take the release's `package.json` exactly, run with `--overwrite-customized`; yours is copied to `.forge/update-backups/<timestamp>/` first.
+
 Update also lists files in `pforge-mcp/`, `pforge-master/` and `pforge-sdk/` that the new release no longer ships as `REMOVE`, and moves them to `.forge/update-backups/<timestamp>/` when it applies. Use `--yes` (or `-y`) to skip the confirmation prompt in scripts.
 
 Review the kept files with `pforge pending`, which `pforge smith` also reminds you about while any remain. Changes need `--yes`; without it, `apply` and `discard` only show what they would do.
@@ -732,7 +736,7 @@ pforge pending apply --all --yes       # or discard --all
 **What it does:**
 1. Compares `.forge.json` templateVersion with the source VERSION
 2. Hashes each framework file to detect actual changes
-3. Checks guidance files against the versions Plan Forge shipped, to find the ones you edited
+3. Checks guidance files against the versions Plan Forge shipped, to find the ones you edited, and merges the dependency ranges of the framework packages' `package.json` files with yours
 4. Shows a preview of updates (`UPDATE`), new files (`NEW`) and edited files it will keep (`KEEP`)
 5. Asks for confirmation (unless `--force`)
 6. Copies changed files, saves new versions of kept files under `.forge/update-pending/`, and updates `.forge.json` version

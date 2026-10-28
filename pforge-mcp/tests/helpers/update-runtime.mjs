@@ -14,6 +14,7 @@ const REPO_ROOT = fileURLToPath(new URL("../../../", import.meta.url));
 export const UPDATE_RUNTIME_FILES = Object.freeze([
   "pforge-mcp/update-plan.mjs",
   "pforge-mcp/update-guard.mjs",
+  "pforge-mcp/manifest-merge.mjs",
   "pforge-mcp/detect-preset.mjs",
   "pforge-mcp/migrate-forge-config.mjs",
   "pforge-mcp/preset-catalog.json",

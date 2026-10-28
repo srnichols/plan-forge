@@ -380,8 +380,11 @@ cmd_new_phase() {
         [ "$arg" = "--dry-run" ] && dry_run=true
     done
 
+    # The plan file is named from the phase name, so each character a file name cannot hold becomes a "-": a "/" or "\"
+    # made a path into a folder that is not there, and a ":" an alternate data stream on Windows (#431). The name stays
+    # as typed inside the plan and the roadmap. sed, not tr: BSD and GNU tr differ when the second set is shorter.
     local upper_name
-    upper_name="$(echo "$phase_name" | tr '[:lower:] ' '[:upper:]-')"
+    upper_name="$(printf '%s' "$phase_name" | tr '[:lower:] ' '[:upper:]-' | sed 's#[/\\:*?"<>|]#-#g')"
 
     local plans_dir="$REPO_ROOT/docs/plans"
     local next_num=1
@@ -2022,7 +2025,7 @@ for (const op of plan.operations) {
     fi
 
     # ─── Apply guidance files through the update guard (#280) ────
-    local _guided_apply=() _guard_flags=() _apply_out _res _detail
+    local _guided_apply=() _guard_flags=() _apply_out _res _detail _note
     for entry in ${_updates[@]+"${_updates[@]}"} ${_new_files[@]+"${_new_files[@]}"} ${_kept[@]+"${_kept[@]}"}; do
         _e_dst="${entry#*|}"; _e_dst="${_e_dst%%|*}"
         _pf_set_has "$_is_guided" "$_e_dst" && _guided_apply+=("$entry")
@@ -2037,7 +2040,8 @@ for (const op of plan.operations) {
         while IFS=$'\t' read -r _res _e_rel _detail; do
             case "$_res" in
                 added)     echo "  ✅ Added $_e_rel" ;;
-                updated)   echo "  ✅ Updated $_e_rel" ;;
+                # A package.json that kept ranges the project raised says which (#435).
+                updated)   _note=""; if [ -n "$_detail" ]; then _note=" ($_detail)"; fi; echo "  ✅ Updated $_e_rel$_note" ;;
                 overwrote) echo "  ✅ Updated $_e_rel (your version backed up to $_detail)" ;;
                 kept)      echo "  📝 Kept $_e_rel (customized); new version saved to $_detail" ;;
             esac

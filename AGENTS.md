@@ -5,7 +5,7 @@
 >
 > **Project**: Plan Forge
 > **Stack**: Node.js ESM (`.mjs`), no TypeScript build step. PowerShell 7+ AND Bash 3.2+ for every entry point (`setup.sh`, `validate-setup.sh` and `pforge.sh` run in the Bash and BSD tools macOS ships: no `declare -A`, `mapfile`, `grep -P` or `find -printf`; `bash-3-2-portability.test.mjs` guards it and the macOS job in `validate.yml` runs them).
-> **Node**: **22.12+** for shipped packages and for contributing (`engines.node` in every package; Node 20 reached end of life on 2026-04-30). Node 24 LTS is recommended. CI runs Node 24, plus the vitest suite on 22.12 to hold the floor.
+> **Node**: **22.12+** for the shipped packages (`engines.node` in every package; Node 20 reached end of life on 2026-04-30). **22.13+** to install the dev dependencies and run the tests: jsdom 29 and eslint-visitor-keys 5 ask for it, and npm only warns on a lower one (#438). Node 24 LTS is recommended. CI runs Node 24, plus the vitest suite on 22.12 to hold the runtime floor. jsdom 30 needs 22.22.2 or 24.15, so it stays out until the floor is raised on purpose.
 > **Lives on**: This file is dev-internal — ships from `planning/main`, NOT from `master`.
 
 ---

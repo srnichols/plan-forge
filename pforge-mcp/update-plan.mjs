@@ -22,7 +22,9 @@
  * skills, hooks, automations — anything under `.github/{prompts,instructions,
  * agents,skills,hooks,automations}/` or `docs/plans/`) go through `update-guard.mjs` so a
  * project's hand-edited copy is never silently replaced (#280). Everything
- * else (mcp, sdk, master, cli, validation, core) is a plain byte compare.
+ * else (mcp, sdk, master, cli, validation, core) is a plain byte compare, except the
+ * package.json of pforge-mcp, pforge-master and pforge-sdk: it is guided too, with a
+ * merge that keeps the dependency ranges a project raised itself (#435).
  *
  * A project whose `.forge.json` records the `custom` preset alone (or that is
  * planned with `--presets custom`) was installed with the shared files only, so
@@ -38,6 +40,7 @@ import { dirname, join, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import { detectPreset } from "./detect-preset.mjs";
 import { BACKUP_DIR, classifyFile, loadShippedHashes, readPlaceholderValues } from "./update-guard.mjs";
+import { classifyManifest, isPackageManifest } from "./manifest-merge.mjs";
 import { migrateForgeConfig } from "./migrate-forge-config.mjs";
 
 const MODULE_DIR = dirname(fileURLToPath(import.meta.url));
@@ -135,6 +138,19 @@ function plainEntry({ category, srcFull, dstFull, srcRoot, projectRoot }) {
   if (!existsSync(dstFull)) return { category, action: "new", src, dst, guided: false };
   if (filesDiffer(srcFull, dstFull)) return { category, action: "update", src, dst, guided: false };
   return null;
+}
+
+/**
+ * Build the operation for a framework package's package.json, or `null` when the
+ * project's already is what the merge would write (#435). It is guided, so both
+ * shells send it through the guard, which applies the same merge: a dependency
+ * range the project raised is kept, and the rest is the release's.
+ */
+function manifestEntry({ category, srcFull, dstFull, srcRoot, projectRoot }) {
+  const dstExists = existsSync(dstFull);
+  const { action } = classifyManifest({ sourceText: readFileSync(srcFull, "utf8"), projectText: dstExists ? readFileSync(dstFull, "utf8") : null });
+  if (action === "same") return null;
+  return { category, action, src: toPosix(relative(srcRoot, srcFull)), dst: toPosix(relative(projectRoot, dstFull)), guided: true };
 }
 
 /**
@@ -450,12 +466,13 @@ function scanRemovedPackageFiles({ category, pkgDir, sourceRoot, projectRoot }) 
     .map((rel) => ({ category, action: "remove", src: null, dst: `${pkgDir}/${rel}`, guided: false }));
 }
 
-/** The auto-discovered packages (mcp, sdk, master): every file, recursively, plain byte compare. */
+/** The auto-discovered packages (mcp, sdk, master): every file, recursively, plain byte compare except the package.json, which merges. */
 function scanAutoDiscoverPackage({ category, pkgDir, sourceRoot, projectRoot }) {
   const srcPkg = join(sourceRoot, pkgDir);
   const out = [];
   for (const rel of walkRecursive(srcPkg)) {
-    const entry = plainEntry({
+    const entryOf = isPackageManifest(`${pkgDir}/${rel}`) ? manifestEntry : plainEntry;
+    const entry = entryOf({
       category,
       srcFull: join(srcPkg, rel),
       dstFull: join(projectRoot, pkgDir, rel),

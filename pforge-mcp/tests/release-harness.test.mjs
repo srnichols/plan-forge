@@ -93,9 +93,12 @@ describe("release-checks.json", () => {
 describe("tags (#128)", () => {
   let repo;
   let commits;
-  const git = (args, cwd = repo) => execFileSync("git", args, { cwd, encoding: "utf8" }).trim();
+  // Every git command here runs with an identity: an annotated tag needs one as a commit does, and a CI runner has
+  // none, so the tag in beforeAll threw there, the suite never started and its five tests were skipped (#436).
+  const identity = { GIT_AUTHOR_NAME: "t", GIT_AUTHOR_EMAIL: "t@t", GIT_COMMITTER_NAME: "t", GIT_COMMITTER_EMAIL: "t@t" };
+  const git = (args, cwd = repo) => execFileSync("git", args, { cwd, encoding: "utf8", env: { ...process.env, ...identity } }).trim();
   const commit = (msg) => {
-    git(["-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "--allow-empty", "-m", msg]);
+    git(["commit", "-q", "--allow-empty", "-m", msg]);
     return git(["rev-parse", "HEAD"]);
   };
 

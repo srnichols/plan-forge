@@ -153,7 +153,7 @@ const PWSH = spawnSync("pwsh", ["-NoProfile", "-Command", "exit 0"], { stdio: "i
 const hasWrappers = existsSync(join(REPO_ROOT, "pforge.ps1")) && existsSync(join(REPO_ROOT, "pforge.sh"));
 
 function installWrappers() {
-  for (const f of ["pforge.ps1", "pforge.sh", "pforge-mcp/update-pending.mjs", "pforge-mcp/update-guard.mjs"]) {
+  for (const f of ["pforge.ps1", "pforge.sh", "pforge-mcp/update-pending.mjs", "pforge-mcp/update-guard.mjs", "pforge-mcp/manifest-merge.mjs"]) {
     mkdirSync(dirname(join(project, f)), { recursive: true });
     copyFileSync(join(REPO_ROOT, f), join(project, f));
   }

@@ -19,6 +19,13 @@
  * project's placeholder values turned back into tokens, so setup's rendering
  * does not look like a customization.
  *
+ * The package.json of pforge-mcp, pforge-master and pforge-sdk goes through the
+ * guard too, with a merge instead of the hash index (manifest-merge.mjs, #435): a
+ * dependency range the project raised is kept, and the rest is the release's. Such
+ * a manifest is never "customized"; it is new, same, or an update, and an update
+ * that kept ranges says so in the detail column. With --overwrite-customized the
+ * release's manifest replaces it as it is, after the project's is backed up.
+ *
  * CLI (paths in the list are relative, so no shell has to translate them):
  *   node update-guard.mjs plan  --source <dir> --project <dir> --list <tsv> [--index <file>]
  *   node update-guard.mjs apply --source <dir> --project <dir> --list <tsv> [--index <file>] [--overwrite-customized]
@@ -26,7 +33,7 @@
  * a project's installed copy of the guard can run against any update source.
  * List lines: "<path in source>\t<path in project>". Output lines are tab-separated:
  *   plan:  <new|same|update|customized>\t<path in project>
- *   apply: <added|updated|unchanged|kept|overwrote>\t<path in project>\t<pending or backup path>
+ *   apply: <added|updated|unchanged|kept|overwrote>\t<path in project>\t<pending or backup path, or a note>
  *
  * @module update-guard
  */
@@ -35,6 +42,7 @@ import { createHash } from "node:crypto";
 import { copyFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { classifyManifest, describeKept, isPackageManifest } from "./manifest-merge.mjs";
 
 export const PENDING_DIR = ".forge/update-pending";
 export const BACKUP_DIR = ".forge/update-backups";
@@ -91,11 +99,12 @@ export function loadShippedHashes(indexPath = DEFAULT_INDEX_PATH) {
 }
 
 /**
- * Decide what update should do with one guidance file.
+ * Decide what update should do with one guidance file, or with a framework package's manifest.
  * @returns {{ action: "new"|"same"|"update"|"customized", content: string }}
- *          content is the text to write: rendered Markdown, or the source text.
+ *          content is the text to write: rendered Markdown, the merged manifest, or the source text.
  */
-export function classifyFile({ sourceText, projectText, isMarkdown, values, shippedHashes }) {
+export function classifyFile({ sourceText, projectText, isMarkdown, isManifest = false, values, shippedHashes }) {
+  if (isManifest) return classifyManifest({ sourceText, projectText });
   const content = isMarkdown ? renderPlaceholders(sourceText, values) : sourceText;
   if (projectText === null) return { action: "new", content };
   if (normalizeText(projectText) === normalizeText(content)) return { action: "same", content };
@@ -117,29 +126,42 @@ function writeWithDirs(path, content) {
 export function planUpdates(entries, { sourceRoot, projectRoot, shippedHashes, values = readPlaceholderValues(projectRoot) }) {
   return entries.map(({ sourcePath, projectPath }) => {
     const isMarkdown = projectPath.toLowerCase().endsWith(".md");
-    const { action, content } = classifyFile({
+    const isManifest = isPackageManifest(projectPath);
+    const { action, content, kept = [], releaseText } = classifyFile({
       sourceText: readFileSync(join(sourceRoot, sourcePath), "utf8"),
       projectText: readIfExists(join(projectRoot, projectPath)),
       isMarkdown,
+      isManifest,
       values,
       shippedHashes,
     });
-    return { sourcePath, projectPath, action, content, isMarkdown };
+    return { sourcePath, projectPath, action, content, isMarkdown, isManifest, kept, releaseText };
   });
 }
 
-/** Apply a plan. Non-Markdown files are copied byte for byte, as before. */
+/** --overwrite-customized on a manifest that holds ranges newer than the release's: the project's is backed up, the release's is written as it is. */
+function overwriteManifest(item, { projectRoot, stamp }) {
+  const target = join(projectRoot, item.projectPath);
+  const backup = `${BACKUP_DIR}/${stamp}/${item.projectPath}`;
+  writeWithDirs(join(projectRoot, backup), readFileSync(target, "utf8"));
+  writeWithDirs(target, item.releaseText);
+  return { result: "overwrote", projectPath: item.projectPath, detail: backup };
+}
+
+/** Apply a plan. Files that are neither Markdown nor manifests are copied byte for byte, as before. */
 export function applyUpdates(plan, { sourceRoot, projectRoot, overwriteCustomized = false, stamp = new Date().toISOString().replace(/[:.]/g, "-") }) {
   return plan.map((item) => {
     const target = join(projectRoot, item.projectPath);
-    const write = () => (item.isMarkdown ? writeWithDirs(target, item.content) : (mkdirSync(dirname(target), { recursive: true }), copyFileSync(join(sourceRoot, item.sourcePath), target)));
+    const kept = item.kept ?? [];
+    const write = () => (item.isMarkdown || item.isManifest ? writeWithDirs(target, item.content) : (mkdirSync(dirname(target), { recursive: true }), copyFileSync(join(sourceRoot, item.sourcePath), target)));
     switch (item.action) {
       case "new":
         write();
         return { result: "added", projectPath: item.projectPath, detail: "" };
       case "update":
+        if (item.isManifest && overwriteCustomized && kept.length > 0) return overwriteManifest(item, { projectRoot, stamp });
         write();
-        return { result: "updated", projectPath: item.projectPath, detail: "" };
+        return { result: "updated", projectPath: item.projectPath, detail: describeKept(kept) };
       case "same":
         return { result: "unchanged", projectPath: item.projectPath, detail: "" };
       default: {

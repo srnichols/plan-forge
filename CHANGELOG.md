@@ -7,6 +7,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+## [3.35.2] — 2026-10-28 — Instructions stop stating old tool counts, a lockfile cannot name a private mirror, and the zod and compressed-body advisories are closed
+
 ### Fixed
 
 - Instructions and pages no longer state tool counts from several releases ago. The server registers 107 tools. `.github/copilot-instructions.md` said 36 and the two copies under `templates/` said 17; `AGENT-SETUP.md` said 88 (as of v3.5.1) and 36; `docs/docs.html` and `docs/speckit-interop.html` said 17, `docs/faq.html` said 19 and listed 19 names, and the description of the MCP server reference said 77. The instruction files and `AGENT-SETUP.md` now say "the `forge_*` tools" and point at `forge_capabilities` for the list, so they cannot go stale, and the pages say 107. The `custom` preset installs the repository's own `.github/copilot-instructions.md`, so `custom` projects received the stale line; the other presets use copies of their own that carry no count. A test fails on an "N forge tools" claim in any tracked text file outside dated history (the changelog, plans, research, blog posts, the audit and architecture notes, the long-form manual), and on "all N tools" or "N MCP tools" in the files that state the whole surface, when N is not the registry's. (#413)

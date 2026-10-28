@@ -1310,6 +1310,27 @@ EOF
 }
 
 # ─── Command: update ───────────────────────────────────────────────────
+# Sets and maps are held in strings, one member or "key<TAB>value" per line, the string starting with a newline
+# (`local set=$'\n'`; add with `set+="$member"$'\n'`). `declare -A` is Bash 4.0+, and macOS ships Bash 3.2 (#427).
+_pf_set_has() {
+    local nl=$'\n'
+    case "$1" in *"$nl$2$nl"*) return 0 ;; esac
+    return 1
+}
+
+# Puts the value of key $2 in map $1 into the variable named by $3, empty when the key is not there. The newline
+# and tab sit in variables because $'...' inside a quoted ${...#...} is read differently by Bash 3.2 and 4.
+_pf_map_get() {
+    local nl=$'\n' tab=$'\t' rest
+    rest=${1#*"$nl$2$tab"}
+    if [ "$rest" = "$1" ]; then
+        rest=""
+    else
+        rest=${rest%%"$nl"*}
+    fi
+    printf -v "$3" '%s' "$rest"
+}
+
 _pf_sha256() {
     if command -v sha256sum >/dev/null 2>&1; then
         sha256sum "$1" | cut -d' ' -f1
@@ -1768,16 +1789,16 @@ cmd_update() {
     # Map operations back into _updates / _new_files, matching the shape the
     # confirm/apply/guard/pending machinery below already expects. Node parses
     # the JSON (#297 — never Python or PCRE grep); paths are already posix/rel.
-    declare -A _offered=() _is_guided=()
+    local _offered=$'\n' _is_guided=$'\n'
     local _op_action _op_src _op_dst _op_guided
     while IFS=$'\t' read -r _op_action _op_src _op_dst _op_guided; do
         [ -z "$_op_action" ] && continue
         if [ "$_op_action" = "remove" ]; then _removals+=("$_op_dst"); continue; fi
         local _full_src="$source_path/$_op_src" _full_dst="$REPO_ROOT/$_op_dst"
-        _offered["$_op_dst"]=1
+        _offered+="$_op_dst"$'\n'
         # Guided only when a guard can apply it; without one, guidance files
         # are replaced when they differ, as releases before the guard did.
-        if [ "$_op_guided" = "1" ] && [ -n "$update_guard" ]; then _is_guided["$_full_dst"]=1; fi
+        if [ "$_op_guided" = "1" ] && [ -n "$update_guard" ]; then _is_guided+="$_full_dst"$'\n'; fi
         if [ "$_op_action" = "new" ]; then
             _new_files+=("$_full_src|$_full_dst|$_op_dst")
         else
@@ -1804,7 +1825,7 @@ for (const op of plan.operations) {
             [ -d "$_dst_dir" ] || continue
             while IFS= read -r -d '' _f; do
                 _dst_rel="${_f#"$REPO_ROOT"/}"
-                [ -n "${_offered[$_dst_rel]+x}" ] && continue
+                _pf_set_has "$_offered" "$_dst_rel" && continue
                 _nu_skip=false
                 for nu in "${_never_update[@]}"; do
                     [ "$nu" = "$_dst_rel" ] && _nu_skip=true && break
@@ -1836,7 +1857,7 @@ for (const op of plan.operations) {
     local _kept=() _guided=()
     for entry in ${_updates[@]+"${_updates[@]}"} ${_new_files[@]+"${_new_files[@]}"}; do
         _e_dst="${entry#*|}"; _e_dst="${_e_dst%%|*}"
-        [ -n "${_is_guided[$_e_dst]+x}" ] && _guided+=("$entry")
+        _pf_set_has "$_is_guided" "$_e_dst" && _guided+=("$entry")
     done
     local _guard_candidates=(${_guided[@]+"${_guided[@]}"} ${_kept_candidates[@]+"${_kept_candidates[@]}"})
     if [ "${#_guard_candidates[@]}" -gt 0 ] && [ -z "$update_guard" ]; then
@@ -1849,9 +1870,9 @@ for (const op of plan.operations) {
             _pf_gh_cleanup
             return 1
         fi
-        declare -A _guard_action=()
+        local _guard_action=$'\n' _verdict
         while IFS=$'\t' read -r _act _e_rel; do
-            [ -n "$_e_rel" ] && _guard_action["$_e_rel"]="$_act"
+            [ -n "$_e_rel" ] && _guard_action+="$_e_rel"$'\t'"$_act"$'\n'
         done <<< "$_plan_out"
         # Mirrors PS1's Invoke-Update exactly: a guided _updates/_new_files
         # entry survives only if the guard still calls it update/new; any
@@ -1862,20 +1883,23 @@ for (const op of plan.operations) {
         local _upd2=() _new2=()
         for entry in ${_updates[@]+"${_updates[@]}"}; do
             _e_dst="${entry#*|}"; _e_dst="${_e_dst%%|*}"
-            if [ -z "${_is_guided[$_e_dst]+x}" ]; then _upd2+=("$entry"); continue; fi
-            [ "${_guard_action[${_e_dst#"$REPO_ROOT"/}]:-}" = "update" ] && _upd2+=("$entry")
+            if ! _pf_set_has "$_is_guided" "$_e_dst"; then _upd2+=("$entry"); continue; fi
+            _pf_map_get "$_guard_action" "${_e_dst#"$REPO_ROOT"/}" _verdict
+            [ "$_verdict" = "update" ] && _upd2+=("$entry")
         done
         for entry in ${_new_files[@]+"${_new_files[@]}"}; do
             _e_dst="${entry#*|}"; _e_dst="${_e_dst%%|*}"
-            if [ -z "${_is_guided[$_e_dst]+x}" ]; then _new2+=("$entry"); continue; fi
-            [ "${_guard_action[${_e_dst#"$REPO_ROOT"/}]:-}" = "new" ] && _new2+=("$entry")
+            if ! _pf_set_has "$_is_guided" "$_e_dst"; then _new2+=("$entry"); continue; fi
+            _pf_map_get "$_guard_action" "${_e_dst#"$REPO_ROOT"/}" _verdict
+            [ "$_verdict" = "new" ] && _new2+=("$entry")
         done
         _updates=(${_upd2[@]+"${_upd2[@]}"})
         _new_files=(${_new2[@]+"${_new2[@]}"})
         for entry in ${_guard_candidates[@]+"${_guard_candidates[@]}"}; do
             _e_dst="${entry#*|}"; _e_dst="${_e_dst%%|*}"
-            _is_guided["$_e_dst"]=1
-            [ "${_guard_action[${_e_dst#"$REPO_ROOT"/}]:-}" = "customized" ] && _kept+=("$entry")
+            _is_guided+="$_e_dst"$'\n'
+            _pf_map_get "$_guard_action" "${_e_dst#"$REPO_ROOT"/}" _verdict
+            [ "$_verdict" = "customized" ] && _kept+=("$entry")
         done
         if $overwrite_customized && [ "${#_kept[@]}" -gt 0 ]; then
             for entry in "${_kept[@]}"; do
@@ -1943,7 +1967,7 @@ for (const op of plan.operations) {
     for entry in ${_updates[@]+"${_updates[@]}"}; do
         local src="${entry%%|*}" rest="${entry#*|}"
         local dst="${rest%%|*}" name="${rest##*|}"
-        [ -n "${_is_guided[$dst]+x}" ] && continue
+        _pf_set_has "$_is_guided" "$dst" && continue
         cp "$src" "$dst"
         echo "  ✅ Updated $name"
     done
@@ -1952,7 +1976,7 @@ for (const op of plan.operations) {
     for entry in ${_new_files[@]+"${_new_files[@]}"}; do
         local src="${entry%%|*}" rest="${entry#*|}"
         local dst="${rest%%|*}" name="${rest##*|}"
-        [ -n "${_is_guided[$dst]+x}" ] && continue
+        _pf_set_has "$_is_guided" "$dst" && continue
         mkdir -p "$(dirname "$dst")"
         cp "$src" "$dst"
         echo "  ✅ Added $name"
@@ -1965,7 +1989,7 @@ for (const op of plan.operations) {
     local _guided_apply=() _guard_flags=() _apply_out _res _detail
     for entry in ${_updates[@]+"${_updates[@]}"} ${_new_files[@]+"${_new_files[@]}"} ${_kept[@]+"${_kept[@]}"}; do
         _e_dst="${entry#*|}"; _e_dst="${_e_dst%%|*}"
-        [ -n "${_is_guided[$_e_dst]+x}" ] && _guided_apply+=("$entry")
+        _pf_set_has "$_is_guided" "$_e_dst" && _guided_apply+=("$entry")
     done
     if [ "${#_guided_apply[@]}" -gt 0 ]; then
         $overwrite_customized && _guard_flags+=("--overwrite-customized")
@@ -4300,8 +4324,10 @@ cmd_run_plan() {
         local quorum_val="${quorum_arg#--quorum=}"
         local enums_cli_qm="$REPO_ROOT/pforge-mcp/bin/enums-cli.mjs"
         if command -v node >/dev/null 2>&1 && [ -f "$enums_cli_qm" ]; then
-            local valid_qmodes=()
-            mapfile -t valid_qmodes < <(node "$enums_cli_qm" --enum QUORUM_MODES 2>/dev/null)
+            local valid_qmodes=() qm_line
+            while IFS= read -r qm_line; do
+                if [ -n "$qm_line" ]; then valid_qmodes+=("$qm_line"); fi
+            done < <(node "$enums_cli_qm" --enum QUORUM_MODES 2>/dev/null)
             if [ ${#valid_qmodes[@]} -gt 0 ]; then
                 local qm_valid=false
                 for qm in "${valid_qmodes[@]}"; do

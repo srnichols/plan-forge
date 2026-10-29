@@ -212,6 +212,16 @@ describe("fetchNewestSemverTag", () => {
     expect(newest).toBeNull();
   });
 
+  it("returns null when the answer is not a list of tags, or GitHub did not answer 200", async () => {
+    expect(await fetchNewestSemverTag({ fetchImpl: makeFetch(200, { message: "Not Found" }), env: {} })).toBeNull();
+    expect(await fetchNewestSemverTag({ fetchImpl: makeFetch(500, [{ name: "v2.80.1" }]), env: {} })).toBeNull();
+  });
+
+  it("returns null when no tag in the list is a stable semver tag", async () => {
+    const tags = [{ name: "v3.0.0-beta.1" }, { name: "pre-phase-29" }, {}];
+    expect(await fetchNewestSemverTag({ fetchImpl: makeFetch(200, tags), env: {} })).toBeNull();
+  });
+
   it("sends GH_TOKEN as an Authorization header, like the release request does (#446)", async () => {
     const fetch = makeFetch(200, [{ name: "v2.80.1" }]);
     await fetchNewestSemverTag({ fetchImpl: fetch, env: { GH_TOKEN: "ghp_gh_cli" } });

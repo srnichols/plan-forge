@@ -143,6 +143,22 @@ function compareSemver(a, b) {
 }
 
 // ─── Drift detection ─────────────────────────────────────────────────
+// The newest stable (non-pre-release) semver tag name in a /tags listing, or null.
+function newestStableTagName(tags) {
+  let newest = null;
+  let newestName = null;
+  for (const t of tags) {
+    const parsed = parseSemver(t?.name);
+    // Skip pre-releases — we only want stable tags for drift comparison.
+    if (!parsed || parsed.pre) continue;
+    if (!newest || compareSemver(parsed, newest) > 0) {
+      newest = parsed;
+      newestName = t.name;
+    }
+  }
+  return newestName;
+}
+
 // Fetches /tags and returns the newest stable semver tag. Used to detect
 // the case where tags have been pushed but no GitHub Release was cut —
 // /releases/latest then silently returns an older version than HEAD.
@@ -162,21 +178,7 @@ export async function fetchNewestSemverTag({ fetchImpl = globalThis.fetch, env =
   if (!res.ok) return null;
   let tags;
   try { tags = await res.json(); } catch { return null; }
-  if (!Array.isArray(tags)) return null;
-
-  let newest = null;
-  let newestName = null;
-  for (const t of tags) {
-    const parsed = parseSemver(t?.name);
-    if (!parsed) continue;
-    // Skip pre-releases — we only want stable tags for drift comparison.
-    if (parsed.pre) continue;
-    if (!newest || compareSemver(parsed, newest) > 0) {
-      newest = parsed;
-      newestName = t.name;
-    }
-  }
-  return newestName;
+  return Array.isArray(tags) ? newestStableTagName(tags) : null;
 }
 
 // Returns { drift: boolean, newestTag, releaseTag, message }. Non-null only

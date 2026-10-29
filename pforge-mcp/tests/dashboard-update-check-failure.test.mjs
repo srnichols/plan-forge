@@ -36,7 +36,7 @@ async function pressTheButton(body, { ok = true, status = 200 } = {}) {
   const localStorage = { setItem() {}, removeItem() {}, getItem: () => null };
   const addNotification = (text, type) => notifications.push({ text, type });
   await loadTriggerUpdateCheck()(document, fetch, localStorage, addNotification, escapeHtml, "")();
-  return { notifications, requests, button };
+  return { notifications, requests, button, banner };
 }
 
 describe("dashboard manual update check (#446)", () => {
@@ -67,6 +67,62 @@ describe("dashboard manual update check (#446)", () => {
     const { notifications } = await pressTheButton({ available: false, current: "3.35.4", checkFailed: true });
     expect(notifications[0].text).toMatch(/Update check failed/);
     expect(notifications[0].type).toBe("warning");
+  });
+
+  // A forced check that GitHub could not answer is answered from the cache, and the endpoint says so with a `failure`.
+  // The button's title says it bypasses the cache, so "Up to date" would be GitHub's word when it is the cache's.
+  describe("when the cache answered because GitHub could not be asked", () => {
+    const CHECKED_AT = "2026-10-29T08:12:34.567Z";
+
+    it("says the answer is the cache's, which check it is from, and why GitHub was not asked, instead of 'Up to date'", async () => {
+      const { notifications } = await pressTheButton({ available: false, current: "3.35.4", latest: "3.35.4", fromCache: true, checkedAt: CHECKED_AT, failure: FAILURE });
+      expect(notifications).toHaveLength(1);
+      expect(notifications[0].type).toBe("warning");
+      expect(notifications[0].text).toContain("No newer release");
+      expect(notifications[0].text).toContain("v3.35.4");
+      expect(notifications[0].text).toContain("2026-10-29 08:12 UTC");
+      expect(notifications[0].text).toContain("GitHub could not be asked just now");
+      expect(notifications[0].text).toContain("rate limit");
+      expect(notifications[0].text).not.toContain("Up to date");
+    });
+
+    it("still announces a newer release, and says it is the cache's", async () => {
+      const { notifications } = await pressTheButton({ available: true, current: "3.35.4", latest: "3.35.5", url: "https://example.test/v3.35.5", fromCache: true, checkedAt: CHECKED_AT, failure: FAILURE });
+      expect(notifications).toHaveLength(1);
+      expect(notifications[0].type).toBe("warning");
+      expect(notifications[0].text).toContain("Update available: v3.35.5 (you are on v3.35.4)");
+      expect(notifications[0].text).toContain("2026-10-29 08:12 UTC");
+      expect(notifications[0].text).toContain("GitHub could not be asked just now");
+    });
+
+    it("shows the banner for a newer release it got from the cache", async () => {
+      const { banner } = await pressTheButton({ available: true, current: "3.35.4", latest: "3.35.5", url: "https://example.test/v3.35.5", fromCache: true, checkedAt: CHECKED_AT, failure: FAILURE });
+      expect(banner.dataset.latest).toBe("3.35.5");
+    });
+
+    it("escapes what the server says here too", async () => {
+      const failure = { kind: "network", message: "<img src=x onerror=alert(1)>" };
+      const { notifications } = await pressTheButton({ available: false, current: "3.35.4", latest: "3.35.4", fromCache: true, checkedAt: CHECKED_AT, failure });
+      expect(notifications[0].text).not.toContain("<img");
+      expect(notifications[0].text).toContain("&lt;img");
+    });
+
+    it("escapes the time too, as it comes from the server like the reason does", async () => {
+      const { notifications } = await pressTheButton({ available: false, current: "3.35.4", latest: "3.35.4", fromCache: true, checkedAt: "<img src=x onerror=alert(1)>", failure: FAILURE });
+      expect(notifications[0].text).not.toContain("<img");
+      expect(notifications[0].text).toContain("&lt;img");
+    });
+
+    it("copes with an answer that carries no time", async () => {
+      const { notifications } = await pressTheButton({ available: false, current: "3.35.4", latest: "3.35.4", fromCache: true, failure: FAILURE });
+      expect(notifications[0].text).toContain("GitHub could not be asked just now");
+      expect(notifications[0].text).not.toContain("undefined");
+    });
+
+    it("does not add any of it to an answer from the cache that never needed GitHub", async () => {
+      const { notifications } = await pressTheButton({ available: false, current: "3.35.4", latest: "3.35.4", fromCache: true, checkedAt: CHECKED_AT });
+      expect(notifications).toEqual([{ text: "Up to date (v3.35.4)", type: "success" }]);
+    });
   });
 
   it("gives the button back after a failed check", async () => {

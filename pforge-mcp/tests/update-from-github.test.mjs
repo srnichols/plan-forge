@@ -146,6 +146,24 @@ describe("resolveTag", () => {
     expect(`${error.message} ${JSON.stringify(error)}`).not.toContain("ghp_secret_value_1234567890");
   });
 
+  // fetch quotes a header value it rejects in the error it throws. A token with a newline in it is such a value, and the
+  // error became "Network error: Headers.append: "token ghp_...": an invalid header value", with the token in it.
+  it("goes on without a token that is not a valid header value, and never puts it in an error", async () => {
+    const SECRET = "ghp_REVIEWSECRET0123456789";
+    const seen = [];
+    const fetchImpl = async (_url, init) => {
+      new Headers(init.headers);
+      seen.push(init.headers);
+      return { ok: true, status: 200, statusText: "OK", headers: { get: () => null }, json: async () => ({ tag_name: "v2.50.0" }) };
+    };
+    for (const env of [{ GITHUB_TOKEN: `${SECRET}\nabcdef` }, { GH_TOKEN: `${SECRET}\r\nabcdef` }, { GITHUB_TOKEN: `${SECRET} abcdef` }]) {
+      const tag = await resolveTag({ fetchImpl, env }).catch((e) => e);
+      expect(tag, JSON.stringify(Object.keys(env))).toBe("v2.50.0");
+    }
+    expect(seen).toHaveLength(3);
+    for (const headers of seen) expect(headers).not.toHaveProperty("authorization");
+  });
+
   // A pinned tag has to name a version. `pforge self-update --force` built "v" from a check that had failed, resolve-tag
   // answered ok with it, and the download then said "Tag 'v' not found on GitHub".
   it.each(["v", "V", " ", "v1", "1.2", "v1.2.3.4", "main", "pre-phase-29", "v2.50.0 ", "../v2.50.0", "v2.50.0/../../x", "v2.50.0?x=1"])(

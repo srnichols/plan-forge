@@ -653,6 +653,19 @@ describe("checkForUpdateWithReason (#446)", () => {
       expect(reason.message).not.toMatch(/GITHUB_TOKEN|GH_TOKEN/);
     });
 
+    // GitHub sends its quota headers on every response, a secondary limit's too, so the reset time that comes with a
+    // Retry-After is the hourly quota's. Waiting for it would be waiting for an hour when GitHub asked for a minute.
+    it("words a secondary limit as the wait GitHub asked for, though its quota headers say there is quota left", async () => {
+      const secondary = reply(403, {
+        body: { message: "You have exceeded a secondary rate limit." },
+        headers: { "retry-after": 60, "x-ratelimit-limit": 5000, "x-ratelimit-remaining": 4800, "x-ratelimit-reset": RESET_EPOCH },
+      });
+      const { reason } = await check({ fetchImpl: secondary });
+      expect(reason).toMatchObject({ kind: "rate-limited", retryAfterSeconds: 60, resetAt: null });
+      expect(reason.message).toMatch(/wait about 1 minute/);
+      expect(reason.message).not.toMatch(/used up|until|09:00|GITHUB_TOKEN|GH_TOKEN/);
+    });
+
     it("says the token was rejected when it was, and that the limit is the anonymous one", async () => {
       const { fetchImpl } = recordingFetch((headers) => (headers.authorization ? makeResponse(401) : exhausted()));
       const { reason } = await check({ fetchImpl, env: { GH_TOKEN: "ghp_stale" } });
@@ -704,6 +717,44 @@ describe("checkForUpdateWithReason (#446)", () => {
       const shape = await runSelfUpdateCheck({ currentVersion: CURRENT, projectDir: dir, fetchImpl: exhausted, env: { GH_TOKEN: "ghp_secret_value_1234567890" } });
       expect(JSON.stringify(shape)).not.toContain("ghp_secret_value_1234567890");
     });
+
+    // The real header validation, without a network: a fetch that builds the Headers fetch builds, and throws what fetch
+    // throws. fetch quotes the whole header in that error, so a token it rejects must never reach it.
+    describe("with a token that is not a valid header value", () => {
+      const SECRET = "ghp_REVIEWSECRET0123456789";
+      const validatingFetch = (answer) => async (_url, init) => {
+        new Headers(init.headers);
+        return answer;
+      };
+      const ok = () => makeResponse(200, { body: { tag_name: "v3.35.5" } });
+
+      it.each([
+        ["a newline", `${SECRET}\nabcdef`],
+        ["a carriage return", `${SECRET}\rabcdef`],
+        ["a NUL", `${SECRET}\u0000abcdef`],
+        ["a space", `${SECRET} abcdef`],
+      ])("goes on without it, and does not print it, when it has %s", async (_what, token) => {
+        const out = await check({ fetchImpl: validatingFetch(ok()), env: { GITHUB_TOKEN: token } });
+        expect(out.reason).toBeNull();
+        expect(out.result).toMatchObject({ latest: "3.35.5", fromCache: false });
+        expect(JSON.stringify(out)).not.toContain(SECRET);
+      });
+
+      it("sends the request without an authorization header", async () => {
+        const seen = [];
+        const fetchImpl = async (_url, init) => { new Headers(init.headers); seen.push(init.headers); return ok(); };
+        await check({ fetchImpl, env: { GH_TOKEN: `${SECRET}\nabcdef` } });
+        expect(seen).toHaveLength(1);
+        expect(seen[0]).not.toHaveProperty("authorization");
+      });
+
+      it("uses the other variable when it holds a token that can be sent", async () => {
+        const seen = [];
+        const fetchImpl = async (_url, init) => { new Headers(init.headers); seen.push(init.headers); return ok(); };
+        await check({ fetchImpl, env: { GITHUB_TOKEN: `${SECRET}\nabcdef`, GH_TOKEN: "ghp_good" } });
+        expect(seen[0].authorization).toBe("token ghp_good");
+      });
+    });
   });
 
   describe("a forced check that cannot reach GitHub", () => {
@@ -743,6 +794,13 @@ describe("checkForUpdateWithReason (#446)", () => {
       expect((await check({ fetchImpl: exhausted })).result).toBeNull();
     });
 
+    it("does not answer from an entry whose time is not a date", async () => {
+      for (const checkedAt of ["yesterday", "2026-13-45T99:99:99Z", "", "NaN", {}, []]) {
+        write(fresh({ checkedAt }));
+        expect((await check({ fetchImpl: exhausted })).result, `checkedAt: ${JSON.stringify(checkedAt)}`).toBeNull();
+      }
+    });
+
     it("does not answer from an entry whose version is not a release version", async () => {
       for (const latest of ["garbage", "3", "3.35", "", null, 335]) {
         write({ latest, checkedAt: new Date().toISOString() });
@@ -779,6 +837,59 @@ describe("checkForUpdateWithReason (#446)", () => {
       write(fresh());
       const out = await checkForUpdate({ currentVersion: CURRENT, projectDir: dir, fetchImpl: exhausted, env: {}, force: true });
       expect(out).toMatchObject({ latest: "3.35.5", fromCache: true });
+    });
+
+    // What `pforge update` leaves in the cache after it installs a release (writeFreshCache) is "the version I just
+    // installed", not an answer from GitHub. After a pinned older tag, or from a sibling clone at a -dev version, it can
+    // say "current" when GitHub holds a newer release, or name a version that has no tag.
+    describe("an entry the installer wrote", () => {
+      it("is marked as the installer's, so it can be told from what GitHub answered", () => {
+        writeFreshCache(dir, "3.35.4");
+        expect(JSON.parse(readFileSync(cachePath(dir), "utf-8"))).toMatchObject({ latest: "3.35.4", source: "install" });
+      });
+
+      it("is not used as the answer of a forced check that GitHub does not answer", async () => {
+        writeFreshCache(dir, CURRENT);
+        const out = await check({ fetchImpl: exhausted });
+        expect(out.result).toBeNull();
+        expect(out.reason.kind).toBe("rate-limited");
+      });
+
+      it("makes a rate-limited `pforge self-update` stop, not say 'Already current'", async () => {
+        writeFreshCache(dir, CURRENT);
+        const shape = await runSelfUpdateCheck({ currentVersion: CURRENT, projectDir: dir, fetchImpl: exhausted, env: {} });
+        expect(shape).toMatchObject({ checkFailed: true, reason: { kind: "rate-limited" } });
+        expect(shape).not.toHaveProperty("latest");
+        expect(shape).not.toHaveProperty("notice");
+      });
+
+      it("is still what an unforced check answers from, which is what it is written for", async () => {
+        writeFreshCache(dir, CURRENT);
+        const { fetchImpl, requests } = recordingFetch(() => makeResponse(200, { body: { tag_name: "v9.9.9" } }));
+        const out = await checkForUpdateWithReason({ currentVersion: CURRENT, projectDir: dir, force: false, env: {}, fetchImpl });
+        expect(out.result).toMatchObject({ latest: CURRENT, isNewer: false, fromCache: true });
+        expect(requests).toHaveLength(0);
+      });
+    });
+
+    it.each(["3.36.0-dev", "3.36.0-rc.1", "3.36.0-beta.4"])("does not answer from an entry whose version %s has no release tag to install", async (latest) => {
+      write(fresh({ latest }));
+      const out = await check({ fetchImpl: exhausted });
+      expect(out.result).toBeNull();
+    });
+
+    it("still answers from an entry GitHub's answer left, which carries no marker, as every entry before this one did", async () => {
+      write({ latest: "3.35.5", checkedAt: new Date(Date.now() - 60 * 60 * 1000).toISOString(), url: "https://example.test/v3.35.5", publishedAt: "2026-10-28T12:00:00Z", current: "3.35.4", isNewer: true, fromCache: false });
+      const out = await check({ fetchImpl: exhausted });
+      expect(out.result).toMatchObject({ latest: "3.35.5", isNewer: true, fromCache: true });
+    });
+
+    it("answers from the entry a successful check wrote, on the next forced check that cannot reach GitHub", async () => {
+      const first = await check({ fetchImpl: reply(200, { body: { tag_name: "v3.35.5" } }) });
+      expect(first.result).toMatchObject({ latest: "3.35.5", fromCache: false });
+      const second = await check({ fetchImpl: exhausted });
+      expect(second.result).toMatchObject({ latest: "3.35.5", isNewer: true, fromCache: true });
+      expect(second.reason.kind).toBe("rate-limited");
     });
   });
 });

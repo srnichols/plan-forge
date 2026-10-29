@@ -80,7 +80,7 @@ import { routeFinding } from "../tempering/triage.mjs";
 import { fileClassifierIssue } from "../tempering/classifier-issue.mjs";
 // Phase-39 Slice 7 — audit-loop activation surface
 import { loadAuditConfig, saveAuditConfig, shouldAutoDrain } from "../tempering/auto-activate.mjs";
-import { checkForUpdateWithReason, detectCorruptInstall } from "../update-check.mjs";
+import { checkForUpdateWithReason, detectCorruptInstall, runSelfUpdateCheck } from "../update-check.mjs";
 // Phase GITHUB-A — GitHub stack introspection
 import { inspectGithubStack } from "../github-introspect.mjs";
 // Phase GITHUB-D Slice 5 — Copilot Metrics REST endpoint
@@ -720,6 +720,8 @@ function _registerStaticVersionRoutes(app) {
   // REST API: GET /api/update-status — is there a newer Plan Forge release?
   // Returns the last cached check. When no check could be made (suppressed, rate-limited, offline) it says so:
   // `checkFailed: true` and a `failure` ({ kind, message }), never a bare `available: false`, which reads as "current".
+  // When a forced check could not ask GitHub and a fresh cache entry answered instead, the answer carries the same
+  // `failure` (and `fromCache: true`, `checkedAt`): it is the cache's word, not GitHub's.
   // See `kickoffUpdateCheck()` below for the boot-time refresh.
   // Pass ?force=1 to bypass the 24h cache and hit GitHub now (manual check).
   app.get("/api/update-status", async (req, res) => {
@@ -742,6 +744,7 @@ function _registerStaticVersionRoutes(app) {
         publishedAt: result.publishedAt,
         checkedAt: result.checkedAt,
         fromCache: result.fromCache,
+        ...(reason ? { failure: reason } : {}),
       });
     } catch (err) { res.status(500).json({ error: err.message }); }
   });
@@ -787,19 +790,22 @@ function _registerStaticVersionRoutes(app) {
         send("failed", "VERSION file not found");
         return res.end();
       }
-      const { result, reason } = await checkForUpdateWithReason({ currentVersion, projectDir: PROJECT_DIR, force: true });
-      if (!result) {
+      // `pforge self-update`'s own check, so this route says what the shells say: why a check could not be made, and which
+      // check it is going by when GitHub could not be asked.
+      const check = await runSelfUpdateCheck({ currentVersion, projectDir: PROJECT_DIR });
+      if (check.checkFailed) {
         // A check that did not answer is not a current install (the same meta-bug the shells fixed for `pforge self-update`).
-        send("failed", `Could not check for updates — ${reason.message}`);
+        send("failed", `Could not check for updates — ${check.reason.message}`);
         return res.end();
       }
-      if (!result.isNewer) {
+      if (check.notice) send("checking", `GitHub could not be asked for a fresh check — ${check.liveCheckFailed.message} ${check.notice}`);
+      if (!check.isNewer) {
         send("done", `Already current (v${currentVersion})`);
         return res.end();
       }
 
       // 2. Spawn pforge self-update --yes as child process
-      const latestTag = `v${result.latest}`;
+      const latestTag = `v${check.latest}`;
       send("downloading", `Downloading ${latestTag}...`);
 
       const { spawn } = await import("node:child_process");

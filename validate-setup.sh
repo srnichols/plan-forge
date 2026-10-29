@@ -304,7 +304,7 @@ cyan "Optional capabilities:"
 # Project Principles
 PP_PATH="$PROJECT_PATH/docs/plans/PROJECT-PRINCIPLES.md"
 if [[ -f "$PP_PATH" ]]; then
-    PP_COUNT=$(grep -cE '^\|\s*[0-9]+\s*\|' "$PP_PATH" 2>/dev/null || echo "0")
+    PP_COUNT=$(grep -cE '^\|[[:space:]]*[0-9]+[[:space:]]*\|' "$PP_PATH" 2>/dev/null || echo "0")
     green "  PASS  Project Principles: found ($PP_COUNT principles)"
     PASS=$((PASS+1))
 else

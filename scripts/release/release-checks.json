@@ -198,6 +198,14 @@
     { "label": "pforge update keeps the dependency ranges a project raised in the framework packages (#435) (3.35.4)", "path": "pforge-mcp/manifest-merge.mjs", "contains": "export function mergePackageManifest" },
     { "label": "pforge update offers the framework packages' package.json through the merge (#435) (3.35.4)", "path": "pforge-mcp/update-plan.mjs", "contains": "function manifestEntry" },
     { "label": "pforge update is tested end to end for the ranges it keeps, in all three shells (#435) (3.35.4)", "path": "pforge-mcp/tests/update-package-manifests.test.mjs", "contains": "keeps the ranges the project raised" },
-    { "label": "The release harness's tag tests run with a git identity, as a CI runner has none (#436) (3.35.4)", "path": "pforge-mcp/tests/release-harness.test.mjs", "contains": "GIT_COMMITTER_NAME" }
+    { "label": "The release harness's tag tests run with a git identity, as a CI runner has none (#436) (3.35.4)", "path": "pforge-mcp/tests/release-harness.test.mjs", "contains": "GIT_COMMITTER_NAME" },
+    { "label": "pforge update saves a kept file's new version from the file the planner offers, PowerShell (#443) (3.35.5)", "path": "pforge.ps1", "contains": "function Get-GuidanceSourceCandidates" },
+    { "label": "pforge update saves a kept file's new version from the file the planner offers, bash (#443) (3.35.5)", "path": "pforge.sh", "contains": "_pf_guidance_source()" },
+    { "label": "pforge update is tested for where it finds a kept file's new version, in all three shells (#443) (3.35.5)", "path": "pforge-mcp/tests/update-guided-files.test.mjs", "contains": "saves the release's copy of each kept file from where the planner finds it" },
+    { "label": "pforge smith reads .forge.json with [[:space:]], which macOS's sed knows (3.35.5)", "path": "pforge.sh", "contains": "sed 's/\"preset\":[[:space:]]*\"//'" },
+    { "label": "validate-setup counts the principles table with [[:space:]] (3.35.5)", "path": "validate-setup.sh", "contains": "grep -cE '^\\|[[:space:]]*[0-9]+[[:space:]]*\\|'" },
+    { "label": "pforge.sh's JSON reading is tested under a sed that has no \\s, as macOS's has (3.35.5)", "path": "pforge-mcp/tests/bash-3-2-portability.test.mjs", "contains": "ext info prints every field of the extension" },
+    { "label": "The MCP lock pins @hono/node-server 2.1.5, past GHSA-rmxm-3fg6-px4f (3.35.5)", "path": "pforge-mcp/package-lock.json", "contains": "node-server-2.1.5.tgz" },
+    { "label": "The advisory floors hold the locks to @hono/node-server 2.1.3 or later (3.35.5)", "path": "pforge-mcp/tests/dependency-advisory-floors.test.mjs", "contains": "GHSA-rmxm-3fg6-px4f" }
   ]
 }

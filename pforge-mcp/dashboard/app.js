@@ -3798,6 +3798,11 @@ async function triggerUpdateCheck() {
       addNotification("Update check unavailable (network or suppressed)", "warning");
       return;
     }
+    if (data.checkFailed) {
+      // A check that did not answer is not "up to date": say why (rate limit, offline, turned off).
+      addNotification(`Update check failed: ${escapeHtml(data.failure?.message || "GitHub could not be asked.")}`, "warning");
+      return;
+    }
     if (data.available && data.latest) {
       // Force-show the banner even if previously dismissed for this version.
       try { localStorage.removeItem("pforge-update-dismissed"); } catch { /* ignore */ }

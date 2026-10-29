@@ -14,9 +14,15 @@
 import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 
+import { describeRateLimit, fetchGitHub, readRateLimit } from "./github-request.mjs";
+
 const RELEASES_URL = "https://api.github.com/repos/srnichols/plan-forge/releases/latest";
 const DEFAULT_TTL_MS = 24 * 60 * 60 * 1000; // 24h
 const FETCH_TIMEOUT_MS = 4000;
+const USER_AGENT = "plan-forge-update-check";
+const MAX_ERROR_DETAIL_CHARS = 120;
+// "YYYY-MM-DDTHH:MM" is the first 16 characters of an ISO 8601 timestamp.
+const ISO_MINUTE_END = 16;
 
 export function cachePath(projectDir) {
   return resolve(projectDir, ".forge", "update-check.json");
@@ -163,7 +169,7 @@ function versionFileNewerThanCache(projectDir) {
 
 function readFreshCachedUpdate(projectDir, currentVersion, ttlMs) {
   const cached = readCache(projectDir);
-  if (!cached?.checkedAt) return null;
+  if (!cached?.checkedAt || !isReleaseVersion(cached.latest)) return null;
   const age = Date.now() - new Date(cached.checkedAt).getTime();
   if (!Number.isFinite(age) || age < 0 || age >= ttlMs) return null;
   try {
@@ -173,21 +179,52 @@ function readFreshCachedUpdate(projectDir, currentVersion, ttlMs) {
   }
 }
 
-async function fetchLatestRelease(fetchImpl) {
+function isReleaseVersion(value) {
+  return typeof value === "string" && /^\d+\.\d+\.\d+/.test(value);
+}
+
+// What a user is told when a check did not get an answer. `kind` is for callers to branch on; `message` is the sentence,
+// complete with what to do, so no caller words it again. Nothing here ever holds the token.
+function unanswered(kind, message, details = {}) {
+  return { kind, ...details, message };
+}
+
+function reasonForResponse(res, { authenticated, tokenRejected }) {
+  const status = typeof res?.status === "number" ? res.status : null;
+  const rejected = tokenRejected ? { tokenRejected: true } : {};
+  const limit = readRateLimit(res);
+  if (limit) {
+    return unanswered("rate-limited", describeRateLimit({ ...limit, authenticated, tokenRejected }), { status, authenticated, ...rejected, ...limit });
+  }
+  const says = status === null ? "an error" : `HTTP ${status}`;
+  return unanswered("http", `GitHub answered ${says}. Try again shortly.`, { status, ...rejected });
+}
+
+function reasonForThrown(err) {
+  if (err?.name === "AbortError" || err?.name === "TimeoutError") {
+    return unanswered("timeout", `GitHub did not answer within ${FETCH_TIMEOUT_MS / 1000} seconds. Try again shortly, or check the network connection.`);
+  }
+  const detail = String(err?.cause?.message ?? err?.message ?? "").slice(0, MAX_ERROR_DETAIL_CHARS);
+  return unanswered("network", `GitHub could not be reached${detail ? ` (${detail})` : ""}. Check the network connection and try again.`);
+}
+
+function notARelease() {
+  return unanswered("malformed", "GitHub's answer did not name a release version. Try again shortly.");
+}
+
+async function readJson(res) {
+  try { return await res.json(); } catch { return null; }
+}
+
+async function requestLatestRelease({ fetchImpl, env }) {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
   try {
-    const res = await fetchImpl(RELEASES_URL, {
-      headers: {
-        accept: "application/vnd.github+json",
-        "user-agent": "plan-forge-update-check",
-      },
-      signal: controller.signal,
-    });
-    if (!res || !res.ok) return null;
-    return await res.json();
-  } catch {
-    return null;
+    const { res, authenticated, tokenRejected } = await fetchGitHub(RELEASES_URL, { fetchImpl, env, userAgent: USER_AGENT, signal: controller.signal });
+    if (!res?.ok) return { reason: reasonForResponse(res, { authenticated, tokenRejected }) };
+    return { json: await readJson(res) };
+  } catch (err) {
+    return { reason: reasonForThrown(err) };
   } finally {
     clearTimeout(timer);
   }
@@ -210,19 +247,29 @@ function buildUpdatePayload(currentVersion, json) {
 }
 
 /**
- * Check GitHub for a newer release. Returns:
- *   {
- *     current: "2.37.0",
- *     latest:  "2.38.0",
- *     isNewer: true,
- *     url:     "https://github.com/.../releases/tag/v2.38.0",
- *     publishedAt: "2026-04-25T12:34:56Z",
- *     checkedAt:   "2026-04-19T01:00:00Z",
- *     fromCache: false,
- *   }
+ * Check GitHub for a newer release and say why when it could not be done.
  *
- * Returns `null` when the check is suppressed (env var), the network is
- * unavailable, or the response is malformed. Never throws.
+ * Returns `{ result, reason }`:
+ *   - `result`: the payload below, or null when there is no answer to give.
+ *       {
+ *         current: "2.37.0",
+ *         latest:  "2.38.0",
+ *         isNewer: true,
+ *         url:     "https://github.com/.../releases/tag/v2.38.0",
+ *         publishedAt: "2026-04-25T12:34:56Z",
+ *         checkedAt:   "2026-04-19T01:00:00Z",
+ *         fromCache: false,
+ *       }
+ *   - `reason`: null when GitHub (or the cache, for an unforced check) answered. Otherwise why GitHub was not asked or
+ *     did not answer: `{ kind, message, ... }` with `kind` one of `suppressed`, `no-version`, `network`, `timeout`,
+ *     `rate-limited` (with `resetAt`, `limit`, `retryAfterSeconds`, `authenticated`, `tokenRejected`), `http` (with
+ *     `status`) or `malformed`. `message` is a sentence for the user.
+ *
+ * A forced check that GitHub does not answer falls back to a cache entry that is still inside the TTL, so a rate limit
+ * does not throw away an answer the last check left (`result.fromCache` is true and `reason` says why GitHub was not
+ * asked). The cache entry is left as it was: one failure does not renew an old answer.
+ *
+ * Never throws.
  *
  * @param {object} opts
  * @param {string} opts.currentVersion
@@ -232,7 +279,7 @@ function buildUpdatePayload(currentVersion, json) {
  * @param {typeof fetch} [opts.fetchImpl] Inject fetch (for tests).
  * @param {NodeJS.ProcessEnv} [opts.env] Inject env (for tests).
  */
-export async function checkForUpdate({
+export async function checkForUpdateWithReason({
   currentVersion,
   projectDir,
   force = false,
@@ -240,17 +287,67 @@ export async function checkForUpdate({
   fetchImpl = globalThis.fetch,
   env = process.env,
 } = {}) {
-  if (updateCheckSuppressed(env) || !currentVersion || !projectDir) return null;
+  const refusal = reasonNotToCheck({ currentVersion, projectDir, env });
+  if (refusal) return { result: null, reason: refusal };
   if (!force) {
     const cached = readFreshCachedUpdate(projectDir, currentVersion, ttlMs);
-    if (cached) return cached;
+    if (cached) return { result: cached, reason: null };
   }
-  if (typeof fetchImpl !== "function") return null;
+  return askGitHub({ currentVersion, projectDir, force, ttlMs, fetchImpl, env });
+}
 
-  const payload = buildUpdatePayload(currentVersion, await fetchLatestRelease(fetchImpl));
-  if (!payload) return null;
-  writeCache(projectDir, payload);
-  return payload;
+function reasonNotToCheck({ currentVersion, projectDir, env }) {
+  if (updateCheckSuppressed(env)) {
+    return unanswered("suppressed", "PFORGE_NO_UPDATE_CHECK is set, which turns update checks off. Unset it to check for a release.");
+  }
+  if (!currentVersion || !projectDir) {
+    return unanswered("no-version", "Plan Forge's installed version is not known, so there is nothing to compare a release with.");
+  }
+  return null;
+}
+
+// Asks GitHub. When it does not answer, a forced check falls back to the cache; an unforced one has already read it.
+async function askGitHub({ currentVersion, projectDir, force, ttlMs, fetchImpl, env }) {
+  const live = typeof fetchImpl === "function"
+    ? await requestLatestRelease({ fetchImpl, env })
+    : { reason: unanswered("network", "GitHub could not be reached (this Node.js has no fetch).") };
+  const payload = live.reason ? null : buildUpdatePayload(currentVersion, live.json);
+  if (payload) {
+    writeCache(projectDir, payload);
+    return { result: payload, reason: null };
+  }
+  return {
+    result: force ? readFreshCachedUpdate(projectDir, currentVersion, ttlMs) : null,
+    reason: live.reason ?? notARelease(),
+  };
+}
+
+/**
+ * The payload of `checkForUpdateWithReason`, or null when there is none. Kept for the callers that only need the answer.
+ * Never throws.
+ */
+export async function checkForUpdate(options = {}) {
+  return (await checkForUpdateWithReason(options)).result;
+}
+
+const utcMinute = (iso) => `${new Date(iso).toISOString().slice(0, ISO_MINUTE_END).replace("T", " ")} UTC`;
+
+/**
+ * The check `pforge self-update` makes, as the object pforge.sh and pforge.ps1 print from. Always forced, as
+ * self-update promises. Both shells call this and print what it says, so the wording lives here and nowhere else.
+ *
+ *   answered:                  the payload, as `checkForUpdate` returns it
+ *   answered from the cache:   the payload with `fromCache: true`, `liveCheckFailed` (the reason GitHub was not asked)
+ *                              and `notice` (the sentence that says which check the answer is from)
+ *   no answer:                 `{ checkFailed: true, reason }`
+ *
+ * @param {{ currentVersion: string, projectDir: string, ttlMs?: number, fetchImpl?: typeof fetch, env?: NodeJS.ProcessEnv }} options
+ */
+export async function runSelfUpdateCheck({ currentVersion, projectDir, ttlMs, fetchImpl, env } = {}) {
+  const { result, reason } = await checkForUpdateWithReason({ currentVersion, projectDir, force: true, ttlMs, fetchImpl, env });
+  if (!result) return { checkFailed: true, reason };
+  if (!reason) return result;
+  return { ...result, liveCheckFailed: reason, notice: `Using the release check made at ${utcMinute(result.checkedAt)} instead.` };
 }
 
 /**

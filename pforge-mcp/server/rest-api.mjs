@@ -80,7 +80,7 @@ import { routeFinding } from "../tempering/triage.mjs";
 import { fileClassifierIssue } from "../tempering/classifier-issue.mjs";
 // Phase-39 Slice 7 — audit-loop activation surface
 import { loadAuditConfig, saveAuditConfig, shouldAutoDrain } from "../tempering/auto-activate.mjs";
-import { checkForUpdate, detectCorruptInstall } from "../update-check.mjs";
+import { checkForUpdateWithReason, detectCorruptInstall } from "../update-check.mjs";
 // Phase GITHUB-A — GitHub stack introspection
 import { inspectGithubStack } from "../github-introspect.mjs";
 // Phase GITHUB-D Slice 5 — Copilot Metrics REST endpoint
@@ -718,7 +718,8 @@ function _registerStaticVersionRoutes(app) {
   });
 
   // REST API: GET /api/update-status — is there a newer Plan Forge release?
-  // Returns the last cached check (may be null when suppressed / unavailable).
+  // Returns the last cached check. When no check could be made (suppressed, rate-limited, offline) it says so:
+  // `checkFailed: true` and a `failure` ({ kind, message }), never a bare `available: false`, which reads as "current".
   // See `kickoffUpdateCheck()` below for the boot-time refresh.
   // Pass ?force=1 to bypass the 24h cache and hit GitHub now (manual check).
   app.get("/api/update-status", async (req, res) => {
@@ -731,8 +732,8 @@ function _registerStaticVersionRoutes(app) {
       const current = (FRAMEWORK_VERSION && FRAMEWORK_VERSION !== "unknown") ? FRAMEWORK_VERSION : projectVersion;
       if (!current) return res.json({ available: false, reason: "no-version-file" });
       const force = req.query?.force === "1" || req.query?.force === "true";
-      const result = await checkForUpdate({ currentVersion: current, projectDir: PROJECT_DIR, force });
-      if (!result) return res.json({ available: false, current });
+      const { result, reason } = await checkForUpdateWithReason({ currentVersion: current, projectDir: PROJECT_DIR, force });
+      if (!result) return res.json({ available: false, current, checkFailed: true, failure: reason });
       return res.json({
         available: Boolean(result.isNewer),
         current: result.current,
@@ -786,8 +787,13 @@ function _registerStaticVersionRoutes(app) {
         send("failed", "VERSION file not found");
         return res.end();
       }
-      const result = await checkForUpdate({ currentVersion, projectDir: PROJECT_DIR, force: true });
-      if (!result || !result.isNewer) {
+      const { result, reason } = await checkForUpdateWithReason({ currentVersion, projectDir: PROJECT_DIR, force: true });
+      if (!result) {
+        // A check that did not answer is not a current install (the same meta-bug the shells fixed for `pforge self-update`).
+        send("failed", `Could not check for updates — ${reason.message}`);
+        return res.end();
+      }
+      if (!result.isNewer) {
         send("done", `Already current (v${currentVersion})`);
         return res.end();
       }

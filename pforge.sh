@@ -2840,12 +2840,21 @@ cmd_self_update() {
     fi
     [ -z "$current_version" ] && current_version="unknown"
 
-    # Emit a distinct marker when checkForUpdate returns null so we can
-    # tell "GitHub API failed" apart from "checked and up to date" (meta-bug:
-    # client stuck on v2.66.0 saw 'Already current' after an API failure).
-    local check_script="import { checkForUpdate } from './pforge-mcp/update-check.mjs'; const r = await checkForUpdate({ currentVersion: process.argv[1], projectDir: process.argv[2], force: true }); console.log(JSON.stringify(r === null ? { checkFailed: true } : r));"
+    # runSelfUpdateCheck says why a check could not be made, and answers from the last check's cache when GitHub cannot
+    # be asked (#446). It words all of it, so both shells print what it says. What reaches the case below has to be its
+    # JSON: a check that did not run must not read as "current" (meta-bug: client stuck on v2.66.0 saw 'Already current'
+    # after an API failure). `|| true` lets a node that failed (an update-check.mjs without runSelfUpdateCheck, say) reach
+    # that check instead of ending the script, under set -e, with no message.
+    local check_script="import { runSelfUpdateCheck } from './pforge-mcp/update-check.mjs'; console.log(JSON.stringify(await runSelfUpdateCheck({ currentVersion: process.argv[1], projectDir: process.argv[2] })));"
     local check_result
-    check_result="$(node --input-type=module -e "$check_script" "$current_version" "$REPO_ROOT" 2>&1 | _pf_last_json)"
+    check_result="$(node --input-type=module -e "$check_script" "$current_version" "$REPO_ROOT" 2>&1 | _pf_last_json)" || true
+    case "$check_result" in
+        "{"*) ;;
+        *)
+            echo "ERROR: Failed to parse update check output: $check_result" >&2
+            exit 1
+            ;;
+    esac
 
     local check_failed
     check_failed="$(printf '%s' "$check_result" | json_pick checkFailed false)"
@@ -2856,14 +2865,27 @@ cmd_self_update() {
     local latest_ver
     latest_ver="$(printf '%s' "$check_result" | json_pick latest)"
 
-    # Check-failed path: tell the user the check didn't complete instead of
-    # claiming they're current. --force still proceeds (heal path).
-    if { [ "$check_failed" = "True" ] || [ "$check_failed" = "true" ]; } && ! $force_heal; then
-        echo "  ⚠ Could not check for updates — GitHub API unreachable, rate-limited, or timed out." >&2
+    # Check-failed path: tell the user the check didn't complete, and why, instead of claiming they're current.
+    # Without a version there is no tag to install either, so --force cannot go on: it built the tag "v" from the
+    # missing version and the download then said "Tag 'v' not found".
+    if { [ "$check_failed" = "True" ] || [ "$check_failed" = "true" ]; } || [ -z "$latest_ver" ]; then
+        local check_reason
+        check_reason="$(printf '%s' "$check_result" | json_pick reason.message)"
+        [ -n "$check_reason" ] || check_reason="GitHub API unreachable, rate-limited, or timed out."
+        echo "  ⚠ Could not check for updates — $check_reason" >&2
         echo "    Your local version is v$current_version. This is NOT a confirmation that it is current." >&2
-        echo "    Try again shortly, or set PFORGE_NO_UPDATE_CHECK=1 to suppress checks." >&2
-        echo "    To force-install the latest tagged release anyway: pforge self-update --force" >&2
+        if $force_heal; then
+            echo "    --force installs the latest release, so it needs a successful check to know which one that is." >&2
+        fi
         exit 2
+    fi
+
+    # GitHub could not be asked just now, but the last check's answer is still fresh: use it, and say so.
+    local check_notice
+    check_notice="$(printf '%s' "$check_result" | json_pick notice)"
+    if [ -n "$check_notice" ]; then
+        echo "  ⚠ GitHub could not be asked for a fresh check — $(printf '%s' "$check_result" | json_pick liveCheckFailed.message)"
+        echo "    $check_notice"
     fi
 
     # v2.53.3 — with --force, install the latest tagged release even when the

@@ -43,6 +43,7 @@ import { appendFileSync } from "node:fs";
 const plan = JSON.parse(process.env.PF_FETCH_STUB || "{}");
 globalThis.fetch = async (url, init) => {
   appendFileSync(process.env.PF_FETCH_LOG, JSON.stringify({ url: String(url), headers: init?.headers ?? {} }) + "\\n");
+  new Headers(init?.headers ?? {}); // the header validation fetch does, so a header it would reject is rejected here too
   if (plan.throws) throw new TypeError(plan.throws);
   return new Response(JSON.stringify(plan.body ?? null), { status: plan.status ?? 200, headers: plan.headers ?? {} });
 };
@@ -185,6 +186,28 @@ describe.each(SHELLS)("pforge self-update when GitHub cannot be asked, in $name"
     expect(run.status, run.detail).toBe(2);
     expect(run.output).toContain("NOT a confirmation");
     expect(run.output).not.toContain("Using the release check");
+  }, SLOW);
+
+  // `pforge update` leaves "the version I just installed" in the cache so the next unforced check does not have to ask
+  // GitHub. After a pinned older tag, or from a -dev sibling clone, that is not what GitHub would say.
+  it_("does not take the version the installer cached for a release check", () => {
+    const checkedAt = new Date(Date.now() - 60 * 60 * 1000).toISOString();
+    const project = seed({ cache: { latest: INSTALLED, checkedAt, url: `https://example.test/v${INSTALLED}`, publishedAt: null, source: "install" } });
+    const run = selfUpdate(shell, project, { stub: RATE_LIMITED });
+    expect(run.status, run.detail).toBe(2);
+    expect(run.output).toContain("NOT a confirmation");
+    expect(run.output).toMatch(/rate limit/i);
+    expect(run.output).not.toContain("Already current");
+    expect(run.output).not.toContain("Using the release check");
+  }, SLOW);
+
+  it_("does not offer a -dev version from the cache as a release to install", () => {
+    const checkedAt = new Date(Date.now() - 60 * 60 * 1000).toISOString();
+    const project = seed({ cache: { latest: "3.36.0-dev", checkedAt, url: "https://example.test/v3.36.0-dev", publishedAt: null } });
+    const run = selfUpdate(shell, project, { args: ["--force", "--dry-run"], stub: RATE_LIMITED });
+    expect(run.status, run.detail).toBe(2);
+    expect(run.output).not.toContain("3.36.0-dev");
+    expect(run.output).not.toMatch(/--tag v3\.36/);
   }, SLOW);
 
   it_("tells a network that is down from a rate limit", () => {

@@ -55,6 +55,54 @@ describe("resolveGitHubToken", () => {
     expect(resolveGitHubToken({ COPILOT_GITHUB_TOKEN: "ghp_x", GITHUB_PAT: "ghp_y", NPM_TOKEN: "npm_z" })).toBeNull();
   });
 
+  // fetch rejects a header value with a newline in it by throwing an error that quotes the whole header, which prints the
+  // token. A value that cannot be a token is no token: the request goes out without one.
+  it.each([
+    ["a newline inside", "ghp_abc\ndef"],
+    ["a carriage return inside", "ghp_abc\rdef"],
+    ["a space inside", "ghp_abc def"],
+    ["a tab inside", "ghp_abc\tdef"],
+    ["a NUL inside", "ghp_abc\u0000def"],
+    ["another control character inside", "ghp_abc\u001bdef"],
+    ["DEL inside", "ghp_abc\u007fdef"],
+    ["a character outside ASCII", "ghp_abc\u2019def"],
+    ["a character outside the first 256", "ghp_\u4e2d\u6587"],
+  ])("does not use a value with %s", (_what, value) => {
+    expect(resolveGitHubToken({ GITHUB_TOKEN: value })).toBeNull();
+    expect(resolveGitHubToken({ GH_TOKEN: value })).toBeNull();
+  });
+
+  it("falls through a value that cannot be a token to the next variable, as it does a blank one", () => {
+    expect(resolveGitHubToken({ GITHUB_TOKEN: "ghp_abc def", GH_TOKEN: "ghp_two" })).toBe("ghp_two");
+    expect(resolveGitHubToken({ GITHUB_TOKEN: "ghp_one", GH_TOKEN: "ghp_abc\ndef" })).toBe("ghp_one");
+  });
+
+  it("accepts the tokens GitHub issues", () => {
+    for (const token of ["ghp_" + "A1b2".repeat(9), "github_pat_" + "11ABCDEFG0_".repeat(6), "ghs_16C7e42F292c6912E7710c838347Ae178B4a", "0123456789abcdef0123456789abcdef01234567"]) {
+      expect(resolveGitHubToken({ GITHUB_TOKEN: token })).toBe(token);
+    }
+  });
+
+  // The property the rule exists for, checked against the real Headers class rather than a list of bad characters:
+  // whatever the rule accepts, fetch accepts as a header value; and a value it refuses is one fetch would reject.
+  it("only ever returns a value that is a valid header, for every printable ASCII character", () => {
+    for (let code = 0x21; code <= 0x7e; code++) {
+      const token = `a${String.fromCharCode(code)}b`;
+      expect(resolveGitHubToken({ GITHUB_TOKEN: token }), `U+${code.toString(16)}`).toBe(token);
+      expect(() => new Headers(githubApiHeaders({ userAgent: "plan-forge-test", token })), `U+${code.toString(16)}`).not.toThrow();
+    }
+  });
+
+  it("refuses every character that would make Headers throw", () => {
+    for (let code = 0; code <= 0xff; code++) {
+      const char = String.fromCharCode(code);
+      const token = `a${char}b`;
+      let accepted = true;
+      try { new Headers({ authorization: `token ${token}` }); } catch { accepted = false; }
+      if (!accepted) expect(resolveGitHubToken({ GITHUB_TOKEN: token }), `U+${code.toString(16)}`).toBeNull();
+    }
+  });
+
   it("names the variables in one frozen list, GITHUB_TOKEN first", () => {
     expect(GITHUB_TOKEN_ENV_VARS).toEqual(["GITHUB_TOKEN", "GH_TOKEN"]);
     expect(Object.isFrozen(GITHUB_TOKEN_ENV_VARS)).toBe(true);
@@ -157,6 +205,26 @@ describe("readRateLimit", () => {
     expect(readRateLimit(withHeaders(403, { "retry-after": 30 }))).toEqual({ limit: null, resetAt: null, retryAfterSeconds: 30 });
   });
 
+  // GitHub sends the quota headers on every response, so a secondary limit arrives with a Retry-After AND the headers of a
+  // request that was not short of quota: the reset time there is the hourly quota's, not a time to wait for.
+  it("does not read a reset time from a secondary limit, whose quota headers say there is quota left", () => {
+    const res = withHeaders(403, { "retry-after": 60, "x-ratelimit-limit": 5000, "x-ratelimit-remaining": 4800, "x-ratelimit-reset": RESET_EPOCH });
+    expect(readRateLimit(res)).toEqual({ limit: 5000, resetAt: null, retryAfterSeconds: 60 });
+  });
+
+  it("reads the reset time when the quota is spent, even if Retry-After is sent too", () => {
+    const res = withHeaders(403, { "retry-after": 60, "x-ratelimit-limit": 60, "x-ratelimit-remaining": 0, "x-ratelimit-reset": RESET_EPOCH });
+    expect(readRateLimit(res)).toEqual({ limit: 60, resetAt: "2026-10-29T09:00:00.000Z", retryAfterSeconds: 60 });
+  });
+
+  it("keeps the reset time of a 429 that says nothing about the quota left", () => {
+    expect(readRateLimit(withHeaders(429, { "x-ratelimit-reset": RESET_EPOCH }))).toEqual({ limit: null, resetAt: "2026-10-29T09:00:00.000Z", retryAfterSeconds: null });
+  });
+
+  it("does not read a reset time from a 429 that says there is quota left", () => {
+    expect(readRateLimit(withHeaders(429, { "x-ratelimit-remaining": 25, "x-ratelimit-reset": RESET_EPOCH })).resetAt).toBeNull();
+  });
+
   it("calls every 429 a rate limit, with or without headers", () => {
     expect(readRateLimit(withHeaders(429))).toEqual({ limit: null, resetAt: null, retryAfterSeconds: null });
     expect(readRateLimit(withHeaders(429, { "x-ratelimit-remaining": 25 }))).not.toBeNull();
@@ -226,6 +294,29 @@ describe("describeRateLimit", () => {
   it("says how long to wait when GitHub gave Retry-After and no reset time", () => {
     expect(describeRateLimit({ retryAfterSeconds: 30, authenticated: false })).toMatch(/30 seconds/);
     expect(describeRateLimit({ retryAfterSeconds: 120, authenticated: false })).toMatch(/2 minutes/);
+  });
+
+  // What a real secondary limit looks like once readRateLimit has read it: a Retry-After, the hourly limit, no reset time.
+  it("words a secondary limit as a wait, not as an hourly quota that is used up, and does not offer a token for it", () => {
+    for (const authenticated of [false, true]) {
+      const text = describeRateLimit({ limit: 5000, resetAt: null, retryAfterSeconds: 60, authenticated }, { now: NOW });
+      expect(text).toMatch(/wait about 1 minute/);
+      expect(text).not.toMatch(/used up|requests an hour|until/);
+      expect(text).not.toMatch(/GITHUB_TOKEN|GH_TOKEN/);
+      expect(text).toMatch(/try again after that wait/i);
+    }
+  });
+
+  it("goes by Retry-After, as GitHub tells callers to, when it is sent with a reset time", () => {
+    const text = describeRateLimit({ limit: 60, resetAt: RESET, retryAfterSeconds: 45, authenticated: false }, { now: NOW });
+    expect(text).toMatch(/wait about 45 seconds/);
+    expect(text).not.toContain("09:00 UTC");
+  });
+
+  it("still says a rejected token needs replacing when the limit it ran into was a secondary one", () => {
+    const text = describeRateLimit({ retryAfterSeconds: 30, authenticated: false, tokenRejected: true });
+    expect(text).toMatch(/rejected/i);
+    expect(text).toMatch(/wait about 30 seconds/);
   });
 
   it("says 1 minute, not 1 minutes", () => {

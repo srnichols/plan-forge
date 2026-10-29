@@ -217,6 +217,9 @@
     { "label": "resolve-tag refuses a pinned tag that names no release version (#446) (3.35.6)", "path": "pforge-mcp/update-from-github.mjs", "contains": "ERR_INVALID_TAG" },
     { "label": "/api/update-status says a check could not be made, and why (#446) (3.35.6)", "path": "pforge-mcp/server/rest-api.mjs", "contains": "checkFailed: true, failure: reason" },
     { "label": "The dashboard's manual update check shows why a check failed (#446) (3.35.6)", "path": "pforge-mcp/dashboard/app.js", "contains": "Update check failed: ${escapeHtml(" },
-    { "label": "pforge self-update is tested when GitHub cannot be asked, in all three shells (#446) (3.35.6)", "path": "pforge-mcp/tests/self-update-check-failure.test.mjs", "contains": "pforge self-update when GitHub cannot be asked" }
+    { "label": "pforge self-update is tested when GitHub cannot be asked, in all three shells (#446) (3.35.6)", "path": "pforge-mcp/tests/self-update-check-failure.test.mjs", "contains": "pforge self-update when GitHub cannot be asked" },
+    { "label": "A value that cannot be a GitHub token is never sent, so fetch's error cannot print it (#446) (3.35.6)", "path": "pforge-mcp/github-request.mjs", "contains": "const USABLE_TOKEN" },
+    { "label": "The entry pforge update writes for the version it installed is not taken for a release check (#446) (3.35.6)", "path": "pforge-mcp/update-check.mjs", "contains": "source: INSTALL_SOURCE" },
+    { "label": "/api/update-status says when a fresh cache entry answered because GitHub could not be asked (#446) (3.35.6)", "path": "pforge-mcp/server/rest-api.mjs", "contains": "...(reason ? { failure: reason } : {})" }
   ]
 }

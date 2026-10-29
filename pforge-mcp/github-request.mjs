@@ -27,16 +27,22 @@ const ISO_TIME_END = 16;
 // for something else is never sent to GitHub.
 export const GITHUB_TOKEN_ENV_VARS = Object.freeze(["GITHUB_TOKEN", "GH_TOKEN"]);
 
+// A GitHub token is printable ASCII with no space in it. Anything else cannot be one, and sending it makes fetch throw an
+// error that quotes the whole header (`Headers.append: "token ghp_..." is an invalid header value`), which prints the token
+// in whatever reports the failure. A value like that is no token: the request goes out without one.
+const USABLE_TOKEN = /^[\x21-\x7e]+$/;
+
 /**
  * @param {Record<string, unknown>|undefined} env
- * @returns {string|null} the first non-blank token in GITHUB_TOKEN_ENV_VARS, trimmed, or null.
+ * @returns {string|null} the first usable token in GITHUB_TOKEN_ENV_VARS, trimmed, or null. A blank value, or one that
+ *   cannot be a token, is skipped for the next variable.
  */
 export function resolveGitHubToken(env) {
   for (const name of GITHUB_TOKEN_ENV_VARS) {
     const value = env?.[name];
     if (typeof value !== "string") continue;
     const token = value.trim();
-    if (token) return token;
+    if (USABLE_TOKEN.test(token)) return token;
   }
   return null;
 }
@@ -104,8 +110,12 @@ function epochSecondsToIso(value) {
  * What a response says about a rate limit, or null when it was not one.
  *
  * GitHub refuses a request for its rate with a 403 or a 429. A 429 is always a limit. A 403 is one when it says the
- * quota is spent (x-ratelimit-remaining: 0) or asks the caller to wait (retry-after, which is all a secondary limit
- * sends); a 403 with neither is a refusal for another reason, such as a token without access.
+ * quota is spent (x-ratelimit-remaining: 0) or asks the caller to wait (retry-after, which a secondary limit sends); a
+ * 403 with neither is a refusal for another reason, such as a token without access.
+ *
+ * GitHub sends its quota headers on every response, so a secondary limit arrives with a Retry-After and the headers of a
+ * request that was not short of quota. The reset time is a time to wait for only when the quota is spent (or the response
+ * says nothing about what is left), so it is read only then.
  *
  * @param {{ status?: number, headers?: { get?: (name: string) => string|null } }|null|undefined} res
  * @returns {{ limit: number|null, resetAt: string|null, retryAfterSeconds: number|null }|null}
@@ -114,10 +124,12 @@ export function readRateLimit(res) {
   const status = res?.status;
   if (status !== HTTP_FORBIDDEN && status !== HTTP_TOO_MANY_REQUESTS) return null;
   const retryAfter = headerOf(res, "retry-after");
-  if (status === HTTP_FORBIDDEN && headerOf(res, "x-ratelimit-remaining") !== "0" && retryAfter === null) return null;
+  const remaining = headerOf(res, "x-ratelimit-remaining");
+  if (status === HTTP_FORBIDDEN && remaining !== "0" && retryAfter === null) return null;
+  const quotaSpent = remaining === null || remaining === "0";
   return {
     limit: wholeNumber(headerOf(res, "x-ratelimit-limit")),
-    resetAt: epochSecondsToIso(headerOf(res, "x-ratelimit-reset")),
+    resetAt: quotaSpent ? epochSecondsToIso(headerOf(res, "x-ratelimit-reset")) : null,
     retryAfterSeconds: wholeNumber(retryAfter),
   };
 }
@@ -136,17 +148,21 @@ function resetLabel(resetAt, now) {
   return `${new Date(resetMs).toISOString().slice(ISO_TIME_START, ISO_TIME_END)} UTC${left}`;
 }
 
-// What was limited, and what "try again" waits for: a reset time when GitHub gave one, a wait when it gave Retry-After.
+// What was limited, what "try again" waits for, and whether it was the hourly quota (the only limit a token raises).
+// GitHub's own order: a Retry-After is the wait to go by; without one, the reset time of a spent quota.
 function limitState({ limit, resetAt, retryAfterSeconds }, now) {
+  if (retryAfterSeconds !== null) {
+    return { state: `was reached; GitHub asks to wait about ${humanDuration(retryAfterSeconds)}`, later: "after that wait", hourlyQuota: false };
+  }
   const rate = limit ? ` (${limit.toLocaleString("en-US")} requests an hour)` : "";
-  if (Number.isFinite(Date.parse(resetAt))) return { state: `is used up${rate} until ${resetLabel(resetAt, now)}`, later: "after that time" };
-  if (retryAfterSeconds !== null) return { state: `was reached${rate}; GitHub asks to wait about ${humanDuration(retryAfterSeconds)}`, later: "after that wait" };
-  return { state: `is used up${rate}`, later: "later" };
+  if (Number.isFinite(Date.parse(resetAt))) return { state: `is used up${rate} until ${resetLabel(resetAt, now)}`, later: "after that time", hourlyQuota: true };
+  return { state: `is used up${rate}`, later: "later", hourlyQuota: true };
 }
 
 /**
  * The sentence to show a user whose request GitHub refused for its rate, saying what was limited, until when, and what
- * helps. A token is offered as the cure only when none was accepted: for a request that already carried one it is no cure.
+ * helps. A token is offered as the cure only when none was accepted and it was the hourly quota that ran out: for a
+ * request that already carried one it is no cure, and neither is it for a secondary limit.
  *
  * @param {{ limit?: number|null, resetAt?: string|null, retryAfterSeconds?: number|null, authenticated?: boolean, tokenRejected?: boolean }} [info]
  * @param {{ now?: number }} [options]
@@ -154,11 +170,12 @@ function limitState({ limit, resetAt, retryAfterSeconds }, now) {
  */
 export function describeRateLimit(info = {}, { now = Date.now() } = {}) {
   const { authenticated = false, tokenRejected = false } = info;
-  const { state, later } = limitState({ limit: info.limit ?? null, resetAt: info.resetAt ?? null, retryAfterSeconds: info.retryAfterSeconds ?? null }, now);
+  const { state, later, hourlyQuota } = limitState({ limit: info.limit ?? null, resetAt: info.resetAt ?? null, retryAfterSeconds: info.retryAfterSeconds ?? null }, now);
 
   if (authenticated) return `GitHub's API rate limit for this token ${state}. Try again ${later}.`;
   if (tokenRejected) {
     return `GitHub rejected the token in GITHUB_TOKEN or GH_TOKEN (it may be expired or revoked), and the rate limit for requests without one ${state}. Replace the token or unset it, or try again ${later}.`;
   }
+  if (!hourlyQuota) return `GitHub's API rate limit for this address ${state}. Try again ${later}.`;
   return `GitHub's API rate limit for this address ${state}. Set GITHUB_TOKEN or GH_TOKEN to a GitHub token to raise it to ${AUTHENTICATED_REQUESTS_PER_HOUR.toLocaleString("en-US")} requests an hour, or try again ${later}.`;
 }

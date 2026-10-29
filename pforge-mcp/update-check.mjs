@@ -27,6 +27,8 @@ const USER_AGENT = "plan-forge-update-check";
 const MAX_ERROR_DETAIL_CHARS = 120;
 // "YYYY-MM-DDTHH:MM" is the first 16 characters of an ISO 8601 timestamp.
 const ISO_MINUTE_END = 16;
+// What writeFreshCache puts in `source`: the entry is the version `pforge update` just installed, not a GitHub answer.
+const INSTALL_SOURCE = "install";
 
 export function cachePath(projectDir) {
   return resolve(projectDir, ".forge", "update-check.json");
@@ -171,11 +173,17 @@ function versionFileNewerThanCache(projectDir) {
   return statSync(versionFile).mtimeMs > statSync(cacheFile).mtimeMs;
 }
 
-function readFreshCachedUpdate(projectDir, currentVersion, ttlMs) {
+// A date that does not parse gives NaN, which fails both comparisons: an entry with no usable time is no entry.
+function ageWithinTtl(checkedAt, ttlMs) {
+  const age = Date.now() - new Date(checkedAt).getTime();
+  return age >= 0 && age < ttlMs;
+}
+
+function readFreshCachedUpdate(projectDir, currentVersion, ttlMs, { githubAnswerOnly = false } = {}) {
   const cached = readCache(projectDir);
   if (!cached?.checkedAt || !isReleaseVersion(cached.latest)) return null;
-  const age = Date.now() - new Date(cached.checkedAt).getTime();
-  if (!Number.isFinite(age) || age < 0 || age >= ttlMs) return null;
+  if (githubAnswerOnly && !isGitHubAnswer(cached)) return null;
+  if (!ageWithinTtl(cached.checkedAt, ttlMs)) return null;
   try {
     return versionFileNewerThanCache(projectDir) ? null : cachedUpdatePayload(cached, currentVersion);
   } catch {
@@ -185,6 +193,14 @@ function readFreshCachedUpdate(projectDir, currentVersion, ttlMs) {
 
 function isReleaseVersion(value) {
   return typeof value === "string" && /^\d+\.\d+\.\d+/.test(value);
+}
+
+// What an entry says about where it came from. `pforge update` writes "the version I just installed" (writeFreshCache) so
+// the next unforced check need not ask GitHub; that is not what GitHub would say after a pinned older tag or from a -dev
+// sibling clone. Only an entry GitHub's answer left, for a version that has a release tag, can stand in for a check that
+// could not be made. Entries from before the marker existed carry none, and are what a check left.
+function isGitHubAnswer(cached) {
+  return cached.source !== INSTALL_SOURCE && /^\d+\.\d+\.\d+$/.test(cached.latest);
 }
 
 // What a user is told when a check did not get an answer. `kind` is for callers to branch on; `message` is the sentence,
@@ -271,7 +287,9 @@ function buildUpdatePayload(currentVersion, json) {
  *
  * A forced check that GitHub does not answer falls back to a cache entry that is still inside the TTL, so a rate limit
  * does not throw away an answer the last check left (`result.fromCache` is true and `reason` says why GitHub was not
- * asked). The cache entry is left as it was: one failure does not renew an old answer.
+ * asked). Only an answer from GitHub counts: not the entry `pforge update` writes for the version it installed
+ * (`source: "install"`), and not a version that has no release tag. The cache entry is left as it was: one failure does
+ * not renew an old answer.
  *
  * Never throws.
  *
@@ -310,9 +328,9 @@ function reasonNotToCheck({ currentVersion, projectDir, env }) {
   return null;
 }
 
-// Asks GitHub. When it does not answer, a cache entry that is still inside the TTL is used instead: a forced check, which
-// skipped the cache to get a fresher answer, would otherwise throw away a good one. An unforced check has already read
-// the cache and found nothing usable, so it gains nothing here.
+// Asks GitHub. When it does not answer, a cache entry that GitHub's answer left, and that is still inside the TTL, is used
+// instead: a forced check, which skipped the cache to get a fresher answer, would otherwise throw away a good one. An
+// unforced check has already read the cache and found nothing usable, so it gains nothing here.
 async function askGitHub({ currentVersion, projectDir, ttlMs, fetchImpl, env }) {
   const live = typeof fetchImpl === "function"
     ? await requestLatestRelease({ fetchImpl, env })
@@ -323,7 +341,7 @@ async function askGitHub({ currentVersion, projectDir, ttlMs, fetchImpl, env }) 
     return { result: payload, reason: null };
   }
   return {
-    result: readFreshCachedUpdate(projectDir, currentVersion, ttlMs),
+    result: readFreshCachedUpdate(projectDir, currentVersion, ttlMs, { githubAnswerOnly: true }),
     reason: live.reason ?? notARelease(),
   };
 }
@@ -383,6 +401,10 @@ export async function runSelfUpdateCheck({ currentVersion, projectDir, ttlMs, fe
  * Write a fresh cache entry after a successful self-update so the next
  * `checkForUpdate` returns `isNewer: false` without hitting the network.
  *
+ * The entry says it is the installer's (`source: "install"`): it is the version just installed, which after a pinned
+ * older tag or from a -dev sibling clone is not what GitHub would say, so a forced check that GitHub does not answer
+ * does not take it for a release check.
+ *
  * @param {string} projectDir  Project root (parent of `.forge/`).
  * @param {string} version     The version just installed.
  */
@@ -395,6 +417,7 @@ export function writeFreshCache(projectDir, version) {
     checkedAt: new Date().toISOString(),
     url: `https://github.com/srnichols/plan-forge/releases/tag/v${v}`,
     publishedAt: null,
+    source: INSTALL_SOURCE,
   });
 }
 

@@ -189,8 +189,8 @@ All endpoints accept and return JSON unless otherwise noted. Every MCP tool can 
 | `GET` | `/api/secrets` | Read `.forge/secrets.json` keys (values masked) |
 | `POST` | `/api/secrets` | Update local secrets store |
 | `GET` | `/api/extensions` | Installed extensions |
-| `GET` | `/api/update-status` | Update-check status (latest release, currency); `checkFailed: true` with a `failure` (`{ kind, message }`) when no check could be made, which is not the same as current |
-| `POST` | `/api/self-update` | Trigger self-update install; a check that cannot be made ends the stream with a `failed` frame that says why |
+| `GET` | `/api/update-status` | Update-check status (latest release, currency); `checkFailed: true` with a `failure` (`{ kind, message }`) when no check could be made, which is not the same as current; the same `failure` beside `fromCache: true` when a forced check could not ask GitHub and a fresh cache entry answered |
+| `POST` | `/api/self-update` | Trigger self-update install; says which check it is going by when GitHub could not be asked, and a check that cannot be made ends the stream with a `failed` frame that says why |
 | `POST` | `/api/server/restart` | Soft-restart the MCP server (HMR-friendly) |
 
 ## Generic MCP Dispatcher

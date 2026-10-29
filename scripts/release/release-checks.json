@@ -206,6 +206,17 @@
     { "label": "validate-setup counts the principles table with [[:space:]] (3.35.5)", "path": "validate-setup.sh", "contains": "grep -cE '^\\|[[:space:]]*[0-9]+[[:space:]]*\\|'" },
     { "label": "pforge.sh's JSON reading is tested under a sed that has no \\s, as macOS's has (3.35.5)", "path": "pforge-mcp/tests/bash-3-2-portability.test.mjs", "contains": "ext info prints every field of the extension" },
     { "label": "The MCP lock pins @hono/node-server 2.1.5, past GHSA-rmxm-3fg6-px4f (3.35.5)", "path": "pforge-mcp/package-lock.json", "contains": "node-server-2.1.5.tgz" },
-    { "label": "The advisory floors hold the locks to @hono/node-server 2.1.3 or later (3.35.5)", "path": "pforge-mcp/tests/dependency-advisory-floors.test.mjs", "contains": "GHSA-rmxm-3fg6-px4f" }
+    { "label": "The advisory floors hold the locks to @hono/node-server 2.1.3 or later (3.35.5)", "path": "pforge-mcp/tests/dependency-advisory-floors.test.mjs", "contains": "GHSA-rmxm-3fg6-px4f" },
+    { "label": "One module reads the GitHub token (GITHUB_TOKEN, then GH_TOKEN) for the update check and the download (#446) (3.35.6)", "path": "pforge-mcp/github-request.mjs", "contains": "export function resolveGitHubToken" },
+    { "label": "A rate-limit answer is read and worded in one place (#446) (3.35.6)", "path": "pforge-mcp/github-request.mjs", "contains": "export function describeRateLimit" },
+    { "label": "The update check says why it could not be made, and answers from a fresh cache when GitHub cannot be asked (#446) (3.35.6)", "path": "pforge-mcp/update-check.mjs", "contains": "export async function checkForUpdateWithReason" },
+    { "label": "pforge self-update prints what the check says, bash (#446) (3.35.6)", "path": "pforge.sh", "contains": "import { runSelfUpdateCheck } from './pforge-mcp/update-check.mjs'" },
+    { "label": "pforge self-update prints what the check says, PowerShell (#446) (3.35.6)", "path": "pforge.ps1", "contains": "import { runSelfUpdateCheck } from './pforge-mcp/update-check.mjs'" },
+    { "label": "pforge self-update --force does not go on without a version, bash (#446) (3.35.6)", "path": "pforge.sh", "contains": "--force installs the latest release, so it needs a successful check to know which one that is." },
+    { "label": "pforge self-update --force does not go on without a version, PowerShell (#446) (3.35.6)", "path": "pforge.ps1", "contains": "--force installs the latest release, so it needs a successful check to know which one that is." },
+    { "label": "resolve-tag refuses a pinned tag that names no release version (#446) (3.35.6)", "path": "pforge-mcp/update-from-github.mjs", "contains": "ERR_INVALID_TAG" },
+    { "label": "/api/update-status says a check could not be made, and why (#446) (3.35.6)", "path": "pforge-mcp/server/rest-api.mjs", "contains": "checkFailed: true, failure: reason" },
+    { "label": "The dashboard's manual update check shows why a check failed (#446) (3.35.6)", "path": "pforge-mcp/dashboard/app.js", "contains": "Update check failed: ${escapeHtml(" },
+    { "label": "pforge self-update is tested when GitHub cannot be asked, in all three shells (#446) (3.35.6)", "path": "pforge-mcp/tests/self-update-check-failure.test.mjs", "contains": "pforge self-update when GitHub cannot be asked" }
   ]
 }

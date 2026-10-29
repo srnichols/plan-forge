@@ -234,6 +234,12 @@ describe("describeRateLimit", () => {
     expect(text).not.toContain("1 minutes");
   });
 
+  it("never says 0 minutes, however close the reset is", () => {
+    const text = describeRateLimit({ resetAt: RESET, authenticated: true }, { now: Date.parse("2026-10-29T08:59:40.000Z") });
+    expect(text).toContain("in about 1 minute");
+    expect(text).not.toContain("0 minutes");
+  });
+
   it("leaves out how long it is when the reset time has passed", () => {
     const text = describeRateLimit({ resetAt: RESET, authenticated: false }, { now: Date.parse("2026-10-29T09:30:00.000Z") });
     expect(text).toContain("09:00 UTC");

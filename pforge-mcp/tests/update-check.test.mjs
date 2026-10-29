@@ -577,6 +577,8 @@ describe("checkForUpdateWithReason (#446)", () => {
     expect(out.result).toBeNull();
     expect(out.reason.kind).toBe("http");
     expect(out.reason.message).toMatch(/GitHub/);
+    expect(out.reason.message).not.toContain("undefined");
+    expect(out.reason.status).toBeNull();
   });
 
   it("tolerates no response at all", async () => {
@@ -585,11 +587,32 @@ describe("checkForUpdateWithReason (#446)", () => {
     expect(out.reason.kind).toBe("http");
   });
 
+  it("reports an answer that is not JSON as malformed, not as a network failure", async () => {
+    const notJson = async () => ({ ok: true, status: 200, headers: { get: () => null }, json: async () => { throw new SyntaxError("Unexpected token '<'"); } });
+    const out = await check({ fetchImpl: notJson });
+    expect(out.result).toBeNull();
+    expect(out.reason.kind).toBe("malformed");
+  });
+
+  it("reports a Node.js with no fetch as a network failure, and says so", async () => {
+    const out = await check({ fetchImpl: null });
+    expect(out.result).toBeNull();
+    expect(out.reason.kind).toBe("network");
+    expect(out.reason.message).toContain("no fetch");
+  });
+
   it("reports a request that cannot be made as network, and one that runs out of time as timeout", async () => {
     const network = await check({ fetchImpl: async () => { throw new TypeError("fetch failed"); } });
     expect(network.reason.kind).toBe("network");
+    expect(network.reason.message).toContain("fetch failed");
     const aborted = await check({ fetchImpl: async () => { const e = new Error("The operation was aborted"); e.name = "AbortError"; throw e; } });
     expect(aborted.reason.kind).toBe("timeout");
+  });
+
+  it("says why a network request failed when the cause is nested, as fetch reports a DNS failure", async () => {
+    const error = new TypeError("fetch failed", { cause: new Error("getaddrinfo ENOTFOUND api.github.com") });
+    const { reason } = await check({ fetchImpl: async () => { throw error; } });
+    expect(reason.message).toContain("getaddrinfo ENOTFOUND api.github.com");
   });
 
   it("reports a reply that holds no release as malformed", async () => {
@@ -718,6 +741,13 @@ describe("checkForUpdateWithReason (#446)", () => {
       expect((await check({ fetchImpl: exhausted })).result).toBeNull();
       write({ checkedAt: new Date().toISOString() });
       expect((await check({ fetchImpl: exhausted })).result).toBeNull();
+    });
+
+    it("does not answer from an entry whose version is not a release version", async () => {
+      for (const latest of ["garbage", "3", "3.35", "", null, 335]) {
+        write({ latest, checkedAt: new Date().toISOString() });
+        expect((await check({ fetchImpl: exhausted })).result, `latest: ${JSON.stringify(latest)}`).toBeNull();
+      }
     });
 
     it("does not answer from an entry that says it was checked in the future", async () => {

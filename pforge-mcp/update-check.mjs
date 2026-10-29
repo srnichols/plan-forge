@@ -3,11 +3,15 @@
  *
  * Non-intrusive check against the GitHub Releases API for a newer Plan Forge
  * release. Runs at most once per 24h per project, honors an opt-out env var,
- * and *never* throws — network failure or API hiccup returns `null` and the
- * caller silently continues.
+ * and *never* throws — network failure or API hiccup returns `null` from
+ * `checkForUpdate` and the caller silently continues. `checkForUpdateWithReason`
+ * is the same check with the answer to "why not" (#446), and a forced check
+ * that GitHub does not answer falls back to a fresh cache entry.
  *
  * Separation of concerns:
- *   - This module does HTTP + cache + semver only.
+ *   - This module does cache + semver + what an answer means.
+ *   - How a GitHub request is authenticated, and how a rate limit reads and
+ *     is worded, live in github-request.mjs, shared with update-from-github.mjs.
  *   - Dashboard rendering and REST exposure live in server.mjs / app.js.
  */
 
@@ -201,7 +205,7 @@ function reasonForResponse(res, { authenticated, tokenRejected }) {
 }
 
 function reasonForThrown(err) {
-  if (err?.name === "AbortError" || err?.name === "TimeoutError") {
+  if (err?.name === "AbortError") {
     return unanswered("timeout", `GitHub did not answer within ${FETCH_TIMEOUT_MS / 1000} seconds. Try again shortly, or check the network connection.`);
   }
   const detail = String(err?.cause?.message ?? err?.message ?? "").slice(0, MAX_ERROR_DETAIL_CHARS);
@@ -293,7 +297,7 @@ export async function checkForUpdateWithReason({
     const cached = readFreshCachedUpdate(projectDir, currentVersion, ttlMs);
     if (cached) return { result: cached, reason: null };
   }
-  return askGitHub({ currentVersion, projectDir, force, ttlMs, fetchImpl, env });
+  return askGitHub({ currentVersion, projectDir, ttlMs, fetchImpl, env });
 }
 
 function reasonNotToCheck({ currentVersion, projectDir, env }) {
@@ -306,8 +310,10 @@ function reasonNotToCheck({ currentVersion, projectDir, env }) {
   return null;
 }
 
-// Asks GitHub. When it does not answer, a forced check falls back to the cache; an unforced one has already read it.
-async function askGitHub({ currentVersion, projectDir, force, ttlMs, fetchImpl, env }) {
+// Asks GitHub. When it does not answer, a cache entry that is still inside the TTL is used instead: a forced check, which
+// skipped the cache to get a fresher answer, would otherwise throw away a good one. An unforced check has already read
+// the cache and found nothing usable, so it gains nothing here.
+async function askGitHub({ currentVersion, projectDir, ttlMs, fetchImpl, env }) {
   const live = typeof fetchImpl === "function"
     ? await requestLatestRelease({ fetchImpl, env })
     : { reason: unanswered("network", "GitHub could not be reached (this Node.js has no fetch).") };
@@ -317,7 +323,7 @@ async function askGitHub({ currentVersion, projectDir, force, ttlMs, fetchImpl, 
     return { result: payload, reason: null };
   }
   return {
-    result: force ? readFreshCachedUpdate(projectDir, currentVersion, ttlMs) : null,
+    result: readFreshCachedUpdate(projectDir, currentVersion, ttlMs),
     reason: live.reason ?? notARelease(),
   };
 }

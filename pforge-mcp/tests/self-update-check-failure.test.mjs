@@ -25,11 +25,13 @@ const PWSH_OK = spawnSync("pwsh", ["-NoProfile", "-Command", "exit 0"]).status =
 const PS_ARGS = ["-NoProfile", "-NonInteractive"];
 
 const SHELLS = [
-  { name: "pforge.sh", available: Boolean(BASH), command: (project, args) => [BASH, ["pforge.sh", "self-update", ...args]] },
-  { name: "pforge.ps1 under pwsh", available: PWSH_OK, command: (project, args) => ["pwsh", [...PS_ARGS, "-File", join(project, "pforge.ps1"), "self-update", ...args]] },
+  // pforge.sh writes the failure to stderr, where scripts that read stdout do not see it; pforge.ps1 uses Write-Host.
+  { name: "pforge.sh", available: Boolean(BASH), failuresOnStderr: true, command: (project, args) => [BASH, ["pforge.sh", "self-update", ...args]] },
+  { name: "pforge.ps1 under pwsh", available: PWSH_OK, failuresOnStderr: false, command: (project, args) => ["pwsh", [...PS_ARGS, "-File", join(project, "pforge.ps1"), "self-update", ...args]] },
   {
     name: "pforge.ps1 under Windows PowerShell 5.1",
     available: isWin,
+    failuresOnStderr: false,
     command: (project, args) => ["powershell.exe", [...PS_ARGS, "-ExecutionPolicy", "Bypass", "-File", join(project, "pforge.ps1"), "self-update", ...args]],
   },
 ];
@@ -95,7 +97,7 @@ function selfUpdate(shell, project, { args = [], env = {}, stub = {} } = {}) {
   const run = spawnSync(command, commandArgs, { cwd: project, encoding: "utf8", timeout: 170_000, env: { ...base, ...env } });
   const output = `${run.stdout ?? ""}\n${run.stderr ?? ""}`;
   const requests = existsSync(log) ? readFileSync(log, "utf8").trim().split("\n").filter(Boolean).map((line) => JSON.parse(line)) : [];
-  return { status: run.status, output, requests, detail: `exit ${run.status}\n${output}` };
+  return { status: run.status, output, stdout: run.stdout ?? "", stderr: run.stderr ?? "", requests, detail: `exit ${run.status}\n${output}` };
 }
 
 const utcLabel = (iso) => `${iso.slice(0, 16).replace("T", " ")} UTC`;
@@ -115,6 +117,12 @@ describe.each(SHELLS)("pforge self-update when GitHub cannot be asked, in $name"
     expect(run.output).toContain("NOT a confirmation");
     expect(run.output).not.toContain("Already current");
     expect(run.output).not.toContain("unreachable, rate-limited, or timed out");
+    // Without --force there is nothing to say about --force.
+    expect(run.output).not.toMatch(/--force installs/);
+    if (shell.failuresOnStderr) {
+      expect(run.stderr).toContain("Could not check for updates");
+      expect(run.stdout).not.toContain("Could not check for updates");
+    }
     expect(run.requests).toHaveLength(1);
     expect(run.requests[0].url).toContain("/releases/latest");
     expect(run.requests[0].headers).not.toHaveProperty("authorization");
@@ -160,6 +168,16 @@ describe.each(SHELLS)("pforge self-update when GitHub cannot be asked, in $name"
     expect(run.output).not.toMatch(/--tag v(\s|$)/);
   }, SLOW);
 
+  it_("still heals an install that is as new as the cached release with --force, naming the version", () => {
+    const checkedAt = new Date(Date.now() - 60 * 60 * 1000).toISOString();
+    const project = seed({ cache: { latest: INSTALLED, checkedAt, url: `https://example.test/v${INSTALLED}`, publishedAt: null } });
+    const run = selfUpdate(shell, project, { args: ["--force", "--dry-run"], stub: RATE_LIMITED });
+    expect(run.status, run.detail).toBe(0);
+    expect(run.output).toContain(`Forcing heal to latest tagged release: v${INSTALLED} (you have v${INSTALLED})`);
+    expect(run.output).toContain(`[dry-run] Would run: pforge update --from-github --tag v${INSTALLED}`);
+    expect(run.output).not.toMatch(/--tag v(\s|$)/);
+  }, SLOW);
+
   it_("does not use a cached answer that is older than the cache allows", () => {
     const checkedAt = new Date(Date.now() - 48 * 60 * 60 * 1000).toISOString();
     const project = seed({ cache: { latest: "3.35.5", checkedAt, url: "https://example.test/v3.35.5", publishedAt: null } });
@@ -199,9 +217,20 @@ describe.each(SHELLS)("pforge self-update when GitHub cannot be asked, in $name"
     const run = selfUpdate(shell, seed({ checkModule: noVersion }), { args: ["--force", "--yes"], stub: RELEASE("3.35.5") });
     expect(run.status, run.detail).toBe(2);
     expect(run.output).toContain("NOT a confirmation");
+    // The answer carried no reason, so the shell falls back to the general sentence rather than saying nothing.
+    expect(run.output).toMatch(/Could not check for updates — GitHub API unreachable, rate-limited, or timed out\./);
     expect(run.output).not.toMatch(/Forcing heal/);
     expect(run.output).not.toMatch(/New release available/);
     expect(run.output).not.toMatch(/--tag v(\s|$)/);
+  }, SLOW);
+
+  it_("takes an answer that says the check failed at its word, whatever else the answer holds", () => {
+    const contradiction = "export async function runSelfUpdateCheck() { return { checkFailed: true, reason: { kind: 'network', message: 'the stub says the check failed' }, latest: '3.35.5', isNewer: true }; }\n";
+    const run = selfUpdate(shell, seed({ checkModule: contradiction }), { args: ["--dry-run"], stub: RELEASE("3.35.5") });
+    expect(run.status, run.detail).toBe(2);
+    expect(run.output).toContain("the stub says the check failed");
+    expect(run.output).toContain("NOT a confirmation");
+    expect(run.output).not.toMatch(/New release available/);
   }, SLOW);
 
   it_("still says the install is current when it is", () => {

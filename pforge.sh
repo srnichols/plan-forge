@@ -549,7 +549,7 @@ cmd_commit() {
     if [[ "$goal_line" =~ Slice[[:space:]]*[0-9.]*${slice_num}[[:space:]]*[:\—–-][[:space:]]*(.+) ]]; then
         slice_goal="${BASH_REMATCH[1]}"
     elif echo "$goal_line" | grep -q '^\*\*Goal\*\*:'; then
-        slice_goal="$(echo "$goal_line" | grep '^\*\*Goal\*\*:' | sed 's/\*\*Goal\*\*:\s*//')"
+        slice_goal="$(echo "$goal_line" | grep '^\*\*Goal\*\*:' | sed 's/\*\*Goal\*\*:[[:space:]]*//')"
     fi
 
     # Build commit message
@@ -910,9 +910,9 @@ cmd_ext_search() {
     for id in $ids; do
         local name desc category verified
         # Extract fields for this extension
-        name="$(echo "$catalog" | grep -A1 "\"$id\"" | grep '"name"' | head -1 | sed 's/.*"name":\s*"//' | sed 's/".*//' || echo "$id")"
-        desc="$(echo "$catalog" | grep -A20 "\"id\":\s*\"$id\"" | grep '"description"' | head -1 | sed 's/.*"description":\s*"//' | sed 's/".*//' || true)"
-        category="$(echo "$catalog" | grep -A25 "\"id\":\s*\"$id\"" | grep '"category"' | head -1 | sed 's/.*"category":\s*"//' | sed 's/".*//' || true)"
+        name="$(echo "$catalog" | grep -A1 "\"$id\"" | grep '"name"' | head -1 | sed 's/.*"name":[[:space:]]*"//' | sed 's/".*//' || echo "$id")"
+        desc="$(echo "$catalog" | grep -A20 "\"id\":[[:space:]]*\"$id\"" | grep '"description"' | head -1 | sed 's/.*"description":[[:space:]]*"//' | sed 's/".*//' || true)"
+        category="$(echo "$catalog" | grep -A25 "\"id\":[[:space:]]*\"$id\"" | grep '"category"' | head -1 | sed 's/.*"category":[[:space:]]*"//' | sed 's/".*//' || true)"
 
         # Filter by query if provided
         if [ -n "$query" ]; then
@@ -948,7 +948,7 @@ cmd_ext_add() {
     catalog="$(get_ext_catalog)" || return 1
 
     # Check if extension exists in catalog
-    if ! echo "$catalog" | grep -q "\"id\":\s*\"$ext_name\""; then
+    if ! echo "$catalog" | grep -q "\"id\":[[:space:]]*\"$ext_name\""; then
         echo "ERROR: Extension '$ext_name' not found in catalog." >&2
         echo "  Run 'pforge ext search' to see available extensions." >&2
         exit 1
@@ -956,8 +956,8 @@ cmd_ext_add() {
 
     # Extract download URL and path_in_repo
     local download_url path_in_repo
-    download_url="$(echo "$catalog" | grep -A30 "\"id\":\s*\"$ext_name\"" | grep '"download_url"' | head -1 | sed 's/.*"download_url":\s*"//' | sed 's/".*//')"
-    path_in_repo="$(echo "$catalog" | grep -A30 "\"id\":\s*\"$ext_name\"" | grep '"path_in_repo"' | head -1 | sed 's/.*"path_in_repo":\s*"//' | sed 's/".*//')"
+    download_url="$(echo "$catalog" | grep -A30 "\"id\":[[:space:]]*\"$ext_name\"" | grep '"download_url"' | head -1 | sed 's/.*"download_url":[[:space:]]*"//' | sed 's/".*//')"
+    path_in_repo="$(echo "$catalog" | grep -A30 "\"id\":[[:space:]]*\"$ext_name\"" | grep '"path_in_repo"' | head -1 | sed 's/.*"path_in_repo":[[:space:]]*"//' | sed 's/".*//')"
 
     echo ""
     echo "Installing: $ext_name"
@@ -1009,22 +1009,22 @@ cmd_ext_info() {
     local catalog
     catalog="$(get_ext_catalog)" || return 1
 
-    if ! echo "$catalog" | grep -q "\"id\":\s*\"$ext_name\""; then
+    if ! echo "$catalog" | grep -q "\"id\":[[:space:]]*\"$ext_name\""; then
         echo "ERROR: Extension '$ext_name' not found in catalog." >&2
         exit 1
     fi
 
     # Extract fields
     local block
-    block="$(echo "$catalog" | grep -A40 "\"id\":\s*\"$ext_name\"")"
+    block="$(echo "$catalog" | grep -A40 "\"id\":[[:space:]]*\"$ext_name\"")"
     local name desc author version category license repository
-    name="$(echo "$block" | grep '"name"' | head -1 | sed 's/.*"name":\s*"//' | sed 's/".*//')"
-    desc="$(echo "$block" | grep '"description"' | head -1 | sed 's/.*"description":\s*"//' | sed 's/".*//')"
-    author="$(echo "$block" | grep '"author"' | head -1 | sed 's/.*"author":\s*"//' | sed 's/".*//')"
-    version="$(echo "$block" | grep '"version"' | head -1 | sed 's/.*"version":\s*"//' | sed 's/".*//')"
-    category="$(echo "$block" | grep '"category"' | head -1 | sed 's/.*"category":\s*"//' | sed 's/".*//')"
-    license="$(echo "$block" | grep '"license"' | head -1 | sed 's/.*"license":\s*"//' | sed 's/".*//')"
-    repository="$(echo "$block" | grep '"repository"' | head -1 | sed 's/.*"repository":\s*"//' | sed 's/".*//')"
+    name="$(echo "$block" | grep '"name"' | head -1 | sed 's/.*"name":[[:space:]]*"//' | sed 's/".*//')"
+    desc="$(echo "$block" | grep '"description"' | head -1 | sed 's/.*"description":[[:space:]]*"//' | sed 's/".*//')"
+    author="$(echo "$block" | grep '"author"' | head -1 | sed 's/.*"author":[[:space:]]*"//' | sed 's/".*//')"
+    version="$(echo "$block" | grep '"version"' | head -1 | sed 's/.*"version":[[:space:]]*"//' | sed 's/".*//')"
+    category="$(echo "$block" | grep '"category"' | head -1 | sed 's/.*"category":[[:space:]]*"//' | sed 's/".*//')"
+    license="$(echo "$block" | grep '"license"' | head -1 | sed 's/.*"license":[[:space:]]*"//' | sed 's/".*//')"
+    repository="$(echo "$block" | grep '"repository"' | head -1 | sed 's/.*"repository":[[:space:]]*"//' | sed 's/".*//')"
 
     echo ""
     echo "╔══════════════════════════════════════════════════════════════╗"
@@ -1377,6 +1377,31 @@ _pf_sha256() {
 # the project has not changed, keeps customized ones (saving the new version
 # under .forge/update-pending/), and renders setup's placeholders.
 _PF_GUIDANCE_PATH_RE='^(\.github/(prompts|instructions|agents|skills|hooks|automations)/|docs/plans/)'
+
+# _pf_guidance_source <source-root> <path in project> <variable> [preset...]
+# Puts the file the release keeps for a guidance file of the project into <variable>, empty when it keeps none. The
+# order is update-plan.mjs's (#443): the active presets' copies, shared, the shared skills (they sit in
+# presets/shared/skills, not in .github/skills), templates, and only then the source root's own .github, which is this
+# repository's working copy and not what projects receive. pforge.ps1 does the same in Get-GuidanceSourceCandidates.
+_pf_guidance_source() {
+    local source_path="$1" dst_rel="$2" out_var="$3" found="" p cand
+    shift 3
+    for p in "$@"; do
+        p="${p// /}"
+        [ "$p" = "custom" ] && continue
+        cand="$source_path/presets/$p/$dst_rel"
+        if [ -f "$cand" ]; then found="$cand"; break; fi
+    done
+    if [ -z "$found" ]; then
+        local rest=("$source_path/presets/shared/$dst_rel")
+        case "$dst_rel" in .github/skills/*) rest+=("$source_path/presets/shared/skills/${dst_rel#.github/skills/}") ;; esac
+        rest+=("$source_path/templates/$dst_rel" "$source_path/$dst_rel")
+        for cand in "${rest[@]}"; do
+            if [ -f "$cand" ]; then found="$cand"; break; fi
+        done
+    fi
+    printf -v "$out_var" '%s' "$found"
+}
 
 # Prints the guard to use: the source's copy (its index knows the newest shipped
 # versions), else the project's installed copy (e.g. when the source is an older
@@ -1852,7 +1877,7 @@ for (const op of plan.operations) {
     # project already has that the plan didn't offer.
     local _kept_candidates=()
     if [ -n "$update_guard" ]; then
-        local _guidance_dir _dst_dir _f _dst_rel _nu_skip nu _cand _src_file _p
+        local _guidance_dir _dst_dir _f _dst_rel _nu_skip nu _src_file
         for _guidance_dir in ".github/prompts" ".github/instructions" ".github/agents" ".github/skills" ".github/hooks" "docs/plans"; do
             _dst_dir="$REPO_ROOT/$_guidance_dir"
             [ -d "$_dst_dir" ] || continue
@@ -1864,18 +1889,7 @@ for (const op of plan.operations) {
                     [ "$nu" = "$_dst_rel" ] && _nu_skip=true && break
                 done
                 $_nu_skip && continue
-                _src_file=""
-                for _cand in "$source_path/$_dst_rel" "$source_path/presets/shared/$_dst_rel" "$source_path/templates/$_dst_rel"; do
-                    if [ -f "$_cand" ]; then _src_file="$_cand"; break; fi
-                done
-                if [ -z "$_src_file" ]; then
-                    for _p in "${_presets[@]}"; do
-                        _p="${_p// /}"
-                        [ "$_p" = "custom" ] && continue
-                        _cand="$source_path/presets/$_p/$_dst_rel"
-                        if [ -f "$_cand" ]; then _src_file="$_cand"; break; fi
-                    done
-                fi
+                _pf_guidance_source "$source_path" "$_dst_rel" _src_file ${_presets[@]+"${_presets[@]}"}
                 [ -z "$_src_file" ] && continue
                 _kept_candidates+=("$_src_file|$_f|$_dst_rel")
             done < <(find "$_dst_dir" -type f -print0 2>/dev/null)
@@ -3101,7 +3115,7 @@ cmd_doctor() {
 
         # Check for key settings (basic grep — no jq dependency required)
         if grep -q '"chat.agent.enabled"' <<< "$settings_body"; then
-            if grep -q '"chat.agent.enabled":\s*true' <<< "$settings_body" || grep -q '"chat.agent.enabled": true' <<< "$settings_body"; then
+            if grep -q '"chat.agent.enabled":[[:space:]]*true' <<< "$settings_body" || grep -q '"chat.agent.enabled": true' <<< "$settings_body"; then
                 doctor_pass "chat.agent.enabled = true"
             else
                 doctor_fail "chat.agent.enabled = false" "Set to true in .vscode/settings.json"
@@ -3146,8 +3160,8 @@ cmd_doctor() {
 
     if [ -f "$config_path" ]; then
         # Parse with grep/sed (no jq dependency)
-        preset="$(grep -o '"preset"[^,}]*' "$config_path" | sed 's/"preset":\s*"//' | sed 's/"//' || echo "unknown")"
-        template_version="$(grep -o '"templateVersion"[^,}]*' "$config_path" | sed 's/"templateVersion":\s*"//' | sed 's/"//' || echo "unknown")"
+        preset="$(grep -o '"preset"[^,}]*' "$config_path" | sed 's/"preset":[[:space:]]*"//' | sed 's/"//' || echo "unknown")"
+        template_version="$(grep -o '"templateVersion"[^,}]*' "$config_path" | sed 's/"templateVersion":[[:space:]]*"//' | sed 's/"//' || echo "unknown")"
         local label_bits=""
         [ -n "$preset" ] && [ "$preset" != "unknown" ] && label_bits="preset: $preset"
         if [ -n "$template_version" ] && [ "$template_version" != "unknown" ]; then
@@ -3164,7 +3178,7 @@ cmd_doctor() {
 
         # Check configured agents
         local configured_agents
-        configured_agents="$(grep -o '"agents"[^,}]*' "$config_path" | sed 's/"agents":\s*"//' | sed 's/"//' || echo "copilot")"
+        configured_agents="$(grep -o '"agents"[^,}]*' "$config_path" | sed 's/"agents":[[:space:]]*"//' | sed 's/"//' || echo "copilot")"
         [ -z "$configured_agents" ] && configured_agents="copilot"
 
         IFS=',' read -ra agent_arr <<< "$configured_agents"

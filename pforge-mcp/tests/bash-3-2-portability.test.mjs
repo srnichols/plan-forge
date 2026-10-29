@@ -1,17 +1,18 @@
 /**
  * setup.sh, validate-setup.sh and pforge.sh run on the Bash and the tools that macOS ships (#427): Bash 3.2, and BSD
  * find, grep, sed and awk. The macOS job in validate.yml runs them there. These tests are what a Linux or Windows
- * contributor can run: source-read guards against the Bash 4 and GNU-only constructs that stopped them, and the two
- * helpers that replaced `grep -oP` and `find -printf`, checked against what they replaced.
+ * contributor can run: source-read guards against the Bash 4 and GNU-only constructs that stopped them, the two
+ * helpers that replaced `grep -oP` and `find -printf`, checked against what they replaced, and the commands that read
+ * JSON, run under a sed that does not know `\s`, as macOS's does not.
  *
  * Source-read guard: GNU Bash and GNU tools accept every construct below, so nothing else would notice one coming back.
  */
 
 import { afterAll, describe, expect, it } from "vitest";
-import { spawnSync } from "node:child_process";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { execFileSync, spawnSync } from "node:child_process";
+import { copyFileSync, chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join, resolve } from "node:path";
+import { dirname, join, resolve } from "node:path";
 
 const REPO_ROOT = resolve(import.meta.dirname, "..", "..");
 const isWin = process.platform === "win32";
@@ -28,6 +29,7 @@ const NOT_PORTABLE = [
   [/;;&|\|&|&>>/, "a Bash 4 operator (;;& or |& or &>>)"],
   [/\[\[\s+-v\s/, "[[ -v var ]], Bash 4.2+"],
   [/\bsed\s+(-[a-zA-Z]*\s+)*-[a-zA-Z]*r\b/, "sed -r; the portable spelling is sed -E"],
+  [/\b(sed|grep)\b[^\n]*\\[sS]/, "\\s or \\S in a sed or grep pattern, which macOS's sed reads as the letter; the portable spelling is [[:space:]]"],
 ];
 
 const code = (text) =>
@@ -51,6 +53,10 @@ describe("the shell scripts do not use what Bash 3.2 and BSD tools lack", () => 
     expect(NOT_PORTABLE[1][0].test('mapfile -t lines < <(echo hi)')).toBe(true);
     expect(NOT_PORTABLE[2][0].test("got=$(grep -oP 'a\\K.' file)")).toBe(true);
     expect(NOT_PORTABLE[3][0].test("find . -maxdepth 1 -name '*.md' -printf '%f'")).toBe(true);
+    expect(NOT_PORTABLE[8][0].test(`name="$(echo "$block" | grep '"name"' | sed 's/.*"name":\\s*"//')"`)).toBe(true);
+    expect(NOT_PORTABLE[8][0].test("count=$(grep -cE '^\\|\\s*[0-9]+\\s*\\|' \"$file\")")).toBe(true);
+    expect(NOT_PORTABLE[8][0].test(`name="$(echo "$block" | grep '"name"' | sed 's/.*"name":[[:space:]]*"//')"`), "[[:space:]] is the portable spelling").toBe(false);
+    expect(NOT_PORTABLE[8][0].test("function strip(raw){return raw.replace(/^---[\\s\\S]*?---\\s*/m,'');}"), "a JavaScript pattern in a node script is not a sed or grep pattern").toBe(false);
   });
 });
 
@@ -151,4 +157,99 @@ describe.skipIf(!BASH)("setup.sh helpers that replaced GNU-only code", () => {
     );
     expect(out.trim().split("\n").map((line) => line.replace(/\r$/, ""))).toEqual(['prompts=["a.prompt.md","b.prompt.md"]', 'skills=["alpha","beta"]', "none=[]", 'space=["x.prompt.md"]']);
   });
+});
+
+/**
+ * macOS's sed reads `\s` as the letter s, so `sed 's/"name":\s*"//'` does not match `"name": "x"` there (measured on a
+ * GitHub-hosted macOS runner, #427). `pforge smith`, `ext info` and `ext search` read JSON that way, and printed what
+ * the first sed left of a line. A sed with the same fault first on the PATH shows what they print on a Mac, which no
+ * run on Linux or Windows could.
+ */
+function sedWithoutBackslashS() {
+  const dir = tempDir();
+  const real = runBash("command -v sed").trim();
+  const shim = join(dir, "sed");
+  writeFileSync(shim, ["#!/bin/bash", "args=()", 'for a in "$@"; do args+=("${a//\\\\s/s}"); done', `exec "${real}" "\${args[@]}"`, ""].join("\n"));
+  chmodSync(shim, 0o755);
+  return dir;
+}
+
+// Git for Windows' bash puts /usr/bin ahead of any PATH it inherits, so the directory goes first from inside bash.
+const SHIM_FIRST = 'if command -v cygpath >/dev/null 2>&1; then PF_SHIM="$(cygpath -u "$PF_SHIM")"; fi; PATH="$PF_SHIM:$PATH"; export PATH; ';
+const inBashWithShim = (shimDir, command, args = [], options = {}) =>
+  spawnSync(BASH, ["-c", SHIM_FIRST + command, "pforge", ...args], { encoding: "utf8", timeout: 240_000, env: { ...process.env, PF_SHIM: shimDir }, ...options });
+
+function pforgeProject(files) {
+  const dir = tempDir();
+  for (const [rel, content] of Object.entries(files)) {
+    mkdirSync(dirname(join(dir, rel)), { recursive: true });
+    writeFileSync(join(dir, rel), content);
+  }
+  execFileSync("git", ["init", "-q"], { cwd: dir, stdio: "ignore" });
+  copyFileSync(join(REPO_ROOT, "pforge.sh"), join(dir, "pforge.sh"));
+  return dir;
+}
+
+const CATALOG = JSON.stringify(
+  {
+    schema_version: "1.0",
+    extensions: {
+      "demo-ext": {
+        id: "demo-ext",
+        name: "Demo Extension",
+        description: "Does a demo",
+        author: "Ada",
+        version: "1.2.3",
+        download_url: "https://example.com/demo.zip",
+        repository: "https://example.com/demo",
+        path_in_repo: "extensions/demo",
+        license: "MIT",
+        category: "testing",
+      },
+    },
+  },
+  null,
+  2,
+);
+
+describe.skipIf(!BASH)("pforge.sh reads JSON that has a space after the colon, with a sed that has no \\s as macOS's has", () => {
+  const runPforge = (project, args) => {
+    const run = inBashWithShim(sedWithoutBackslashS(), 'exec bash pforge.sh "$@"', args, { cwd: project });
+    return { status: run.status, out: `${run.stdout}${run.stderr}`.replace(/\r/g, "") };
+  };
+
+  it("the stand-in leaves a pattern with \\s unmatched, and strips the key with [[:space:]], which is the spelling these scripts use", () => {
+    const strip = (space) => `printf '%s' '"a": "b"' | sed 's/"a":${space}*"//'`;
+    expect(inBashWithShim(sedWithoutBackslashS(), strip("\\s")).stdout).toBe('"a": "b"');
+    expect(inBashWithShim(sedWithoutBackslashS(), strip("[[:space:]]")).stdout).toBe('b"');
+  });
+
+  it("ext info prints every field of the extension", () => {
+    const project = pforgeProject({ "extensions/catalog.json": CATALOG });
+    const { status, out } = runPforge(project, ["ext", "info", "demo-ext"]);
+    expect(status, out).toBe(0);
+    expect(out).toContain("Demo Extension");
+    expect(out).toMatch(/Version:\s+1\.2\.3/);
+    expect(out).toMatch(/Author:\s+Ada/);
+    expect(out).toMatch(/Category:\s+testing/);
+    expect(out).toMatch(/License:\s+MIT/);
+    expect(out).toContain("Does a demo");
+    expect(out).toMatch(/Repository:\s+https:\/\/example\.com\/demo/);
+  }, 300_000);
+
+  it("ext search lists the extension with its category and description", () => {
+    const project = pforgeProject({ "extensions/catalog.json": CATALOG });
+    const { status, out } = runPforge(project, ["ext", "search"]);
+    expect(status, out).toBe(0);
+    expect(out).toMatch(/demo-ext\s+\[testing\]/);
+    expect(out).toContain("Does a demo");
+  }, 300_000);
+
+  it("smith reads the preset, the version and the agents of a .forge.json that is indented", () => {
+    const project = pforgeProject({ ".forge.json": JSON.stringify({ templateVersion: "1.2.3", preset: "typescript", agents: "claude" }, null, 2) });
+    const { out } = runPforge(project, ["smith"]);
+    expect(out).toContain("Setup Health:");
+    expect(out).toContain(".forge.json valid (preset: typescript, v1.2.3)");
+    expect(out).toMatch(/Agent: claude/);
+  }, 300_000);
 });

@@ -40,6 +40,10 @@ let package = Package(
         .package(url: "https://github.com/vapor/jwt.git", from: "5.0.0"),
         .package(url: "https://github.com/apple/swift-log.git", from: "1.5.4"),
         .package(url: "https://github.com/apple/swift-nio.git", from: "2.79.0"),
+        // swift-crypto 5 does not compile on Linux in the swift:6.4 image (CryptoKitError is not found), and jwt-kit 5.8
+        // accepts it, so SwiftPM takes the newest unless something holds it back. Nothing here uses the product: the
+        // range is only a constraint. Remove it once a swift-crypto 5 release builds in the image (#442).
+        .package(url: "https://github.com/apple/swift-crypto.git", "4.1.0"..<"5.0.0"),
     ],
     targets: [
         .target(

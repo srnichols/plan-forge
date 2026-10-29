@@ -11,7 +11,9 @@ name: Preset Build Checks
 #     stacks have no compile scaffold yet, so `--docker-only` builds and
 #     health-checks their documented Dockerfile blocks without it.
 # Failure, on any stack, opens or updates one tracking issue; a clean run
-# across every stack closes it. Same pattern as .github/workflows/model-drift.yml.
+# across every stack closes it. Only the nightly and runs of master and
+# planning/main report: a run of any other branch leaves the issue alone.
+# Same pattern as .github/workflows/model-drift.yml.
 
 on:
   schedule:
@@ -86,7 +88,9 @@ jobs:
   report:
     name: Open, update or close the tracking issue
     needs: build
-    if: always()
+    # Only the nightly and the two long-lived branches report. A run of any other branch (a fix under test, a manual
+    # run) says what it found in its own log and leaves the issue that tracks the long-lived ones alone.
+    if: always() && (github.ref == 'refs/heads/master' || github.ref == 'refs/heads/planning/main')
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:

@@ -549,7 +549,7 @@ cmd_commit() {
     if [[ "$goal_line" =~ Slice[[:space:]]*[0-9.]*${slice_num}[[:space:]]*[:\—–-][[:space:]]*(.+) ]]; then
         slice_goal="${BASH_REMATCH[1]}"
     elif echo "$goal_line" | grep -q '^\*\*Goal\*\*:'; then
-        slice_goal="$(echo "$goal_line" | grep '^\*\*Goal\*\*:' | sed 's/\*\*Goal\*\*:\s*//')"
+        slice_goal="$(echo "$goal_line" | grep '^\*\*Goal\*\*:' | sed 's/\*\*Goal\*\*:[[:space:]]*//')"
     fi
 
     # Build commit message
@@ -910,9 +910,9 @@ cmd_ext_search() {
     for id in $ids; do
         local name desc category verified
         # Extract fields for this extension
-        name="$(echo "$catalog" | grep -A1 "\"$id\"" | grep '"name"' | head -1 | sed 's/.*"name":\s*"//' | sed 's/".*//' || echo "$id")"
-        desc="$(echo "$catalog" | grep -A20 "\"id\":\s*\"$id\"" | grep '"description"' | head -1 | sed 's/.*"description":\s*"//' | sed 's/".*//' || true)"
-        category="$(echo "$catalog" | grep -A25 "\"id\":\s*\"$id\"" | grep '"category"' | head -1 | sed 's/.*"category":\s*"//' | sed 's/".*//' || true)"
+        name="$(echo "$catalog" | grep -A1 "\"$id\"" | grep '"name"' | head -1 | sed 's/.*"name":[[:space:]]*"//' | sed 's/".*//' || echo "$id")"
+        desc="$(echo "$catalog" | grep -A20 "\"id\":[[:space:]]*\"$id\"" | grep '"description"' | head -1 | sed 's/.*"description":[[:space:]]*"//' | sed 's/".*//' || true)"
+        category="$(echo "$catalog" | grep -A25 "\"id\":[[:space:]]*\"$id\"" | grep '"category"' | head -1 | sed 's/.*"category":[[:space:]]*"//' | sed 's/".*//' || true)"
 
         # Filter by query if provided
         if [ -n "$query" ]; then
@@ -948,7 +948,7 @@ cmd_ext_add() {
     catalog="$(get_ext_catalog)" || return 1
 
     # Check if extension exists in catalog
-    if ! echo "$catalog" | grep -q "\"id\":\s*\"$ext_name\""; then
+    if ! echo "$catalog" | grep -q "\"id\":[[:space:]]*\"$ext_name\""; then
         echo "ERROR: Extension '$ext_name' not found in catalog." >&2
         echo "  Run 'pforge ext search' to see available extensions." >&2
         exit 1
@@ -956,8 +956,8 @@ cmd_ext_add() {
 
     # Extract download URL and path_in_repo
     local download_url path_in_repo
-    download_url="$(echo "$catalog" | grep -A30 "\"id\":\s*\"$ext_name\"" | grep '"download_url"' | head -1 | sed 's/.*"download_url":\s*"//' | sed 's/".*//')"
-    path_in_repo="$(echo "$catalog" | grep -A30 "\"id\":\s*\"$ext_name\"" | grep '"path_in_repo"' | head -1 | sed 's/.*"path_in_repo":\s*"//' | sed 's/".*//')"
+    download_url="$(echo "$catalog" | grep -A30 "\"id\":[[:space:]]*\"$ext_name\"" | grep '"download_url"' | head -1 | sed 's/.*"download_url":[[:space:]]*"//' | sed 's/".*//')"
+    path_in_repo="$(echo "$catalog" | grep -A30 "\"id\":[[:space:]]*\"$ext_name\"" | grep '"path_in_repo"' | head -1 | sed 's/.*"path_in_repo":[[:space:]]*"//' | sed 's/".*//')"
 
     echo ""
     echo "Installing: $ext_name"
@@ -1009,22 +1009,22 @@ cmd_ext_info() {
     local catalog
     catalog="$(get_ext_catalog)" || return 1
 
-    if ! echo "$catalog" | grep -q "\"id\":\s*\"$ext_name\""; then
+    if ! echo "$catalog" | grep -q "\"id\":[[:space:]]*\"$ext_name\""; then
         echo "ERROR: Extension '$ext_name' not found in catalog." >&2
         exit 1
     fi
 
     # Extract fields
     local block
-    block="$(echo "$catalog" | grep -A40 "\"id\":\s*\"$ext_name\"")"
+    block="$(echo "$catalog" | grep -A40 "\"id\":[[:space:]]*\"$ext_name\"")"
     local name desc author version category license repository
-    name="$(echo "$block" | grep '"name"' | head -1 | sed 's/.*"name":\s*"//' | sed 's/".*//')"
-    desc="$(echo "$block" | grep '"description"' | head -1 | sed 's/.*"description":\s*"//' | sed 's/".*//')"
-    author="$(echo "$block" | grep '"author"' | head -1 | sed 's/.*"author":\s*"//' | sed 's/".*//')"
-    version="$(echo "$block" | grep '"version"' | head -1 | sed 's/.*"version":\s*"//' | sed 's/".*//')"
-    category="$(echo "$block" | grep '"category"' | head -1 | sed 's/.*"category":\s*"//' | sed 's/".*//')"
-    license="$(echo "$block" | grep '"license"' | head -1 | sed 's/.*"license":\s*"//' | sed 's/".*//')"
-    repository="$(echo "$block" | grep '"repository"' | head -1 | sed 's/.*"repository":\s*"//' | sed 's/".*//')"
+    name="$(echo "$block" | grep '"name"' | head -1 | sed 's/.*"name":[[:space:]]*"//' | sed 's/".*//')"
+    desc="$(echo "$block" | grep '"description"' | head -1 | sed 's/.*"description":[[:space:]]*"//' | sed 's/".*//')"
+    author="$(echo "$block" | grep '"author"' | head -1 | sed 's/.*"author":[[:space:]]*"//' | sed 's/".*//')"
+    version="$(echo "$block" | grep '"version"' | head -1 | sed 's/.*"version":[[:space:]]*"//' | sed 's/".*//')"
+    category="$(echo "$block" | grep '"category"' | head -1 | sed 's/.*"category":[[:space:]]*"//' | sed 's/".*//')"
+    license="$(echo "$block" | grep '"license"' | head -1 | sed 's/.*"license":[[:space:]]*"//' | sed 's/".*//')"
+    repository="$(echo "$block" | grep '"repository"' | head -1 | sed 's/.*"repository":[[:space:]]*"//' | sed 's/".*//')"
 
     echo ""
     echo "╔══════════════════════════════════════════════════════════════╗"
@@ -3115,7 +3115,7 @@ cmd_doctor() {
 
         # Check for key settings (basic grep — no jq dependency required)
         if grep -q '"chat.agent.enabled"' <<< "$settings_body"; then
-            if grep -q '"chat.agent.enabled":\s*true' <<< "$settings_body" || grep -q '"chat.agent.enabled": true' <<< "$settings_body"; then
+            if grep -q '"chat.agent.enabled":[[:space:]]*true' <<< "$settings_body" || grep -q '"chat.agent.enabled": true' <<< "$settings_body"; then
                 doctor_pass "chat.agent.enabled = true"
             else
                 doctor_fail "chat.agent.enabled = false" "Set to true in .vscode/settings.json"
@@ -3160,8 +3160,8 @@ cmd_doctor() {
 
     if [ -f "$config_path" ]; then
         # Parse with grep/sed (no jq dependency)
-        preset="$(grep -o '"preset"[^,}]*' "$config_path" | sed 's/"preset":\s*"//' | sed 's/"//' || echo "unknown")"
-        template_version="$(grep -o '"templateVersion"[^,}]*' "$config_path" | sed 's/"templateVersion":\s*"//' | sed 's/"//' || echo "unknown")"
+        preset="$(grep -o '"preset"[^,}]*' "$config_path" | sed 's/"preset":[[:space:]]*"//' | sed 's/"//' || echo "unknown")"
+        template_version="$(grep -o '"templateVersion"[^,}]*' "$config_path" | sed 's/"templateVersion":[[:space:]]*"//' | sed 's/"//' || echo "unknown")"
         local label_bits=""
         [ -n "$preset" ] && [ "$preset" != "unknown" ] && label_bits="preset: $preset"
         if [ -n "$template_version" ] && [ "$template_version" != "unknown" ]; then
@@ -3178,7 +3178,7 @@ cmd_doctor() {
 
         # Check configured agents
         local configured_agents
-        configured_agents="$(grep -o '"agents"[^,}]*' "$config_path" | sed 's/"agents":\s*"//' | sed 's/"//' || echo "copilot")"
+        configured_agents="$(grep -o '"agents"[^,}]*' "$config_path" | sed 's/"agents":[[:space:]]*"//' | sed 's/"//' || echo "copilot")"
         [ -z "$configured_agents" ] && configured_agents="copilot"
 
         IFS=',' read -ra agent_arr <<< "$configured_agents"

@@ -218,10 +218,10 @@ describe.skipIf(!BASH)("pforge.sh reads JSON that has a space after the colon, w
     return { status: run.status, out: `${run.stdout}${run.stderr}`.replace(/\r/g, "") };
   };
 
-  it("the stand-in leaves a pattern with \\s unmatched, where the real sed strips the key", () => {
-    const strip = `printf '%s' '"a": "b"' | sed 's/"a":\\s*"//'`;
-    expect(inBashWithShim(sedWithoutBackslashS(), strip).stdout).toBe('"a": "b"');
-    expect(spawnSync(BASH, ["-c", strip], { encoding: "utf8" }).stdout).toBe('b"');
+  it("the stand-in leaves a pattern with \\s unmatched, and strips the key with [[:space:]], which is the spelling these scripts use", () => {
+    const strip = (space) => `printf '%s' '"a": "b"' | sed 's/"a":${space}*"//'`;
+    expect(inBashWithShim(sedWithoutBackslashS(), strip("\\s")).stdout).toBe('"a": "b"');
+    expect(inBashWithShim(sedWithoutBackslashS(), strip("[[:space:]]")).stdout).toBe('b"');
   });
 
   it("ext info prints every field of the extension", () => {

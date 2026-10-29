@@ -12,6 +12,12 @@
  * after a compressed request body (GHSA-27r3-jxmh-p828). express and the MCP SDK ask for `^2`, so a lock
  * update is enough and needs no override.
  *
+ * @hono/node-server from 1.19.10 up to 2.1.3 decodes a request path twice in `serveStatic`, which lets a
+ * request bypass the middleware on a static path (GHSA-rmxm-3fg6-px4f). No 1.x release has the fix.
+ * @modelcontextprotocol/sdk asks for `^1.19.9 || ^2.0.5`, so a lock update to 2.1.3 or later is enough and
+ * needs no override. Neither the SDK nor Plan Forge calls `serveStatic`: the SDK's HTTP transport is the only
+ * thing that loads the package.
+ *
  * undici before 7.30.1 (eight advisories; jsdom reaches it through `^7.25.0`), vite up to 8.3.2, vitest and
  * @vitest/mocker before 4.1.12, and postcss-selector-parser before 6.1.5 are development dependencies. A lock
  * update inside the ranges package.json allows is enough for each.
@@ -41,6 +47,7 @@ const MANIFESTS = ["package.json", "pforge-mcp/package.json"];
 const ADVISORIES = [
   { id: "GHSA-mrhx-c7xc-m3w5", pkg: "zod", patched: [ZOD_FLOOR] },
   { id: "GHSA-27r3-jxmh-p828", pkg: "body-parser", patched: ["1.20.9", "2.4.0"] },
+  { id: "GHSA-rmxm-3fg6-px4f", pkg: "@hono/node-server", patched: ["2.1.3"] },
   { id: "GHSA-4qv8-2p9j-2685 and seven more", pkg: "undici", patched: ["7.30.1", "8.0.0"], locks: [ROOT_LOCK, MCP_LOCK] },
   { id: "GHSA-587h-7wmj-h5pm and five more", pkg: "vite", patched: ["8.3.3"] },
   { id: "GHSA-qxg6-89mg-rqv8 and GHSA-xp26-3454-mjgp", pkg: "vitest", patched: ["4.1.12", "5.0.0"] },

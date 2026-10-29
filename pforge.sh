@@ -1378,6 +1378,31 @@ _pf_sha256() {
 # under .forge/update-pending/), and renders setup's placeholders.
 _PF_GUIDANCE_PATH_RE='^(\.github/(prompts|instructions|agents|skills|hooks|automations)/|docs/plans/)'
 
+# _pf_guidance_source <source-root> <path in project> <variable> [preset...]
+# Puts the file the release keeps for a guidance file of the project into <variable>, empty when it keeps none. The
+# order is update-plan.mjs's (#443): the active presets' copies, shared, the shared skills (they sit in
+# presets/shared/skills, not in .github/skills), templates, and only then the source root's own .github, which is this
+# repository's working copy and not what projects receive. pforge.ps1 does the same in Get-GuidanceSourceCandidates.
+_pf_guidance_source() {
+    local source_path="$1" dst_rel="$2" out_var="$3" found="" p cand
+    shift 3
+    for p in "$@"; do
+        p="${p// /}"
+        [ "$p" = "custom" ] && continue
+        cand="$source_path/presets/$p/$dst_rel"
+        if [ -f "$cand" ]; then found="$cand"; break; fi
+    done
+    if [ -z "$found" ]; then
+        local rest=("$source_path/presets/shared/$dst_rel")
+        case "$dst_rel" in .github/skills/*) rest+=("$source_path/presets/shared/skills/${dst_rel#.github/skills/}") ;; esac
+        rest+=("$source_path/templates/$dst_rel" "$source_path/$dst_rel")
+        for cand in "${rest[@]}"; do
+            if [ -f "$cand" ]; then found="$cand"; break; fi
+        done
+    fi
+    printf -v "$out_var" '%s' "$found"
+}
+
 # Prints the guard to use: the source's copy (its index knows the newest shipped
 # versions), else the project's installed copy (e.g. when the source is an older
 # release). Prints nothing when Node or both copies are missing; update then
@@ -1852,7 +1877,7 @@ for (const op of plan.operations) {
     # project already has that the plan didn't offer.
     local _kept_candidates=()
     if [ -n "$update_guard" ]; then
-        local _guidance_dir _dst_dir _f _dst_rel _nu_skip nu _cand _src_file _p
+        local _guidance_dir _dst_dir _f _dst_rel _nu_skip nu _src_file
         for _guidance_dir in ".github/prompts" ".github/instructions" ".github/agents" ".github/skills" ".github/hooks" "docs/plans"; do
             _dst_dir="$REPO_ROOT/$_guidance_dir"
             [ -d "$_dst_dir" ] || continue
@@ -1864,18 +1889,7 @@ for (const op of plan.operations) {
                     [ "$nu" = "$_dst_rel" ] && _nu_skip=true && break
                 done
                 $_nu_skip && continue
-                _src_file=""
-                for _cand in "$source_path/$_dst_rel" "$source_path/presets/shared/$_dst_rel" "$source_path/templates/$_dst_rel"; do
-                    if [ -f "$_cand" ]; then _src_file="$_cand"; break; fi
-                done
-                if [ -z "$_src_file" ]; then
-                    for _p in "${_presets[@]}"; do
-                        _p="${_p// /}"
-                        [ "$_p" = "custom" ] && continue
-                        _cand="$source_path/presets/$_p/$_dst_rel"
-                        if [ -f "$_cand" ]; then _src_file="$_cand"; break; fi
-                    done
-                fi
+                _pf_guidance_source "$source_path" "$_dst_rel" _src_file ${_presets[@]+"${_presets[@]}"}
                 [ -z "$_src_file" ] && continue
                 _kept_candidates+=("$_src_file|$_f|$_dst_rel")
             done < <(find "$_dst_dir" -type f -print0 2>/dev/null)

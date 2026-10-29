@@ -1672,6 +1672,24 @@ function Write-MissingDependencyHint([string]$ProjectRoot) {
     }
 }
 
+# Where the release keeps a guidance file the project has, in the order update-plan.mjs offers it (#443): the active
+# preset's copy, shared, the shared skills (they sit in presets/shared/skills, not in .github/skills), templates, and
+# only then the source root's own .github, which is this repository's working copy and not what projects receive.
+# pforge.sh does the same in _pf_guidance_source.
+function Get-GuidanceSourceCandidates([string]$SourcePath, [string]$DstRel, [string[]]$Presets) {
+    $candidates = @()
+    foreach ($p in @($Presets | Where-Object { $_ -ne 'custom' })) {
+        $candidates += (Join-Path $SourcePath "presets/$p/$DstRel")
+    }
+    $candidates += (Join-Path $SourcePath "presets/shared/$DstRel")
+    if ($DstRel -like '.github/skills/*') {
+        $candidates += (Join-Path $SourcePath ('presets/shared/skills/' + $DstRel.Substring('.github/skills/'.Length)))
+    }
+    $candidates += (Join-Path $SourcePath "templates/$DstRel")
+    $candidates += (Join-Path $SourcePath $DstRel)
+    return $candidates
+}
+
 function Invoke-Update {
     Write-ManualSteps "update" @(
         "Clone/pull the latest Plan Forge template repo"
@@ -2078,15 +2096,7 @@ function Invoke-Update {
             Get-ChildItem -Path $dstDir -File -Recurse | ForEach-Object {
                 $dstRel = $_.FullName.Substring($RepoRoot.Length).TrimStart('\', '/').Replace('\', '/')
                 if ($offeredDst.ContainsKey($dstRel) -or $neverUpdate -contains $dstRel) { return }
-                $candidates = @(
-                    (Join-Path $sourcePath $dstRel),
-                    (Join-Path $sourcePath "presets/shared/$dstRel"),
-                    (Join-Path $sourcePath "templates/$dstRel")
-                )
-                foreach ($p in @($presets | Where-Object { $_ -ne 'custom' })) {
-                    $candidates += (Join-Path $sourcePath "presets/$p/$dstRel")
-                }
-                $srcFile = $candidates | Where-Object { Test-Path $_ } | Select-Object -First 1
+                $srcFile = Get-GuidanceSourceCandidates $sourcePath $dstRel $presets | Where-Object { Test-Path $_ } | Select-Object -First 1
                 if (-not $srcFile) { return }
                 $srcRel = $srcFile.Substring($sourcePath.Length).TrimStart('\', '/').Replace('\', '/')
                 $keptCandidatesList.Add(@{ Src = $srcFile; Dst = $_.FullName; Name = $dstRel; Guided = $true; DstRel = $dstRel; SrcRel = $srcRel })

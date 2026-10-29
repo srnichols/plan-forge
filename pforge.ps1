@@ -6535,13 +6535,12 @@ function Invoke-SelfUpdate {
     }
 
     Write-Host "Checking for updates (force refresh)..." -ForegroundColor DarkCyan
-    # Emit a distinct marker when checkForUpdate returns null so we can tell
-    # "GitHub API failed" apart from "checked and up to date" (meta-bug:
-    # client stuck on v2.66.0 saw 'Already current' after an API failure).
+    # runSelfUpdateCheck says why a check could not be made, and answers from the last check's cache when GitHub cannot
+    # be asked (#446). It words all of it, so both shells print what it says. A check that did not run must not read as
+    # "current" (meta-bug: client stuck on v2.66.0 saw 'Already current' after an API failure).
     $checkScript = @"
-import { checkForUpdate } from './pforge-mcp/update-check.mjs';
-const r = await checkForUpdate({ currentVersion: process.argv[1], projectDir: process.argv[2], force: true });
-console.log(JSON.stringify(r === null ? { checkFailed: true } : r));
+import { runSelfUpdateCheck } from './pforge-mcp/update-check.mjs';
+console.log(JSON.stringify(await runSelfUpdateCheck({ currentVersion: process.argv[1], projectDir: process.argv[2] })));
 "@
     # The INSTALLED Plan Forge version comes from .forge.json's templateVersion —
     # NOT the project-root VERSION file, which in most consumer projects holds
@@ -6570,14 +6569,23 @@ console.log(JSON.stringify(r === null ? { checkFailed: true } : r));
         exit 1
     }
 
-    # Check-failed path: tell the user the check didn't complete instead of
-    # claiming they're current. --force still proceeds (heal path).
-    if ($checkJson.checkFailed -and -not $forceUpdate) {
-        Write-Host "  ⚠ Could not check for updates — GitHub API unreachable, rate-limited, or timed out." -ForegroundColor Yellow
+    # Check-failed path: tell the user the check didn't complete, and why, instead of claiming they're current.
+    # Without a version there is no tag to install either, so --force cannot go on: it built the tag "v" from the
+    # missing version and the download then said "Tag 'v' not found".
+    if ($checkJson.checkFailed -or -not $checkJson.latest) {
+        $checkReason = if ($checkJson.reason.message) { $checkJson.reason.message } else { "GitHub API unreachable, rate-limited, or timed out." }
+        Write-Host "  ⚠ Could not check for updates — $checkReason" -ForegroundColor Yellow
         Write-Host "    Your local version is v$currentVersion. This is NOT a confirmation that it is current." -ForegroundColor Yellow
-        Write-Host "    Try again shortly, or set PFORGE_NO_UPDATE_CHECK=1 to suppress checks." -ForegroundColor Yellow
-        Write-Host "    To force-install the latest tagged release anyway: pforge self-update --force" -ForegroundColor Yellow
+        if ($forceUpdate) {
+            Write-Host "    --force installs the latest release, so it needs a successful check to know which one that is." -ForegroundColor Yellow
+        }
         exit 2
+    }
+
+    # GitHub could not be asked just now, but the last check's answer is still fresh: use it, and say so.
+    if ($checkJson.notice) {
+        Write-Host "  ⚠ GitHub could not be asked for a fresh check — $($checkJson.liveCheckFailed.message)" -ForegroundColor Yellow
+        Write-Host "    $($checkJson.notice)" -ForegroundColor Yellow
     }
 
     # v2.53.3 — with --force, install the latest tagged release even when the

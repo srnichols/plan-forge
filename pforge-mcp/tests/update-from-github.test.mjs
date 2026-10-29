@@ -100,6 +100,75 @@ describe("resolveTag", () => {
     await expect(resolveTag({ fetchImpl: fetch, env: {} }))
       .rejects.toMatchObject({ code: "ERR_RATE_LIMITED" });
   });
+
+  // #446 — the check and the download read the same token variables and describe a rate limit the same way.
+  it("includes GH_TOKEN, which the GitHub CLI uses, as Authorization header when GITHUB_TOKEN is not set", async () => {
+    const fetch = makeFetch(200, { tag_name: "v2.50.0" });
+    await resolveTag({ fetchImpl: fetch, env: { GH_TOKEN: "ghp_gh_cli" } });
+    expect(fetch.mock.calls[0][1].headers.authorization).toBe("token ghp_gh_cli");
+  });
+
+  it("repeats the request without a token that GitHub rejects with 401, so a stale token does not block an update", async () => {
+    const fetch = vi.fn(async (_url, init) => ({
+      ok: !init.headers.authorization,
+      status: init.headers.authorization ? 401 : 200,
+      statusText: "",
+      headers: { get: () => null },
+      json: async () => ({ tag_name: "v2.50.0" }),
+    }));
+    const tag = await resolveTag({ fetchImpl: fetch, env: { GITHUB_TOKEN: "ghp_stale" } });
+    expect(tag).toBe("v2.50.0");
+    expect(fetch.mock.calls.map(([, init]) => Boolean(init.headers.authorization))).toEqual([true, false]);
+  });
+
+  it("throws ERR_RATE_LIMITED on 429, which GitHub also uses for a limit", async () => {
+    await expect(resolveTag({ fetchImpl: makeFetch(429, {}), env: {} })).rejects.toMatchObject({ code: "ERR_RATE_LIMITED" });
+  });
+
+  it("says when the limit resets and that GITHUB_TOKEN or GH_TOKEN raises it, when GitHub sent its rate-limit headers", async () => {
+    const fetch = makeFetch(403, {}, { headers: { "x-ratelimit-limit": "60", "x-ratelimit-remaining": "0", "x-ratelimit-reset": "1793264400" } });
+    const error = await resolveTag({ fetchImpl: fetch, env: {} }).catch((e) => e);
+    expect(error.code).toBe("ERR_RATE_LIMITED");
+    expect(error.message).toContain("09:00 UTC");
+    expect(error.message).toContain("GITHUB_TOKEN");
+    expect(error.message).toContain("GH_TOKEN");
+  });
+
+  it("does not tell a caller whose token was accepted to set one", async () => {
+    const fetch = makeFetch(403, {}, { headers: { "x-ratelimit-limit": "5000", "x-ratelimit-remaining": "0", "x-ratelimit-reset": "1793264400" } });
+    const error = await resolveTag({ fetchImpl: fetch, env: { GITHUB_TOKEN: "ghp_good" } }).catch((e) => e);
+    expect(error.code).toBe("ERR_RATE_LIMITED");
+    expect(error.message).not.toMatch(/GITHUB_TOKEN|GH_TOKEN/);
+  });
+
+  it("never puts the token in an error", async () => {
+    const error = await resolveTag({ fetchImpl: makeFetch(403, {}), env: { GITHUB_TOKEN: "ghp_secret_value_1234567890" } }).catch((e) => e);
+    expect(`${error.message} ${JSON.stringify(error)}`).not.toContain("ghp_secret_value_1234567890");
+  });
+
+  // A pinned tag has to name a version. `pforge self-update --force` built "v" from a check that had failed, resolve-tag
+  // answered ok with it, and the download then said "Tag 'v' not found on GitHub".
+  it.each(["v", "V", " ", "v1", "1.2", "v1.2.3.4", "main", "pre-phase-29", "v2.50.0 ", "../v2.50.0", "v2.50.0/../../x", "v2.50.0?x=1"])(
+    "rejects the pinned tag %j, which names no release, with ERR_INVALID_TAG and without asking GitHub",
+    async (tag) => {
+      const fetch = makeFetch(200, { tag_name: "v2.50.0" });
+      const error = await resolveTag({ tag, fetchImpl: fetch, env: {} }).catch((e) => e);
+      expect(error).toBeInstanceOf(UpdateError);
+      expect(error.code).toBe("ERR_INVALID_TAG");
+      expect(error.message).toContain("latest");
+      expect(fetch).not.toHaveBeenCalled();
+    },
+  );
+
+  it.each(["v2.49.1", "2.49.1", "v2.36.0-beta.4", "v2.10.0-plans", "v10.0.0"])("still accepts the pinned tag %s verbatim", async (tag) => {
+    const fetch = makeFetch(200, {});
+    expect(await resolveTag({ tag, fetchImpl: fetch, env: {} })).toBe(tag);
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it("still answers HEAD with ERR_NO_HEAD_TAG, not ERR_INVALID_TAG, because that message says why", async () => {
+    await expect(resolveTag({ tag: "HEAD", fetchImpl: makeFetch(200, {}), env: {} })).rejects.toMatchObject({ code: "ERR_NO_HEAD_TAG" });
+  });
 });
 
 // ─── buildTarballUrl ─────────────────────────────────────────────────
@@ -141,6 +210,12 @@ describe("fetchNewestSemverTag", () => {
     const fetch = vi.fn().mockRejectedValue(new Error("boom"));
     const newest = await fetchNewestSemverTag({ fetchImpl: fetch, env: {} });
     expect(newest).toBeNull();
+  });
+
+  it("sends GH_TOKEN as an Authorization header, like the release request does (#446)", async () => {
+    const fetch = makeFetch(200, [{ name: "v2.80.1" }]);
+    await fetchNewestSemverTag({ fetchImpl: fetch, env: { GH_TOKEN: "ghp_gh_cli" } });
+    expect(fetch.mock.calls[0][1].headers.authorization).toBe("token ghp_gh_cli");
   });
 });
 
@@ -293,6 +368,43 @@ describe("downloadTarball", () => {
       fetchImpl: fetch,
       env: {},
     })).rejects.toMatchObject({ code: "ERR_NETWORK" });
+  });
+
+  // #446 — the download reads the same token variables as the check, follows GitHub's redirect to the tarball, and tells a
+  // rate limit from a missing tag.
+  it("sends GH_TOKEN and follows the redirect to the tarball", async () => {
+    const fetch = makeFetch(200, makeGzipBuffer(50), { asyncIterable: true });
+    await downloadTarball({ tag: "v2.50.0", cacheDir: join(TMP_DIR, "cache-token"), fetchImpl: fetch, env: { GH_TOKEN: "ghp_gh_cli" } });
+    const init = fetch.mock.calls[0][1];
+    expect(init.headers.authorization).toBe("token ghp_gh_cli");
+    expect(init.redirect).toBe("follow");
+  });
+
+  it("repeats the request without a token that GitHub rejects with 401", async () => {
+    const buffer = makeGzipBuffer(50);
+    const fetch = vi.fn(async (_url, init) => ({
+      ok: !init.headers.authorization,
+      status: init.headers.authorization ? 401 : 200,
+      statusText: "",
+      headers: { get: () => null },
+      body: init.headers.authorization ? null : { [Symbol.asyncIterator]: async function* () { yield buffer; } },
+    }));
+    const result = await downloadTarball({ tag: "v2.50.0", cacheDir: join(TMP_DIR, "cache-401"), fetchImpl: fetch, env: { GITHUB_TOKEN: "ghp_stale" } });
+    expect(result.sizeBytes).toBe(50);
+    expect(fetch.mock.calls.map(([, init]) => Boolean(init.headers.authorization))).toEqual([true, false]);
+  });
+
+  it.each([403, 429])("a %i → ERR_RATE_LIMITED that names what raises the limit, not ERR_TAG_NOT_FOUND", async (status) => {
+    const error = await downloadTarball({ tag: "v2.50.0", cacheDir: join(TMP_DIR, "cache-limit"), fetchImpl: makeFetch(status, {}), env: {} }).catch((e) => e);
+    expect(error.code).toBe("ERR_RATE_LIMITED");
+    expect(error.message).toContain("GITHUB_TOKEN");
+    expect(error.message).toContain("GH_TOKEN");
+  });
+
+  it("says when the limit resets, from GitHub's rate-limit headers", async () => {
+    const fetch = makeFetch(403, {}, { headers: { "x-ratelimit-limit": "60", "x-ratelimit-remaining": "0", "x-ratelimit-reset": "1793264400" } });
+    const error = await downloadTarball({ tag: "v2.50.0", cacheDir: join(TMP_DIR, "cache-reset"), fetchImpl: fetch, env: {} }).catch((e) => e);
+    expect(error.message).toContain("09:00 UTC");
   });
 });
 

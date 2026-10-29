@@ -66,6 +66,16 @@ describe("update-from-github CLI", () => {
     }
   }, 15_000);
 
+  // #446 — `pforge self-update --force` built "v" from a check that had failed. resolve-tag said ok with it and the
+  // download then reported "Tag 'v' not found on GitHub".
+  it.each(["v", "V", "main", "v1"])("resolve-tag rejects the tag %j, which names no version, and exits 1 without asking GitHub", (tag) => {
+    const run = spawnSync(process.execPath, [CLI_PATH, "resolve-tag", "--tag", tag], { encoding: "utf8", timeout: 30_000, env: { ...process.env, GITHUB_TOKEN: "", GH_TOKEN: "" } });
+    const result = JSON.parse(run.stdout.trim());
+    expect(result).toMatchObject({ ok: false, code: "ERR_INVALID_TAG" });
+    expect(result.message).toContain(`'${tag}'`);
+    expect(run.status).toBe(1);
+  }, 30_000);
+
   it("download requires --tag", async () => {
     try {
       await execFileP("node", [CLI_PATH, "download", "--project-dir", TMP_DIR]);
@@ -117,7 +127,7 @@ describe("update-from-github CLI", () => {
   });
 });
 
-// A preload that stands in for the network: UFG_FETCH_STUB maps a URL fragment to { status, body } or
+// A preload that stands in for the network: UFG_FETCH_STUB maps a URL fragment to { status, body, headers } or
 // { throws }, and every request is appended to UFG_FETCH_LOG so a test can see what was asked.
 const FETCH_STUB = `
 import { appendFileSync } from "node:fs";
@@ -126,7 +136,7 @@ globalThis.fetch = async (url, init) => {
   appendFileSync(process.env.UFG_FETCH_LOG, JSON.stringify({ url: String(url), headers: init?.headers ?? {} }) + "\\n");
   const found = Object.entries(stub).find(([part]) => String(url).includes(part));
   if (!found || found[1].throws) throw new TypeError(found ? found[1].throws : "fetch failed");
-  return new Response(JSON.stringify(found[1].body ?? null), { status: found[1].status ?? 200 });
+  return new Response(JSON.stringify(found[1].body ?? null), { status: found[1].status ?? 200, headers: found[1].headers ?? {} });
 };
 `;
 
@@ -137,7 +147,7 @@ function resolveTagStubbed(stub, { env = {} } = {}) {
   const run = spawnSync(process.execPath, ["--import", pathToFileURL(preload).href, CLI_PATH, "resolve-tag"], {
     encoding: "utf8",
     timeout: 60_000,
-    env: { ...process.env, GITHUB_TOKEN: "", UFG_FETCH_STUB: JSON.stringify(stub), UFG_FETCH_LOG: log, ...env },
+    env: { ...process.env, GITHUB_TOKEN: "", GH_TOKEN: "", UFG_FETCH_STUB: JSON.stringify(stub), UFG_FETCH_LOG: log, ...env },
   });
   let out = null;
   try { out = JSON.parse(run.stdout.trim()); } catch { /* the assertions show the raw output through detail */ }
@@ -164,6 +174,26 @@ describe("update-from-github CLI resolve-tag against a stubbed GitHub API (#409)
     const r = resolveTagStubbed({ "/releases/latest": RELEASE, "/tags": tags("v9.9.9") }, { env: { GITHUB_TOKEN: "not-a-real-token" } });
     expect(r.out, r.detail).toEqual({ ok: true, tag: "v9.9.9" });
     expect(r.requests.map((q) => q.headers.authorization)).toEqual(["token not-a-real-token", "token not-a-real-token"]);
+  });
+
+  it("sends GH_TOKEN, the variable the GitHub CLI reads, the same way (#446)", () => {
+    const r = resolveTagStubbed({ "/releases/latest": RELEASE, "/tags": tags("v9.9.9") }, { env: { GH_TOKEN: "not-a-real-gh-token" } });
+    expect(r.out, r.detail).toEqual({ ok: true, tag: "v9.9.9" });
+    expect(r.requests.map((q) => q.headers.authorization)).toEqual(["token not-a-real-gh-token", "token not-a-real-gh-token"]);
+  });
+
+  it("says when a rate limit resets and what raises it, and never prints the token (#446)", () => {
+    const limited = { status: 403, body: { message: "API rate limit exceeded" }, headers: { "x-ratelimit-limit": "60", "x-ratelimit-remaining": "0", "x-ratelimit-reset": "1793264400" } };
+    const anonymous = resolveTagStubbed({ "/releases/latest": limited });
+    expect(anonymous.out, anonymous.detail).toMatchObject({ ok: false, code: "ERR_RATE_LIMITED" });
+    expect(anonymous.out.message).toContain("09:00 UTC");
+    expect(anonymous.out.message).toContain("GITHUB_TOKEN");
+    expect(anonymous.out.message).toContain("GH_TOKEN");
+
+    const withToken = resolveTagStubbed({ "/releases/latest": limited }, { env: { GH_TOKEN: "not-a-real-gh-token" } });
+    expect(withToken.out, withToken.detail).toMatchObject({ ok: false, code: "ERR_RATE_LIMITED" });
+    expect(withToken.detail).not.toContain("not-a-real-gh-token");
+    expect(withToken.out.message).not.toMatch(/GITHUB_TOKEN|GH_TOKEN/);
   });
 
   it("warns when a newer stable tag exists than the latest release, ignoring pre-releases", () => {

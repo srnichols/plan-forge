@@ -9,7 +9,7 @@
 
 import { describe, expect, it, vi } from "vitest";
 
-import { GITHUB_TOKEN_ENV_VARS, describeRateLimit, fetchGitHub, githubApiHeaders, readRateLimit, resolveGitHubToken } from "../github-request.mjs";
+import { GITHUB_TOKEN_ENV_VARS, describeRateLimit, fetchGitHub, findUnusableTokenVariable, githubApiHeaders, readRateLimit, resolveGitHubToken } from "../github-request.mjs";
 
 const response = (status) => ({ ok: status >= 200 && status < 300, status });
 
@@ -109,6 +109,44 @@ describe("resolveGitHubToken", () => {
   });
 });
 
+// The name of a variable that is set but cannot be sent, so a message can say so instead of telling the user to set it.
+describe("findUnusableTokenVariable", () => {
+  it("names a variable that is set to a value that cannot be a token", () => {
+    expect(findUnusableTokenVariable({ GITHUB_TOKEN: "ghp_abc def" })).toBe("GITHUB_TOKEN");
+    expect(findUnusableTokenVariable({ GH_TOKEN: "Authorization: token ghp_x" })).toBe("GH_TOKEN");
+    expect(findUnusableTokenVariable({ GITHUB_TOKEN: "ghp_abc\ndef" })).toBe("GITHUB_TOKEN");
+  });
+
+  it("names the first when both are unusable", () => {
+    expect(findUnusableTokenVariable({ GITHUB_TOKEN: "a b", GH_TOKEN: "c d" })).toBe("GITHUB_TOKEN");
+  });
+
+  it("names none when a token can be sent, whatever else is set", () => {
+    expect(findUnusableTokenVariable({ GITHUB_TOKEN: "ghp_ok" })).toBeNull();
+    expect(findUnusableTokenVariable({ GITHUB_TOKEN: "ghp_abc def", GH_TOKEN: "ghp_ok" })).toBeNull();
+    expect(findUnusableTokenVariable({ GITHUB_TOKEN: "ghp_ok", GH_TOKEN: "a b" })).toBeNull();
+  });
+
+  it("names none when nothing is set, or a value is blank, or is not a string", () => {
+    expect(findUnusableTokenVariable({})).toBeNull();
+    expect(findUnusableTokenVariable(undefined)).toBeNull();
+    expect(findUnusableTokenVariable({ GITHUB_TOKEN: "", GH_TOKEN: "  \n" })).toBeNull();
+    expect(findUnusableTokenVariable({ GITHUB_TOKEN: 12345, GH_TOKEN: null })).toBeNull();
+  });
+
+  it("reads no other variable", () => {
+    expect(findUnusableTokenVariable({ COPILOT_GITHUB_TOKEN: "a b", NPM_TOKEN: "c d" })).toBeNull();
+  });
+
+  it("never returns the value, only a name from the list", () => {
+    for (const value of ["ghp_SECRETVALUE 123", "ghp_SECRET\nVALUE"]) {
+      const name = findUnusableTokenVariable({ GITHUB_TOKEN: value });
+      expect(GITHUB_TOKEN_ENV_VARS).toContain(name);
+      expect(String(name)).not.toContain("SECRET");
+    }
+  });
+});
+
 describe("githubApiHeaders", () => {
   it("sends the media type and user agent GitHub requires, and nothing else without a token", () => {
     expect(githubApiHeaders({ userAgent: "plan-forge-test" })).toEqual({
@@ -143,6 +181,23 @@ describe("fetchGitHub", () => {
     const out = await fetchGitHub(URL, { fetchImpl, env: {}, userAgent: "plan-forge-test" });
     expect(fetchImpl.mock.calls[0][1].headers).not.toHaveProperty("authorization");
     expect(out).toMatchObject({ authenticated: false, tokenRejected: false });
+  });
+
+  // The request goes out anonymously, and the result says why a variable the user set was not used, by name.
+  it("reports the variable it skipped because its value cannot be a token, and sends no authorization header", async () => {
+    const fetchImpl = vi.fn(async () => response(200));
+    const out = await fetchGitHub(URL, { fetchImpl, env: { GITHUB_TOKEN: "ghp_abc def" }, userAgent: "plan-forge-test" });
+    expect(fetchImpl.mock.calls[0][1].headers).not.toHaveProperty("authorization");
+    expect(out).toMatchObject({ authenticated: false, tokenRejected: false, ignoredTokenVariable: "GITHUB_TOKEN" });
+    expect(JSON.stringify(out.ignoredTokenVariable)).not.toContain("abc");
+  });
+
+  it("reports no skipped variable when a token was sent, when none was set, or when the value was only blank", async () => {
+    const fetchImpl = async () => response(200);
+    expect((await fetchGitHub(URL, { fetchImpl, env: { GITHUB_TOKEN: "ghp_one" }, userAgent: "t" })).ignoredTokenVariable).toBeNull();
+    expect((await fetchGitHub(URL, { fetchImpl, env: { GITHUB_TOKEN: "ghp_abc def", GH_TOKEN: "ghp_two" }, userAgent: "t" })).ignoredTokenVariable).toBeNull();
+    expect((await fetchGitHub(URL, { fetchImpl, env: {}, userAgent: "t" })).ignoredTokenVariable).toBeNull();
+    expect((await fetchGitHub(URL, { fetchImpl, env: { GITHUB_TOKEN: "  " }, userAgent: "t" })).ignoredTokenVariable).toBeNull();
   });
 
   it("repeats a request GitHub rejected with 401 once, without the token, so a stale token cannot break what works anonymously", async () => {
@@ -198,35 +253,48 @@ describe("readRateLimit", () => {
 
   it("reads the limit and the reset time from a 403 whose quota is used up", () => {
     const res = withHeaders(403, { "x-ratelimit-limit": 60, "x-ratelimit-remaining": 0, "x-ratelimit-reset": RESET_EPOCH });
-    expect(readRateLimit(res)).toEqual({ limit: 60, resetAt: "2026-10-29T09:00:00.000Z", retryAfterSeconds: null });
+    expect(readRateLimit(res)).toEqual({ limit: 60, resetAt: "2026-10-29T09:00:00.000Z", retryAfterSeconds: null, quotaSpent: true });
   });
 
   it("reads Retry-After from a 403 that carries one, which is how a secondary limit answers", () => {
-    expect(readRateLimit(withHeaders(403, { "retry-after": 30 }))).toEqual({ limit: null, resetAt: null, retryAfterSeconds: 30 });
+    expect(readRateLimit(withHeaders(403, { "retry-after": 30 }))).toEqual({ limit: null, resetAt: null, retryAfterSeconds: 30, quotaSpent: true });
   });
 
   // GitHub sends the quota headers on every response, so a secondary limit arrives with a Retry-After AND the headers of a
   // request that was not short of quota: the reset time there is the hourly quota's, not a time to wait for.
   it("does not read a reset time from a secondary limit, whose quota headers say there is quota left", () => {
     const res = withHeaders(403, { "retry-after": 60, "x-ratelimit-limit": 5000, "x-ratelimit-remaining": 4800, "x-ratelimit-reset": RESET_EPOCH });
-    expect(readRateLimit(res)).toEqual({ limit: 5000, resetAt: null, retryAfterSeconds: 60 });
+    expect(readRateLimit(res)).toEqual({ limit: 5000, resetAt: null, retryAfterSeconds: 60, quotaSpent: false });
   });
 
   it("reads the reset time when the quota is spent, even if Retry-After is sent too", () => {
     const res = withHeaders(403, { "retry-after": 60, "x-ratelimit-limit": 60, "x-ratelimit-remaining": 0, "x-ratelimit-reset": RESET_EPOCH });
-    expect(readRateLimit(res)).toEqual({ limit: 60, resetAt: "2026-10-29T09:00:00.000Z", retryAfterSeconds: 60 });
+    expect(readRateLimit(res)).toEqual({ limit: 60, resetAt: "2026-10-29T09:00:00.000Z", retryAfterSeconds: 60, quotaSpent: true });
   });
 
   it("keeps the reset time of a 429 that says nothing about the quota left", () => {
-    expect(readRateLimit(withHeaders(429, { "x-ratelimit-reset": RESET_EPOCH }))).toEqual({ limit: null, resetAt: "2026-10-29T09:00:00.000Z", retryAfterSeconds: null });
+    expect(readRateLimit(withHeaders(429, { "x-ratelimit-reset": RESET_EPOCH }))).toEqual({ limit: null, resetAt: "2026-10-29T09:00:00.000Z", retryAfterSeconds: null, quotaSpent: true });
   });
 
   it("does not read a reset time from a 429 that says there is quota left", () => {
     expect(readRateLimit(withHeaders(429, { "x-ratelimit-remaining": 25, "x-ratelimit-reset": RESET_EPOCH })).resetAt).toBeNull();
   });
 
+  // A limit that says quota is left and gives no Retry-After is a secondary one that GitHub documents as "wait at least a
+  // minute". It says so: the quota was not what ran out.
+  it("says the quota is not what ran out when a 429 reports quota left", () => {
+    expect(readRateLimit(withHeaders(429, { "x-ratelimit-limit": 60, "x-ratelimit-remaining": 25, "x-ratelimit-reset": RESET_EPOCH }))).toEqual({ limit: 60, resetAt: null, retryAfterSeconds: null, quotaSpent: false });
+  });
+
+  it("treats a quota it is not told about as spent, and any count above zero as left", () => {
+    expect(readRateLimit(withHeaders(429)).quotaSpent).toBe(true);
+    expect(readRateLimit(withHeaders(429, { "x-ratelimit-remaining": 0 })).quotaSpent).toBe(true);
+    expect(readRateLimit(withHeaders(429, { "x-ratelimit-remaining": 1 })).quotaSpent).toBe(false);
+    expect(readRateLimit(withHeaders(429, { "x-ratelimit-remaining": "lots" })).quotaSpent).toBe(false);
+  });
+
   it("calls every 429 a rate limit, with or without headers", () => {
-    expect(readRateLimit(withHeaders(429))).toEqual({ limit: null, resetAt: null, retryAfterSeconds: null });
+    expect(readRateLimit(withHeaders(429))).toEqual({ limit: null, resetAt: null, retryAfterSeconds: null, quotaSpent: true });
     expect(readRateLimit(withHeaders(429, { "x-ratelimit-remaining": 25 }))).not.toBeNull();
     expect(readRateLimit({ status: 429 })).not.toBeNull();
   });
@@ -247,7 +315,7 @@ describe("readRateLimit", () => {
 
   it("keeps a header it cannot read as unknown rather than guessing", () => {
     const res = withHeaders(403, { "x-ratelimit-remaining": 0, "x-ratelimit-limit": "lots", "x-ratelimit-reset": "soon", "retry-after": "Wed, 21 Oct 2026 07:28:00 GMT" });
-    expect(readRateLimit(res)).toEqual({ limit: null, resetAt: null, retryAfterSeconds: null });
+    expect(readRateLimit(res)).toEqual({ limit: null, resetAt: null, retryAfterSeconds: null, quotaSpent: true });
   });
 
   it("tolerates no response and a response with no headers", () => {
@@ -317,6 +385,62 @@ describe("describeRateLimit", () => {
     const text = describeRateLimit({ retryAfterSeconds: 30, authenticated: false, tokenRejected: true });
     expect(text).toMatch(/rejected/i);
     expect(text).toMatch(/wait about 30 seconds/);
+  });
+
+  // GitHub documents a limit that reports quota left and gives no Retry-After as "wait at least one minute". It is not the
+  // hourly quota that ran out, so the text must not say it is, give the hourly number, or offer a token for it.
+  it("words a limit that reports quota left, and no Retry-After, as GitHub's minimum wait", () => {
+    for (const authenticated of [false, true]) {
+      const text = describeRateLimit({ limit: 60, resetAt: null, retryAfterSeconds: null, quotaSpent: false, authenticated });
+      expect(text).toMatch(/wait at least a minute/);
+      expect(text).toMatch(/try again after that wait/i);
+      expect(text).not.toMatch(/used up|requests an hour|until|GITHUB_TOKEN|GH_TOKEN/);
+    }
+  });
+
+  it("goes by Retry-After over the minimum wait when both could apply", () => {
+    const text = describeRateLimit({ retryAfterSeconds: 45, quotaSpent: false, authenticated: false });
+    expect(text).toMatch(/wait about 45 seconds/);
+    expect(text).not.toMatch(/at least a minute/);
+  });
+
+  it("assumes the quota ran out when it is not told otherwise", () => {
+    expect(describeRateLimit({ authenticated: false })).toMatch(/used up/);
+    expect(describeRateLimit({ authenticated: false, quotaSpent: true })).toMatch(/used up/);
+  });
+
+  // A variable that is set to a value that cannot be a token is skipped, and the rate-limit text must not then tell the
+  // user to set what they have set. It names the variable, never the value.
+  describe("when a token variable is set to a value that cannot be a token", () => {
+    const info = { limit: 60, resetAt: RESET, authenticated: false, ignoredTokenVariable: "GITHUB_TOKEN" };
+
+    it("says which variable, that it cannot be a token and so was not sent, and keeps the reset time and what a token would give", () => {
+      const text = describeRateLimit(info, { now: NOW });
+      expect(text).toContain("GITHUB_TOKEN is set to a value that cannot be a token");
+      expect(text).toMatch(/was not sent/);
+      expect(text).toContain("09:00 UTC");
+      expect(text).toMatch(/5,000 requests an hour/);
+    });
+
+    it("does not tell the user to set the variable they have set", () => {
+      const text = describeRateLimit(info, { now: NOW });
+      expect(text).not.toMatch(/Set GITHUB_TOKEN or GH_TOKEN/);
+      expect(text).toMatch(/correct it|fix it|replace it/i);
+    });
+
+    it("names the other variable when that is the one", () => {
+      expect(describeRateLimit({ ...info, ignoredTokenVariable: "GH_TOKEN" }, { now: NOW })).toContain("GH_TOKEN is set to a value that cannot be a token");
+    });
+
+    it("says nothing of it for a limit a token would not raise, where no token is asked for", () => {
+      const text = describeRateLimit({ retryAfterSeconds: 30, authenticated: false, ignoredTokenVariable: "GITHUB_TOKEN" });
+      expect(text).not.toMatch(/GITHUB_TOKEN|cannot be a token/);
+    });
+
+    it("says nothing of it when a token was sent", () => {
+      const text = describeRateLimit({ ...info, authenticated: true }, { now: NOW });
+      expect(text).not.toMatch(/GITHUB_TOKEN|cannot be a token/);
+    });
   });
 
   it("says 1 minute, not 1 minutes", () => {

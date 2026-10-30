@@ -23,6 +23,9 @@ let realFetch;
 let createExpressApp;
 let githubRequests;
 
+// Importing the server loads its whole graph, which takes most of the default 30 s hook timeout on a cold or loaded runner.
+const IMPORT_TIMEOUT_MS = 120_000;
+
 beforeAll(async () => {
   mkdirSync(SCRATCH_ROOT, { recursive: true });
   project = join(SCRATCH_ROOT, `pforge-update-fallback-${process.pid}-${Date.now()}`);
@@ -32,7 +35,12 @@ beforeAll(async () => {
   process.chdir(project);
   realFetch = globalThis.fetch;
   ({ createExpressApp } = await import("../server.mjs"));
-});
+  // The server fixes its project directory when it is first imported. A runner that shares one process between test files
+  // (--no-isolate) may have imported it for another project already, and these tests write a cache file into it: stop
+  // rather than write into that project's .forge.
+  const { PROJECT_DIR } = await import("../server/state.mjs");
+  expect(PROJECT_DIR, "the server was already loaded for another project, so this suite would write into its .forge").toBe(project);
+}, IMPORT_TIMEOUT_MS);
 
 afterAll(() => {
   if (savedCwd) process.chdir(savedCwd);

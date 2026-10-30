@@ -66,8 +66,8 @@ function isRateLimitRefusal(res) {
   return res.status === 403 || res.status === 429;
 }
 
-function rateLimitedError(res, { authenticated, tokenRejected }) {
-  return new UpdateError("ERR_RATE_LIMITED", describeRateLimit({ ...readRateLimit(res), authenticated, tokenRejected }));
+function rateLimitedError(res, { authenticated, tokenRejected, ignoredTokenVariable }) {
+  return new UpdateError("ERR_RATE_LIMITED", describeRateLimit({ ...readRateLimit(res), authenticated, tokenRejected, ignoredTokenVariable }));
 }
 
 // ─── Tag resolution ──────────────────────────────────────────────────

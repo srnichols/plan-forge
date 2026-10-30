@@ -653,6 +653,48 @@ describe("checkForUpdateWithReason (#446)", () => {
       expect(reason.message).not.toMatch(/GITHUB_TOKEN|GH_TOKEN/);
     });
 
+    // GitHub documents a limit that reports quota left and gives no Retry-After as "wait at least one minute". The hourly
+    // quota is not what ran out, so the text must not say it is or offer a token for it.
+    it("words a 429 that reports quota left, and gives no Retry-After, as GitHub's minimum wait, not as an hourly quota used up", async () => {
+      const limited = reply(429, { headers: { "x-ratelimit-limit": 60, "x-ratelimit-remaining": 25, "x-ratelimit-reset": RESET_EPOCH } });
+      for (const env of [{}, { GITHUB_TOKEN: "ghp_one" }]) {
+        const { reason } = await check({ fetchImpl: limited, env });
+        expect(reason).toMatchObject({ kind: "rate-limited", quotaSpent: false, resetAt: null, retryAfterSeconds: null });
+        expect(reason.message).toMatch(/wait at least a minute/);
+        expect(reason.message).not.toMatch(/used up|requests an hour|until|09:00|GITHUB_TOKEN|GH_TOKEN/);
+      }
+    });
+
+    // The variable is skipped, not sent, and not echoed: the message names it and never carries its value.
+    describe("when a token variable is set to a value that cannot be a token", () => {
+      const PASTED = "Authorization: token ghp_REVIEWSECRET0123456789";
+
+      it("says which variable was not sent, instead of telling the user to set it, and never carries the value", async () => {
+        const { reason } = await check({ fetchImpl: exhausted, env: { GITHUB_TOKEN: PASTED } });
+        expect(reason.kind).toBe("rate-limited");
+        expect(reason.message).toContain("GITHUB_TOKEN is set to a value that cannot be a token");
+        expect(reason.message).toContain("09:00 UTC");
+        expect(reason.message).not.toMatch(/Set GITHUB_TOKEN or GH_TOKEN/);
+        expect(JSON.stringify(reason)).not.toContain("REVIEWSECRET");
+        expect(JSON.stringify(reason)).not.toContain("Authorization");
+      });
+
+      it("names the other variable when that is the one", async () => {
+        const { reason } = await check({ fetchImpl: exhausted, env: { GH_TOKEN: "ghp_abc def" } });
+        expect(reason.message).toContain("GH_TOKEN is set to a value that cannot be a token");
+      });
+
+      it("says nothing of it when a usable token was sent", async () => {
+        const { reason } = await check({ fetchImpl: exhausted, env: { GITHUB_TOKEN: PASTED, GH_TOKEN: "ghp_one" } });
+        expect(reason.message).not.toContain("cannot be a token");
+      });
+
+      it("says nothing of it when the check did not run into a rate limit", async () => {
+        const { reason } = await check({ fetchImpl: reply(500), env: { GITHUB_TOKEN: PASTED } });
+        expect(reason.message).not.toContain("cannot be a token");
+      });
+    });
+
     // GitHub sends its quota headers on every response, a secondary limit's too, so the reset time that comes with a
     // Retry-After is the hourly quota's. Waiting for it would be waiting for an hour when GitHub asked for a minute.
     it("words a secondary limit as the wait GitHub asked for, though its quota headers say there is quota left", async () => {

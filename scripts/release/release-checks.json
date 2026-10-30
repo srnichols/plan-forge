@@ -220,6 +220,7 @@
     { "label": "pforge self-update is tested when GitHub cannot be asked, in all three shells (#446) (3.35.6)", "path": "pforge-mcp/tests/self-update-check-failure.test.mjs", "contains": "pforge self-update when GitHub cannot be asked" },
     { "label": "A value that cannot be a GitHub token is never sent, so fetch's error cannot print it (#446) (3.35.6)", "path": "pforge-mcp/github-request.mjs", "contains": "const USABLE_TOKEN" },
     { "label": "The entry pforge update writes for the version it installed is not taken for a release check (#446) (3.35.6)", "path": "pforge-mcp/update-check.mjs", "contains": "source: INSTALL_SOURCE" },
-    { "label": "/api/update-status says when a fresh cache entry answered because GitHub could not be asked (#446) (3.35.6)", "path": "pforge-mcp/server/rest-api.mjs", "contains": "...(reason ? { failure: reason } : {})" }
+    { "label": "/api/update-status says when a fresh cache entry answered because GitHub could not be asked (#446) (3.35.6)", "path": "pforge-mcp/server/rest-api.mjs", "contains": "...(reason ? { failure: reason } : {})" },
+    { "label": "A rate-limit message names a token variable that was set but cannot be a token, and never its value (#446) (3.35.6)", "path": "pforge-mcp/github-request.mjs", "contains": "export function findUnusableTokenVariable" }
   ]
 }

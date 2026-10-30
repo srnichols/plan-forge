@@ -146,6 +146,25 @@ describe("resolveTag", () => {
     expect(`${error.message} ${JSON.stringify(error)}`).not.toContain("ghp_secret_value_1234567890");
   });
 
+  // The download and the check word it the same way: a variable skipped for holding a value that cannot be a token is
+  // named, so the user is not told to set what they have set, and its value is never in the error.
+  it("says which token variable was not sent, and never its value, when a rate limit is the answer", async () => {
+    const fetch = makeFetch(403, {}, { headers: { "x-ratelimit-limit": "60", "x-ratelimit-remaining": "0", "x-ratelimit-reset": "1793264400" } });
+    const error = await resolveTag({ fetchImpl: fetch, env: { GITHUB_TOKEN: "Authorization: token ghp_REVIEWSECRET0123456789" } }).catch((e) => e);
+    expect(error.code).toBe("ERR_RATE_LIMITED");
+    expect(error.message).toContain("GITHUB_TOKEN is set to a value that cannot be a token");
+    expect(error.message).not.toMatch(/Set GITHUB_TOKEN or GH_TOKEN/);
+    expect(`${error.message} ${JSON.stringify(error)}`).not.toContain("REVIEWSECRET");
+  });
+
+  it("words a 429 that reports quota left as GitHub's minimum wait", async () => {
+    const fetch = makeFetch(429, {}, { headers: { "x-ratelimit-limit": "60", "x-ratelimit-remaining": "25", "x-ratelimit-reset": "1793264400" } });
+    const error = await resolveTag({ fetchImpl: fetch, env: {} }).catch((e) => e);
+    expect(error.code).toBe("ERR_RATE_LIMITED");
+    expect(error.message).toMatch(/wait at least a minute/);
+    expect(error.message).not.toMatch(/used up|GITHUB_TOKEN|GH_TOKEN/);
+  });
+
   // fetch quotes a header value it rejects in the error it throws. A token with a newline in it is such a value, and the
   // error became "Network error: Headers.append: "token ghp_...": an invalid header value", with the token in it.
   it("goes on without a token that is not a valid header value, and never puts it in an error", async () => {

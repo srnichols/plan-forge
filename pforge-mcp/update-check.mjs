@@ -209,12 +209,12 @@ function unanswered(kind, message, details = {}) {
   return { kind, ...details, message };
 }
 
-function reasonForResponse(res, { authenticated, tokenRejected }) {
+function reasonForResponse(res, { authenticated, tokenRejected, ignoredTokenVariable }) {
   const status = typeof res?.status === "number" ? res.status : null;
   const rejected = tokenRejected ? { tokenRejected: true } : {};
   const limit = readRateLimit(res);
   if (limit) {
-    return unanswered("rate-limited", describeRateLimit({ ...limit, authenticated, tokenRejected }), { status, authenticated, ...rejected, ...limit });
+    return unanswered("rate-limited", describeRateLimit({ ...limit, authenticated, tokenRejected, ignoredTokenVariable }), { status, authenticated, ...rejected, ...limit });
   }
   const says = status === null ? "an error" : `HTTP ${status}`;
   return unanswered("http", `GitHub answered ${says}. Try again shortly.`, { status, ...rejected });
@@ -240,9 +240,9 @@ async function requestLatestRelease({ fetchImpl, env }) {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
   try {
-    const { res, authenticated, tokenRejected } = await fetchGitHub(RELEASES_URL, { fetchImpl, env, userAgent: USER_AGENT, signal: controller.signal });
-    if (!res?.ok) return { reason: reasonForResponse(res, { authenticated, tokenRejected }) };
-    return { json: await readJson(res) };
+    const request = await fetchGitHub(RELEASES_URL, { fetchImpl, env, userAgent: USER_AGENT, signal: controller.signal });
+    if (!request.res?.ok) return { reason: reasonForResponse(request.res, request) };
+    return { json: await readJson(request.res) };
   } catch (err) {
     return { reason: reasonForThrown(err) };
   } finally {
@@ -282,7 +282,7 @@ function buildUpdatePayload(currentVersion, json) {
  *       }
  *   - `reason`: null when GitHub (or the cache, for an unforced check) answered. Otherwise why GitHub was not asked or
  *     did not answer: `{ kind, message, ... }` with `kind` one of `suppressed`, `no-version`, `network`, `timeout`,
- *     `rate-limited` (with `resetAt`, `limit`, `retryAfterSeconds`, `authenticated`, `tokenRejected`), `http` (with
+ *     `rate-limited` (with `resetAt`, `limit`, `retryAfterSeconds`, `quotaSpent`, `authenticated`, `tokenRejected`), `http` (with
  *     `status`) or `malformed`. `message` is a sentence for the user.
  *
  * A forced check that GitHub does not answer falls back to a cache entry that is still inside the TTL, so a rate limit

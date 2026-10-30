@@ -147,6 +147,21 @@ describe.each(SHELLS)("pforge self-update when GitHub cannot be asked, in $name"
     expect(existsSync(join(project, ".forge", "cache"))).toBe(false);
   }, SLOW);
 
+  // A pasted `Authorization: token ...` line, or a token with a space in it: the value goes through the shell's environment
+  // to node, where it cannot be a token. It is not sent, and the user is told which variable and why, not to set it.
+  it_("says which token variable was not sent when its value cannot be a token, instead of telling the user to set it", () => {
+    const pasted = "Authorization: token ghp_REVIEWSECRET0123456789";
+    const run = selfUpdate(shell, seed(), { env: { GITHUB_TOKEN: pasted }, stub: RATE_LIMITED });
+    expect(run.status, run.detail).toBe(2);
+    expect(run.requests).toHaveLength(1);
+    expect(run.requests[0].headers).not.toHaveProperty("authorization");
+    expect(run.output).toContain("GITHUB_TOKEN is set to a value that cannot be a token");
+    expect(run.output).toContain("09:00 UTC");
+    expect(run.output).not.toMatch(/Set GITHUB_TOKEN or GH_TOKEN/);
+    expect(run.output).not.toContain("REVIEWSECRET");
+    expect(run.output).not.toContain("Authorization: token");
+  }, SLOW);
+
   it_("uses the answer the last check cached, says so, and carries on", () => {
     const checkedAt = new Date(Date.now() - 60 * 60 * 1000).toISOString();
     const project = seed({ cache: { latest: "3.35.5", checkedAt, url: "https://example.test/v3.35.5", publishedAt: null } });

@@ -62,6 +62,7 @@ describe.skipIf(!BASH)("pforge.sh JSON reads behave the same on every platform",
       ".forge.json": JSON.stringify({ templateVersion: "3.27.0" }),
       VERSION: "9.8.7",
       "pforge-mcp/update-check.mjs": readFileSync(join(REPO_ROOT, "pforge-mcp", "update-check.mjs"), "utf8"),
+      "pforge-mcp/github-request.mjs": readFileSync(join(REPO_ROOT, "pforge-mcp", "github-request.mjs"), "utf8"),
     });
     const r = pforge(dir, ["self-update", "--dry-run"]);
     const output = `${r.stdout}\n${r.stderr}`;

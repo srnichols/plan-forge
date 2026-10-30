@@ -210,3 +210,34 @@ describe("smith auto-update row", () => {
     expect(lastTag).toBe("unknown");
   });
 });
+
+// ─── #446: a check that cannot be made is not a current install ────────────────
+
+describe("POST /api/self-update when no check can be made (#446)", () => {
+  let server;
+  let baseUrl;
+  let previous;
+  beforeEach(async () => {
+    // PFORGE_NO_UPDATE_CHECK keeps the test off the network and makes the check unanswerable in a way that never varies.
+    previous = process.env.PFORGE_NO_UPDATE_CHECK;
+    process.env.PFORGE_NO_UPDATE_CHECK = "1";
+    server = createExpressApp().listen(0);
+    await new Promise((resolve) => server.once("listening", resolve));
+    baseUrl = `http://127.0.0.1:${server.address().port}`;
+  });
+  afterEach(async () => {
+    if (previous === undefined) delete process.env.PFORGE_NO_UPDATE_CHECK;
+    else process.env.PFORGE_NO_UPDATE_CHECK = previous;
+    await new Promise((resolve) => server.close(resolve));
+  });
+
+  it("ends the stream with a failed frame that says why, not 'Already current'", async () => {
+    const res = await fetch(`${baseUrl}/api/self-update`, { method: "POST" });
+    const text = await res.text();
+    const frames = text.split("\n\n").filter(Boolean).map((frame) => JSON.parse(frame.replace(/^data:\s*/, "")));
+    expect(frames.map((frame) => frame.state)).toEqual(["checking", "failed"]);
+    expect(frames[1].detail).toContain("Could not check for updates");
+    expect(frames[1].detail).toContain("PFORGE_NO_UPDATE_CHECK");
+    expect(text).not.toContain("Already current");
+  });
+});

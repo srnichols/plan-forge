@@ -17,9 +17,12 @@ import { createHash } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, writeFileSync, appendFileSync, unlinkSync, createReadStream } from "node:fs";
 import { resolve, join } from "node:path";
 
+import { describeRateLimit, fetchGitHub, readRateLimit } from "./github-request.mjs";
+
 const RELEASES_URL = "https://api.github.com/repos/srnichols/plan-forge/releases/latest";
 const TAGS_URL = "https://api.github.com/repos/srnichols/plan-forge/tags?per_page=100";
 const TARBALL_BASE = "https://api.github.com/repos/srnichols/plan-forge/tarball";
+const USER_AGENT = "plan-forge-update";
 const DEFAULT_MAX_TARBALL_BYTES = 52_428_800; // 50 MB
 const DEFAULT_CACHE_DIR = ".forge/cache";
 const CONNECT_TIMEOUT_MS = 4_000;
@@ -56,27 +59,39 @@ export function loadFromGitHubConfig(projectDir) {
   return { cacheDir: resolved, maxTarballBytes };
 }
 
+// ─── Rate limits ─────────────────────────────────────────────────────
+// GitHub refuses a request for its rate with a 403 or a 429. This module has always answered every 403 as a rate limit,
+// and keeps doing so; the response's headers, when it has them, add when the limit resets.
+function isRateLimitRefusal(res) {
+  return res.status === 403 || res.status === 429;
+}
+
+function rateLimitedError(res, { authenticated, tokenRejected, ignoredTokenVariable }) {
+  return new UpdateError("ERR_RATE_LIMITED", describeRateLimit({ ...readRateLimit(res), authenticated, tokenRejected, ignoredTokenVariable }));
+}
+
 // ─── Tag resolution ──────────────────────────────────────────────────
+// A pinned tag has to name a release version. "v" used to pass: pforge self-update --force built it from a check that had
+// failed, and the download then said "Tag 'v' not found on GitHub".
+function requireReleaseTag(tag) {
+  if (parseSemver(tag)) return tag;
+  throw new UpdateError("ERR_INVALID_TAG", `Tag '${tag}' does not name a release version. Use a tag such as v2.50.0, or --tag latest for the newest release.`);
+}
+
 export async function resolveTag({ tag, fetchImpl = globalThis.fetch, env = process.env } = {}) {
   if (tag && /^HEAD$/i.test(tag)) {
     throw new UpdateError("ERR_NO_HEAD_TAG", "Tag 'HEAD' is not allowed — this command is for releases, not dev builds.");
   }
   if (tag && !/^latest$/i.test(tag)) {
-    return tag;
+    return requireReleaseTag(tag);
   }
-
-  const headers = {
-    accept: "application/vnd.github+json",
-    "user-agent": "plan-forge-update",
-  };
-  if (env.GITHUB_TOKEN) headers.authorization = `token ${env.GITHUB_TOKEN}`;
 
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), CONNECT_TIMEOUT_MS);
 
-  let res;
+  let request;
   try {
-    res = await fetchImpl(RELEASES_URL, { headers, signal: controller.signal });
+    request = await fetchGitHub(RELEASES_URL, { fetchImpl, env, userAgent: USER_AGENT, signal: controller.signal });
   } catch (err) {
     clearTimeout(timer);
     if (err.name === "AbortError") {
@@ -86,9 +101,8 @@ export async function resolveTag({ tag, fetchImpl = globalThis.fetch, env = proc
   }
   clearTimeout(timer);
 
-  if (res.status === 403) {
-    throw new UpdateError("ERR_RATE_LIMITED", "GitHub API rate limit exceeded. Set GITHUB_TOKEN env var for higher limits.");
-  }
+  const { res } = request;
+  if (isRateLimitRefusal(res)) throw rateLimitedError(res, request);
   if (!res.ok) {
     throw new UpdateError("ERR_API", `GitHub API returned ${res.status}: ${res.statusText}`);
   }
@@ -129,22 +143,32 @@ function compareSemver(a, b) {
 }
 
 // ─── Drift detection ─────────────────────────────────────────────────
+// The newest stable (non-pre-release) semver tag name in a /tags listing, or null.
+function newestStableTagName(tags) {
+  let newest = null;
+  let newestName = null;
+  for (const t of tags) {
+    const parsed = parseSemver(t?.name);
+    // Skip pre-releases — we only want stable tags for drift comparison.
+    if (!parsed || parsed.pre) continue;
+    if (!newest || compareSemver(parsed, newest) > 0) {
+      newest = parsed;
+      newestName = t.name;
+    }
+  }
+  return newestName;
+}
+
 // Fetches /tags and returns the newest stable semver tag. Used to detect
 // the case where tags have been pushed but no GitHub Release was cut —
 // /releases/latest then silently returns an older version than HEAD.
 // Returns null on network failure or no parseable tags (non-fatal).
 export async function fetchNewestSemverTag({ fetchImpl = globalThis.fetch, env = process.env } = {}) {
-  const headers = {
-    accept: "application/vnd.github+json",
-    "user-agent": "plan-forge-update",
-  };
-  if (env.GITHUB_TOKEN) headers.authorization = `token ${env.GITHUB_TOKEN}`;
-
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), CONNECT_TIMEOUT_MS);
   let res;
   try {
-    res = await fetchImpl(TAGS_URL, { headers, signal: controller.signal });
+    ({ res } = await fetchGitHub(TAGS_URL, { fetchImpl, env, userAgent: USER_AGENT, signal: controller.signal }));
   } catch {
     clearTimeout(timer);
     return null;
@@ -154,21 +178,7 @@ export async function fetchNewestSemverTag({ fetchImpl = globalThis.fetch, env =
   if (!res.ok) return null;
   let tags;
   try { tags = await res.json(); } catch { return null; }
-  if (!Array.isArray(tags)) return null;
-
-  let newest = null;
-  let newestName = null;
-  for (const t of tags) {
-    const parsed = parseSemver(t?.name);
-    if (!parsed) continue;
-    // Skip pre-releases — we only want stable tags for drift comparison.
-    if (parsed.pre) continue;
-    if (!newest || compareSemver(parsed, newest) > 0) {
-      newest = parsed;
-      newestName = t.name;
-    }
-  }
-  return newestName;
+  return Array.isArray(tags) ? newestStableTagName(tags) : null;
 }
 
 // Returns { drift: boolean, newestTag, releaseTag, message }. Non-null only
@@ -222,18 +232,12 @@ export async function downloadTarball({
   const destPath = join(cacheDir, `update-${tag.replace(/[^a-zA-Z0-9._-]/g, "_")}.tar.gz`);
   const url = buildTarballUrl(tag);
 
-  const headers = {
-    accept: "application/vnd.github+json",
-    "user-agent": "plan-forge-update",
-  };
-  if (env.GITHUB_TOKEN) headers.authorization = `token ${env.GITHUB_TOKEN}`;
-
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), TOTAL_TIMEOUT_MS);
 
-  let res;
+  let request;
   try {
-    res = await fetchImpl(url, { headers, signal: controller.signal, redirect: "follow" });
+    request = await fetchGitHub(url, { fetchImpl, env, userAgent: USER_AGENT, signal: controller.signal, redirect: "follow" });
   } catch (err) {
     clearTimeout(timer);
     _cleanupPartial(destPath);
@@ -243,13 +247,14 @@ export async function downloadTarball({
     throw new UpdateError("ERR_NETWORK", `Network error during download: ${err.message}`, err);
   }
 
+  const { res } = request;
   if (res.status === 404) {
     clearTimeout(timer);
     throw new UpdateError("ERR_TAG_NOT_FOUND", `Tag '${tag}' not found on GitHub.`);
   }
-  if (res.status === 403) {
+  if (isRateLimitRefusal(res)) {
     clearTimeout(timer);
-    throw new UpdateError("ERR_RATE_LIMITED", "GitHub API rate limit exceeded. Set GITHUB_TOKEN env var for higher limits.");
+    throw rateLimitedError(res, request);
   }
   if (!res.ok) {
     clearTimeout(timer);

@@ -3798,6 +3798,11 @@ async function triggerUpdateCheck() {
       addNotification("Update check unavailable (network or suppressed)", "warning");
       return;
     }
+    if (data.checkFailed) {
+      // A check that did not answer is not "up to date": say why (rate limit, offline, turned off).
+      addNotification(`Update check failed: ${escapeHtml(data.failure?.message || "GitHub could not be asked.")}`, "warning");
+      return;
+    }
     if (data.available && data.latest) {
       // Force-show the banner even if previously dismissed for this version.
       try { localStorage.removeItem("pforge-update-dismissed"); } catch { /* ignore */ }
@@ -3810,7 +3815,9 @@ async function triggerUpdateCheck() {
         banner.classList.remove("hidden");
         banner.classList.add("inline-flex");
       }
-      addNotification(`Update available: v${data.latest} (you are on v${data.current})`, "info");
+      addNotification(`Update available: v${data.latest} (you are on v${data.current})${cachedAnswerNote(data)}`, data.failure ? "warning" : "info");
+    } else if (data.failure) {
+      addNotification(`No newer release found (v${data.current || "?"})${cachedAnswerNote(data)}`, "warning");
     } else {
       addNotification(`Up to date (v${data.current || "?"})`, "success");
     }
@@ -3821,6 +3828,14 @@ async function triggerUpdateCheck() {
     btn.textContent = originalText;
     btn.title = "Check GitHub for a newer Plan Forge release (bypasses 24h cache)";
   }
+}
+
+// When GitHub could not be asked and the cache answered (the endpoint says so with a `failure`), the answer is the cache's
+// word, not GitHub's: say which check it is from and why GitHub was not asked. Escaped, as notifications are rendered as HTML.
+function cachedAnswerNote(data) {
+  if (!data.failure) return "";
+  const at = data.checkedAt ? ` made at ${escapeHtml(String(data.checkedAt).slice(0, 16).replace("T", " "))} UTC` : "";
+  return ` (from the check${at}; GitHub could not be asked just now: ${escapeHtml(data.failure.message || "no reason given")})`;
 }
 window.triggerUpdateCheck = triggerUpdateCheck;
 

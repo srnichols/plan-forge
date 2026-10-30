@@ -581,7 +581,7 @@ forge_diagnose({ file: "src/auth/token-validator.ts", models: "grok-4.20-0309-no
             <tbody>
               <tr><td><code>--yes</code>, <code>-y</code></td><td>boolean</td><td>Skip the "Install vX.Y.Z now? [Y/n]" confirmation prompt. Before v3.31.2, the update it started still asked its own question and, with nobody to answer, cancelled; on those versions run <code>pforge self-update --yes --force</code> unattended</td></tr>
               <tr><td><code>--dry-run</code></td><td>boolean</td><td>Print what would happen (target tag, downgrade detection) without writing anything</td></tr>
-              <tr><td><code>--force</code></td><td>boolean</td><td>Heal an already-current install — reinstalls the latest tagged release even when the local VERSION matches. Useful when a corrupt <code>-dev</code> tarball needs replacing</td></tr>
+              <tr><td><code>--force</code></td><td>boolean</td><td>Heal an already-current install — reinstalls the latest tagged release even when the local VERSION matches. Useful when a corrupt <code>-dev</code> tarball needs replacing. It needs the version it would install, so it needs a successful check (or a cached answer under 24 hours old); without one it prints why and exits 2</td></tr>
               <tr><td><code>--downgrade</code></td><td>boolean</td><td>Required with <code>--force</code> when the latest release is OLDER than the local version (e.g. recovering from a manual VERSION edit). Without it, <code>self-update</code> refuses to silently downgrade.</td></tr>
               <tr><td><code>--verify</code></td><td>boolean</td><td><strong>v3.20.0+</strong> — After a successful update, runs <code>pforge check</code> and <code>pforge smith</code> in subprocesses against the freshly-installed wrapper. Exits non-zero if either fails. Composes with every other flag.</td></tr>
               <tr><td><code>--overwrite-customized</code></td><td>boolean</td><td><strong>v3.28.0+</strong> — Passed to <code>pforge update</code>: also replace guidance files you edited, backing each one up first.</td></tr>
@@ -602,6 +602,10 @@ pforge self-update --force --verify             # heal + verify</code></pre>
 
           <div class="callout callout-info" class="callout-sm">
             <strong>Why <code>--verify</code> spawns subprocesses</strong>: When <code>pforge.ps1</code> / <code>pforge.sh</code> are updated in-place, the running shell still has the OLD wrapper code loaded in memory (Issue #177). <code>--verify</code> shells out to <code>pwsh -File pforge.ps1 check</code> / <code>bash pforge.sh check</code> so the just-installed wrapper is the one that does the verification.
+          </div>
+
+          <div class="callout callout-info" class="callout-sm">
+            <strong>When GitHub refuses the check (v3.35.6+)</strong>: GitHub allows an address 60 anonymous API requests an hour, and everyone behind a shared egress address spends the same 60. <code>self-update</code> sends <code>GITHUB_TOKEN</code>, then <code>GH_TOKEN</code>, when one is set, which raises the limit to 5,000 an hour. When the check is refused anyway it exits 2 and says what happened: a rate limit with when it resets (or how long GitHub asks to wait, for a secondary limit) and, for a request that carried no token and ran into the hourly limit, to set one, or, if a token variable is set to a value that cannot be a token, which variable and that it was not sent; a dead network, a timeout, or a check turned off by <code>PFORGE_NO_UPDATE_CHECK</code>. None of these is reported as "Already current". If <code>.forge/update-check.json</code> holds an answer from an earlier check that is under 24 hours old, <code>self-update</code> uses it and says which check it used; the entry <code>pforge update</code> writes for the version it installed is not such an answer, and neither is a <code>-dev</code> version.
           </div>
         </div>
 

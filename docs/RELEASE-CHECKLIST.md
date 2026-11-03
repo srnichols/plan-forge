@@ -42,48 +42,26 @@ Copy-Item .github/hooks/<name> templates/.github/hooks/<name> -Force
 
 History: `PreCommit.mjs` (#74) and `postSlice` (v2.82.1) were each created in `.github/hooks/` only, so downstream projects never received them via `setup` until a sync pass mirrored them.
 
-### 1b. Shared instruction files enumeration
+### 1b. Instruction files ship from the preset catalog
 
-Every `.github/instructions/*.instructions.md` MUST be enumerated in **all four** of:
+Which instruction files reach a project is named in one place, [`pforge-mcp/preset-catalog.json`](../pforge-mcp/preset-catalog.json):
 
-| File | Pattern |
-|---|---|
-| [setup.ps1](../setup.ps1) | `$sharedFiles = @( @{ Src = "..."; Dst = "..." } ... )` |
-| [setup.sh](../setup.sh) | `SHARED_FILES=( "..." ... )` |
-| [pforge.ps1](../pforge.ps1) | `$sharedInstructions = @("...", ...)` |
-| [pforge.sh](../pforge.sh) | `for instr_name in "..." "..."; do` |
+| List | Ships from | Files |
+|---|---|---|
+| `internalInstructions` | `.github/instructions/` | ai-plan-hardening-runbook, context-fuel, git-workflow |
+| `sharedInstructions` | `presets/shared/.github/instructions/` (consumer-facing, stack-neutral) | architecture-principles, clean-code, security, self-repair-reporting, status-reporting, testing |
 
-Verification:
+[setup.ps1](../setup.ps1), [setup.sh](../setup.sh) and [update-plan.mjs](../pforge-mcp/update-plan.mjs), which both `pforge update` shells run, read those two lists. None of the four scripts keeps a list of its own (#299), so there is nothing to find a name in by searching them. `project-principles.instructions.md` ships from `templates/.github/instructions/` and remains user-editable. When a selected stack preset has its own copy of an instruction (every stack preset ships `testing` and `security`), setup and update use the preset's copy instead. The release and ACI-authoring instructions are maintainer-only: they are on neither list.
+
+Verification is a test, so CI runs it on every change. From `pforge-mcp/`:
+
 ```pwsh
-# Maintainer-only instruction files that intentionally do NOT ship to consumers
-# (their own frontmatter says so). Skip them when checking enumeration.
-$maintainerOnly = @('release-checklist.instructions.md', 'aci-design.instructions.md')
-
-$repo = Get-ChildItem .github/instructions -Filter "*.instructions.md" | Select-Object -ExpandProperty Name
-foreach ($f in $repo) {
-  if ($maintainerOnly -contains $f) { continue }
-  $name = $f
-  $hits = @(
-    (Select-String -Path setup.ps1   -Pattern $name -Quiet),
-    (Select-String -Path setup.sh    -Pattern $name -Quiet),
-    (Select-String -Path pforge.ps1  -Pattern $name -Quiet),
-    (Select-String -Path pforge.sh   -Pattern $name -Quiet)
-  )
-  if ($hits -contains $false) { Write-Warning "$name missing from one of setup/update scripts" }
-}
+npx vitest run tests/instruction-distribution.test.mjs
 ```
 
-`project-principles.instructions.md` ships from `templates/.github/instructions/`
-and remains user-editable. Architecture, clean-code, security, self-repair,
-status, and testing instructions ship from `presets/shared/.github/instructions/`
-(consumer-facing, stack-neutral); the remaining shared instructions
-(ai-plan-hardening-runbook, context-fuel, git-workflow) ship from
-`.github/instructions/`. When a selected stack preset has its own copy of any of
-these (every stack preset ships `testing` and `security`), setup and update use
-the preset's copy instead. Release and ACI-authoring instructions are
-maintainer-only. The string scan above is an
-inventory hint, not proof of copying: inspect the actual lists and verify the
-installed files so a comment mentioning a filename cannot create a false pass.
+It fails for an instruction file in `.github/instructions/` that is on neither list and is not declared maintainer-only, for a catalog name with no file behind it, for a file in `presets/shared/.github/instructions/` that the catalog does not list (setup would never install it), and for a maintainer-only file that a route carries. It does not look at an installed project; the release rehearsal (§3 Step 3a) installs and updates real projects in both shells.
+
+To add an instruction file: put it in `.github/instructions/` (and a stack-neutral copy in `presets/shared/.github/instructions/` for a shared one), name it on the matching list in `preset-catalog.json`, then regenerate the shipped-guidance index (§0). A file that must stay out of projects is added to `MAINTAINER_ONLY` in that test instead, with the reason.
 
 ### 1c. Pipeline prompts ship via glob — but smith name-checks them
 
@@ -447,7 +425,7 @@ If a user genuinely wants the older release (e.g. their local v2.96.0 is corrupt
 [ ] §0  `node scripts/generate-well-known.mjs --check` says the published capability descriptor is current
 [ ] §0  If docs CSS was changed: `npm run build:css` run and `docs/assets/tailwind.built.css.sha256` committed
 [ ] §1a Hooks mirrored (.github/hooks/ ⊆ templates/.github/hooks/)
-[ ] §1b Every instruction file enumerated in setup.{ps1,sh} + pforge.{ps1,sh}
+[ ] §1b Every instruction file is on a preset-catalog.json list or declared maintainer-only (tests/instruction-distribution.test.mjs)
 [ ] §1c New step-N prompts added to smith's required list (if any)
 [ ] §2a Picked SemVer segment from commit content (PATCH for fix:, MINOR for feat:, MAJOR for !:)
 [ ] §2  node scripts/sync-versions.mjs X.Y.Z, then --check passes (no -dev)

@@ -27,7 +27,7 @@ The canonical checklist lives at [docs/RELEASE-CHECKLIST.md](../../docs/RELEASE-
 | Gate | Command | Pass criteria |
 |---|---|---|
 | Hooks mirrored | `diff <(ls .github/hooks) <(ls templates/.github/hooks)` | Every file in `.github/hooks/` also in `templates/.github/hooks/` (`plan-forge.json` is templates-only) |
-| Instruction enumeration | See §1b of checklist | Every `.github/instructions/*.instructions.md` is enumerated in setup.{ps1,sh} + pforge.{ps1,sh} (except `project-principles` which ships from `templates/`) |
+| Instruction distribution | `npx vitest run tests/instruction-distribution.test.mjs`, inside `pforge-mcp/` (see §1b of checklist) | Every `.github/instructions/*.instructions.md` is on `preset-catalog.json`'s `internalInstructions` or `sharedInstructions`, is `project-principles` (ships from `templates/`), or is declared maintainer-only in that test |
 | VERSION sync | `git show vX.Y.Z:VERSION` after tagging | Exactly `X.Y.Z`, no `-dev`, no trailing newline |
 | Release exists | `node pforge-mcp/update-from-github.mjs resolve-tag` | `{"ok":true,"tag":"vX.Y.Z"}` with NO `warning` field |
 | SDK routing contract | `node --input-type=module -e "import{loadCopilotSdkPreference}from'./pforge-mcp/orchestrator/worker-spawn.mjs';import os from'node:os';const v=loadCopilotSdkPreference(os.tmpdir());if(v!=='prefer')throw new Error('unexpected SDK default: '+v)"` | The default has been `"prefer"` since v3.29 (#307 cost-parity evidence). Use a temporary directory with no config for the check. Changing it again requires new benchmark evidence, not an automatic release-time edit. |
@@ -60,7 +60,7 @@ The bump-back biases the *next* maintainer toward a segment. If you ship a `fix:
 
 **If you find `VERSION` already drifted** (e.g. reads `3.7.0-dev` but the next release is a hotfix that should be `3.6.2`): reset `VERSION` and the package versions (`node scripts/sync-versions.mjs X.Y.Z-dev`) to the correct next-dev value in a standalone `chore: reset VERSION` commit BEFORE starting the release sequence. See [docs/RELEASE-CHECKLIST.md §6 → "VERSION drifted past intended next release"](../../docs/RELEASE-CHECKLIST.md#version-drifted-past-intended-next-release).
 - Editing **`.github/hooks/<file>`**: mirror to `templates/.github/hooks/<file>` in the same commit, or it won't reach consumers.
-- Editing **`.github/instructions/<file>.instructions.md`**: add to `setup.ps1` `$sharedFiles`, `setup.sh` `SHARED_FILES`, `pforge.ps1` `$sharedInstructions`, AND `pforge.sh` `for instr_name in ...` — all four. (Exception: this very file, which is dev-only.)
+- Editing or adding **`.github/instructions/<file>.instructions.md`**: name it on a list in `pforge-mcp/preset-catalog.json` — `internalInstructions` ships it from `.github/instructions/`, `sharedInstructions` ships the stack-neutral copy in `presets/shared/.github/instructions/` — then regenerate the shipped-guidance index. `setup.ps1`, `setup.sh` and `pforge update` all read that one list; none of them keeps its own. A maintainer-only file, such as this one, goes in `MAINTAINER_ONLY` in `pforge-mcp/tests/instruction-distribution.test.mjs` instead.
 - Editing **`setup.ps1` / `setup.sh` / `pforge.ps1` / `pforge.sh`**: if you change distribution behavior, update [docs/RELEASE-CHECKLIST.md §1](../../docs/RELEASE-CHECKLIST.md#1--distribution-sync-invariants-run-before-commit) so the next maintainer sees the new invariant.
 
 ---
@@ -81,10 +81,8 @@ Any release that flips a routing default or raises the `engines.node` floor requ
 
 This instruction file is intentionally **NOT** mirrored to consuming projects:
 
-- It is **NOT** added to `setup.ps1` `$sharedFiles`
-- It is **NOT** added to `setup.sh` `SHARED_FILES`
-- It is **NOT** added to `pforge.ps1` `$sharedInstructions`
-- It is **NOT** added to `pforge.sh` `for instr_name in ...`
+- It is **NOT** named on either list in `pforge-mcp/preset-catalog.json` (`internalInstructions`, `sharedInstructions`), the one list `setup.ps1`, `setup.sh` and `pforge update` read
+- It is declared maintainer-only in `pforge-mcp/tests/instruction-distribution.test.mjs`, which fails if any route to projects carries it
 
 The release procedure is Plan Forge maintainer business; downstream projects have their own release flows.
 

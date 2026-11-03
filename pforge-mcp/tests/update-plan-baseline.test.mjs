@@ -25,14 +25,19 @@
  * both shells; the only non-gap operations either shell can report are the
  * `pforge-mcp/*` auto-discovery entries the update guard itself requires
  * (symmetric in both shells, so they never show up as a difference).
+ *
+ * The record of what each shell reported lives in `<case>/<case>.baseline.json`, committed. A run compares with it
+ * and never rewrites it, and so leaves the tracked files alone; re-record on purpose with PFORGE_UPDATE_BASELINES=1
+ * (tests/helpers/baseline-file.mjs).
  */
 
 import { describe, it, expect, afterEach } from "vitest";
 import { execFileSync, spawnSync } from "node:child_process";
-import { copyFileSync, cpSync, existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { copyFileSync, cpSync, existsSync, mkdirSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { copyUpdateRuntime } from "./helpers/update-runtime.mjs";
+import { UPDATE_BASELINES_ENV, checkBaseline } from "./helpers/baseline-file.mjs";
 
 const REPO_ROOT = resolve(import.meta.dirname, "..", "..");
 const FIXTURES_ROOT = resolve(import.meta.dirname, "fixtures", "update-plan");
@@ -122,23 +127,27 @@ describe.each(CASES)("update-plan baseline: %s", (caseName) => {
       results[name] = parseReport(r.stdout);
     }
 
-    writeFileSync(
-      join(FIXTURES_ROOT, caseName, `${caseName}.baseline.json`),
-      `${JSON.stringify(results, null, 2)}\n`,
-    );
-
     // The hand-edited guidance file is always kept, regardless of shell or stack.
     for (const [name, list] of Object.entries(results)) {
       expect(list, `${name} did not KEEP the edited guidance file`).toContain(EDITED_GUIDANCE_LINE);
     }
 
-    if (!results["pforge.sh"] || !results["pforge.ps1"]) return; // only one shell runnable here — nothing to diff
+    // With both shells runnable, each must report exactly what the other does.
+    if (results["pforge.sh"] && results["pforge.ps1"]) {
+      const bashOnly = results["pforge.sh"].filter((l) => !results["pforge.ps1"].includes(l));
+      const psOnly = results["pforge.ps1"].filter((l) => !results["pforge.sh"].includes(l));
 
-    const bashOnly = results["pforge.sh"].filter((l) => !results["pforge.ps1"].includes(l));
-    const psOnly = results["pforge.ps1"].filter((l) => !results["pforge.sh"].includes(l));
+      expect(psOnly, "pforge.ps1 reported a line pforge.sh did not").toEqual([]);
+      expect(bashOnly, "pforge.sh reported a line pforge.ps1 did not").toEqual([]);
+      expect(results["pforge.sh"]).toEqual(results["pforge.ps1"]);
+    }
 
-    expect(psOnly, "pforge.ps1 reported a line pforge.sh did not").toEqual([]);
-    expect(bashOnly, "pforge.sh reported a line pforge.ps1 did not").toEqual([]);
-    expect(results["pforge.sh"]).toEqual(results["pforge.ps1"]);
+    // Last, so that re-recording never saves a result the checks above rejected. A run compares with the committed
+    // baseline and never rewrites it; update-plan.test.mjs reads the same file.
+    const check = checkBaseline({ file: join(FIXTURES_ROOT, caseName, `${caseName}.baseline.json`), results });
+    expect(
+      check.mismatches,
+      `a shell reports something other than the committed baseline. If that is intended, re-record it: ${UPDATE_BASELINES_ENV}=1 npx vitest run tests/update-plan-baseline.test.mjs`,
+    ).toEqual([]);
   });
 });

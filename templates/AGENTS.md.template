@@ -64,11 +64,11 @@ The following agents automate the full Specify → Plan → Execute → Review �
 
 | Agent | File | Purpose | Tools |
 |-------|------|---------|-------|
-| Specifier | `.github/agents/specifier.agent.md` | Interviews user to define what & why (Step 0) | read, search |
-| Plan Hardener | `.github/agents/plan-hardener.agent.md` | Hardens draft plans into execution contracts | read, search, editFiles |
-| Executor | `.github/agents/executor.agent.md` | Executes slices with validation gates | read, search, editFiles, runCommands |
-| Reviewer Gate | `.github/agents/reviewer-gate.agent.md` | Read-only audit for drift and violations | read, search |
-| Shipper | `.github/agents/shipper.agent.md` | Commits, updates roadmap, captures postmortem, push/PR | read, search, editFiles, runCommands |
+| Specifier | `.github/agents/specifier.agent.md` | Interviews user to define what & why (Step 0) | read, search, edit, agents |
+| Plan Hardener | `.github/agents/plan-hardener.agent.md` | Hardens draft plans into execution contracts | read, search, edit, runCommands, agents |
+| Executor | `.github/agents/executor.agent.md` | Executes slices with validation gates | read, search, edit, runCommands, agents |
+| Reviewer Gate | `.github/agents/reviewer-gate.agent.md` | Read-only audit for drift and violations | read, search, runCommands, agents |
+| Shipper | `.github/agents/shipper.agent.md` | Commits, updates roadmap, captures postmortem, push/PR | read, search, edit, runCommands, agents |
 
 **Handoff chain**: Specifier → *"Start Plan Hardening →"* → Plan Hardener → *"Start Execution →"* → Executor → *"Run Review Gate →"* → Reviewer Gate → *"Ship It →"* (PASS) or *"Fix Issues →"* (LOCKOUT) → Shipper
 

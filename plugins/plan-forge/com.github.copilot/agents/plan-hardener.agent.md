@@ -1,7 +1,7 @@
 ---
 description: "Harden a draft phase plan into a drift-proof execution contract with scope contracts, execution slices, and validation gates."
 name: "Plan Hardener"
-tools: [read, search, editFiles, runCommands, agents]
+tools: [read, search, edit, runCommands, agents]
 handoffs:
   - agent: "executor"
     label: "Start Execution →"

@@ -39,6 +39,23 @@ const AGENT_PATH = resolve(REPO_ROOT, ".github", "agents", "plan-health-auditor.
 // Write-capable tool names that MUST NOT appear in the agent's tool allowlist.
 const WRITE_TOOLS = new Set([
   "editFiles",
+  // The aliases GitHub and VS Code document for the same right (`edit` covers creating files too), and the tool names
+  // the Copilot CLI resolves them to.
+  "edit",
+  "edit/editFiles",
+  "edit/createFile",
+  "edit/createDirectory",
+  "edit-editFiles",
+  "create-createFile",
+  "createFile",
+  "createDirectory",
+  "Edit",
+  "MultiEdit",
+  "Write",
+  "NotebookEdit",
+  "create",
+  "apply_patch",
+  "str_replace_editor",
   "create_file",
   "replace_string_in_file",
   "insert_edit_into_file",

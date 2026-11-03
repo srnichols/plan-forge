@@ -39,6 +39,14 @@ const AGENT_PATH = resolve(REPO_ROOT, ".github", "agents", "plan-health-auditor.
 // Write-capable tool names that MUST NOT appear in the agent's tool allowlist.
 const WRITE_TOOLS = new Set([
   "editFiles",
+  // The aliases GitHub and VS Code document for the same right (`edit` covers creating files too).
+  "edit",
+  "createFile",
+  "createDirectory",
+  "Edit",
+  "MultiEdit",
+  "Write",
+  "NotebookEdit",
   "create_file",
   "replace_string_in_file",
   "insert_edit_into_file",

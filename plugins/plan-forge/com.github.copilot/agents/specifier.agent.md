@@ -1,7 +1,7 @@
 ---
 description: "Interview the user to define what and why before any technical planning. Surfaces ambiguities as [NEEDS CLARIFICATION] markers that block hardening."
 name: "Specifier"
-tools: [read, search, editFiles, agents]
+tools: [read, search, edit, agents]
 handoffs:
   - agent: "plan-hardener"
     label: "Start Plan Hardening →"

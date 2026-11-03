@@ -300,6 +300,11 @@ jobs:
         working-directory: pforge-mcp
         run: npm install --no-audit --no-fund
 
+      - name: Note the tracked files before the suite
+        id: note
+        # The install may rewrite a lockfile. That is not the suite's doing, so the step after the suite compares with this.
+        run: git diff > "$RUNNER_TEMP/tracked-before.diff"
+
       - name: Run vitest (full suite)
         working-directory: pforge-mcp
         # Hard-fail on any test failure. v2.82.2 set this at 35 to track the
@@ -347,6 +352,19 @@ jobs:
             exit 1
           fi
           echo "::notice::vitest within baseline tolerance ($NUM_FAILED <= $BASELINE_FAILURES tests, $NUM_FAILED_SUITES <= $BASELINE_FAILURES suites)."
+
+      - name: Tests leave tracked files as they found them
+        # After the suite, pass or fail, but only when the tree was noted: with no snapshot (the install failed) there is nothing to compare.
+        if: always() && steps.note.conclusion == 'success'
+        # A test that writes a tracked file (a fixture, a report) passes here, then shows up modified on a
+        # contributor's machine, where `git add -A` commits it. A test writes to a temporary directory instead.
+        run: |
+          git diff > "$RUNNER_TEMP/tracked-after.diff"
+          if ! diff -u "$RUNNER_TEMP/tracked-before.diff" "$RUNNER_TEMP/tracked-after.diff"; then
+            echo "::error::The suite changed tracked files (the diff above). Have the test write to a temporary directory; the audit scripts take PFORGE_AUDIT_RAW_DIR."
+            exit 1
+          fi
+          echo "The suite left the tracked files as it found them."
 
       - name: Upload vitest results
         if: always()

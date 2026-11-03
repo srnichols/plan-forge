@@ -95,6 +95,10 @@ const SOURCE_ONLY_SUITES = {
     "tests/bash-3-2-portability.test.mjs",
     "tests/dependency-advisory-floors.test.mjs",
     "tests/setup-next-steps.test.mjs",
+    // These read the checklist, the shared and template instruction directories, the workflow, the release checks and the git checkout.
+    "tests/instruction-distribution.test.mjs",
+    "tests/tests-leave-tracked-files.test.mjs",
+    "tests/release-checks-verbatim.test.mjs",
   ],
   "../.github/instructions/release-checklist.instructions.md": [
     "tests/consumer-test-surface.test.mjs",
@@ -110,6 +114,7 @@ const SOURCE_ONLY_SUITES = {
   "../scripts/benchmark": ["tests/sdk-parity-benchmark.test.mjs"],
   "../scripts/build-agent-plugin.mjs": ["tests/agent-plugin.test.mjs"],
   "../templates/.github/agents/specifier.agent.md": ["tests/planning-guidance.test.mjs"],
+  "../templates/.github/agents/executor.agent.md": ["tests/agent-tools.test.mjs"],
   "../presets/shared/skills/code-review/SKILL.md": ["tests/review-guidance.test.mjs"],
   "../pforge-master": [
     "tests/auditor-automation-baseline.test.mjs",
@@ -159,10 +164,13 @@ export default defineConfig({
     root: configDir,
     include: ["tests/**/*.test.mjs", "../pforge-sdk/tests/**/*.test.mjs"],
     exclude: ["**/.forge/**", "**/node_modules/**", ...SOURCE_ONLY_EXCLUDES],
-    hookTimeout: 30000,
-    // Matches hookTimeout: much of this suite shells out to real CLI probes
-    // (detectWorkers, probeQuorumModelAvailability, spawnWorker), which the
-    // 5000ms default could not cover once vitest 4 added per-test overhead.
+    // A hook may load the whole server: fifteen suites import server.mjs in a beforeAll, and vite-node transforms
+    // every module it reaches, which took longer than 30 s on a busy machine. Idle runs finish in seconds, so the
+    // longer limit only matters when something is slow; a hook that truly hangs fails after two minutes, not never.
+    hookTimeout: 120000,
+    // A test's own limit is shorter than a hook's: much of this suite shells out to real CLI probes
+    // (detectWorkers, probeQuorumModelAvailability, spawnWorker), which the 5000ms default could not cover
+    // once vitest 4 added per-test overhead.
     testTimeout: 30000,
     // Runs started by tests must not ask the real Copilot runtime for its model
     // list (copilot-live-models.mjs): it is slow, needs a signed-in user, and is

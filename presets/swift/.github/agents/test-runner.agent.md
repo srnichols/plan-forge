@@ -1,7 +1,7 @@
 ---
 description: "Run tests, check coverage, and report failures. Adapts to Swift (XCTest, Swift Testing)."
 name: "Test Runner"
-tools: [run_in_terminal, read_file]
+tools: [read, search, runCommands]
 ---
 You are the **Test Runner**. Execute Swift tests and report results clearly.
 

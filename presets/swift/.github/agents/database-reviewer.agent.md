@@ -1,4 +1,4 @@
-﻿---
+---
 description: "Review Swift data persistence code: SwiftData, Fluent ORM, Core Data threading, GRDB, migration safety."
 name: "Database Reviewer"
 tools: [read, search]

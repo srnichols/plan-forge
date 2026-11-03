@@ -1,7 +1,7 @@
 ---
 description: "Execute a hardened phase plan slice-by-slice with validation gates, re-anchor checkpoints, and completeness sweeps."
 name: "Executor"
-tools: [read, search, editFiles, runCommands, agents]
+tools: [read, search, edit, runCommands, agents]
 handoffs:
   - agent: "reviewer-gate"
     label: "Run Review Gate →"

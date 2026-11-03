@@ -221,6 +221,15 @@
     { "label": "A value that cannot be a GitHub token is never sent, so fetch's error cannot print it (#446) (3.35.6)", "path": "pforge-mcp/github-request.mjs", "contains": "const USABLE_TOKEN" },
     { "label": "The entry pforge update writes for the version it installed is not taken for a release check (#446) (3.35.6)", "path": "pforge-mcp/update-check.mjs", "contains": "source: INSTALL_SOURCE" },
     { "label": "/api/update-status says when a fresh cache entry answered because GitHub could not be asked (#446) (3.35.6)", "path": "pforge-mcp/server/rest-api.mjs", "contains": "...(reason ? { failure: reason } : {})" },
-    { "label": "A rate-limit message names a token variable that was set but cannot be a token, and never its value (#446) (3.35.6)", "path": "pforge-mcp/github-request.mjs", "contains": "export function findUnusableTokenVariable" }
+    { "label": "A rate-limit message names a token variable that was set but cannot be a token, and never its value (#446) (3.35.6)", "path": "pforge-mcp/github-request.mjs", "contains": "export function findUnusableTokenVariable" },
+    { "label": "The Executor agent can create files: it lists the edit alias, not editFiles (#449) (3.35.7)", "path": ".github/agents/executor.agent.md", "contains": "tools: [read, search, edit, runCommands, agents]" },
+    { "label": "The Plan Hardener agent can create files: it lists the edit alias, not editFiles (#449) (3.35.7)", "path": ".github/agents/plan-hardener.agent.md", "contains": "tools: [read, search, edit, runCommands, agents]" },
+    { "label": "The Shipper agent can create files: it lists the edit alias, not editFiles (#449) (3.35.7)", "path": ".github/agents/shipper.agent.md", "contains": "tools: [read, search, edit, runCommands, agents]" },
+    { "label": "The Specifier agent can create files: it lists the edit alias, not editFiles (#449) (3.35.7)", "path": ".github/agents/specifier.agent.md", "contains": "tools: [read, search, edit, agents]" },
+    { "label": "A pipeline agent no longer lists editFiles, which the Copilot CLI maps without file creation (#449) (3.35.7)", "path": ".github/agents/executor.agent.md", "notContains": "editFiles" },
+    { "label": "A hook has two minutes to load the whole server before it times out (3.35.7)", "path": "pforge-mcp/vitest.config.mjs", "contains": "hookTimeout: 120000" },
+    { "label": "The update baseline test compares with its committed baseline instead of rewriting it (3.35.7)", "path": "pforge-mcp/tests/update-plan-baseline.test.mjs", "contains": "checkBaseline" },
+    { "label": "Instruction files ship from the preset catalog's two lists, and a suite fails for one that is on neither (3.35.7)", "path": "pforge-mcp/tests/instruction-distribution.test.mjs", "contains": "MAINTAINER_ONLY" },
+    { "label": "The Swift Test Runner lists the tools the other presets' test runners do, so it has a shell and can run a test (3.35.7)", "path": ".github/agents/test-runner.agent.md", "preset": "swift", "contains": "tools: [read, search, runCommands]" }
   ]
 }

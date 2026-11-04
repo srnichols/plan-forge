@@ -18,6 +18,12 @@
  * needs no override. Neither the SDK nor Plan Forge calls `serveStatic`: the SDK's HTTP transport is the only
  * thing that loads the package.
  *
+ * @azure/msal-node from 5.0.0-beta.0 up to 7.1.0 can disclose the parameters of the authorization code flow
+ * to an attacker-controlled endpoint (GHSA-xcx6-jx8p-x3h5). @azure/identity is an optional dependency of
+ * pforge-mcp, loaded only by the optional `DefaultAzureCredential` import in `orchestrator/worker-spawn.mjs`.
+ * Its 4.14.0 asked for msal-node `^6`, which no fixed release satisfies; 4.14.1 asks for `^7.1.0`, so raising the
+ * floor of the optional dependency and updating the locks is enough, with no override.
+ *
  * undici before 7.30.1 (eight advisories; jsdom reaches it through `^7.25.0`), vite up to 8.3.2, vitest and
  * @vitest/mocker before 4.1.12, and postcss-selector-parser before 6.1.5 are development dependencies. A lock
  * update inside the ranges package.json allows is enough for each.
@@ -34,6 +40,7 @@ import { fileURLToPath } from "node:url";
 
 const REPO = resolve(dirname(fileURLToPath(import.meta.url)), "..", "..");
 const ZOD_FLOOR = "4.6.6";
+const IDENTITY_FLOOR = "4.14.1";
 const ROOT_LOCK = "package-lock.json";
 const MCP_LOCK = "pforge-mcp/package-lock.json";
 const LOCKS = [ROOT_LOCK, MCP_LOCK, "pforge-master/package-lock.json"];
@@ -48,6 +55,8 @@ const ADVISORIES = [
   { id: "GHSA-mrhx-c7xc-m3w5", pkg: "zod", patched: [ZOD_FLOOR] },
   { id: "GHSA-27r3-jxmh-p828", pkg: "body-parser", patched: ["1.20.9", "2.4.0"] },
   { id: "GHSA-rmxm-3fg6-px4f", pkg: "@hono/node-server", patched: ["2.1.3"] },
+  { id: "GHSA-xcx6-jx8p-x3h5", pkg: "@azure/msal-node", patched: ["7.1.0"], locks: [ROOT_LOCK, MCP_LOCK] },
+  { id: "GHSA-xcx6-jx8p-x3h5, through @azure/msal-node", pkg: "@azure/identity", patched: ["4.14.1"], locks: [ROOT_LOCK, MCP_LOCK] },
   { id: "GHSA-4qv8-2p9j-2685 and seven more", pkg: "undici", patched: ["7.30.1", "8.0.0"], locks: [ROOT_LOCK, MCP_LOCK] },
   { id: "GHSA-587h-7wmj-h5pm and five more", pkg: "vite", patched: ["8.3.3"] },
   { id: "GHSA-qxg6-89mg-rqv8 and GHSA-xp26-3454-mjgp", pkg: "vitest", patched: ["4.1.12", "5.0.0"] },
@@ -126,5 +135,21 @@ describe(`zod is held at ${ZOD_FLOOR} or later by an override`, () => {
     const spec = readJson(manifest).overrides?.zod;
     expect(spec, `${manifest} needs "overrides": { "zod": "^${ZOD_FLOOR}" } while @github/copilot-sdk pins zod`).toBeTypeOf("string");
     expect(atLeast(spec, ZOD_FLOOR), `${manifest} overrides zod to ${spec}`).toBe(true);
+  });
+});
+
+describe(`@azure/identity is asked for at ${IDENTITY_FLOOR} or later`, () => {
+  it("pforge-mcp/package.json raises the floor, so an install made without the lock cannot take the release that needs the vulnerable msal-node", () => {
+    const spec = readJson("pforge-mcp/package.json").optionalDependencies?.["@azure/identity"];
+    expect(spec, "pforge-mcp/package.json lists @azure/identity under optionalDependencies").toBeTypeOf("string");
+    expect(atLeast(spec, IDENTITY_FLOOR), `pforge-mcp/package.json asks for @azure/identity ${spec}`).toBe(true);
+  });
+
+  it.each([ROOT_LOCK, MCP_LOCK])("%s has @azure/identity ask for an @azure/msal-node at 7.1.0 or later", (lock) => {
+    const identity = readJson(lock).packages["node_modules/@azure/identity"];
+    expect(identity, `${lock} has no @azure/identity`).toBeDefined();
+    const spec = identity.dependencies?.["@azure/msal-node"];
+    expect(spec, `${lock} @azure/identity ${identity.version} lists no @azure/msal-node`).toBeTypeOf("string");
+    expect(atLeast(spec, "7.1.0"), `${lock} @azure/identity ${identity.version} asks for @azure/msal-node ${spec}`).toBe(true);
   });
 });

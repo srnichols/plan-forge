@@ -29,7 +29,7 @@
     "ws": "^8.22.0"
   },
   "optionalDependencies": {
-    "@azure/identity": "^4.14.0"
+    "@azure/identity": "^4.14.1"
   },
   "overrides": {
     "zod": "^4.6.6"

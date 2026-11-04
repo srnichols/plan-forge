@@ -6,8 +6,10 @@
     // Enable Copilot Chat agent mode (required for execution pipeline)
     "github.copilot.chat.agent.enabled": true,
 
-    // Allow pipeline agents to invoke each other as nested subagents (single-session pipeline).
-    // Remove or set to false to require manual handoff button clicks between pipeline agents.
+    // Lets a subagent start another subagent, which the pipeline agents' nested chain (a single-session pipeline) needs.
+    // The agent files Plan Forge ships give no agent a tool that starts another, so that chain has not been run from them
+    // (https://github.com/srnichols/plan-forge/issues/455). The handoff buttons move you between agents either way.
+    // Safe to leave on; set it to false to rule nested subagents out.
     "chat.subagents.allowInvocationsFromSubagents": true,
 
     // Point Copilot to your instruction files for inline suggestions

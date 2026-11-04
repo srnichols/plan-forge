@@ -238,7 +238,7 @@
         <p>The executor shouldn't self-audit, that's like grading your own exam. Each session starts fresh, loads the same guardrails, but brings independent judgment. Session 3 (Review) has never seen the code being written, it reads the plan, reads the code, and checks for drift. Session 4 is when Guard and Learn take over: LiveGuard does its pre-deploy scan, OpenBrain writes the lessons.</p>
 
         <div class="callout callout-info">
-          <strong>Nested subagents</strong>: Within a session, agents can spawn sub-agents for complex tasks, the architecture reviewer can call the security reviewer, for example. This happens automatically; you don't need to configure it.
+          <strong>Nested subagents</strong>: The pipeline agents are written so that each could start the next as a nested subagent and run the four sessions as one. That has not been run from the agent files Plan Forge ships, which give no agent a tool that starts another, so you move from one session to the next with the handoff buttons, or start each session yourself. The specialist reviewers (architecture, security and the others) only read and search, so they do not start one another either.
         </div>
 
         <!-- ─── Why Session Isolation Works ─── -->

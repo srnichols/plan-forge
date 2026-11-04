@@ -213,7 +213,9 @@ If the OpenBrain MCP server is available:
 
 ## Nested Subagent Invocation
 
-> **Requires**: VS Code setting `chat.subagents.allowInvocationsFromSubagents: true` in `.vscode/settings.json`
+> **Not run from this file.** This agent's `tools:` list names `agents`, which is not a tool name: the Copilot CLI ignores it, and VS Code, going by its source (not run), reads `agents` as a separate attribute, not as a tool. So, as shipped, it has no tool that starts another agent, and the steps below have not been run.
+>
+> **Requires**, if you add a tool that starts agents to `tools:`: VS Code setting `chat.subagents.allowInvocationsFromSubagents: true` in `.vscode/settings.json`
 
 When specification is complete and all `[NEEDS CLARIFICATION]` markers are resolved, you may invoke the **Plan Hardener** as a subagent instead of waiting for a manual handoff click:
 
@@ -229,7 +231,7 @@ When specification is complete and all `[NEEDS CLARIFICATION]` markers are resol
 | ❌ **Never invoke Executor, Reviewer Gate, or Shipper** | Pipeline is linear — skip-ahead is forbidden |
 | 🛑 **Stop if markers remain** | Unresolved `[NEEDS CLARIFICATION]` markers require human input before any subagent is invoked |
 
-If `chat.subagents.allowInvocationsFromSubagents` is not set, fall back to the **"Start Plan Hardening →"** handoff button — it carries context automatically.
+If you cannot start an agent (you have no tool that does, or `chat.subagents.allowInvocationsFromSubagents` is not set), do not say that you are invoking one: fall back to the **"Start Plan Hardening →"** handoff button — it carries context automatically.
 
 ## Completion
 

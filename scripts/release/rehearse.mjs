@@ -24,7 +24,7 @@ import { appendFileSync, existsSync, readdirSync, writeFileSync } from "node:fs"
 import {
   Checks, checkTagCollision, commitAll, evaluateFileCheck, expandRef, findBash, git, has, isCleanVersion,
   makeWorkRoot, newConsumer, SHORT_SHA, parseArgs, previousTag, readJson, readText, requirePwsh, runBash, runPwsh,
-  sameText, selectFileChecks, shq, toBashPath, versionAt,
+  sameText, selectFileChecks, shq, summarizeInstalledSuite, toBashPath, versionAt,
 } from "./harness.mjs";
 
 const REPO_DEFAULT = resolve(fileURLToPath(new URL("../..", import.meta.url)));
@@ -189,7 +189,6 @@ function updateBash(ctx) {
 
 const NPM_TIMEOUT_MS = 600_000;
 const VITEST_TIMEOUT_MS = 1_200_000;
-const MAX_FAILED_FILES_LISTED = 8;
 const LOG_MAX_BUFFER = 268_435_456; // 256 MiB of npm / vitest output
 
 function runLogged(args, { cwd, log, timeout }) {
@@ -203,6 +202,8 @@ function runLogged(args, { cwd, log, timeout }) {
  * `npm test` there would. It caught nothing before 3.31.2 because nothing ran
  * it: repository-only tests and files left over from older releases failed
  * in every installed project. npm and vitest run through node, never a shell.
+ * A failure names the tests that failed, and the report that holds their
+ * messages stays in the logs directory as `<tag>-vitest.json` (#457).
  */
 function assertInstalledTestsPass(ctx, tag, project) {
   if (ctx.args.skipInstalledTests) return;
@@ -218,12 +219,8 @@ function assertInstalledTestsPass(ctx, tag, project) {
   if (install.status !== 0) return;
   const report = join(ctx.root, `${tag}-vitest.json`);
   runLogged([join(pkg, "node_modules", "vitest", "vitest.mjs"), "run", "--reporter=json", `--outputFile=${report}`], { cwd: pkg, log, timeout: VITEST_TIMEOUT_MS });
-  const result = readJson(report);
-  const failedFiles = (result?.testResults ?? []).filter((f) => f.status === "failed").map((f) => f.name.replace(/\\/g, "/").split("/pforge-mcp/")[1] ?? f.name);
-  const detail = result
-    ? `${result.numFailedTests} failed of ${result.numTotalTests}${failedFiles.length ? `: ${failedFiles.slice(0, MAX_FAILED_FILES_LISTED).join(", ")}` : ""}`
-    : "no vitest report (see log)";
-  ctx.checks.add(`${tag} installed pforge-mcp test suite passes`, Boolean(result) && result.numFailedTests === 0 && result.numFailedTestSuites === 0, detail);
+  const summary = summarizeInstalledSuite(readJson(report));
+  ctx.checks.add(`${tag} installed pforge-mcp test suite passes`, summary.ok, summary.detail);
 }
 
 function findFile(dir, fileName) {

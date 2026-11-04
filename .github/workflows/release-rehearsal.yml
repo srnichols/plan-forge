@@ -72,6 +72,7 @@ jobs:
           path: |
             ${{ runner.temp }}/release-rehearsal/results.txt
             ${{ runner.temp }}/release-rehearsal/*.log
+            ${{ runner.temp }}/release-rehearsal/*-vitest.json
 
   verify-public:
     name: Verify public self-update (both shells)

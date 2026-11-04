@@ -212,6 +212,64 @@ export class Checks {
   }
 }
 
+// ─── The installed test suite (#457) ────────────────────────────────────────
+
+const MAX_FAILED_TESTS_LISTED = 8;
+const MAX_ENTRY_CHARS = 160;
+
+/** One line of at most `limit` characters: whitespace runs, line breaks included, become a space, and a cut ends in an ellipsis. */
+function boundedLine(text, limit) {
+  const flat = String(text).replace(/\s+/g, " ").trim();
+  return flat.length > limit ? `${flat.slice(0, limit - 1)}…` : flat;
+}
+
+/** A report's file path from the project's pforge-mcp directory down, whichever slash it was written with. */
+function packageRelative(file) {
+  const path = String(file).replace(/\\/g, "/");
+  return path.split("/pforge-mcp/")[1] ?? path;
+}
+
+function failedTestName(file, test) {
+  const titles = Array.isArray(test.ancestorTitles) && test.title ? [...test.ancestorTitles, test.title] : [test.fullName ?? test.title ?? "(unnamed test)"];
+  return boundedLine([file, ...titles].join(" > "), MAX_ENTRY_CHARS);
+}
+
+/** What one file of the report failed at: each failed test by name, or, for a file that failed to load, the file and its first message line. */
+function failuresOfFile(fileResult) {
+  const file = packageRelative(fileResult.name);
+  const failed = (fileResult.assertionResults ?? []).filter((test) => test.status === "failed");
+  if (failed.length > 0) return failed.map((test) => failedTestName(file, test));
+  if (fileResult.status !== "failed") return [];
+  const reason = String(fileResult.message ?? "").split("\n")[0].trim();
+  return [boundedLine(reason ? `${file}: ${reason}` : file, MAX_ENTRY_CHARS)];
+}
+
+/**
+ * What the rehearsal says about a project's installed pforge-mcp test suite, from the report
+ * `vitest run --reporter=json` wrote: whether it passed and, when it did not, which tests failed.
+ * Before this the line named only the files, and a flaky test in a file of 9,000 tests could not
+ * be found from it (#457). `detail` is one line: at most eight failures, each at most 160
+ * characters, then a count of the rest. A report without the three counts is no report, as before.
+ *
+ * @param {object|null} report - the parsed vitest JSON report, or null when none was written
+ * @returns {{ ok: boolean, detail: string }}
+ */
+export function summarizeInstalledSuite(report) {
+  const counted = report && typeof report === "object"
+    && [report.numTotalTests, report.numFailedTests, report.numFailedTestSuites].every(Number.isInteger);
+  if (!counted) return { ok: false, detail: "no vitest report (see log)" };
+  const ok = report.numFailedTests === 0 && report.numFailedTestSuites === 0;
+  const counts = `${report.numFailedTests} failed of ${report.numTotalTests}`;
+  const failures = (report.testResults ?? []).flatMap(failuresOfFile);
+  if (failures.length === 0) {
+    const suites = report.numFailedTestSuites;
+    const failedSuites = suites > 0 ? `, ${suites} suite${suites === 1 ? "" : "s"} failed` : "";
+    return { ok, detail: ok ? counts : `${counts}${failedSuites}, none named (see the vitest report)` };
+  }
+  const rest = failures.length - MAX_FAILED_TESTS_LISTED;
+  return { ok, detail: `${counts}: ${failures.slice(0, MAX_FAILED_TESTS_LISTED).join("; ")}${rest > 0 ? `; and ${rest} more` : ""}` };
+}
+
 // ─── Versions and tags ──────────────────────────────────────────────────────
 
 export function isCleanVersion(version) {

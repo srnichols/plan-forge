@@ -3,8 +3,9 @@
  *
  * The rehearsal itself drives real installers for several minutes and runs in
  * the release-rehearsal workflow; these tests cover its decision logic: argument
- * parsing, version ordering, release-checks.json evaluation, and the tag-collision
- * preflight that would have stopped the 2026-04-28 retrograde re-release.
+ * parsing, version ordering, release-checks.json evaluation, the tag-collision
+ * preflight that would have stopped the 2026-04-28 retrograde re-release, and what
+ * it says about a failed installed suite (#457).
  */
 
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
@@ -13,7 +14,7 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "nod
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import {
-  Checks, checkTagCollision, compareVersions, evaluateFileCheck, parseArgs, previousTag, selectFileChecks,
+  Checks, checkTagCollision, compareVersions, evaluateFileCheck, parseArgs, previousTag, selectFileChecks, summarizeInstalledSuite,
 } from "../../scripts/release/harness.mjs";
 
 const REPO_ROOT = resolve(import.meta.dirname, "..", "..");
@@ -150,5 +151,179 @@ describe("tags (#128)", () => {
     checkTagCollision(checks, lonely, "1.0.0", "x");
     expect(checks.failed).toBe(0);
     expect(checks.lines[0]).toMatch(/origin unreachable/);
+  });
+});
+
+// ─── The installed suite (#457) ─────────────────────────────────────────────
+
+// A vitest JSON report as the rehearsal reads it, for a project the rehearsal installed under a temp directory.
+const installedPath = (relative) => `D:\\a\\_temp\\release-rehearsal\\fresh-ps\\pforge-mcp\\${relative.replace(/\//g, "\\")}`;
+const testOf = (title, status, ancestorTitles = []) => ({
+  ancestorTitles, title, status, fullName: [...ancestorTitles, title].join(" "),
+  failureMessages: status === "failed" ? ["AssertionError: expected 1 to deeply equal 2\n    at somewhere"] : [],
+});
+const fileOf = (relative, tests) => ({
+  name: installedPath(relative), status: tests.some((t) => t.status === "failed") ? "failed" : "passed", message: "", assertionResults: tests,
+});
+const reportOf = (files, counts = {}) => {
+  const all = files.flatMap((f) => f.assertionResults);
+  return {
+    numTotalTests: all.length,
+    numFailedTests: all.filter((t) => t.status === "failed").length,
+    numFailedTestSuites: files.filter((f) => f.status === "failed").length,
+    ...counts,
+    testResults: files,
+  };
+};
+
+describe("summarizeInstalledSuite (#457)", () => {
+  it("says only the count for a suite that passes, and does not list skipped or todo tests", () => {
+    const report = reportOf([fileOf("tests/a.test.mjs", [testOf("works", "passed", ["a"]), testOf("later", "skipped", ["a"]), testOf("someday", "todo", ["a"])])]);
+    expect(summarizeInstalledSuite(report)).toEqual({ ok: true, detail: "0 failed of 3" });
+  });
+
+  it("names the failed test: its file, its suites and its title, joined by >", () => {
+    const report = reportOf([
+      fileOf("tests/cost-service.test.mjs", [
+        testOf("prices a plan", "passed", ["cost-service"]),
+        testOf("estimatePlan matches buildEstimate — with quorum config enabled", "failed", ["cost-service: estimatePlan regression", "with a quorum"]),
+      ]),
+    ]);
+    expect(summarizeInstalledSuite(report)).toEqual({
+      ok: false,
+      detail: "1 failed of 2: tests/cost-service.test.mjs > cost-service: estimatePlan regression > with a quorum > estimatePlan matches buildEstimate — with quorum config enabled",
+    });
+  });
+
+  it("names the failed tests of each file, in the order the report has them", () => {
+    const report = reportOf([
+      fileOf("tests/a.test.mjs", [testOf("one", "failed", ["a"]), testOf("two", "passed", ["a"])]),
+      fileOf("tests/b.test.mjs", [testOf("three", "failed", ["b"])]),
+    ]);
+    expect(summarizeInstalledSuite(report).detail).toBe("2 failed of 3: tests/a.test.mjs > a > one; tests/b.test.mjs > b > three");
+  });
+
+  it("reads a Windows path and a POSIX path the same way", () => {
+    const windows = fileOf("tests/a.test.mjs", [testOf("fails", "failed", ["a"])]);
+    const posix = { ...windows, name: "/home/runner/work/_temp/release-rehearsal/fresh-ps/pforge-mcp/tests/a.test.mjs" };
+    expect(summarizeInstalledSuite(reportOf([windows])).detail).toBe("1 failed of 1: tests/a.test.mjs > a > fails");
+    expect(summarizeInstalledSuite(reportOf([posix])).detail).toBe("1 failed of 1: tests/a.test.mjs > a > fails");
+  });
+
+  it("lists at most eight failed tests and counts the rest", () => {
+    const many = Array.from({ length: 11 }, (_, index) => testOf(`case ${index + 1}`, "failed", ["s"]));
+    const { detail } = summarizeInstalledSuite(reportOf([fileOf("tests/many.test.mjs", many)]));
+    expect(detail.startsWith("11 failed of 11: tests/many.test.mjs > s > case 1; ")).toBe(true);
+    expect(detail).toContain("tests/many.test.mjs > s > case 8");
+    expect(detail).not.toContain("case 9");
+    expect(detail.endsWith("; and 3 more")).toBe(true);
+  });
+
+  it("does not count the rest when exactly eight failed", () => {
+    const eight = Array.from({ length: 8 }, (_, index) => testOf(`case ${index + 1}`, "failed", ["s"]));
+    const { detail } = summarizeInstalledSuite(reportOf([fileOf("tests/eight.test.mjs", eight)]));
+    expect(detail).toContain("case 8");
+    expect(detail).not.toContain("more");
+  });
+
+  it("puts a title with line breaks and tabs on one line", () => {
+    const { detail } = summarizeInstalledSuite(reportOf([fileOf("tests/lines.test.mjs", [testOf("first line\r\n   second\tline\nthird", "failed", ["s"])])]));
+    expect(detail).toBe("1 failed of 1: tests/lines.test.mjs > s > first line second line third");
+  });
+
+  it("drops the whitespace a title ends with", () => {
+    const { detail } = summarizeInstalledSuite(reportOf([fileOf("tests/trim.test.mjs", [testOf("trailing \n\t", "failed", ["s"])])]));
+    expect(detail).toBe("1 failed of 1: tests/trim.test.mjs > s > trailing");
+  });
+
+  it("cuts a long title to 160 characters and ends it with an ellipsis", () => {
+    const long = `a ${"very ".repeat(80)}long title`;
+    const { detail } = summarizeInstalledSuite(reportOf([fileOf("tests/long.test.mjs", [testOf(long, "failed", ["s"])])]));
+    const entry = detail.slice("1 failed of 1: ".length);
+    expect(entry).toHaveLength(160);
+    expect(entry.endsWith("…")).toBe(true);
+    expect(entry.startsWith("tests/long.test.mjs > s > a very very")).toBe(true);
+  });
+
+  it("keeps an entry of exactly 160 characters whole, and cuts one of 161", () => {
+    const entryFor = (length) => {
+      const prefix = "tests/edge.test.mjs > s > ";
+      return summarizeInstalledSuite(reportOf([fileOf("tests/edge.test.mjs", [testOf("x".repeat(length - prefix.length), "failed", ["s"])])])).detail.slice("1 failed of 1: ".length);
+    };
+    expect(entryFor(160)).toBe(`tests/edge.test.mjs > s > ${"x".repeat(160 - 26)}`);
+    expect(entryFor(161)).toBe(`tests/edge.test.mjs > s > ${"x".repeat(160 - 27)}…`);
+  });
+
+  it("falls back to the full name of a test the report gives no ancestor titles for", () => {
+    const bare = { title: "only a title", status: "failed", fullName: "suite only a title", failureMessages: [] };
+    expect(summarizeInstalledSuite(reportOf([fileOf("tests/bare.test.mjs", [bare])])).detail).toBe("1 failed of 1: tests/bare.test.mjs > suite only a title");
+  });
+
+  it("names a file that failed to load, with the first line of its message", () => {
+    const broken = { name: installedPath("tests/broken.test.mjs"), status: "failed", message: "SyntaxError: Unexpected token\n    at wrapSafe (node:internal/modules/cjs/loader:1)", assertionResults: [] };
+    expect(summarizeInstalledSuite(reportOf([broken]))).toEqual({ ok: false, detail: "0 failed of 0: tests/broken.test.mjs: SyntaxError: Unexpected token" });
+  });
+
+  it("names a file that failed to load and has no message", () => {
+    const broken = { name: installedPath("tests/silent.test.mjs"), status: "failed", message: "", assertionResults: [] };
+    expect(summarizeInstalledSuite(reportOf([broken])).detail).toBe("0 failed of 0: tests/silent.test.mjs");
+  });
+
+  it("fails a suite that failed with every test passing, and says so instead of reading 0 failed", () => {
+    const report = { numTotalTests: 5, numFailedTests: 0, numFailedTestSuites: 2, testResults: [] };
+    expect(summarizeInstalledSuite(report)).toEqual({ ok: false, detail: "0 failed of 5, 2 suites failed, none named (see the vitest report)" });
+    expect(summarizeInstalledSuite({ ...report, numFailedTestSuites: 1 }).detail).toBe("0 failed of 5, 1 suite failed, none named (see the vitest report)");
+  });
+
+  it("says when tests failed that the report does not name", () => {
+    const report = { numTotalTests: 9, numFailedTests: 3, numFailedTestSuites: 0, testResults: [{ name: installedPath("tests/a.test.mjs"), status: "failed", message: "", assertionResults: [] }] };
+    expect(summarizeInstalledSuite(report).detail).toBe("3 failed of 9: tests/a.test.mjs");
+    expect(summarizeInstalledSuite({ ...report, testResults: [] })).toEqual({ ok: false, detail: "3 failed of 9, none named (see the vitest report)" });
+  });
+
+  it("has no report to read when vitest wrote none, or wrote something without the three counts", () => {
+    for (const report of [null, undefined, "x", 3, {}, { numTotalTests: 1 }, { numFailedTests: 0 }, { numTotalTests: 1, numFailedTests: 0 }, { numTotalTests: "1", numFailedTests: 0, numFailedTestSuites: 0 }]) {
+      expect(summarizeInstalledSuite(report), String(JSON.stringify(report))).toEqual({ ok: false, detail: "no vitest report (see log)" });
+    }
+  });
+});
+
+describe("the rehearsal reports the installed suite through summarizeInstalledSuite (#457)", () => {
+  const rehearse = readFileSync(join(REPO_ROOT, "scripts/release/rehearse.mjs"), "utf8");
+
+  it("takes the verdict and the detail of each installed suite's check from the summary", () => {
+    expect(rehearse).toMatch(/import\s*\{[^}]*\bsummarizeInstalledSuite\b[^}]*\}\s*from\s*"\.\/harness\.mjs"/);
+    expect(rehearse).toMatch(/summarizeInstalledSuite\(/);
+    expect(rehearse).toMatch(/installed pforge-mcp test suite passes`,\s*\w+\.ok,\s*\w+\.detail/);
+  });
+
+  it("keeps no list of failed files of its own, which named no test", () => {
+    expect(rehearse).not.toContain("failedFiles");
+    expect(rehearse).not.toContain("MAX_FAILED_FILES_LISTED");
+  });
+});
+
+describe("the rehearsal workflow keeps the vitest reports of a failed run (#457)", () => {
+  const workflow = readFileSync(join(REPO_ROOT, ".github/workflows/release-rehearsal.yml"), "utf8").replace(/\r\n/g, "\n");
+  const rehearse = readFileSync(join(REPO_ROOT, "scripts/release/rehearse.mjs"), "utf8");
+
+  /** The `path:` lines of the step that uploads `artifact`: they end at the first blank line. */
+  function uploadedPaths(artifact) {
+    const start = workflow.indexOf(`name: ${artifact}`);
+    if (start < 0) return [];
+    const block = workflow.slice(start).split("\n\n")[0];
+    return block.split("\n").map((line) => line.trim()).filter((line) => line.startsWith("${{ runner.temp }}"));
+  }
+
+  it("uploads results.txt, the logs and the vitest report of each installed suite", () => {
+    expect(uploadedPaths("release-rehearsal-logs")).toEqual([
+      "${{ runner.temp }}/release-rehearsal/results.txt",
+      "${{ runner.temp }}/release-rehearsal/*.log",
+      "${{ runner.temp }}/release-rehearsal/*-vitest.json",
+    ]);
+  });
+
+  it("is looking for the file name the rehearsal writes", () => {
+    expect(rehearse).toContain("`${tag}-vitest.json`");
   });
 });

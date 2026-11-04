@@ -128,7 +128,9 @@ If the OpenBrain MCP server is available:
 
 ## Nested Subagent Invocation
 
-> **Requires**: VS Code setting `chat.subagents.allowInvocationsFromSubagents: true` in `.vscode/settings.json`
+> **Not run from this file.** This agent's `tools:` list names `agents`, which is not a tool name: the Copilot CLI ignores it, and VS Code, going by its source (not run), reads `agents` as a separate attribute, not as a tool. So, as shipped, it has no tool that starts another agent, and the steps below have not been run.
+>
+> **Requires**, if you add a tool that starts agents to `tools:`: VS Code setting `chat.subagents.allowInvocationsFromSubagents: true` in `.vscode/settings.json`
 
 After issuing a verdict, you may invoke the next agent as a subagent instead of waiting for a manual handoff click:
 
@@ -155,7 +157,7 @@ After issuing a verdict, you may invoke the next agent as a subagent instead of 
 **Escalation message after 2 failed cycles:**
 > "Two LOCKOUT cycles completed without resolving all 🔴 Critical findings. Human intervention required. Review the `## Amendments` section in the plan for details."
 
-If `chat.subagents.allowInvocationsFromSubagents` is not set, fall back to the **"Ship It →"** or **"Fix Issues →"** handoff buttons — they carry context automatically.
+If you cannot start an agent (you have no tool that does, or `chat.subagents.allowInvocationsFromSubagents` is not set), do not say that you are invoking one: fall back to the **"Ship It →"** or **"Fix Issues →"** handoff buttons — they carry context automatically.
 
 ## Constraints
 

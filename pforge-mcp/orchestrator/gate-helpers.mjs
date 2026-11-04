@@ -3,7 +3,7 @@
 import { readFileSync, existsSync, readdirSync, statSync } from "node:fs";
 import { execSync } from "node:child_process";
 import { resolve, basename, dirname, join, relative, extname, isAbsolute } from "node:path";
-import { parsePlan, normalizeSliceId, unreadDependencyEntries, isManualGateSlice, VALIDATION_GATE_MARKER_RE } from "./plan-parser.mjs";
+import { parsePlan, normalizeSliceId, unreadDependencyEntries, dependencyListText, isManualGateSlice, VALIDATION_GATE_MARKER_RE } from "./plan-parser.mjs";
 import { lintTaskFilesOutsideScope } from "./task-scope-lint.mjs";
 import { UNIX_TOOLS, resolveGateCommandToken } from "./constants.mjs";
 import { isGateLineAllowed, loadGateAllowedPrefixes, gateAllowlistAdvice } from "./gate-allowlist.mjs";
@@ -358,7 +358,7 @@ function _lintUnparsedDependencies(slice, warnings) {
   for (const line of body) {
     const m = String(line).match(DEPENDS_DECLARATION_RE);
     if (!m) continue;
-    const phrase = (m[1] || "").trim();
+    const phrase = dependencyListText(m[1] || "").trim();
     if (NO_VALUE_RE.test(phrase) || !DEPENDS_NAMES_SLICE_RE.test(phrase)) continue;
     warnings.push({
       slice: slice.number,

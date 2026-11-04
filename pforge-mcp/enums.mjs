@@ -73,7 +73,7 @@ export const ERROR_CODES = Object.freeze({
   NO_ISSUE_NUMBER: freezeErrorCode("NO_ISSUE_NUMBER", "medium", "GitHub issue number is missing from the external reference. Re-sync the external issue metadata."),
   NO_REASONING_MODEL: freezeErrorCode("NO_REASONING_MODEL", "high", "Forge-Master has no model configured and no provider key available. Set forgeMaster.reasoningModel or configure a provider key."),
   NO_REPO: freezeErrorCode("NO_REPO", "medium", "GitHub repository could not be resolved from config or remotes. Set bugRegistry.githubRepo or add a Git remote."),
-  NO_TOKEN: freezeErrorCode("NO_TOKEN", "medium", "GitHub token is missing. Set GITHUB_TOKEN, configure .forge/secrets.json, or run gh auth login."),
+  NO_TOKEN: freezeErrorCode("NO_TOKEN", "medium", "GitHub token is missing. Set GITHUB_TOKEN or GH_TOKEN, configure .forge/secrets.json, or run gh auth login."),
   OBSERVER_BUDGET_EXCEEDED: freezeErrorCode("observer-budget-exceeded", "medium", "Forge-Master Observer hit its daily USD cap or hourly narration cap. Wait for the budget window to reset or widen the cap in .forge.json."),
   PLAN_ALREADY_EXISTS: freezeErrorCode("PLAN_ALREADY_EXISTS", "medium", "Refused to overwrite an existing hand-authored plan. Read both files, then re-finalize with overwrite: true if you really mean it."),
   PLAN_NOT_FOUND: freezeErrorCode("PLAN_NOT_FOUND", "medium", "Plan path doesn't exist or is outside the workspace. Verify the path and keep plans under docs/plans by convention."),

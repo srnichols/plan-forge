@@ -1792,7 +1792,7 @@ export const TOOL_METADATA = {
     cost: "low",
     maxConcurrent: 5,
     addedIn: "2.62.2",
-    prerequisites: ["gh CLI authenticated OR GITHUB_TOKEN"],
+    prerequisites: ["gh CLI authenticated OR GITHUB_TOKEN OR GH_TOKEN"],
     produces: ["GitHub issue (or comment on existing issue)"],
     consumes: [".forge.json", ".forge/trajectories/**"],
     sideEffects: [
@@ -1802,7 +1802,7 @@ export const TOOL_METADATA = {
     network: true,
     risk: "low",
     errors: {
-      NO_TOKEN: { message: "No GitHub token available", recovery: "Set GITHUB_TOKEN env var, add to .forge/secrets.json, or authenticate with gh CLI" },
+      NO_TOKEN: { message: "No GitHub token available", recovery: "Set GITHUB_TOKEN or GH_TOKEN in the environment the MCP server was started with (a server reads its environment once, so restart it after changing it), add github.token to .forge/secrets.json, or run `gh auth login`. The response's `message` names each source tried and why it had no token." },
       NO_REPO: { message: "Could not resolve target repository", recovery: "Set meta.selfRepairRepo in .forge.json (e.g. 'owner/repo')" },
       CREATE_FAILED: { message: "GitHub issue creation failed", recovery: "Check token permissions and repository access" },
       INVALID_CLASS: { message: "Bug class not in META_BUG_CLASSES enum", recovery: "Use one of: plan-defect, orchestrator-defect, prompt-defect" },

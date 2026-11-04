@@ -376,23 +376,59 @@ function appendValidationGateText(current, body) {
 const DEPENDENCY_SEPARATOR_RE = /([()])|\s*(?:,|;|&|\+|\band\b)\s*/gi;
 
 /**
+ * A bold label that opens the next field on the line: "**Blocks**:" or
+ * "**Blocks:**". Bold text with no colon, such as the decision reference
+ * "**D-C1**", belongs to the list, and so does a bold span that begins with a
+ * slice id and has one ("**Slice 2**: x", "**S2**: x"): that is an entry of the
+ * list, which the reader leaves unread and the gate linter reports, and no field
+ * is ever named "Slice 2". A bare number is no slice id here. When it is unclear
+ * whether bold text is a label the list ends, because a dependency read from a
+ * label closes a loop (#453), and one dropped only leaves the slice in order.
+ * Group 1 is a parenthesis, which the reader of the list tracks to skip
+ * commentary.
+ */
+const DEPENDENCY_LIST_END_RE = /([()])|\*\*(?!\s*(?:slices?\s*|s)\d)[^*\n]+?(?::\*\*|\*\*\s*:)/gi;
+
+/**
+ * The part of a `**Depends On**:` value that is the list: it ends at the next
+ * bold label on the line, outside parentheses. "Prereqs green. **Blocks**: 2, 3."
+ * lists nothing; the 3 used to be read as a dependency, which closed a loop with
+ * the slice that waits on this one (meta-bug #453). The gate linter reads the list
+ * through this too, so it and the parser cannot disagree.
+ *
+ * @param {string} text - what follows the `**Depends On**:` label
+ * @returns {string}
+ */
+export function dependencyListText(text) {
+  const value = String(text);
+  let depth = 0;
+  for (const match of value.matchAll(DEPENDENCY_LIST_END_RE)) {
+    if (match[1] === "(") depth++;
+    else if (match[1] === ")") depth = Math.max(0, depth - 1);
+    else if (depth === 0) return value.slice(0, match.index);
+  }
+  return value;
+}
+
+/**
  * Split a dependency list at its separators, but not inside parentheses:
  * "(none — parallel to Slices 4, 5)" is one commentary phrase, and splitting
  * its comma used to leak a dependency on 5 (meta-bug #362).
  */
 function splitDependencyList(text) {
+  const list = dependencyListText(text);
   const parts = [];
   let depth = 0;
   let start = 0;
-  for (const match of String(text).matchAll(DEPENDENCY_SEPARATOR_RE)) {
+  for (const match of list.matchAll(DEPENDENCY_SEPARATOR_RE)) {
     if (match[1] === "(") depth++;
     else if (match[1] === ")") depth = Math.max(0, depth - 1);
     else if (depth === 0) {
-      parts.push(text.slice(start, match.index));
+      parts.push(list.slice(start, match.index));
       start = match.index + match[0].length;
     }
   }
-  parts.push(text.slice(start));
+  parts.push(list.slice(start));
   return parts;
 }
 
@@ -1140,10 +1176,39 @@ function topologicalSort(nodes) {
   }
 
   if (order.length !== nodes.size) {
-    throw new Error("Cycle detected in slice dependencies — cannot build DAG");
+    throw new Error(
+      `Cycle detected in slice dependencies — cannot build DAG: ${describeDependencyCycle(nodes, order)}. ` +
+      `Check the Depends On line or [depends: ...] tag of each.`,
+    );
   }
 
   return order;
+}
+
+/**
+ * The slices that wait on each other, as a sentence: "slice 1 depends on slice 3,
+ * which depends on slice 1" (meta-bug #453). Kahn's algorithm leaves every slice
+ * it could not order with a dependency that is also left over, so following those
+ * from the lowest slice left reaches a loop. A slice that only waits on the loop
+ * is left over too and is not named. A plan that repeats a slice number can leave
+ * a slice whose recorded dependencies name none, and then only the ids are listed.
+ */
+function describeDependencyCycle(nodes, order) {
+  const ordered = new Set(order);
+  const left = [...nodes.keys()].filter((id) => !ordered.has(id)).sort(compareSliceIds);
+  const leftIds = new Set(left);
+  const position = new Map();
+  const path = [];
+  let id = left[0];
+  while (id !== undefined && !position.has(id)) {
+    position.set(id, path.length);
+    path.push(id);
+    id = nodes.get(id).depends.filter((dep) => leftIds.has(dep)).sort(compareSliceIds)[0];
+  }
+  if (id === undefined) return `slices ${left.join(", ")} cannot be ordered`;
+  const [first, ...rest] = path.slice(position.get(id));
+  if (rest.length === 0) return `slice ${first} depends on itself`;
+  return `slice ${first} depends on ${[...rest, first].map((sliceId) => `slice ${sliceId}`).join(", which depends on ")}`;
 }
 
 

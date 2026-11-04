@@ -105,9 +105,15 @@ function makeFetchError(status, headers = {}) {
 
 describe("Token resolution", () => {
   const origToken = process.env.GITHUB_TOKEN;
+  const origGhToken = process.env.GH_TOKEN;
+  beforeEach(() => {
+    delete process.env.GH_TOKEN;
+  });
   afterEach(() => {
     if (origToken !== undefined) process.env.GITHUB_TOKEN = origToken;
     else delete process.env.GITHUB_TOKEN;
+    if (origGhToken !== undefined) process.env.GH_TOKEN = origGhToken;
+    else delete process.env.GH_TOKEN;
   });
 
   it("resolves from GITHUB_TOKEN env first", () => {

@@ -92,6 +92,8 @@ Validate that setup completed correctly. Delegates to `validate-setup.ps1` / `va
 1. Run `.\validate-setup.ps1`
 2. Review the output for any missing files
 
+**Agent tool names.** For each `.github/agents/*.agent.md`, `check` reads the `tools:` list and warns about a name that gives the agent less in the Copilot CLI than the file lists: `editFiles` (the agent can edit a file but cannot create one), `run_in_terminal` (no shell) and `read_file` (no tool of that name), which Plan Forge itself shipped before 3.35.7. `pforge update` replaces an agent file you have not edited and keeps one you edited, with the new copy under `.forge/update-pending/`, so a kept file is the one this finds. Change the name to the one the warning gives. `forge_validate` runs the same check.
+
 ---
 
 ### `pforge status`

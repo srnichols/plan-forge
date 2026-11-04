@@ -85,4 +85,27 @@ describe("consumer test surface (#249)", () => {
       vi.resetModules();
     }
   });
+
+  // #449: the agent-tool suites read the agent files under templates/ and presets/, which a project never gets, and the
+  // validate-setup one runs the framework's own validate-setup. Left out of the map, `npm test` goes red in every project.
+  it("excludes the agent-tool suites in a project that has none of the templates they read (#449)", async () => {
+    const agentTemplate = fileURLToPath(new URL("../../templates/.github/agents/executor.agent.md", import.meta.url));
+    vi.doMock("node:fs", async (importOriginal) => {
+      const original = await importOriginal();
+      return {
+        ...original,
+        existsSync: (file) => file === agentTemplate ? false : original.existsSync(file),
+      };
+    });
+    vi.resetModules();
+    try {
+      const { SOURCE_ONLY_EXCLUDES: consumerExcludes } = await import("../vitest.config.mjs");
+      expect(consumerExcludes).toContain("tests/agent-tools.test.mjs");
+      expect(consumerExcludes).toContain("tests/validate-setup-agent-tools.test.mjs");
+      expect(consumerExcludes).not.toContain("tests/memory-provenance.test.mjs");
+    } finally {
+      vi.doUnmock("node:fs");
+      vi.resetModules();
+    }
+  });
 });

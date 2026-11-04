@@ -4,7 +4,7 @@
  * Syncs bugs discovered by tempering scanners to GitHub Issues.
  * All public functions return structured results and never throw.
  *
- * Token resolution priority: GITHUB_TOKEN env → .forge/secrets.json → `gh auth token`
+ * Token resolution priority: GITHUB_TOKEN or GH_TOKEN env → .forge/secrets.json → `gh auth token`
  * Issue creation: tries `gh issue create` first, falls back to REST API.
  *
  * @module tempering/bug-adapters/github
@@ -14,56 +14,93 @@ import { resolve } from "node:path";
 import { existsSync, readFileSync } from "node:fs";
 import { createHash } from "node:crypto";
 import { ERROR_CODES } from "../../enums.mjs";
+import { findUnusableTokenVariable, resolveGitHubToken as readTokenFromEnv } from "../../github-request.mjs";
 import { createIssueViaGhCli, findOpenIssueByHashViaGhCli } from "../gh-cli.mjs";
 
 // ─── Helpers (exported for tests) ─────────────────────────────────────
 
+const GH_AUTH_TOKEN_TIMEOUT_MS = 10_000;
+const MS_PER_SECOND = 1000;
+const STDERR_EXCERPT_CHARS = 120;
+// A token that a failing command printed must not travel into the answer that reports the failure.
+const TOKEN_SHAPED = /\b(?:gh[pousr]_|github_pat_)[A-Za-z0-9_]{8,}|\b[0-9a-f]{40}\b/g;
+
+function tokenFromEnv(env) {
+  const token = readTokenFromEnv(env);
+  if (token) return { token, source: "env" };
+  const unusable = findUnusableTokenVariable(env);
+  return {
+    miss: unusable
+      ? `${unusable} is set but is not a usable token (a token has no spaces and only printable ASCII characters)`
+      : "GITHUB_TOKEN and GH_TOKEN are not set in this process",
+  };
+}
+
+function tokenFromSecretsFile(cwd) {
+  const secretsPath = resolve(cwd, ".forge", "secrets.json");
+  if (!existsSync(secretsPath)) return { miss: ".forge/secrets.json was not found" };
+  try {
+    const token = JSON.parse(readFileSync(secretsPath, "utf-8"))?.github?.token;
+    return token ? { token, source: "secrets.json" } : { miss: ".forge/secrets.json has no github.token" };
+  } catch {
+    return { miss: ".forge/secrets.json could not be read as JSON" };
+  }
+}
+
+function describeGhFailure(error) {
+  if (error?.code === "ETIMEDOUT") return `timed out after ${GH_AUTH_TOKEN_TIMEOUT_MS / MS_PER_SECOND} s`;
+  if (typeof error?.status !== "number") return `could not run${error?.code ? ` (${error.code})` : ""}`;
+  const firstLine = String(error.stderr ?? "").replace(TOKEN_SHAPED, "[redacted]").split(/\r?\n/).find((line) => line.trim() !== "");
+  const status = `exited with status ${error.status}`;
+  return firstLine ? `${status}: ${firstLine.trim().slice(0, STDERR_EXCERPT_CHARS)}` : status;
+}
+
+function tokenFromGhCli({ execSync, cwd }) {
+  if (typeof execSync !== "function") return { miss: "`gh auth token` was not run (no command runner was given)" };
+  try {
+    const output = execSync("gh auth token", {
+      encoding: "utf-8",
+      timeout: GH_AUTH_TOKEN_TIMEOUT_MS,
+      stdio: ["pipe", "pipe", "pipe"],
+      cwd,
+    });
+    const token = String(output ?? "").trim();
+    return token ? { token, source: "gh-cli" } : { miss: "`gh auth token` printed no token" };
+  } catch (error) {
+    return { miss: `\`gh auth token\` ${describeGhFailure(error)}` };
+  }
+}
+
+function noTokenMessage(misses) {
+  return `No GitHub token: ${misses.join("; ")}. Set GITHUB_TOKEN or GH_TOKEN in the environment this process was started with, add github.token to .forge/secrets.json, or run \`gh auth login\`.`;
+}
+
 /**
  * Resolve a GitHub token from multiple sources.
- * Priority: GITHUB_TOKEN env → .forge/secrets.json#github.token → `gh auth token`
+ * Priority: GITHUB_TOKEN or GH_TOKEN env (github-request.mjs owns the names and their order)
+ * → .forge/secrets.json#github.token → `gh auth token`.
+ *
+ * When no source has a token, `message` says which were tried and why each had none, so a caller can show it.
  *
  * @param {object} config
  * @param {object} [deps]
  * @param {Function} [deps.execSync]
  * @param {string} [deps.cwd]
- * @returns {{ token: string, source: string } | { token: null, error: string }}
+ * @param {Record<string, string|undefined>} [deps.env] - defaults to process.env
+ * @returns {{ token: string, source: string } | { token: null, error: string, message: string }}
  */
-export function resolveGitHubToken(config, { execSync, cwd } = {}) {
-  // 1. Environment variable
-  const envToken = process.env.GITHUB_TOKEN;
-  if (envToken) {
-    return { token: envToken, source: "env" };
-  }
+export function resolveGitHubToken(config, { execSync, cwd, env = process.env } = {}) {
+  const attempts = [() => tokenFromEnv(env)];
+  if (cwd) attempts.push(() => tokenFromSecretsFile(cwd));
+  attempts.push(() => tokenFromGhCli({ execSync, cwd }));
 
-  // 2. .forge/secrets.json
-  if (cwd) {
-    const secretsPath = resolve(cwd, ".forge", "secrets.json");
-    try {
-      if (existsSync(secretsPath)) {
-        const secrets = JSON.parse(readFileSync(secretsPath, "utf-8"));
-        if (secrets?.github?.token) {
-          return { token: secrets.github.token, source: "secrets.json" };
-        }
-      }
-    } catch { /* malformed JSON — skip */ }
+  const misses = [];
+  for (const attempt of attempts) {
+    const found = attempt();
+    if (found.token) return found;
+    misses.push(found.miss);
   }
-
-  // 3. gh auth token subprocess
-  if (typeof execSync === "function") {
-    try {
-      const token = execSync("gh auth token", {
-        encoding: "utf-8",
-        timeout: 10_000,
-        stdio: ["pipe", "pipe", "pipe"],
-        cwd,
-      }).trim();
-      if (token) {
-        return { token, source: "gh-cli" };
-      }
-    } catch { /* gh not installed or not logged in */ }
-  }
-
-  return { token: null, error: ERROR_CODES.NO_TOKEN.code };
+  return { token: null, error: ERROR_CODES.NO_TOKEN.code, message: noTokenMessage(misses) };
 }
 
 /**
@@ -636,7 +673,7 @@ async function _createNewMetaBug({ repoInfo, issueTitle, body, labels, tokenResu
   return { ok: true, issueNumber: result.issueNumber, url: result.url, deduped: false, hash };
 }
 
-export async function fileMetaBug(params, config, { execSync: execSyncFn, execFile: execFileFn, fetch: fetchFn = globalThis.fetch, cwd } = {}) {
+export async function fileMetaBug(params, config, { execSync: execSyncFn, execFile: execFileFn, fetch: fetchFn = globalThis.fetch, cwd, env } = {}) {
   try {
     const bugClass = params?.class;
     const title = params?.title;
@@ -646,9 +683,9 @@ export async function fileMetaBug(params, config, { execSync: execSyncFn, execFi
       return { ok: false, error: ERROR_CODES.MISSING_REQUIRED_FIELDS.code };
     }
 
-    const tokenResult = resolveGitHubToken(config, { execSync: execSyncFn, cwd });
+    const tokenResult = resolveGitHubToken(config, { execSync: execSyncFn, cwd, env });
     if (!tokenResult.token) {
-      return { ok: false, error: ERROR_CODES.NO_TOKEN.code };
+      return { ok: false, error: tokenResult.error, message: tokenResult.message };
     }
 
     const repoInfo = resolveSelfRepairRepo(config);

@@ -75,6 +75,7 @@ function stubTokenEnv() {
 
 function clearTokenEnv() {
   delete process.env.GITHUB_TOKEN;
+  delete process.env.GH_TOKEN;
 }
 
 // ─── Tests ────────────────────────────────────────────────────────────

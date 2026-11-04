@@ -12,15 +12,14 @@
  *   - Never throws — all paths return structured `{ ok, ... }`
  *   - No side effects beyond GitHub issue creation
  *   - Dedup window: 7 days (same hash in an open issue = comment instead)
- *   - Token resolution: env → .forge/secrets.json → gh auth token
+ *   - Token resolution: the bug adapter's (GITHUB_TOKEN or GH_TOKEN → .forge/secrets.json → gh auth token)
  *
  * @module tempering/classifier-issue
  */
 
 import { createHash } from "node:crypto";
-import { existsSync, readFileSync } from "node:fs";
-import { resolve } from "node:path";
 import { ERROR_CODES } from "../enums.mjs";
+import { resolveGitHubToken } from "./bug-adapters/github.mjs";
 import { createIssueViaGhCli, findOpenIssueByHashViaGhCli } from "./gh-cli.mjs";
 
 // ─── Labels ──────────────────────────────────────────────────────────────────
@@ -97,31 +96,7 @@ export function buildClassifierIssueBody(payload, hash) {
   return lines.join("\n");
 }
 
-// ─── Token + repo resolution (mirrors bug-adapters/github.mjs) ───────────────
-
-function resolveToken(config, { execSync: execSyncFn, cwd } = {}) {
-  const envToken = process.env.GITHUB_TOKEN;
-  if (envToken) return { token: envToken, source: "env" };
-
-  if (cwd) {
-    const secretsPath = resolve(cwd, ".forge", "secrets.json");
-    try {
-      if (existsSync(secretsPath)) {
-        const s = JSON.parse(readFileSync(secretsPath, "utf-8"));
-        if (s?.github?.token) return { token: s.github.token, source: "secrets.json" };
-      }
-    } catch { /* malformed */ }
-  }
-
-  if (typeof execSyncFn === "function") {
-    try {
-      const t = execSyncFn("gh auth token", { encoding: "utf-8", timeout: 10_000, stdio: ["pipe", "pipe", "pipe"], cwd }).trim();
-      if (t) return { token: t, source: "gh-cli" };
-    } catch { /* gh not available */ }
-  }
-
-  return { token: null, error: ERROR_CODES.NO_TOKEN.code };
-}
+// ─── Repo resolution (mirrors bug-adapters/github.mjs) ───────────────────────
 
 function resolveRepo(config, { execSync: execSyncFn, cwd } = {}) {
   const cfgRepo = config?.bugRegistry?.githubRepo;
@@ -232,9 +207,9 @@ export async function fileClassifierIssue(payload, config, {
   try {
     const hash = computeClassifierIssueHash(payload.findingClass, payload.reason);
 
-    const tokenResult = resolveToken(config, { execSync: execSyncFn, cwd });
+    const tokenResult = resolveGitHubToken(config, { execSync: execSyncFn, cwd });
     if (!tokenResult.token) {
-      return { ok: false, error: ERROR_CODES.NO_TOKEN.code, message: "No GitHub token — set GITHUB_TOKEN, .forge/secrets.json#github.token, or run `gh auth login`." };
+      return { ok: false, error: tokenResult.error, message: tokenResult.message };
     }
 
     const repoInfo = resolveRepo(config, { execSync: execSyncFn, cwd });

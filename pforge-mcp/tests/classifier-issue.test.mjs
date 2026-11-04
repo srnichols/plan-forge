@@ -137,7 +137,9 @@ const BASE_PAYLOAD = {
 describe("fileClassifierIssue — no token", () => {
   it("returns ok:false with NO_TOKEN when no token available", async () => {
     const origEnv = process.env.GITHUB_TOKEN;
+    const origGhToken = process.env.GH_TOKEN;
     delete process.env.GITHUB_TOKEN;
+    delete process.env.GH_TOKEN;
     const result = await fileClassifierIssue(BASE_PAYLOAD, {}, {
       execSync: () => { throw new Error("no gh"); },
       fetch: undefined,
@@ -146,6 +148,7 @@ describe("fileClassifierIssue — no token", () => {
     expect(result.ok).toBe(false);
     expect(result.error).toBe("NO_TOKEN");
     if (origEnv !== undefined) process.env.GITHUB_TOKEN = origEnv;
+    if (origGhToken !== undefined) process.env.GH_TOKEN = origGhToken;
   });
 });
 

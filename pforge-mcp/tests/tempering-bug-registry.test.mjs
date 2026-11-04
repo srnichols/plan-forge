@@ -675,7 +675,14 @@ describe("registerBug — dispatch integration", () => {
 
   it("returns local success when external dispatch fails (non-fatal)", async () => {
     const origToken = process.env.GITHUB_TOKEN;
+    const origGhToken = process.env.GH_TOKEN;
     delete process.env.GITHUB_TOKEN;
+    delete process.env.GH_TOKEN;
+    let requests = 0;
+    const recordRequest = async () => {
+      requests++;
+      return { ok: false, status: 500, json: async () => ({}), headers: { get: () => null } };
+    };
     try {
       const result = await registerBug({
         cwd: dir,
@@ -686,15 +693,19 @@ describe("registerBug — dispatch integration", () => {
         classification: "real-bug",
         classifierMeta: {},
         config: { bugRegistry: { integration: "github", autoCreateIssues: true, githubRepo: "o/r" } },
+        fetch: recordRequest,
       });
       expect(result.ok).toBe(true);
       expect(result.bugId).toMatch(/^bug-/);
       // Bug file still written even though external failed
       const bug = loadBug(dir, result.bugId);
       expect(bug).not.toBeNull();
+      expect(requests, "with no token, no request is sent, whatever the environment holds").toBe(0);
     } finally {
       if (origToken !== undefined) process.env.GITHUB_TOKEN = origToken;
       else delete process.env.GITHUB_TOKEN;
+      if (origGhToken !== undefined) process.env.GH_TOKEN = origGhToken;
+      else delete process.env.GH_TOKEN;
     }
   });
 

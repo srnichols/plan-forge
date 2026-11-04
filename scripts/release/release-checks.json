@@ -230,6 +230,17 @@
     { "label": "A hook has two minutes to load the whole server before it times out (3.35.7)", "path": "pforge-mcp/vitest.config.mjs", "contains": "hookTimeout: 120000" },
     { "label": "The update baseline test compares with its committed baseline instead of rewriting it (3.35.7)", "path": "pforge-mcp/tests/update-plan-baseline.test.mjs", "contains": "checkBaseline" },
     { "label": "Instruction files ship from the preset catalog's two lists, and a suite fails for one that is on neither (3.35.7)", "path": "pforge-mcp/tests/instruction-distribution.test.mjs", "contains": "MAINTAINER_ONLY" },
-    { "label": "The Swift Test Runner lists the tools the other presets' test runners do, so it has a shell and can run a test (3.35.7)", "path": ".github/agents/test-runner.agent.md", "preset": "swift", "contains": "tools: [read, search, runCommands]" }
+    { "label": "The Swift Test Runner lists the tools the other presets' test runners do, so it has a shell and can run a test (3.35.7)", "path": ".github/agents/test-runner.agent.md", "preset": "swift", "contains": "tools: [read, search, runCommands]" },
+    { "label": "The optional @azure/identity is asked for at 4.14.1 or later, which takes an @azure/msal-node without GHSA-xcx6-jx8p-x3h5 (#418) (3.35.8)", "path": "pforge-mcp/package.json", "contains": "\"@azure/identity\": \"^4.14.1\"" },
+    { "label": "The pforge-mcp lock holds @azure/msal-node 7.1.2, past the advisory's fix (#418) (3.35.8)", "path": "pforge-mcp/package-lock.json", "contains": "msal-node-7.1.2.tgz" },
+    { "label": "validate-setup.sh warns about an agent tool name that fails in the Copilot CLI (3.35.8)", "path": "validate-setup.sh", "contains": "agent_tool_problem()" },
+    { "label": "validate-setup.ps1 warns about an agent tool name that fails in the Copilot CLI (3.35.8)", "path": "validate-setup.ps1", "contains": "AgentToolProblems" },
+    { "label": "The smith-golden test runs its testbed comparison only when asked, and writes nothing (3.35.8)", "path": "pforge-mcp/tests/smith-golden.test.mjs", "contains": "PFORGE_SMITH_GOLDEN" },
+    { "label": "A test loads the optional @azure/identity and its @azure/msal-node the way Plan Forge does (3.35.8)", "path": "pforge-mcp/tests/azure-identity-loads.test.mjs", "contains": "DefaultAzureCredential" },
+    { "label": "A Depends On list ends at the next bold label, so a Blocks clause on its line is not read as dependencies (#453) (3.35.8)", "path": "pforge-mcp/orchestrator/plan-parser.mjs", "contains": "export function dependencyListText" },
+    { "label": "Gate lint reads a Depends On list through the parser's function, so the two cannot disagree (#453) (3.35.8)", "path": "pforge-mcp/orchestrator/gate-helpers.mjs", "contains": "dependencyListText(m[1]" },
+    { "label": "A dependency cycle error names the slices on the loop (#453) (3.35.8)", "path": "pforge-mcp/orchestrator/plan-parser.mjs", "contains": "function describeDependencyCycle" },
+    { "label": "The bug adapter takes its token variables from github-request.mjs, so GH_TOKEN works for forge_meta_bug_file (3.35.8)", "path": "pforge-mcp/tempering/bug-adapters/github.mjs", "contains": "readTokenFromEnv" },
+    { "label": "The classifier lane keeps no copy of the GitHub token chain (3.35.8)", "path": "pforge-mcp/tempering/classifier-issue.mjs", "notContains": "process.env.GITHUB_TOKEN" }
   ]
 }

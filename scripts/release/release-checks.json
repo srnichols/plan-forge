@@ -241,6 +241,10 @@
     { "label": "Gate lint reads a Depends On list through the parser's function, so the two cannot disagree (#453) (3.35.8)", "path": "pforge-mcp/orchestrator/gate-helpers.mjs", "contains": "dependencyListText(m[1]" },
     { "label": "A dependency cycle error names the slices on the loop (#453) (3.35.8)", "path": "pforge-mcp/orchestrator/plan-parser.mjs", "contains": "function describeDependencyCycle" },
     { "label": "The bug adapter takes its token variables from github-request.mjs, so GH_TOKEN works for forge_meta_bug_file (3.35.8)", "path": "pforge-mcp/tempering/bug-adapters/github.mjs", "contains": "readTokenFromEnv" },
-    { "label": "The classifier lane keeps no copy of the GitHub token chain (3.35.8)", "path": "pforge-mcp/tempering/classifier-issue.mjs", "notContains": "process.env.GITHUB_TOKEN" }
+    { "label": "The classifier lane keeps no copy of the GitHub token chain (3.35.8)", "path": "pforge-mcp/tempering/classifier-issue.mjs", "notContains": "process.env.GITHUB_TOKEN" },
+    { "label": "The Specifier agent says its nested-subagent steps have not been run from the shipped file, because `agents` is not a tool name (#455) (3.35.9)", "path": ".github/agents/specifier.agent.md", "contains": "**Not run from this file.**" },
+    { "label": "The Plan Hardener agent says its nested-subagent steps have not been run from the shipped file, because `agents` is not a tool name (#455) (3.35.9)", "path": ".github/agents/plan-hardener.agent.md", "contains": "**Not run from this file.**" },
+    { "label": "The Executor agent says its nested-subagent steps have not been run from the shipped file, because `agents` is not a tool name (#455) (3.35.9)", "path": ".github/agents/executor.agent.md", "contains": "**Not run from this file.**" },
+    { "label": "The Reviewer Gate agent says its nested-subagent steps have not been run from the shipped file, because `agents` is not a tool name (#455) (3.35.9)", "path": ".github/agents/reviewer-gate.agent.md", "contains": "**Not run from this file.**" }
   ]
 }

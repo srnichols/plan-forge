@@ -102,6 +102,7 @@ describe("consumer test surface (#249)", () => {
       const { SOURCE_ONLY_EXCLUDES: consumerExcludes } = await import("../vitest.config.mjs");
       expect(consumerExcludes).toContain("tests/agent-tools.test.mjs");
       expect(consumerExcludes).toContain("tests/validate-setup-agent-tools.test.mjs");
+      expect(consumerExcludes).toContain("tests/meta-455-nested-subagent-docs.test.mjs");
       expect(consumerExcludes).not.toContain("tests/memory-provenance.test.mjs");
     } finally {
       vi.doUnmock("node:fs");

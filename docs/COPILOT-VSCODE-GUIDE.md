@@ -2,7 +2,7 @@
 
 > **Purpose**: Practical guide for running the Plan Forge Pipeline using GitHub Copilot's Agent Mode in VS Code
 > **Audience**: Developers using GitHub Copilot (free, Pro, or Enterprise) in VS Code
-> **Last Updated**: 2026-04-07
+> **Last Updated**: 2026-11-04
 
 ---
 
@@ -35,7 +35,7 @@
 | **GitHub Copilot** | Free, Pro, or Enterprise plan |
 | **Copilot Chat extension** | Latest version (auto-updates) |
 | **Agent Mode** | Enabled (Settings → `github.copilot.chat.agent.enabled`) |
-| **Nested subagents** *(optional)* | `chat.subagents.allowInvocationsFromSubagents: true` — required for single-session pipeline; manual handoff works without it |
+| **Nested subagents** *(optional; the shipped agents do not use it)* | `chat.subagents.allowInvocationsFromSubagents: true` — only matters once an agent can start another, which the shipped pipeline agents cannot (see [Single-Session Pipeline](#single-session-pipeline-with-nested-subagents)); manual handoff works without it |
 
 ### Verify Setup
 
@@ -179,13 +179,19 @@ Monitor at `localhost:3100/dashboard` for live slice progress, cost tracking, an
 
 ## Single-Session Pipeline with Nested Subagents
 
+> **Status: designed, not run.** The pipeline agents are written to start each other as nested subagents, but the agent files Plan Forge ships give them no tool that starts an agent, so this chain has not been run from them. Move between agents with the [handoff buttons](#fallback-manual-handoff), or start each session yourself as [the workflow above](#the-3-session-workflow-in-practice) describes. What follows is the design, kept for when the agents are given that tool ([#455](https://github.com/srnichols/plan-forge/issues/455)).
+
 > **VS Code requirement**: `chat.subagents.allowInvocationsFromSubagents: true` (see [Prerequisites](#prerequisites))
 
-The 6 pipeline agents can run end-to-end in a **single session** by invoking each other as nested subagents. This collapses what would otherwise be 4 separate sessions into one continuous run — no manual handoff clicks required.
+The pipeline agents are written so that they could run end-to-end in a **single session** by invoking each other as nested subagents. That would collapse what are otherwise 4 separate sessions into one continuous run, with no manual handoff clicks.
+
+### Why It Does Not Run Today
+
+Each pipeline agent lists `agents` in its `tools:`, and `agents` is not a tool name. Measured with Copilot CLI 1.0.106 on 2026-11-03: an agent that lists `agents` gets no tool that starts another agent, and one that lists `agent` gets `task`, `read_agent`, `write_agent` and `list_agents`. In VS Code 1.144.1, read from its source and not run, `agents` is a separate frontmatter attribute, an unknown tool name is ignored with a hint, and the tool that starts a subagent is named `agent`. The `tools:` lists are left as they are: whether to change them is a design decision ([#455](https://github.com/srnichols/plan-forge/issues/455)).
 
 ### How It Works
 
-Each agent invokes the next automatically after completing its phase:
+Each agent is written to invoke the next after completing its phase:
 
 ```
 Single session:
@@ -196,7 +202,7 @@ Single session:
                                               ──subagent──► Shipper
 ```
 
-The plan file path is passed from agent to agent so context flows without any copy-pasting.
+The plan file path would be passed from agent to agent, so context would flow without any copy-pasting.
 
 ### Enable Nested Subagents
 
@@ -206,18 +212,20 @@ Add this to `.vscode/settings.json` (already included in `templates/vscode-setti
 "chat.subagents.allowInvocationsFromSubagents": true
 ```
 
-Without this setting, agents still display **handoff buttons** at the end of each phase — context carries over automatically when you click them.
+Without this setting, agents still display **handoff buttons** at the end of each phase — context carries over automatically when you click them. Setting it does not make the shipped agents start each other (see [Why It Does Not Run Today](#why-it-does-not-run-today)).
 
 ### Starting a Single-Session Pipeline Run
+
+This is the run the design describes. It does not start from the shipped agent files (see the status above), so read the steps as what you would see once the agents can start each other.
 
 1. Open Copilot Chat (`Ctrl+Shift+I`)
 2. Confirm `chat.subagents.allowInvocationsFromSubagents: true` is in `.vscode/settings.json`
 3. Select **Agent** mode
 4. Select the **Specifier** agent from the agent picker
-5. Describe your feature — the Specifier interviews you, creates the plan file, then invokes Plan Hardener automatically
-6. Each subsequent agent completes its phase and hands off to the next without requiring input
+5. Describe your feature — the Specifier interviews you, creates the plan file, then would invoke Plan Hardener
+6. Each subsequent agent would complete its phase and start the next, with no input from you
 
-You can type at any point to pause and redirect before the next subagent invocation.
+You could type at any point to pause and redirect before the next subagent invocation.
 
 ### Recursion Safety — Termination Guards
 
@@ -235,7 +243,7 @@ The LOCKOUT guard is the most critical: the Reviewer Gate → Executor → Revie
 
 ### Fallback: Manual Handoff
 
-If `chat.subagents.allowInvocationsFromSubagents` is not set (or if you prefer step-by-step control), the pipeline falls back to **manual handoff buttons** — the same clickable buttons that appear at the end of each agent's response:
+As shipped, the pipeline moves from agent to agent with manual handoff buttons, whether or not `chat.subagents.allowInvocationsFromSubagents` is set. They are the clickable buttons that appear at the end of each agent's response:
 
 | Handoff button | From → To |
 |----------------|-----------|
@@ -245,7 +253,7 @@ If `chat.subagents.allowInvocationsFromSubagents` is not set (or if you prefer s
 | **Ship It →** | Reviewer Gate → Shipper |
 | **Fix Issues →** | Reviewer Gate → Executor (on LOCKOUT) |
 
-Manual handoff provides the same context transfer — the only difference is that you click the button rather than the agent invoking automatically.
+Manual handoff carries the same context — you click the button, where the designed chain would have the agent invoke the next one.
 
 ---
 

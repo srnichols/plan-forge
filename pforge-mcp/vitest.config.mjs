@@ -114,7 +114,7 @@ const SOURCE_ONLY_SUITES = {
   "../scripts/benchmark": ["tests/sdk-parity-benchmark.test.mjs"],
   "../scripts/build-agent-plugin.mjs": ["tests/agent-plugin.test.mjs"],
   "../templates/.github/agents/specifier.agent.md": ["tests/planning-guidance.test.mjs"],
-  "../templates/.github/agents/executor.agent.md": ["tests/agent-tools.test.mjs"],
+  "../templates/.github/agents/executor.agent.md": ["tests/agent-tools.test.mjs", "tests/validate-setup-agent-tools.test.mjs"],
   "../presets/shared/skills/code-review/SKILL.md": ["tests/review-guidance.test.mjs"],
   "../pforge-master": [
     "tests/auditor-automation-baseline.test.mjs",

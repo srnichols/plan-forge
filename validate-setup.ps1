@@ -69,6 +69,66 @@ function Check-NoPlaceholders([string]$RelPath) {
     }
 }
 
+# Tool names Plan Forge itself once shipped in an agent's `tools:` list, which give the agent less in the Copilot CLI than
+# the file lists. Measured with CLI 1.0.106: `editFiles` gets `edit` and no `create`; `run_in_terminal` and `read_file` get
+# no shell and no search. `runCommands` and `agents` are shipped today, so they are not on this list.
+$script:AgentToolProblems = [ordered]@{
+    'editFiles'       = "in the Copilot CLI it cannot create a file. Use 'edit'."
+    'run_in_terminal' = "the Copilot CLI gives the agent no shell for it. Use 'runCommands'."
+    'read_file'       = "the Copilot CLI has no tool of that name. Use 'read'."
+}
+
+function Read-BracketedListPiece([string]$Text) {
+    # The names in a piece of a list in brackets (all of "[a, b]", or one line of a list over several lines), and whether the piece ends the list.
+    $piece = ($Text -replace '(^|\s+)#.*$', '').Trim()
+    if ($piece.StartsWith('[')) { $piece = $piece.Substring(1) }
+    $piece = $piece.TrimEnd()
+    $closed = $piece.EndsWith(']')
+    if ($closed) { $piece = $piece.Substring(0, $piece.Length - 1) }
+    return [pscustomobject]@{ Names = @($piece.Split(',')); Closed = $closed }
+}
+
+function Get-AgentToolNames([string]$Path) {
+    # The `tools:` entries in the first frontmatter block: an inline list ([a, 'b']), a list in brackets over several lines (how Prettier
+    # writes one that is too long for a line), or a block list (- a). The key and the names are read as written (-cmatch), as validate-setup.sh
+    # reads them. ReadAllText drops a byte-order mark.
+    $lines = [System.IO.File]::ReadAllText($Path) -split "`r?`n"
+    if ($lines.Count -eq 0 -or $lines[0] -notmatch '^---\s*$') { return @() }
+    $names = @()
+    # none; pending (after a tools: with nothing on its line, so the list is on the lines below); block (inside a block list);
+    # bracketed (inside a list in brackets that goes on over several lines)
+    $mode = 'none'
+    for ($i = 1; $i -lt $lines.Count; $i++) {
+        $line = $lines[$i]
+        if ($line -match '^---\s*$') { break }
+        if ($mode -eq 'bracketed') {
+            $piece = Read-BracketedListPiece $line
+            $names += $piece.Names
+            if ($piece.Closed) { $mode = 'none' }
+            continue
+        }
+        if ($mode -eq 'pending' -or $mode -eq 'block') {
+            if ($line -match '^\s*-\s+(.+?)\s*$') { $names += ($Matches[1] -replace '\s+#.*$', ''); $mode = 'block'; continue }
+            if ($line -match '^\s*(#.*)?$') { continue }
+            if ($mode -eq 'pending' -and $line -match '^\s*\[') {
+                $piece = Read-BracketedListPiece $line
+                $names += $piece.Names
+                $mode = if ($piece.Closed) { 'none' } else { 'bracketed' }
+                continue
+            }
+            $mode = 'none'
+        }
+        if ($line -cmatch '^tools\s*:\s*(.*?)\s*$') {
+            $rest = $Matches[1] -replace '(^|\s+)#.*$', ''
+            if ($rest -eq '') { $mode = 'pending'; continue }
+            $piece = Read-BracketedListPiece $rest
+            $names += $piece.Names
+            if ($rest.TrimStart().StartsWith('[') -and -not $piece.Closed) { $mode = 'bracketed' }
+        }
+    }
+    return @($names | ForEach-Object { $_.Trim(' ', "`t", '"', "'") } | Where-Object { $_ })
+}
+
 # ─── Banner ────────────────────────────────────────────────────────────
 Write-Host ""
 Write-Host "╔══════════════════════════════════════════════════════════════╗" -ForegroundColor Cyan
@@ -286,6 +346,33 @@ if (Test-Path $configPath) {
 else {
     Write-Host "  WARN  .forge.json not found — skipping minimum count checks" -ForegroundColor Yellow
     $script:warn++
+}
+
+# ─── Agent Tool Names ─────────────────────────────────────────────────
+# `pforge update` keeps an agent file you edited, so a copy from before a fix still lists the old name.
+$agentFiles = @(Get-ChildItem -Path (Join-Path $ProjectPath ".github/agents") -Filter "*.agent.md" -File -ErrorAction SilentlyContinue)
+if ($agentFiles.Count -gt 0) {
+    Write-Host ""
+    Write-Host "Agent tool names:" -ForegroundColor Cyan
+
+    $toolWarnings = 0
+    foreach ($agentFile in $agentFiles) {
+        foreach ($toolName in (Get-AgentToolNames $agentFile.FullName)) {
+            if ($script:AgentToolProblems.Keys -ccontains $toolName) {
+                Write-Host "  WARN  .github/agents/$($agentFile.Name) lists '$toolName': $($script:AgentToolProblems[$toolName])" -ForegroundColor Yellow
+                $script:warn++
+                $toolWarnings++
+            }
+        }
+    }
+
+    if ($toolWarnings -eq 0) {
+        Write-Host "  PASS  .github/agents/ tool names ($($agentFiles.Count) agent files, none that fails in the Copilot CLI)" -ForegroundColor Green
+        $script:pass++
+    }
+    else {
+        Write-Host "  INFO  pforge update replaces an agent file you have not edited; one you edited is kept, with the new copy under .forge/update-pending/" -ForegroundColor Cyan
+    }
 }
 
 # ─── Optional Files ───────────────────────────────────────────────────

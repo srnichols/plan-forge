@@ -8,31 +8,10 @@
  */
 
 import { afterEach, describe, expect, it } from "vitest";
-import { spawnSync } from "node:child_process";
-import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { dirname, join, resolve } from "node:path";
-
-const REPO_ROOT = resolve(import.meta.dirname, "..", "..");
-const isWin = process.platform === "win32";
-const BASH = isWin ? ["C:\\Program Files\\Git\\bin\\bash.exe", "C:\\Program Files (x86)\\Git\\bin\\bash.exe"].find((p) => existsSync(p)) : "bash";
-const PWSH_OK = spawnSync("pwsh", ["-NoProfile", "-Command", "exit 0"]).status === 0;
-const PS_ARGS = ["-NoProfile", "-NonInteractive"];
-
-const SHELLS = [
-  { name: "validate-setup.sh", available: Boolean(BASH), run: (project) => spawnSync(BASH, [join(REPO_ROOT, "validate-setup.sh"), "--path", project], { encoding: "utf8", timeout: 120_000 }) },
-  {
-    name: "validate-setup.ps1 under pwsh",
-    available: PWSH_OK,
-    run: (project) => spawnSync("pwsh", [...PS_ARGS, "-File", join(REPO_ROOT, "validate-setup.ps1"), "-ProjectPath", project], { encoding: "utf8", timeout: 120_000 }),
-  },
-  {
-    name: "validate-setup.ps1 under Windows PowerShell 5.1",
-    available: isWin,
-    run: (project) =>
-      spawnSync("powershell.exe", [...PS_ARGS, "-ExecutionPolicy", "Bypass", "-File", join(REPO_ROOT, "validate-setup.ps1"), "-ProjectPath", project], { encoding: "utf8", timeout: 120_000 }),
-  },
-];
+import { dirname, join } from "node:path";
+import { SHELLS } from "./helpers/validate-setup-shells.mjs";
 
 const tmpDirs = [];
 afterEach(() => {

@@ -80,6 +80,85 @@ check_no_placeholders() {
     done
 }
 
+# Tool names Plan Forge itself once shipped in an agent's `tools:` list, which give the agent less in the Copilot CLI than
+# the file lists. Measured with CLI 1.0.106: `editFiles` gets `edit` and no `create`; `run_in_terminal` and `read_file` get
+# no shell and no search. `runCommands` and `agents` are shipped today, so they are not on this list.
+agent_tool_problem() {
+    case "$1" in
+        editFiles)       echo "in the Copilot CLI it cannot create a file. Use 'edit'." ;;
+        run_in_terminal) echo "the Copilot CLI gives the agent no shell for it. Use 'runCommands'." ;;
+        read_file)       echo "the Copilot CLI has no tool of that name. Use 'read'." ;;
+    esac
+}
+
+# The `tools:` entries in the first frontmatter block of an agent file, one per line: an inline list ([a, 'b']), a list in
+# brackets over several lines (how Prettier writes one that is too long for a line), or a block list (- a). The key and
+# the names are read as written, as validate-setup.ps1 reads them. Awk, not a pipe, so that pipefail cannot count an early
+# exit as a failure; LC_ALL=C so that the byte-order mark is three plain bytes; BSD awk (macOS) and mawk read this the same
+# way, so it names a bracket as a set ([[] and []]) and not as an escaped character.
+agent_tool_names() {
+    LC_ALL=C awk '
+        function emit(s) {
+            gsub(/^[ \t"\047]+/, "", s)
+            gsub(/[ \t"\047]+$/, "", s)
+            if (s != "") print s
+        }
+        # The names in a piece of a list in brackets: all of "[a, b]", or one line of a list over several lines.
+        # Returns 1 when the piece ends the list. [[] and []] are the brackets as sets, which every awk reads the same way.
+        function bracketed(s,    n, parts, i, closed) {
+            sub(/(^|[ \t]+)#.*$/, "", s)
+            sub(/^[ \t]*[[]/, "", s)
+            closed = (s ~ /[]][ \t]*$/)
+            sub(/[]][ \t]*$/, "", s)
+            n = split(s, parts, ",")
+            for (i = 1; i <= n; i++) emit(parts[i])
+            return closed
+        }
+        function opens_bracket(s) {
+            return s ~ /^[ \t]*[[]/
+        }
+        { sub(/\r$/, "") }
+        NR == 1 { sub(/^\357\273\277/, "") }
+        BEGIN { state = 0; mode = 0 }
+        state == 0 {
+            if ($0 ~ /^---[ \t]*$/) { state = 1; next }
+            exit
+        }
+        /^---[ \t]*$/ { exit }
+        # mode 3: inside a list in brackets that goes on over several lines.
+        mode == 3 {
+            if (bracketed($0)) mode = 0
+            next
+        }
+        # mode 1: after a tools: with nothing on its line, so the list is on the lines below. mode 2: inside a block list.
+        mode == 1 || mode == 2 {
+            if ($0 ~ /^[ \t]*-[ \t]+/) {
+                item = $0
+                sub(/^[ \t]*-[ \t]+/, "", item)
+                sub(/[ \t]+#.*$/, "", item)
+                emit(item)
+                mode = 2
+                next
+            }
+            if ($0 ~ /^[ \t]*(#.*)?$/) next
+            if (mode == 1 && opens_bracket($0)) {
+                mode = bracketed($0) ? 0 : 3
+                next
+            }
+            mode = 0
+        }
+        /^tools[ \t]*:/ {
+            rest = $0
+            sub(/^tools[ \t]*:[ \t]*/, "", rest)
+            sub(/(^|[ \t]+)#.*$/, "", rest)
+            sub(/[ \t]+$/, "", rest)
+            if (rest == "") { mode = 1; next }
+            if (opens_bracket(rest)) { if (!bracketed(rest)) mode = 3 }
+            else bracketed(rest)
+        }
+    ' "$1"
+}
+
 # ─── Banner ────────────────────────────────────────────────────────────
 echo ""
 cyan "╔══════════════════════════════════════════════════════════════╗"
@@ -287,6 +366,41 @@ if [[ -f "$CONFIG_PATH" ]]; then
 else
     yellow "  WARN  .forge.json not found — skipping minimum count checks"
     WARN=$((WARN+1))
+fi
+
+# ─── Agent Tool Names ─────────────────────────────────────────────────
+# `pforge update` keeps an agent file you edited, so a copy from before a fix still lists the old name.
+AGENT_TOOL_FILES=()
+if [[ -d "$PROJECT_PATH/.github/agents" ]]; then
+    while IFS= read -r agent_file; do
+        AGENT_TOOL_FILES+=("$agent_file")
+    done < <(find "$PROJECT_PATH/.github/agents" -maxdepth 1 -name "*.agent.md" -type f 2>/dev/null | sort)
+fi
+
+# ${#array[@]} is safe on an empty array; expanding "${array[@]}" under set -u is not, in Bash before 4.4 (macOS ships 3.2).
+if [[ ${#AGENT_TOOL_FILES[@]} -gt 0 ]]; then
+    echo ""
+    cyan "Agent tool names:"
+
+    tool_warnings=0
+    for agent_file in "${AGENT_TOOL_FILES[@]}"; do
+        while IFS= read -r tool_name; do
+            [[ -z "$tool_name" ]] && continue
+            tool_problem="$(agent_tool_problem "$tool_name")"
+            if [[ -n "$tool_problem" ]]; then
+                yellow "  WARN  .github/agents/$(basename "$agent_file") lists '$tool_name': $tool_problem"
+                WARN=$((WARN+1))
+                tool_warnings=$((tool_warnings+1))
+            fi
+        done < <(agent_tool_names "$agent_file")
+    done
+
+    if [[ "$tool_warnings" -eq 0 ]]; then
+        green "  PASS  .github/agents/ tool names (${#AGENT_TOOL_FILES[@]} agent files, none that fails in the Copilot CLI)"
+        PASS=$((PASS+1))
+    else
+        cyan "  INFO  pforge update replaces an agent file you have not edited; one you edited is kept, with the new copy under .forge/update-pending/"
+    fi
 fi
 
 # ─── Optional Files ───────────────────────────────────────────────────

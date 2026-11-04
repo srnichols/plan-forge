@@ -1,9 +1,10 @@
 name: Validate Setup
 on:
+  # planning/main is where every change lands first, so the suite runs for it too: a change is checked before it is cut to master.
   push:
-    branches: [main, master]
+    branches: [main, master, planning/main]
   pull_request:
-    branches: [main, master]
+    branches: [main, master, planning/main]
 
 jobs:
   validate-powershell:
@@ -169,6 +170,12 @@ jobs:
           [ "$instructions_on_disk" -gt 0 ] && [ "$instructions_on_disk" = "$instructions_listed" ] || { echo "::error::.forge/capabilities.json lists $instructions_listed instructions, and the project has $instructions_on_disk"; rc=1; }
           ./pforge.sh --help >/dev/null || { echo "::error::pforge.sh --help failed"; rc=1; }
           ./pforge.sh check || { echo "::error::pforge.sh check failed"; rc=1; }
+          # validate-setup.sh reads the tools: list of each agent file with awk, which has to read it the way the awk macOS ships does:
+          # a clean project says so, and a file that lists editFiles (which cannot create a file in the Copilot CLI) gets the warning.
+          ./validate-setup.sh --path . | grep -qF "PASS  .github/agents/ tool names" || { echo "::error::validate-setup.sh did not pass the agent tool names of a clean project"; rc=1; }
+          printf -- '---\nname: Probe\ndescription: Probe\ntools: [read, editFiles]\n---\n' > .github/agents/zz-probe.agent.md
+          ./validate-setup.sh --path . | grep -qF "lists 'editFiles'" || { echo "::error::validate-setup.sh did not warn about editFiles in an agent file"; rc=1; }
+          rm .github/agents/zz-probe.agent.md
           rm .github/instructions/security.instructions.md
           echo "<!-- edited here -->" >> .github/instructions/testing.instructions.md
           # A line out of the managed block in .gitignore makes the update rewrite the block with awk, which is what BSD

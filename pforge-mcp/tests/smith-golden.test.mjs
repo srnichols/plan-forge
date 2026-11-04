@@ -8,15 +8,20 @@
  * (added/removed sections, changed hook counts, new fail messages) will
  * surface here.
  *
- * The test is skipped on CI / non-Windows runners where pforge.ps1 cannot
- * run — use the companion pforge.sh path for that case — and wherever no
- * testbed resolves (testbed.path in .forge.json, or a plan-forge-testbed
- * clone next to the repo). The testbed is read-only; never modify it.
+ * It runs only when asked (PFORGE_SMITH_GOLDEN=1), on Windows, where a testbed resolves (testbed.path in
+ * .forge.json, or a plan-forge-testbed clone next to the repo). The golden is a snapshot of one testbed in one tool
+ * state: smith prints the testbed's .vscode/mcp.json entries, which Forge-Master and pforge-sdk sections it has
+ * installed, its last run, and whether claude and grok are on PATH, so the comparison passes only while all of those
+ * still match, and it drifts with every testbed or tool change that smith's own structure does not show. A suite
+ * that is red for those reasons teaches people to read past its summary, and this one added two minutes to a
+ * local run. Run it when you change what smith prints. When the testbed has changed on purpose, run `pforge smith`
+ * in it and save the output as tests/fixtures/smith-golden-pre-enums.txt. The testbed is read-only; never modify
+ * it. This test never writes a file.
  */
 
 import { describe, it, expect } from "vitest";
 import { spawnSync } from "node:child_process";
-import { readFileSync, writeFileSync, existsSync } from "node:fs";
+import { readFileSync, existsSync } from "node:fs";
 import { resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { resolveTestbedPath } from "../testbed/scenarios.mjs";
@@ -71,11 +76,11 @@ function normalize(text) {
       // graceful fallback). All three normalize to the same placeholder so the
       // golden fixture is forward- and backward-compatible.
       .replace(/copilot-coding-agent (?:v\S*|\(version unknown\))[^\n]*/g, "copilot-coding-agent <coding-agent-status>")
-      // grok worker probe: present-and-versioned on a machine with the CLI,
-      // "not found on PATH" plus a FIX line without it. Same environment-varying
-      // class as gh-copilot above; the FIX line is dropped so both shapes collapse.
-      .replace(/[^\S\n]*(?:✅|Γ£à|⚠️|⚠|ΓÜá∩╕Å)[^\n]*\bgrok\b[^\n]*\(agent worker\)[^\n]*/g, "  grok <worker-status>")
-      .replace(/[^\S\n]+FIX: irm https:\/\/x\.ai\/cli\/install[^\n]*\n?/g, "")
+      // Worker CLIs (claude, grok): present and versioned on a machine with the CLI ("(agentic capable)"), "not found
+      // on PATH" plus a FIX line without it ("(agent worker)"). Same environment-varying class as gh-copilot above;
+      // the FIX line is dropped so both shapes collapse.
+      .replace(/[^\S\n]*(?:✅|Γ£à|⚠️|⚠|ΓÜá∩╕Å)[^\n]*\b(claude|grok)\b[^\n]*\((?:agent worker|agentic capable)\)[^\n]*/g, "  $1 <worker-status>")
+      .replace(/[^\S\n]+FIX: (?:irm https:\/\/x\.ai\/cli\/install|winget install Anthropic\.Claude)[^\n]*\n?/g, "")
       // Image API key presence: XAI_API_KEY / OPENAI_API_KEY vary by environment
       .replace(/[^\S\n]*(?:✓|✅|Γ£à)[^\n]*API_KEY[^\n]*/g, "  <api-key-present>")
       .replace(/[^\S\n]*(?:✓|✅|Γ£à)[^\n]*Grok Aurora[^\n]*/g, "  <api-key-present>")
@@ -135,7 +140,8 @@ function runSmith() {
 
 // Run smith once and share the result across both tests in this file.
 // Avoids running pforge.ps1 twice (each invocation takes 15–30 s under load).
-const canRun = isWindows && testbedExists && ps1Exists;
+const OPTED_IN = process.env.PFORGE_SMITH_GOLDEN === "1";
+const canRun = OPTED_IN && isWindows && testbedExists && ps1Exists;
 let _smithOutput = null;
 function getSmithOutput() {
   if (_smithOutput === null) {
@@ -169,6 +175,24 @@ describe("smith-golden cache normalization", () => {
   });
 });
 
+describe("smith-golden worker normalization", () => {
+  // A worker CLI that is on PATH and one that is not are the same structure, whichever machine ran smith.
+  const WORKERS = [
+    ["claude", "  ⚠️  claude not found on PATH (agent worker)\n     FIX: winget install Anthropic.Claude   (or npm install -g @anthropic-ai/claude-code)\n", "  ✅ claude v2.1.0 (agentic capable)\n"],
+    ["grok", "  ⚠️  grok not found on PATH (agent worker)\n     FIX: irm https://x.ai/cli/install.ps1 | iex\n", "  ✅ grok v0.1.2 (agentic capable)\n"],
+  ];
+
+  it.each(WORKERS)("collapses %s installed and missing to the same line", (_name, missing, present) => {
+    expect(normalize(present)).toBe(normalize(missing));
+  });
+
+  it("keeps the other lines around a worker line", () => {
+    const text = `Workers:\n${WORKERS[0][2]}  ✅ node v22.12.0\n`;
+    expect(normalize(text)).toContain("claude <worker-status>");
+    expect(normalize(text)).toContain("node v<version>");
+  });
+});
+
 describe("smith-golden: pforge smith output stability", () => {
   it.skipIf(!canRun)(
     "smith reports 8/8 lifecycle hooks (PostRun added by Phase-39/41)",
@@ -184,21 +208,7 @@ describe("smith-golden: pforge smith output stability", () => {
     "smith output matches the S2 golden fixture (normalized)",
     () => {
       const goldenRaw = readFileSync(GOLDEN, "utf-8");
-
-      if (!goldenRaw.trim()) {
-        // Golden was not captured yet — populate it from the current run and
-        // consider this test passed (first-capture mode).
-        const captured = stripAnsi(getSmithOutput());
-        writeFileSync(GOLDEN, captured, "utf-8");
-        console.warn(
-          "[smith-golden] Golden was empty — captured from current run. " +
-            "Re-run to validate stability."
-        );
-        expect(captured.trim().length).toBeGreaterThan(100);
-        return;
-      }
-
-      expect(goldenRaw.length, "Golden fixture should be non-empty").toBeGreaterThan(100);
+      expect(goldenRaw.length, "Golden fixture should be non-empty; save `pforge smith` output from the testbed as tests/fixtures/smith-golden-pre-enums.txt").toBeGreaterThan(100);
 
       const actual = normalize(getSmithOutput());
       const expected = normalize(goldenRaw);

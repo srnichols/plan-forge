@@ -53,7 +53,7 @@ Which instruction files reach a project is named in one place, [`pforge-mcp/pres
 
 [setup.ps1](../setup.ps1), [setup.sh](../setup.sh) and [update-plan.mjs](../pforge-mcp/update-plan.mjs), which both `pforge update` shells run, read those two lists. None of the four scripts keeps a list of its own (#299), so there is nothing to find a name in by searching them. `project-principles.instructions.md` ships from `templates/.github/instructions/` and remains user-editable. When a selected stack preset has its own copy of an instruction (every stack preset ships `testing` and `security`), setup and update use the preset's copy instead. The release and ACI-authoring instructions are maintainer-only: they are on neither list.
 
-Verification is a test. CI runs it for a change into `master`; a pull request into `planning/main` does not run the vitest suite, so run it there yourself, from `pforge-mcp/`:
+Verification is a test. The **Validate Setup** workflow runs the whole vitest suite for a pull request into `planning/main` or `master` and for a push to either. To run it yourself, from `pforge-mcp/`:
 
 ```pwsh
 npx vitest run tests/instruction-distribution.test.mjs
